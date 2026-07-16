@@ -2,6 +2,8 @@ node_modules/
 dist/
 release/
 theme_demo_previews/
+themes/kawaii-idol/
+themes/customize_new_theme_prompt.md
 docs/preview.png
 *.zip
 *.sha256

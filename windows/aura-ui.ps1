@@ -618,7 +618,13 @@ function Hide-AuraUiLoading {
 function Start-AuraUiScript {
   param([string]$Source, [ValidateSet('Apply', 'Restore')][string]$Action, [bool]$Cover = $false)
   if (-not $script:WebReady -or $null -eq $script:WebView.CoreWebView2) { return }
-  if ($null -ne $script:ScriptTask -and -not $script:ScriptTask.IsCompleted) { return }
+  if ($null -ne $script:ScriptTask -and -not $script:ScriptTask.IsCompleted) {
+    # A script is already running (a common case during the sign-in redirect
+    # burst). Remember to re-apply once it finishes so a navigation-time apply is
+    # never silently dropped, and never leave the cover stranded behind the guard.
+    if ($Action -eq 'Apply') { $script:PendingApply = $true }
+    return
+  }
   if ($Cover) { Show-AuraUiLoading -Message "$($script:UiCopy.applyingTheme)" }
   Set-AuraUiBusy -Busy $true
   $script:ScriptAction = $Action
@@ -1199,22 +1205,34 @@ public static class AuraWindow {
         $core.Settings.IsZoomControlEnabled = $true
 
         $core.add_NavigationStarting({
+          $script:PageReady = $false
           Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
           $script:StatusLabel.Text = "$($script:UiCopy.loadingClaude)"
         })
         $core.add_NavigationCompleted({
           param($sender, $eventArgs)
           if (-not $eventArgs.IsSuccess) {
+            # A genuine navigation failure is the only case that keeps the cover.
             $script:StatusLabel.Text = "$($script:UiCopy.couldNotLoadClaude)"
             Show-AuraUiLoading -Message "$($script:UiCopy.loadFailed)" -Retry $true
             return
           }
           $enabled = $true
           if ($null -ne $script:Config.PSObject.Properties['enabled']) { $enabled = [bool]$script:Config.enabled }
-          if ((Test-AuraUiClaudeUri -Value $script:WebView.Source) -and $enabled) { Apply-AuraUiTheme -Cover $true }
-          else {
+          if (Test-AuraUiClaudeUri -Value $script:WebView.Source) {
+            # The claude.ai document has loaded and is usable, including right after
+            # the very first sign-in. Reveal it now and inject the theme over the live
+            # page (the in-page renderer self-heals its own styling). Hiding the cover
+            # on this real navigation signal — rather than waiting for the async theme
+            # script to confirm — is what prevents an injection race from stranding an
+            # opaque cover over a working, signed-in interface.
+            $script:PageReady = $true
             Hide-AuraUiLoading
-            $script:StatusLabel.Text = if ($enabled) { "$($script:UiCopy.continueSigningIn)" } else { "$($script:UiCopy.originalActive)" }
+            if ($enabled) { Apply-AuraUiTheme }
+            else { $script:StatusLabel.Text = "$($script:UiCopy.originalActive)" }
+          } else {
+            Hide-AuraUiLoading
+            $script:StatusLabel.Text = "$($script:UiCopy.continueSigningIn)"
           }
         })
         $core.add_NewWindowRequested({
@@ -1254,23 +1272,37 @@ public static class AuraWindow {
         $script:StatusLabel.Text = if ($action -eq 'Apply') { "$($script:UiCopy.activeTheme)" -f "$($script:ActiveLabel)" } else { "$($script:UiCopy.originalActive)" }
         if ($covered) { Hide-AuraUiLoading }
         Set-AuraUiBusy -Busy $false
+        if ($script:PendingApply) {
+          $script:PendingApply = $false
+          Apply-AuraUiTheme
+        }
       }
     } catch {
       $script:EnvironmentTask = $null
       $script:EnsureTask = $null
       $script:ScriptTask = $null
       Set-AuraUiBusy -Busy $false
-      if ($script:WebReady) {
+      if (-not $script:WebReady) {
+        Fail-AuraUiStartup -Exception $_.Exception
+      } elseif ($script:PageReady) {
+        # claude.ai is loaded and visible; a theme-injection hiccup must never cover
+        # it with an opaque panel. Surface a quiet status and leave the interface
+        # usable. The navigation that caused the hiccup re-drives Apply on its own
+        # NavigationCompleted, and the toolbar "Apply theme" control is a manual path.
+        Write-AuraUiLog -Message $_.Exception.ToString()
+        $script:StatusLabel.Text = "$($script:UiCopy.themeRetryStatus)"
+        Hide-AuraUiLoading
+      } else {
         Write-AuraUiLog -Message $_.Exception.ToString()
         $script:StatusLabel.Text = "$($script:UiCopy.themeRetryStatus)"
         Show-AuraUiLoading -Message "$($script:UiCopy.openedRetry)" -Retry $true
-      } else {
-        Fail-AuraUiStartup -Exception $_.Exception
       }
     }
   })
 
   $script:Form.add_Shown({
+    $script:PageReady = $false
+    $script:PendingApply = $false
     Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
     try {
       $script:EnvironmentTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $WebDataRoot, $null)

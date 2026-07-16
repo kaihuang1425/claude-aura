@@ -85,9 +85,13 @@ async function deliverableFiles(directory = PROJECT_ROOT, relativeDirectory = ""
   const files = [];
   const excludedRoots = new Set([".agents", ".codex", ".git", "dist", "node_modules", "release", "theme_demo_previews"]);
   const excludedNames = new Set([".DS_Store", "Thumbs.db", "config.local.json", "state.json"]);
+  // Supplied source-asset kit: preserved on disk and gitignored like the reference
+  // composites. Only the derived runtime copies under assets/theme-art/ ship.
+  const excludedPaths = new Set(["themes/kawaii-idol", "themes/customize_new_theme_prompt.md"]);
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
     const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
     if (!relativeDirectory && excludedRoots.has(entry.name)) continue;
+    if (excludedPaths.has(relativePath)) continue;
     if (relativePath === "docs/preview.png" || excludedNames.has(entry.name) || entry.name.startsWith(".tmp-") ||
         entry.name.includes(".corrupt-") ||
         entry.name.endsWith(".log") || entry.name.endsWith(".zip") || entry.name.endsWith(".sha256")) continue;
@@ -685,6 +689,17 @@ test("Windows uses WebView2 and an accessible rich theme gallery", async () => {
   assert.match(ui, /StandardErrorEncoding\s*=\s*\[System\.Text\.UTF8Encoding\]::new\(\$false\)/);
   assert(!/Get-Content -LiteralPath \$ConfigPath -Raw \|/.test(ui),
     "Config reads must decode as UTF-8, not the default ANSI code page");
+  // First-sign-in blank-screen fix: the opaque loading cover must be hidden on the
+  // real navigation signal, never gated on the async theme-injection result. A
+  // theme hiccup over a loaded claude.ai must not re-cover the page.
+  assert(!/Apply-AuraUiTheme\s+-Cover\s+\$true/.test(ui),
+    "Navigation must not gate the loading cover on themed-apply success");
+  assert.match(ui, /\$script:PageReady\s*=\s*\$true[\s\S]{0,400}?Hide-AuraUiLoading/,
+    "A loaded claude.ai document must mark the page ready and hide the cover");
+  assert.match(ui, /elseif\s*\(\$script:PageReady\)/,
+    "A theme-injection failure over a ready page must not show the opaque cover");
+  assert.match(ui, /\$script:PendingApply/,
+    "A skipped navigation-time apply must be retried, not dropped");
   assert(!ui.includes("'Customize themes'"), "Picker chrome must come from localized UI copy");
   assert(!ui.includes("'Applying your look...'"), "Loading status must come from localized UI copy");
   assert.match(ui, /themeFallbackDescription/);
