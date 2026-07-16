@@ -27,7 +27,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'The Claude Aura configuration could not be initialized.' }
   $payload = @(& $node.Path (Join-Path $Root 'scripts\webview-cli.mjs') --config $ConfigPath) -join "`n"
   if ($LASTEXITCODE -ne 0 -or $payload -notmatch '__CLAUDE_AURA_STATE__') { throw 'The selected theme could not be prepared.' }
-  $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+  $config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
   $env:PATH = "$loaderRoot;$VendorRoot;$env:PATH"
   [void][Reflection.Assembly]::LoadFrom($required[0])
   $runtime = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::GetAvailableBrowserVersionString()

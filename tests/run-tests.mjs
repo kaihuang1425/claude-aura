@@ -678,6 +678,13 @@ test("Windows uses WebView2 and an accessible rich theme gallery", async () => {
   assert.match(ui, /swatches/i);
   assert.match(ui, /Get-AuraUiCopy/);
   assert.match(ui, /ui-copy\.json/);
+  // The Node helper emits UTF-8; decode it as UTF-8 so localized metadata does not
+  // corrupt (and break JSON parsing) when the console falls back to an OEM code
+  // page such as Big5 on a Traditional Chinese system.
+  assert.match(ui, /StandardOutputEncoding\s*=\s*\[System\.Text\.UTF8Encoding\]::new\(\$false\)/);
+  assert.match(ui, /StandardErrorEncoding\s*=\s*\[System\.Text\.UTF8Encoding\]::new\(\$false\)/);
+  assert(!/Get-Content -LiteralPath \$ConfigPath -Raw \|/.test(ui),
+    "Config reads must decode as UTF-8, not the default ANSI code page");
   assert(!ui.includes("'Customize themes'"), "Picker chrome must come from localized UI copy");
   assert(!ui.includes("'Applying your look...'"), "Loading status must come from localized UI copy");
   assert.match(ui, /themeFallbackDescription/);

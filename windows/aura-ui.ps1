@@ -335,6 +335,11 @@ function Invoke-AuraUiNode {
   $start.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
   $start.RedirectStandardOutput = $true
   $start.RedirectStandardError = $true
+  # The helper emits UTF-8. Decode it as UTF-8 explicitly; otherwise .NET falls
+  # back to the console/OEM code page (for example Big5 on a zh-TW system), which
+  # corrupts localized theme metadata and can swallow JSON quote bytes.
+  $start.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+  $start.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
   $process = [System.Diagnostics.Process]::new()
   $process.StartInfo = $start
   if (-not $process.Start()) { throw 'A required Claude Aura helper could not start.' }
@@ -365,7 +370,7 @@ function Set-AuraUiConfig {
   if ($script:Locale) { $arguments += @('--locale', $script:Locale) }
   $arguments += '--payload'
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
-  $script:Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+  $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
   Set-AuraUiPayloadState -Payload $payload
 }
 
@@ -704,7 +709,7 @@ try {
   if ($initialOptions.Count -gt 0) { Set-AuraUiConfig -Options $initialOptions }
   else {
     $initialPayload = Invoke-AuraUiNode -CommandArguments @($ThemeCli, 'init', '--config', $ConfigPath, '--locale', $script:Locale, '--payload')
-    $script:Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+    $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Set-AuraUiPayloadState -Payload $initialPayload
   }
 

@@ -107,7 +107,11 @@ WebView, or theme selection from working.
 
 Theme metadata and Windows picker chrome, status, error, and accessibility copy
 support `en`, `zh-CN`, and `zh-TW`. Windows passes the current UI culture to the
-theme CLI. Locale normalization maps `zh-CN`, `zh-SG`, and
+theme CLI and decodes the helper's UTF-8 output with an explicit UTF-8
+`StandardOutputEncoding`, and reads `config.json` with `-Encoding UTF8`, so
+localized metadata is not corrupted when the console falls back to an OEM code
+page such as Big5 (cp950) on a Traditional Chinese system. Locale normalization
+maps `zh-CN`, `zh-SG`, and
 `zh-Hans` tags to `zh-CN`; it maps `zh-TW`, `zh-HK`, `zh-MO`, and `zh-Hant`
 tags to `zh-TW`. Other tags fall back to English. Theme CSS and artwork contain
 no localized functional copy.
