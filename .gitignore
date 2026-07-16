@@ -1,0 +1,13 @@
+node_modules/
+dist/
+release/
+theme_demo_previews/
+docs/preview.png
+*.zip
+*.sha256
+*.log
+state.json
+config.local.json
+*.corrupt-*.json
+.DS_Store
+Thumbs.db

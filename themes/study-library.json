@@ -1,0 +1,87 @@
+{
+  "name": "study-library",
+  "variant": "study-library",
+  "blur": 6,
+  "typography": {
+    "ui": "\"Segoe UI\", system-ui, sans-serif",
+    "display": "Georgia, \"Times New Roman\", serif",
+    "body": "Georgia, \"Times New Roman\", serif",
+    "mono": "\"Cascadia Mono\", Consolas, ui-monospace, monospace",
+    "displayWeight": 600,
+    "letterSpacing": "-0.015em"
+  },
+  "shape": {
+    "control": 5,
+    "card": 7,
+    "composer": 9,
+    "icon": 4,
+    "borderWidth": 1
+  },
+  "effects": {
+    "shadowSoft": "0 6px 22px rgb(57 47 31 / 0.11)",
+    "shadowElevated": "0 18px 52px rgb(44 35 22 / 0.22)",
+    "hoverLift": 0,
+    "transitionMs": 140
+  },
+  "light": {
+    "semantic": {
+      "--aura-background-primary": "44 43% 93%",
+      "--aura-background-secondary": "42 34% 87%",
+      "--aura-sidebar-background": "138 25% 18%",
+      "--aura-sidebar-text-primary": "44 43% 93%",
+      "--aura-sidebar-text-muted": "43 18% 69%",
+      "--aura-sidebar-selected": "139 24% 27%",
+      "--aura-panel-background": "45 48% 96%",
+      "--aura-elevated-surface": "46 60% 98%",
+      "--aura-text-primary": "70 10% 15%",
+      "--aura-text-secondary": "70 8% 29%",
+      "--aura-text-muted": "70 6% 42%",
+      "--aura-text-on-accent": "45 50% 97%",
+      "--aura-accent-primary": "146 37% 28%",
+      "--aura-accent-secondary": "352 36% 33%",
+      "--aura-border-emphasis": "70 12% 20%",
+      "--aura-composer-background": "45 44% 95%",
+      "--aura-card-background": "45 46% 96%",
+      "--aura-destructive": "352 56% 38%",
+      "--aura-success": "146 42% 26%",
+      "--aura-warning": "39 66% 34%"
+    },
+    "wallpaper": {
+      "gradient": "repeating-linear-gradient(0deg, transparent 0 27px, rgb(45 97 75 / .06) 27px 28px), linear-gradient(90deg, rgb(116 52 59 / .1) 0 1px, transparent 1px 76px), linear-gradient(135deg, #f7f0df 0%, #e9dfc7 100%)",
+      "surfaceAlpha": 0.94,
+      "sidebarAlpha": 0.96,
+      "imageOpacity": 0.1,
+      "artOpacity": 0.26,
+      "textureOpacity": 0.5
+    }
+  },
+  "dark": {
+    "semantic": {
+      "--aura-background-primary": "138 20% 13%",
+      "--aura-background-secondary": "138 22% 9%",
+      "--aura-sidebar-background": "139 26% 7%",
+      "--aura-panel-background": "120 10% 16%",
+      "--aura-elevated-surface": "42 12% 19%",
+      "--aura-text-primary": "44 40% 91%",
+      "--aura-text-secondary": "43 23% 76%",
+      "--aura-text-muted": "42 14% 61%",
+      "--aura-text-on-accent": "140 28% 7%",
+      "--aura-accent-primary": "145 45% 67%",
+      "--aura-accent-secondary": "351 54% 72%",
+      "--aura-border-emphasis": "42 25% 76%",
+      "--aura-composer-background": "42 11% 18%",
+      "--aura-card-background": "42 12% 19%",
+      "--aura-destructive": "352 72% 71%",
+      "--aura-success": "146 47% 64%",
+      "--aura-warning": "41 76% 68%"
+    },
+    "wallpaper": {
+      "gradient": "repeating-linear-gradient(0deg, transparent 0 27px, rgb(214 184 121 / .035) 27px 28px), radial-gradient(circle at 80% 18%, rgb(116 52 59 / .18), transparent 32%), linear-gradient(145deg, #0c1711 0%, #15241b 54%, #241f19 100%)",
+      "surfaceAlpha": 0.9,
+      "sidebarAlpha": 0.94,
+      "imageOpacity": 0.12,
+      "artOpacity": 0.24,
+      "textureOpacity": 0.46
+    }
+  }
+}

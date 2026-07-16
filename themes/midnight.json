@@ -1,0 +1,74 @@
+{
+  "name": "midnight",
+  "label": "Midnight",
+  "description": "Ink, indigo, and electric violet with a quiet orbital glow.",
+  "radius": 18,
+  "blur": 20,
+  "light": {
+    "tokens": {
+      "--bg-000": "230 45% 99%",
+      "--bg-100": "232 38% 96%",
+      "--bg-200": "234 30% 92%",
+      "--bg-300": "235 26% 88%",
+      "--bg-400": "234 22% 83%",
+      "--bg-500": "234 18% 77%",
+      "--text-000": "232 36% 14%",
+      "--text-200": "232 22% 29%",
+      "--text-400": "231 13% 43%",
+      "--accent-brand": "258 66% 48%",
+      "--accent-pro-100": "286 60% 47%",
+      "--border-200": "232 28% 18%",
+      "--danger-100": "353 72% 45%",
+      "--warning-100": "31 92% 40%",
+      "--success-100": "151 67% 32%",
+      "--oncolor-100": "0 0% 100%",
+      "--claude-accent-clay": "#6840c5",
+      "--claude-background-color": "#f4f5fb",
+      "--claude-foreground-color": "#181a31",
+      "--claude-secondary-color": "#5c607a",
+      "--claude-border": "#6840c520",
+      "--claude-border-300": "#6840c538",
+      "--claude-border-300-more": "#6840c560"
+    },
+    "wallpaper": {
+      "gradient": "radial-gradient(circle at 14% 8%, rgb(121 88 255 / .28), transparent 34%), radial-gradient(circle at 88% 82%, rgb(58 199 255 / .18), transparent 40%), linear-gradient(140deg, #f8f8ff 0%, #eef0fb 52%, #f5f2ff 100%)",
+      "surfaceAlpha": 0.88,
+      "sidebarAlpha": 0.84,
+      "imageOpacity": 0.16
+    }
+  },
+  "dark": {
+    "tokens": {
+      "--bg-000": "232 22% 18%",
+      "--bg-100": "233 24% 14%",
+      "--bg-200": "235 27% 10%",
+      "--bg-300": "236 29% 8%",
+      "--bg-400": "237 32% 6%",
+      "--bg-500": "238 36% 4%",
+      "--text-000": "225 44% 94%",
+      "--text-200": "226 27% 80%",
+      "--text-400": "228 16% 65%",
+      "--accent-brand": "267 82% 75%",
+      "--accent-pro-100": "197 87% 72%",
+      "--border-200": "228 38% 78%",
+      "--danger-100": "353 82% 72%",
+      "--warning-100": "38 91% 70%",
+      "--success-100": "151 58% 64%",
+      "--oncolor-100": "237 35% 9%",
+      "--claude-accent-clay": "#bd96ff",
+      "--claude-background-color": "#191a2a",
+      "--claude-foreground-color": "#eef0fb",
+      "--claude-secondary-color": "#afb3cc",
+      "--claude-border": "#bd96ff20",
+      "--claude-border-300": "#bd96ff38",
+      "--claude-border-300-more": "#bd96ff60"
+    },
+    "wallpaper": {
+      "gradient": "radial-gradient(circle at 18% 12%, rgb(142 94 255 / .32), transparent 36%), radial-gradient(circle at 82% 78%, rgb(27 178 255 / .18), transparent 42%), linear-gradient(145deg, #0b0c18 0%, #151426 48%, #0b1220 100%)",
+      "surfaceAlpha": 0.82,
+      "sidebarAlpha": 0.78,
+      "imageOpacity": 0.2
+    }
+  }
+}
+

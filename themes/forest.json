@@ -1,0 +1,74 @@
+{
+  "name": "forest",
+  "label": "Forest",
+  "description": "Soft sage daylight and a deep evergreen workspace after dusk.",
+  "radius": 17,
+  "blur": 18,
+  "light": {
+    "tokens": {
+      "--bg-000": "82 31% 99%",
+      "--bg-100": "85 28% 95%",
+      "--bg-200": "91 23% 90%",
+      "--bg-300": "94 19% 85%",
+      "--bg-400": "96 16% 79%",
+      "--bg-500": "98 14% 72%",
+      "--text-000": "122 28% 13%",
+      "--text-200": "119 20% 28%",
+      "--text-400": "115 12% 42%",
+      "--accent-brand": "145 55% 34%",
+      "--accent-pro-100": "191 55% 34%",
+      "--border-200": "121 24% 17%",
+      "--danger-100": "354 69% 44%",
+      "--warning-100": "37 88% 38%",
+      "--success-100": "145 55% 31%",
+      "--oncolor-100": "0 0% 100%",
+      "--claude-accent-clay": "#277b50",
+      "--claude-background-color": "#f3f6ed",
+      "--claude-foreground-color": "#1c2a1e",
+      "--claude-secondary-color": "#586b5b",
+      "--claude-border": "#277b5020",
+      "--claude-border-300": "#277b5038",
+      "--claude-border-300-more": "#277b5060"
+    },
+    "wallpaper": {
+      "gradient": "radial-gradient(circle at 13% 10%, rgb(82 170 111 / .22), transparent 35%), radial-gradient(circle at 87% 84%, rgb(89 177 176 / .15), transparent 43%), linear-gradient(145deg, #f8fbf4 0%, #edf2e7 52%, #f1f7f1 100%)",
+      "surfaceAlpha": 0.9,
+      "sidebarAlpha": 0.86,
+      "imageOpacity": 0.15
+    }
+  },
+  "dark": {
+    "tokens": {
+      "--bg-000": "145 20% 16%",
+      "--bg-100": "147 23% 12%",
+      "--bg-200": "149 26% 9%",
+      "--bg-300": "150 28% 7%",
+      "--bg-400": "151 31% 5%",
+      "--bg-500": "152 34% 4%",
+      "--text-000": "95 32% 92%",
+      "--text-200": "101 22% 77%",
+      "--text-400": "108 13% 61%",
+      "--accent-brand": "145 57% 63%",
+      "--accent-pro-100": "186 59% 65%",
+      "--border-200": "103 29% 77%",
+      "--danger-100": "354 79% 71%",
+      "--warning-100": "39 89% 68%",
+      "--success-100": "145 57% 63%",
+      "--oncolor-100": "151 30% 8%",
+      "--claude-accent-clay": "#6fd29a",
+      "--claude-background-color": "#17251c",
+      "--claude-foreground-color": "#e7efe1",
+      "--claude-secondary-color": "#a6b7a7",
+      "--claude-border": "#6fd29a20",
+      "--claude-border-300": "#6fd29a38",
+      "--claude-border-300-more": "#6fd29a60"
+    },
+    "wallpaper": {
+      "gradient": "radial-gradient(circle at 14% 10%, rgb(57 170 104 / .27), transparent 36%), radial-gradient(circle at 84% 79%, rgb(41 155 168 / .16), transparent 44%), linear-gradient(150deg, #09120d 0%, #102218 50%, #081311 100%)",
+      "surfaceAlpha": 0.84,
+      "sidebarAlpha": 0.8,
+      "imageOpacity": 0.18
+    }
+  }
+}
+

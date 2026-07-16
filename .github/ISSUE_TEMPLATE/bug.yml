@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a launch, loading, theme, or appearance problem.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, macOS development scripts]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Claude Aura version
+    validations:
+      required: true
+  - type: input
+    id: webview
+    attributes:
+      label: WebView2 version (Windows)
+      description: Run windows/verify.ps1 if you do not know it.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted verify output or logs
+      description: Remove names, paths, URLs, screenshots, and conversation content you do not want to share.

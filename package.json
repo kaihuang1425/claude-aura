@@ -1,0 +1,19 @@
+{
+  "name": "claude-aura",
+  "version": "0.3.0",
+  "private": true,
+  "description": "A reversible theme companion for Claude.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run-tests.mjs",
+    "check": "node --check scripts/injector.mjs && node --check scripts/theme-core.mjs && node --check scripts/webview-cli.mjs && node --check assets/renderer-inject.js && node tests/run-tests.mjs",
+    "preview:build": "node scripts/build-preview.mjs",
+    "preview:serve": "node scripts/preview-server.mjs",
+    "themes": "node scripts/theme-cli.mjs list",
+    "release": "node scripts/build-release.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

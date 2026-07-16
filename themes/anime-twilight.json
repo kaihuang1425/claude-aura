@@ -1,0 +1,87 @@
+{
+  "name": "anime-twilight",
+  "variant": "anime-twilight",
+  "blur": 22,
+  "typography": {
+    "ui": "\"Segoe UI Variable\", \"Yu Gothic UI\", system-ui, sans-serif",
+    "display": "\"Segoe UI Variable Display\", \"Yu Gothic UI\", system-ui, sans-serif",
+    "body": "\"Segoe UI Variable\", \"Yu Gothic UI\", system-ui, sans-serif",
+    "mono": "\"Cascadia Code\", Consolas, ui-monospace, monospace",
+    "displayWeight": 400,
+    "letterSpacing": "-0.03em"
+  },
+  "shape": {
+    "control": 10,
+    "card": 16,
+    "composer": 22,
+    "icon": 10,
+    "borderWidth": 1
+  },
+  "effects": {
+    "shadowSoft": "0 12px 40px rgb(26 18 83 / 0.18)",
+    "shadowElevated": "0 26px 80px rgb(8 7 42 / 0.4)",
+    "hoverLift": 1,
+    "transitionMs": 190
+  },
+  "light": {
+    "semantic": {
+      "--aura-background-primary": "229 45% 94%",
+      "--aura-background-secondary": "230 40% 88%",
+      "--aura-sidebar-background": "232 38% 20%",
+      "--aura-sidebar-text-primary": "224 54% 94%",
+      "--aura-sidebar-text-muted": "225 26% 72%",
+      "--aura-sidebar-selected": "235 39% 31%",
+      "--aura-panel-background": "229 48% 96%",
+      "--aura-elevated-surface": "226 65% 98%",
+      "--aura-text-primary": "232 37% 16%",
+      "--aura-text-secondary": "231 24% 30%",
+      "--aura-text-muted": "230 14% 43%",
+      "--aura-text-on-accent": "0 0% 100%",
+      "--aura-accent-primary": "259 54% 40%",
+      "--aura-accent-secondary": "188 58% 31%",
+      "--aura-border-emphasis": "232 30% 22%",
+      "--aura-composer-background": "228 55% 97%",
+      "--aura-card-background": "230 45% 96%",
+      "--aura-destructive": "350 66% 43%",
+      "--aura-success": "159 51% 28%",
+      "--aura-warning": "32 88% 34%"
+    },
+    "wallpaper": {
+      "gradient": "radial-gradient(circle at 70% 10%, rgb(122 101 221 / .27), transparent 32%), radial-gradient(circle at 42% 84%, rgb(94 217 226 / .18), transparent 38%), linear-gradient(155deg, #eef1ff 0%, #d8dcf6 54%, #ebe3f5 100%)",
+      "surfaceAlpha": 0.84,
+      "sidebarAlpha": 0.91,
+      "imageOpacity": 0.12,
+      "artOpacity": 0.26,
+      "textureOpacity": 0.18
+    }
+  },
+  "dark": {
+    "semantic": {
+      "--aura-background-primary": "232 48% 14%",
+      "--aura-background-secondary": "232 52% 10%",
+      "--aura-sidebar-background": "232 56% 8%",
+      "--aura-panel-background": "234 43% 18%",
+      "--aura-elevated-surface": "235 38% 22%",
+      "--aura-text-primary": "225 54% 94%",
+      "--aura-text-secondary": "226 34% 80%",
+      "--aura-text-muted": "227 22% 65%",
+      "--aura-text-on-accent": "234 55% 9%",
+      "--aura-accent-primary": "261 75% 76%",
+      "--aura-accent-secondary": "185 72% 73%",
+      "--aura-border-emphasis": "230 42% 80%",
+      "--aura-composer-background": "234 42% 19%",
+      "--aura-card-background": "235 38% 21%",
+      "--aura-destructive": "350 79% 71%",
+      "--aura-success": "159 56% 66%",
+      "--aura-warning": "39 89% 72%"
+    },
+    "wallpaper": {
+      "gradient": "radial-gradient(ellipse at 70% 5%, rgb(99 102 241 / .38), transparent 38%), radial-gradient(circle at 48% 70%, rgb(82 220 225 / .15), transparent 42%), linear-gradient(160deg, #080d2a 0%, #191447 48%, #2b1e59 100%)",
+      "surfaceAlpha": 0.76,
+      "sidebarAlpha": 0.88,
+      "imageOpacity": 0.14,
+      "artOpacity": 0.34,
+      "textureOpacity": 0.16
+    }
+  }
+}

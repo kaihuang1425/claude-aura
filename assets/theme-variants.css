@@ -1,0 +1,291 @@
+/* Theme-specific component recipes. The active theme is selected only through
+   the stable root attribute installed by renderer-inject.js. */
+
+html.claude-aura[data-claude-aura-theme="default"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  border-color: hsl(var(--aura-accent-primary) / 0.18) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="default"] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"]) {
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-accent-primary) / 0.14);
+}
+
+/* Japanese Film Editorial: paper, ink, editorial rules, compact geometry. */
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] .dframe-content,
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] .dframe-main {
+  background-image:
+    linear-gradient(90deg, hsl(var(--aura-border-subtle) / 0.08) 1px, transparent 1px),
+    linear-gradient(hsl(var(--aura-border-subtle) / 0.045) 1px, transparent 1px) !important;
+  background-size: 96px 100%, 100% 28px !important;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(h1, h2, h3, [role="heading"]) {
+  font-style: normal;
+  line-height: 1.08;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(button, [role="button"], [role="tab"], input, textarea, select) {
+  border-radius: var(--aura-control-radius) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(article, [data-card], [data-testid*="card"]) {
+  border-inline-start: 3px solid hsl(var(--aura-accent-primary) / 0.72) !important;
+  background-image: linear-gradient(135deg, transparent 0 92%, hsl(var(--aura-accent-secondary) / 0.08) 92%) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  border-block-width: 1px 2px !important;
+  border-color: hsl(var(--aura-accent-primary) / 0.52) !important;
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, hsl(var(--aura-border-subtle) / 0.05) 27px 28px) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is([role="separator"], hr) {
+  border-style: solid;
+  border-image: linear-gradient(90deg, hsl(var(--aura-accent-primary)), hsl(var(--aura-border-subtle) / 0.18), transparent) 1;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(.claude-logo, [data-testid="claude-logo"], [data-testid="claude-starburst"]) {
+  filter: sepia(0.22) drop-shadow(3px 4px 0 hsl(var(--aura-accent-secondary) / 0.14));
+}
+
+/* Korean Prestige: architectural spacing, fine silver borders, calm glass. */
+html.claude-aura[data-claude-aura-theme="korean-prestige"] .dframe-sidebar,
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is([role="dialog"], [role="menu"], [role="listbox"]) {
+  border-color: hsl(var(--aura-border-emphasis) / 0.24) !important;
+  box-shadow: inset 0 1px 0 hsl(var(--aura-border-emphasis) / 0.12), var(--aura-shadow-elevated) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(h1, h2, h3, [role="heading"]) {
+  text-wrap: balance;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(button, [role="button"], [role="tab"]) {
+  border: 1px solid hsl(var(--aura-border-emphasis) / 0.2);
+  background-image: linear-gradient(145deg, hsl(var(--aura-elevated-surface) / 0.12), transparent 58%);
+}
+
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"]) {
+  background-image: linear-gradient(100deg, hsl(var(--aura-accent-primary) / 0.22), hsl(var(--aura-elevated-surface) / 0.06)) !important;
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-border-emphasis) / 0.2), 0 0 24px hsl(var(--aura-accent-primary) / 0.08);
+}
+
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(article, [data-card], [data-testid*="card"]),
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  background-image:
+    linear-gradient(135deg, hsl(var(--aura-elevated-surface) / 0.15), transparent 45%),
+    linear-gradient(90deg, transparent 0 98%, hsl(var(--aura-accent-primary) / 0.2) 98%) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(svg, [data-icon]) {
+  stroke-width: 1.65;
+}
+
+/* Cartoon Studio: ink outlines, friendly controls, tactile but uncluttered. */
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-sidebar,
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-content,
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-main {
+  backdrop-filter: none;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(button, [role="button"], [role="tab"], input, textarea, select) {
+  border: 2px solid hsl(var(--aura-border-emphasis) / 0.78) !important;
+  border-radius: var(--aura-control-radius) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(button, [role="button"]):not([disabled]):hover {
+  box-shadow: 3px 4px 0 hsl(var(--aura-border-emphasis) / 0.22) !important;
+  transform: translate(-1px, -2px) rotate(-0.25deg);
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(article, [data-card], [data-testid*="card"]) {
+  border: 2px solid hsl(var(--aura-border-emphasis) / 0.74) !important;
+  box-shadow: 4px 5px 0 hsl(var(--aura-border-emphasis) / 0.14) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(article, [data-card], [data-testid*="card"]):nth-of-type(3n+1) {
+  border-color: hsl(var(--aura-accent-secondary) / 0.72) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(article, [data-card], [data-testid*="card"]):nth-of-type(3n+2) {
+  border-color: hsl(var(--aura-accent-primary) / 0.72) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  outline: 1px dashed hsl(var(--aura-accent-primary) / 0.52);
+  outline-offset: -7px;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is([role="separator"], hr) {
+  border-style: dashed;
+}
+
+/* Anime Twilight: cinematic glass, cyan edge light, restrained data lines. */
+html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-content,
+html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-main {
+  background-image:
+    radial-gradient(circle at 18% 22%, hsl(var(--aura-accent-secondary) / 0.16) 0 1px, transparent 1.6px),
+    linear-gradient(115deg, transparent 0 62%, hsl(var(--aura-accent-primary) / 0.055) 62% 62.2%, transparent 62.2%) !important;
+  background-size: 42px 42px, 100% 100% !important;
+}
+
+html.claude-aura[data-claude-aura-theme="anime-twilight"] :is(article, [data-card], [data-testid*="card"]),
+html.claude-aura[data-claude-aura-theme="anime-twilight"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  border-color: hsl(var(--aura-accent-secondary) / 0.34) !important;
+  background-image: linear-gradient(135deg, hsl(var(--aura-accent-primary) / 0.1), transparent 54%) !important;
+  box-shadow: inset 0 1px 0 hsl(var(--aura-text-primary) / 0.08), var(--aura-shadow-elevated) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="anime-twilight"] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"]) {
+  box-shadow: inset 0 -2px 0 hsl(var(--aura-accent-secondary)), 0 0 20px hsl(var(--aura-accent-primary) / 0.12);
+}
+
+html.claude-aura[data-claude-aura-theme="anime-twilight"] :focus-visible {
+  outline-color: hsl(var(--aura-accent-secondary)) !important;
+}
+
+/* Study Library: ruled paper, index tabs, book-spine navigation. */
+html.claude-aura[data-claude-aura-theme="study-library"] .dframe-content,
+html.claude-aura[data-claude-aura-theme="study-library"] .dframe-main {
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 31px, hsl(var(--aura-border-subtle) / 0.055) 31px 32px),
+    linear-gradient(90deg, hsl(var(--aura-accent-secondary) / 0.09) 0 1px, transparent 1px) !important;
+  background-size: auto, 82px 100% !important;
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] :is(.font-claude-response-body, .font-claude-response-title, .font-claude-response) {
+  line-height: 1.72;
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] .dframe-sidebar :is(a, button, [role="button"]) {
+  border-inline-start: 3px solid transparent;
+  border-radius: 2px var(--aura-control-radius) var(--aura-control-radius) 2px !important;
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] .dframe-sidebar :is([aria-current="page"], [aria-selected="true"], [data-state="active"]) {
+  border-inline-start-color: hsl(var(--aura-accent-secondary));
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] :is(article, [data-card], [data-testid*="card"]) {
+  border-block-start: 4px solid hsl(var(--aura-accent-primary) / 0.72) !important;
+  background-image: linear-gradient(90deg, hsl(var(--aura-accent-secondary) / 0.09) 0 26px, transparent 26px) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, hsl(var(--aura-accent-primary) / 0.09) 27px 28px) !important;
+  box-shadow: 0 7px 0 hsl(var(--aura-accent-secondary) / 0.12), var(--aura-shadow-soft) !important;
+}
+
+/* Japanese Idol: warm editorial softness, fine ribbons, pearlescent controls. */
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(article, [data-card], [data-testid*="card"]),
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  background-image:
+    radial-gradient(circle at 88% 12%, hsl(var(--aura-accent-secondary) / 0.13), transparent 28%),
+    linear-gradient(135deg, hsl(var(--aura-accent-primary) / 0.05), transparent 52%) !important;
+  border-color: hsl(var(--aura-accent-primary) / 0.28) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(button, [role="button"], [role="tab"]) {
+  border-radius: 999px;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"]) {
+  background-image: linear-gradient(100deg, hsl(var(--aura-accent-primary) / 0.2), hsl(var(--aura-accent-secondary) / 0.14)) !important;
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-text-primary) / 0.05), 0 8px 28px hsl(var(--aura-accent-primary) / 0.09);
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is([role="separator"], hr) {
+  border-image: linear-gradient(90deg, transparent, hsl(var(--aura-accent-primary) / 0.42), hsl(var(--aura-accent-secondary) / 0.35), transparent) 1;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(.claude-logo, [data-testid="claude-logo"], [data-testid="claude-starburst"]) {
+  filter: drop-shadow(0 0 10px hsl(var(--aura-accent-primary) / 0.28));
+}
+
+/* Korean Idol: geometric grids, holographic edges, music-player rhythm. */
+html.claude-aura[data-claude-aura-theme="korean-idol"] .dframe-content,
+html.claude-aura[data-claude-aura-theme="korean-idol"] .dframe-main {
+  background-image:
+    linear-gradient(hsl(var(--aura-accent-primary) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--aura-accent-secondary) / 0.045) 1px, transparent 1px) !important;
+  background-size: 56px 56px !important;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-idol"] :is(article, [data-card], [data-testid*="card"]),
+html.claude-aura[data-claude-aura-theme="korean-idol"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  border-color: hsl(var(--aura-accent-primary) / 0.28) !important;
+  background-image:
+    linear-gradient(110deg, hsl(var(--aura-accent-secondary) / 0.1), transparent 32%),
+    linear-gradient(290deg, hsl(var(--aura-accent-primary) / 0.12), transparent 36%) !important;
+  box-shadow: inset 0 1px 0 hsl(var(--aura-text-primary) / 0.09), var(--aura-shadow-elevated) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-idol"] :is(button, [role="button"], [role="tab"]) {
+  border-radius: var(--aura-control-radius) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-idol"] :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"]) {
+  background-image: linear-gradient(100deg, hsl(var(--aura-accent-primary) / 0.24), hsl(var(--aura-accent-secondary) / 0.18)) !important;
+  box-shadow: inset 0 -2px 0 hsl(var(--aura-accent-secondary)), 0 10px 28px hsl(var(--aura-accent-primary) / 0.1);
+}
+
+html.claude-aura[data-claude-aura-theme="korean-idol"] :is(svg, [data-icon]) {
+  filter: drop-shadow(1px 1px 0 hsl(var(--aura-accent-secondary) / 0.15));
+}
+
+/* Interactive icon containers use the shared icon-radius token, then take on
+   distinct material and stroke treatments per theme without changing markup. */
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: 1px;
+  background: hsl(var(--aura-elevated-surface) / 0.78);
+  box-shadow: inset 0 -2px 0 hsl(var(--aura-accent-primary) / 0.72);
+  stroke-linecap: square;
+}
+
+html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: 2px;
+  background: linear-gradient(145deg, hsl(var(--aura-accent-secondary) / 0.18), transparent 72%);
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-accent-secondary) / 0.48);
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: var(--aura-icon-radius);
+  background: hsl(var(--aura-warning) / 0.18);
+  box-shadow: inset 0 0 0 2px hsl(var(--aura-border-emphasis) / 0.58), 2px 2px 0 hsl(var(--aura-accent-secondary) / 0.24);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html.claude-aura[data-claude-aura-theme="anime-twilight"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  background: radial-gradient(circle, hsl(var(--aura-accent-secondary) / 0.24), transparent 74%);
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-accent-secondary) / 0.32), 0 0 9px hsl(var(--aura-accent-secondary) / 0.18);
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: 1px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-accent-primary) / 0.42);
+  stroke-linecap: square;
+}
+
+html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: 999px;
+  background: linear-gradient(135deg, hsl(var(--aura-accent-primary) / 0.18), hsl(var(--aura-accent-secondary) / 0.13));
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-accent-primary) / 0.3), 0 2px 8px hsl(var(--aura-accent-primary) / 0.14);
+}
+
+html.claude-aura[data-claude-aura-theme="korean-idol"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: 3px 9px;
+  background: linear-gradient(135deg, hsl(var(--aura-accent-secondary) / 0.2), hsl(var(--aura-info) / 0.12));
+  box-shadow: inset 0 0 0 1px hsl(var(--aura-accent-secondary) / 0.4), 0 0 8px hsl(var(--aura-info) / 0.13);
+}
+
+@media (max-width: 820px) {
+  html.claude-aura[data-claude-aura-theme] :is(article, [data-card], [data-testid*="card"]) {
+    background-image: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(.claude-logo, [data-testid="claude-logo"], [data-testid="claude-starburst"]):hover {
+    transform: rotate(4deg) scale(1.03);
+  }
+}

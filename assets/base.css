@@ -1,0 +1,595 @@
+html.claude-aura {
+  background: hsl(var(--aura-background-primary)) !important;
+  color: hsl(var(--aura-text-primary)) !important;
+  color-scheme: light;
+  font-family: var(--aura-font-ui);
+}
+
+html.claude-aura:is(.dark, .darkTheme),
+html.claude-aura[data-mode="dark"] {
+  color-scheme: dark;
+}
+
+html.claude-aura:is(.light, .lightTheme),
+html.claude-aura[data-mode="light"] {
+  color-scheme: light;
+}
+
+html.claude-aura body {
+  background: transparent !important;
+  color: hsl(var(--aura-text-primary)) !important;
+  font-family: var(--aura-font-ui);
+}
+
+#claude-aura-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none !important;
+  user-select: none;
+  contain: strict;
+  background: hsl(var(--aura-background-primary));
+}
+
+#claude-aura-backdrop,
+#claude-aura-backdrop * {
+  pointer-events: none !important;
+}
+
+#claude-aura-backdrop > div {
+  position: absolute;
+  inset: -2%;
+}
+
+#claude-aura-backdrop .claude-aura-gradient {
+  background: var(--aura-wallpaper-gradient);
+  background-position: center;
+  background-size: cover;
+}
+
+#claude-aura-backdrop .claude-aura-image {
+  background-image: var(--aura-image, none);
+  background-position: var(--aura-image-position, center);
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: saturate(0.9) contrast(0.96);
+  opacity: var(--aura-image-opacity, var(--aura-default-image-opacity, 0));
+  transform: scale(1.025);
+}
+
+#claude-aura-backdrop .claude-aura-theme-art {
+  inset: 0;
+  background-image: var(--aura-theme-art, none);
+  background-position: var(--aura-art-position, right center);
+  background-repeat: no-repeat;
+  background-size: var(--aura-art-size, min(58vw, 860px) auto);
+  opacity: var(--aura-art-opacity, 0);
+  transform: translateZ(0);
+  animation: aura-art-enter 420ms ease-out both;
+}
+
+#claude-aura-backdrop .claude-aura-grain {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgb(255 255 255 / 0.05) 0 0.55px, transparent 0.8px),
+    radial-gradient(circle at 80% 40%, rgb(0 0 0 / 0.055) 0 0.5px, transparent 0.8px);
+  background-size: 5px 5px, 7px 7px;
+  mix-blend-mode: soft-light;
+  opacity: var(--aura-texture-opacity, 0.34);
+}
+
+#claude-aura-backdrop .claude-aura-vignette {
+  inset: 0;
+  background:
+    linear-gradient(90deg, hsl(var(--aura-background-primary) / 0.22), transparent 38%, transparent 68%, hsl(var(--aura-background-primary) / 0.14)),
+    linear-gradient(0deg, hsl(var(--aura-background-primary) / 0.28), transparent 22% 78%, hsl(var(--aura-background-primary) / 0.16));
+}
+
+html.claude-aura #root,
+html.claude-aura [id="root"],
+html.claude-aura .dframe-root,
+html.claude-aura .cds-root,
+html.claude-aura .epitaxy-root {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+}
+
+html.claude-aura .dframe-root {
+  --df-z1: var(--aura-background-primary) !important;
+  --df-z2: var(--aura-background-secondary) !important;
+  --df-sidebar-bg: hsl(var(--aura-sidebar-background) / var(--aura-sidebar-alpha)) !important;
+  --df-surface-primary: hsl(var(--aura-panel-background) / var(--aura-surface-alpha)) !important;
+}
+
+html.claude-aura,
+html.claude-aura .cds-root,
+html.claude-aura .epitaxy-root,
+html.claude-aura [data-mode="dark"],
+html.claude-aura [data-mode="light"] {
+  --cds-page-bg: hsl(var(--aura-sidebar-background) / var(--aura-sidebar-alpha)) !important;
+  --cds-surface-0: hsl(var(--aura-sidebar-background) / var(--aura-sidebar-alpha)) !important;
+  --cds-surface-1: hsl(var(--aura-panel-background) / var(--aura-surface-alpha)) !important;
+  --cds-surface-2: hsl(var(--aura-background-primary) / var(--aura-surface-alpha)) !important;
+  --cds-surface-3: hsl(var(--aura-elevated-surface) / 0.96) !important;
+  --cds-surface-panel: hsl(var(--aura-panel-background) / var(--aura-surface-alpha)) !important;
+  --cds-surface-popover: hsl(var(--aura-overlay-background) / 0.96) !important;
+  --surface-primary: hsl(var(--aura-panel-background) / var(--aura-surface-alpha)) !important;
+  --surface-primary-elevated: hsl(var(--aura-elevated-surface) / 0.96) !important;
+  --surface-popover: hsl(var(--aura-overlay-background) / 0.96) !important;
+  --surface-panel: hsl(var(--aura-panel-background) / var(--aura-surface-alpha)) !important;
+  --surface-hud: hsl(var(--aura-background-secondary) / 0.94) !important;
+  --cds-text-primary: hsl(var(--aura-text-primary)) !important;
+  --cds-text-secondary: hsl(var(--aura-text-secondary)) !important;
+  --cds-text-muted: hsl(var(--aura-text-muted)) !important;
+  --cds-border: hsl(var(--aura-border-subtle) / 0.3) !important;
+  --cds-clay: hsl(var(--aura-accent-primary)) !important;
+}
+
+html.claude-aura .dframe-sidebar {
+  color: hsl(var(--aura-sidebar-text-primary)) !important;
+  background-color: hsl(var(--aura-sidebar-background) / var(--aura-sidebar-alpha)) !important;
+  border-color: hsl(var(--aura-border-subtle) / 0.2) !important;
+  backdrop-filter: blur(var(--aura-blur)) saturate(1.06);
+}
+
+html.claude-aura .dframe-sidebar :is(a, button, [role="button"], [role="link"], [role="menuitem"]) {
+  color: hsl(var(--aura-sidebar-text-primary)) !important;
+}
+
+html.claude-aura .dframe-sidebar :is(p, small, time, [data-secondary], [data-muted]) {
+  color: hsl(var(--aura-sidebar-text-muted)) !important;
+}
+
+html.claude-aura .dframe-sidebar :is([aria-current="page"], [aria-selected="true"], [data-state="active"]) {
+  background: hsl(var(--aura-sidebar-selected) / 0.88) !important;
+  color: hsl(var(--aura-sidebar-text-primary)) !important;
+  box-shadow: inset 3px 0 0 hsl(var(--aura-sidebar-indicator));
+}
+
+html.claude-aura [data-darker] .dframe-sidebar {
+  background-color: hsl(var(--aura-sidebar-background) / 0.96) !important;
+}
+
+html.claude-aura .dframe-content,
+html.claude-aura .dframe-main,
+html.claude-aura main.dframe-main {
+  background-color: hsl(var(--aura-panel-background) / var(--aura-surface-alpha)) !important;
+  backdrop-filter: blur(calc(var(--aura-blur) * 0.68)) saturate(1.03);
+}
+
+html.claude-aura .epitaxy-top-scrim {
+  background: linear-gradient(hsl(var(--aura-panel-background) / 0.97), transparent) !important;
+}
+
+html.claude-aura .epitaxy-bottom-scrim {
+  background: linear-gradient(transparent, hsl(var(--aura-panel-background) / 0.97)) !important;
+}
+
+html.claude-aura :is(h1, h2, h3, [role="heading"]) {
+  color: hsl(var(--aura-text-primary));
+  font-family: var(--aura-font-display);
+  font-weight: var(--aura-display-weight);
+  letter-spacing: var(--aura-display-spacing);
+}
+
+html.claude-aura :is(.font-claude-response-body, .font-claude-response-title, .font-claude-response) {
+  font-family: var(--aura-font-body) !important;
+}
+
+html.claude-aura :is(code, pre, kbd, samp, .font-mono) {
+  font-family: var(--aura-font-mono) !important;
+}
+
+html.claude-aura :is(.claude-logo, [data-testid="claude-logo"], [data-testid="claude-starburst"]) {
+  color: hsl(var(--aura-accent-primary)) !important;
+  filter: drop-shadow(0 5px 14px hsl(var(--aura-accent-primary) / 0.2));
+  animation: aura-mark-enter 360ms ease-out both;
+}
+
+html.claude-aura :is([role="dialog"], [role="menu"], [role="listbox"], [role="tooltip"], [data-radix-popper-content-wrapper] > *) {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-overlay-background) / 0.96) !important;
+  border: var(--aura-border-width) solid hsl(var(--aura-border-subtle) / 0.32) !important;
+  border-radius: var(--aura-card-radius);
+  box-shadow: var(--aura-shadow-elevated) !important;
+  backdrop-filter: blur(var(--aura-blur)) saturate(1.1);
+}
+
+html.claude-aura [role="tooltip"] {
+  border-radius: var(--aura-control-radius);
+  font-family: var(--aura-font-ui);
+  font-size: max(12px, 0.75rem);
+}
+
+html.claude-aura :is([data-empty-state], .empty-state, [data-testid*="empty-state"]) {
+  color: hsl(var(--aura-text-secondary)) !important;
+  background: hsl(var(--aura-elevated-surface) / 0.72) !important;
+  border: var(--aura-border-width) dashed hsl(var(--aura-border-subtle) / 0.42) !important;
+  border-radius: var(--aura-card-radius);
+}
+
+html.claude-aura :is([role="menuitem"], [role="option"], [role="tab"]) {
+  border-radius: var(--aura-control-radius);
+}
+
+html.claude-aura :is([role="menuitem"], [role="option"], [role="tab"]):is([aria-selected="true"], [data-state="active"], [aria-checked="true"]) {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-selected-surface) / 0.92) !important;
+  box-shadow: inset 0 -2px 0 hsl(var(--aura-accent-primary));
+}
+
+html.claude-aura :is([role="menuitem"], [role="option"])[data-destructive],
+html.claude-aura :is(button, [role="button"])[data-destructive] {
+  color: hsl(var(--aura-destructive)) !important;
+}
+
+html.claude-aura :is(article, [data-testid*="card"], [data-testid*="project-card"], [data-card]) {
+  color: hsl(var(--aura-text-primary));
+  background: hsl(var(--aura-card-background) / 0.92) !important;
+  border-color: hsl(var(--aura-border-subtle) / 0.24) !important;
+  border-radius: var(--aura-card-radius);
+  box-shadow: var(--aura-shadow-soft);
+}
+
+html.claude-aura :is(
+  [data-widget],
+  article[data-testid*="widget"],
+  section[data-testid*="widget"],
+  [role="group"][data-testid*="widget"],
+  :is(button, a, [role="button"], [role="link"])[data-testid*="quick-action"],
+  :is(li, article, button, a, [role="listitem"], [role="button"], [role="link"])[data-testid*="pinned"],
+  :is(li, article, button, a, [role="listitem"], [role="button"], [role="link"])[data-testid*="recent"]
+) {
+  color: hsl(var(--aura-text-primary));
+  background-color: hsl(var(--aura-card-background) / 0.88);
+  border-color: hsl(var(--aura-border-subtle) / 0.26) !important;
+  border-radius: var(--aura-card-radius);
+  box-shadow: var(--aura-shadow-soft);
+}
+
+html.claude-aura :is(
+  [data-settings-panel],
+  :is(section, article, form, [role="dialog"])[data-testid*="settings-panel"],
+  :is(section, article, form, [role="dialog"])[data-testid*="preferences-panel"]
+) {
+  color: hsl(var(--aura-text-primary));
+  background-color: hsl(var(--aura-elevated-surface) / 0.94) !important;
+  border-color: hsl(var(--aura-border-subtle) / 0.3) !important;
+  border-radius: var(--aura-card-radius);
+}
+
+html.claude-aura :is(
+  [data-profile-control],
+  [data-workspace-control],
+  :is(button, a, [role="button"], [role="menuitem"])[data-testid*="profile"],
+  :is(button, a, [role="button"], [role="menuitem"])[data-testid*="workspace"],
+  :is(button, a, [role="button"], [role="menuitem"])[data-testid*="account-menu"]
+) {
+  color: hsl(var(--aura-text-primary));
+  border-color: hsl(var(--aura-border-subtle) / 0.24) !important;
+  border-radius: var(--aura-control-radius);
+  font-family: var(--aura-font-ui);
+}
+
+html.claude-aura :is([data-avatar], [data-testid*="avatar"]) {
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px hsl(var(--aura-accent-primary) / 0.28);
+}
+
+html.claude-aura :is([data-user-message-bubble], [data-testid="user-message"]) {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-card-background) / 0.94) !important;
+  border: var(--aura-border-width) solid hsl(var(--aura-border-subtle) / 0.22);
+  border-radius: var(--aura-card-radius) var(--aura-card-radius) calc(var(--aura-card-radius) * 0.35) var(--aura-card-radius);
+}
+
+html.claude-aura :is(.bg-white, [data-surface="elevated"]) {
+  background-color: hsl(var(--aura-elevated-surface) / 0.96) !important;
+}
+
+html.claude-aura .text-black {
+  color: hsl(var(--aura-text-primary)) !important;
+}
+
+html.claude-aura :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-composer-background) / 0.94) !important;
+  border: var(--aura-border-width) solid hsl(var(--aura-border-emphasis) / 0.26) !important;
+  border-radius: var(--aura-composer-radius) !important;
+  box-shadow: var(--aura-shadow-elevated), 0 0 0 1px hsl(var(--aura-accent-primary) / 0.05) !important;
+  backdrop-filter: blur(var(--aura-blur)) saturate(1.06);
+}
+
+html.claude-aura input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+html.claude-aura textarea,
+html.claude-aura select,
+html.claude-aura [contenteditable="true"],
+html.claude-aura .ProseMirror {
+  color: hsl(var(--aura-text-primary)) !important;
+  caret-color: hsl(var(--aura-accent-primary));
+  border-color: hsl(var(--aura-border-subtle) / 0.3) !important;
+  border-radius: var(--aura-control-radius);
+  font-family: var(--aura-font-ui);
+}
+
+html.claude-aura :is(input, textarea, select):disabled,
+html.claude-aura [contenteditable="true"][aria-disabled="true"] {
+  color: hsl(var(--aura-text-disabled)) !important;
+  background: hsl(var(--aura-disabled-surface) / 0.72) !important;
+  cursor: not-allowed;
+}
+
+html.claude-aura ::placeholder {
+  color: hsl(var(--aura-text-muted)) !important;
+  opacity: 0.92;
+}
+
+html.claude-aura :focus-visible {
+  outline: 2px solid hsl(var(--aura-focus-ring)) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px hsl(var(--aura-focus-ring) / 0.18) !important;
+}
+
+html.claude-aura .dframe-sidebar :focus-visible {
+  outline-color: hsl(var(--aura-sidebar-indicator)) !important;
+  box-shadow: 0 0 0 4px hsl(var(--aura-focus-ring) / 0.34) !important;
+}
+
+html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) {
+  font-family: var(--aura-font-ui);
+  transition:
+    color var(--aura-transition-duration) ease,
+    background-color var(--aura-transition-duration) ease,
+    border-color var(--aura-transition-duration) ease,
+    box-shadow var(--aura-transition-duration) ease,
+    transform var(--aura-transition-duration) ease;
+}
+
+html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]),
+html.claude-aura .dframe-sidebar a {
+  border-radius: var(--aura-control-radius);
+}
+
+html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
+  border-radius: var(--aura-icon-radius);
+  background-color: hsl(var(--aura-accent-primary) / 0.07);
+  box-shadow: inset 0 0 0 var(--aura-border-width) hsl(var(--aura-border-emphasis) / 0.14);
+  transition:
+    background-color var(--aura-transition-duration) ease,
+    box-shadow var(--aura-transition-duration) ease,
+    filter var(--aura-transition-duration) ease,
+    transform var(--aura-transition-duration) ease;
+}
+
+html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):not([disabled]):not([aria-disabled="true"]):hover,
+html.claude-aura .dframe-sidebar a:not([aria-disabled="true"]):hover {
+  border-color: hsl(var(--aura-accent-primary) / 0.36) !important;
+  box-shadow: 0 0 0 1px hsl(var(--aura-accent-primary) / 0.12), var(--aura-shadow-soft);
+  transform: translateY(calc(var(--aura-hover-lift) * -1));
+}
+
+html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):not([disabled]):not([aria-disabled="true"]):active,
+html.claude-aura .dframe-sidebar a:not([aria-disabled="true"]):active {
+  background-color: hsl(var(--aura-selected-surface) / 0.88) !important;
+  transform: translateY(0) scale(0.985);
+}
+
+html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):is([disabled], [aria-disabled="true"]),
+html.claude-aura .dframe-sidebar a[aria-disabled="true"] {
+  color: hsl(var(--aura-text-disabled)) !important;
+  background: hsl(var(--aura-disabled-surface) / 0.66) !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+html.claude-aura :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"], [data-state="active"]) {
+  color: hsl(var(--aura-text-primary));
+  background-color: hsl(var(--aura-selected-surface) / 0.9);
+  border-color: hsl(var(--aura-accent-primary) / 0.42) !important;
+}
+
+html.claude-aura :is([type="checkbox"], [type="radio"]):checked {
+  color: hsl(var(--aura-text-on-accent)) !important;
+  background-color: hsl(var(--aura-accent-primary)) !important;
+  border-color: hsl(var(--aura-accent-primary)) !important;
+}
+
+html.claude-aura :is(input[type="range"], progress) {
+  accent-color: hsl(var(--aura-accent-primary));
+}
+
+html.claude-aura :is([role="switch"], [data-state="checked"]) {
+  border-color: hsl(var(--aura-accent-primary) / 0.5) !important;
+}
+
+html.claude-aura :is([role="switch"][aria-checked="true"], [data-state="checked"]) {
+  color: hsl(var(--aura-text-on-accent));
+  background: hsl(var(--aura-accent-primary)) !important;
+}
+
+html.claude-aura :is([role="alert"], [data-status="error"]) {
+  color: hsl(var(--aura-destructive)) !important;
+  border-color: hsl(var(--aura-destructive) / 0.38) !important;
+}
+
+html.claude-aura :is([role="status"], [aria-live], [data-status="info"]) {
+  color: hsl(var(--aura-text-secondary));
+  background: hsl(var(--aura-card-background) / 0.9);
+  border-color: hsl(var(--aura-info) / 0.32) !important;
+  border-radius: var(--aura-control-radius);
+}
+
+html.claude-aura :is([data-status="info"], [data-tone="info"]) {
+  color: hsl(var(--aura-info)) !important;
+  border-color: hsl(var(--aura-info) / 0.38) !important;
+}
+
+html.claude-aura :is([data-status="success"], [data-tone="success"]) {
+  color: hsl(var(--aura-success)) !important;
+  background: hsl(var(--aura-card-background) / 0.9);
+  border-color: hsl(var(--aura-success) / 0.38) !important;
+}
+
+html.claude-aura :is([data-status="warning"], [data-tone="warning"]) {
+  color: hsl(var(--aura-warning)) !important;
+  background: hsl(var(--aura-card-background) / 0.9);
+  border-color: hsl(var(--aura-warning) / 0.38) !important;
+}
+
+html.claude-aura :is([aria-busy="true"], [data-status="loading"], [data-loading="true"]) {
+  cursor: progress;
+}
+
+html.claude-aura :is([aria-busy="true"], [data-status="loading"], [data-loading="true"])::after {
+  content: "";
+  display: inline-block;
+  inline-size: 0.8em;
+  block-size: 0.8em;
+  margin-inline-start: 0.5em;
+  border: 2px solid hsl(var(--aura-accent-primary) / 0.3);
+  border-top-color: hsl(var(--aura-accent-primary));
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: aura-spin 700ms linear infinite;
+}
+
+html.claude-aura [role="progressbar"] {
+  color: hsl(var(--aura-accent-primary));
+  background-color: hsl(var(--aura-disabled-surface) / 0.72);
+  border-radius: 999px;
+  accent-color: hsl(var(--aura-accent-primary));
+  overflow: hidden;
+}
+
+html.claude-aura :is([data-status="loading"], [data-loading="true"], [data-testid*="skeleton"]) {
+  color: hsl(var(--aura-text-muted));
+  background-image: linear-gradient(110deg, hsl(var(--aura-disabled-surface) / 0.82), hsl(var(--aura-elevated-surface) / 0.96), hsl(var(--aura-disabled-surface) / 0.82));
+  border-color: hsl(var(--aura-border-subtle) / 0.24) !important;
+  border-radius: var(--aura-control-radius);
+}
+
+html.claude-aura ::selection {
+  color: hsl(var(--aura-text-primary));
+  background: hsl(var(--aura-accent-primary) / 0.26) !important;
+}
+
+html.claude-aura :is(hr, [role="separator"]) {
+  border-color: hsl(var(--aura-border-subtle) / 0.28) !important;
+}
+
+html.claude-aura * {
+  scrollbar-color: hsl(var(--aura-accent-primary) / 0.5) transparent;
+  scrollbar-width: thin;
+}
+
+html.claude-aura ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.claude-aura ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html.claude-aura ::-webkit-scrollbar-thumb {
+  background: hsl(var(--aura-accent-primary) / 0.5);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+html.claude-aura ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--aura-accent-primary) / 0.72);
+  background-clip: padding-box;
+}
+
+@keyframes aura-art-enter {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: var(--aura-art-opacity, 0); transform: translateX(0); }
+}
+
+@keyframes aura-mark-enter {
+  from { opacity: 0; transform: rotate(-10deg) scale(0.88); }
+  to { opacity: 1; transform: rotate(0) scale(1); }
+}
+
+@keyframes aura-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1100px) {
+  #claude-aura-backdrop .claude-aura-theme-art {
+    background-size: min(64vw, 720px) auto;
+    opacity: calc(var(--aura-art-opacity, 0) * 0.66);
+  }
+}
+
+@media (max-width: 820px) {
+  #claude-aura-backdrop .claude-aura-theme-art {
+    background-position: right top;
+    background-size: min(78vw, 580px) auto;
+    opacity: calc(var(--aura-art-opacity, 0) * 0.38);
+  }
+
+  html.claude-aura[data-claude-aura-art-mobile="hide"] #claude-aura-backdrop .claude-aura-theme-art {
+    display: none;
+  }
+
+  html.claude-aura .dframe-content,
+  html.claude-aura .dframe-main,
+  html.claude-aura main.dframe-main {
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  html.claude-aura {
+    --aura-surface-alpha: 1 !important;
+    --aura-sidebar-alpha: 1 !important;
+    --aura-art-opacity: 0 !important;
+    --aura-image-opacity: 0 !important;
+  }
+
+  html.claude-aura :focus-visible {
+    outline-width: 3px !important;
+    outline-offset: 3px;
+  }
+}
+
+@media (forced-colors: active) {
+  #claude-aura-backdrop { display: none !important; }
+  html.claude-aura :focus-visible { outline: 2px solid Highlight !important; box-shadow: none !important; }
+  html.claude-aura :is(button, input, textarea, select, [role="button"], [role="tab"], [role="menuitem"]) {
+    forced-color-adjust: auto;
+  }
+}
+
+html.claude-aura.claude-aura-reduce-motion *,
+html.claude-aura.claude-aura-reduce-motion *::before,
+html.claude-aura.claude-aura-reduce-motion *::after {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+html.claude-aura.claude-aura-reduce-motion.claude-aura-animated-image #claude-aura-backdrop .claude-aura-image {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.claude-aura *,
+  html.claude-aura *::before,
+  html.claude-aura *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  html.claude-aura.claude-aura-animated-image #claude-aura-backdrop .claude-aura-image {
+    display: none;
+  }
+}

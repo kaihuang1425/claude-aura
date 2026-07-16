@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "defaultTheme": "default",
+  "legacyAliases": {
+    "midnight": "default",
+    "ember": "japanese-film-editorial",
+    "forest": "study-library",
+    "sakura": "japanese-idol"
+  },
+  "themes": [
+    {
+      "id": "default",
+      "labels": {
+        "en": "Default",
+        "zh-CN": "默认",
+        "zh-TW": "預設"
+      },
+      "descriptions": {
+        "en": "Claude Aura’s familiar indigo foundation with calm, balanced controls.",
+        "zh-CN": "保留 Claude Aura 熟悉的靛蓝基调，界面清晰克制。",
+        "zh-TW": "保留 Claude Aura 熟悉的靛藍基調，畫面清楚、操作沉穩。"
+      },
+      "swatches": ["#F7F7FC", "#E8E9F5", "#4F46A8", "#26243B"],
+      "preview": {
+        "chrome": "#171623",
+        "background": "#F3F3FA",
+        "surface": "#FFFFFF",
+        "accent": "#5D54C7",
+        "text": "#242238"
+      },
+      "artwork": null
+    },
+    {
+      "id": "japanese-film-editorial",
+      "labels": {
+        "en": "Japanese Film Editorial",
+        "zh-CN": "日式电影编辑风",
+        "zh-TW": "日系電影編輯風"
+      },
+      "descriptions": {
+        "en": "Warm paper, charcoal ink, muted indigo, and restrained vermilion.",
+        "zh-CN": "暖象牙色纸张、墨线与朱红焦点，呈现沉静的电影编辑感。",
+        "zh-TW": "暖象牙紙、墨線與朱紅焦點，營造安靜的電影編輯質感。"
+      },
+      "swatches": ["#F2E8D5", "#252725", "#394563", "#B64B32"],
+      "preview": {
+        "chrome": "#171A19",
+        "background": "#EEE2CC",
+        "surface": "#F8F0E1",
+        "accent": "#B64B32",
+        "text": "#272824"
+      },
+      "artwork": {
+        "path": "assets/theme-art/japanese-film-editorial.svg",
+        "position": "right center",
+        "size": "min(60vw, 920px) auto",
+        "mobile": "reduce"
+      }
+    },
+    {
+      "id": "korean-prestige",
+      "labels": {
+        "en": "Korean Prestige",
+        "zh-CN": "韩式精品",
+        "zh-TW": "韓系精品"
+      },
+      "descriptions": {
+        "en": "Midnight navy, silver structure, and precise architectural glass.",
+        "zh-CN": "午夜蓝配合银灰玻璃表面，结构利落，层次清晰。",
+        "zh-TW": "午夜藍搭配銀灰玻璃表面，結構俐落、層次清楚。"
+      },
+      "swatches": ["#071426", "#152840", "#AAB5C7", "#4D84D8"],
+      "preview": {
+        "chrome": "#050C18",
+        "background": "#08172B",
+        "surface": "#14233A",
+        "accent": "#5A91E6",
+        "text": "#EDF3FA"
+      },
+      "artwork": {
+        "path": "assets/theme-art/korean-prestige.svg",
+        "position": "right center",
+        "size": "min(58vw, 880px) auto",
+        "mobile": "reduce"
+      }
+    },
+    {
+      "id": "cartoon-studio",
+      "labels": {
+        "en": "Cartoon Studio",
+        "zh-CN": "卡通工作室",
+        "zh-TW": "卡通工作室"
+      },
+      "descriptions": {
+        "en": "Cream, coral, teal, and sunny yellow with friendly inked details.",
+        "zh-CN": "奶油色、珊瑚色和青绿色搭配手绘轮廓，轻松但不失秩序。",
+        "zh-TW": "奶油色、珊瑚色與青綠色搭配手繪輪廓，輕鬆又有秩序。"
+      },
+      "swatches": ["#FFF6E7", "#EA6047", "#248C88", "#F4B62E"],
+      "preview": {
+        "chrome": "#2B2621",
+        "background": "#FFF5E3",
+        "surface": "#FFFBF3",
+        "accent": "#248C88",
+        "text": "#302820"
+      },
+      "artwork": {
+        "path": "assets/theme-art/cartoon-studio.svg",
+        "position": "right bottom",
+        "size": "min(54vw, 780px) auto",
+        "mobile": "reduce"
+      }
+    },
+    {
+      "id": "anime-twilight",
+      "labels": {
+        "en": "Anime Twilight",
+        "zh-CN": "动漫暮色",
+        "zh-TW": "動畫暮光"
+      },
+      "descriptions": {
+        "en": "Twilight blue glass, pale cyan, violet, and warm window light.",
+        "zh-CN": "暮蓝与紫色玻璃面板，配合柔和窗光和星空线条。",
+        "zh-TW": "暮藍與紫色玻璃面板，搭配柔和窗光與星空線條。"
+      },
+      "swatches": ["#111A49", "#393A85", "#9CE5EC", "#F0B875"],
+      "preview": {
+        "chrome": "#0A102E",
+        "background": "#141C50",
+        "surface": "#293063",
+        "accent": "#A98FE8",
+        "text": "#F1F1FF"
+      },
+      "artwork": {
+        "path": "assets/theme-art/anime-twilight.svg",
+        "position": "right bottom",
+        "size": "cover",
+        "mobile": "reduce"
+      }
+    },
+    {
+      "id": "study-library",
+      "labels": {
+        "en": "Study Library",
+        "zh-CN": "自习图书馆",
+        "zh-TW": "自習圖書館"
+      },
+      "descriptions": {
+        "en": "Ivory paper, forest green, oxblood, graphite, and quiet brass.",
+        "zh-CN": "象牙纸、森林绿和牛血红，营造安静的研究与阅读氛围。",
+        "zh-TW": "象牙紙、森林綠與牛血紅，營造安靜的研究與閱讀氛圍。"
+      },
+      "swatches": ["#F4EEDC", "#1F523F", "#74343B", "#AA884C"],
+      "preview": {
+        "chrome": "#25251F",
+        "background": "#EEE6D2",
+        "surface": "#FAF5E8",
+        "accent": "#2D614B",
+        "text": "#292B26"
+      },
+      "artwork": {
+        "path": "assets/theme-art/study-library.svg",
+        "position": "right bottom",
+        "size": "min(48vw, 700px) auto",
+        "mobile": "hide"
+      }
+    },
+    {
+      "id": "japanese-idol",
+      "labels": {
+        "en": "Japanese Idol",
+        "zh-CN": "日式偶像",
+        "zh-TW": "日系偶像"
+      },
+      "descriptions": {
+        "en": "Warm cream, blush, rose, and pearlescent lilac with fine ribbons.",
+        "zh-CN": "暖奶油色与柔粉色，辅以克制的丝带和舞台光元素。",
+        "zh-TW": "暖奶油色與柔粉色，點綴節制的緞帶與舞台光。"
+      },
+      "swatches": ["#FFF5F1", "#EF879A", "#C7B3E6", "#F2A17C"],
+      "preview": {
+        "chrome": "#3A2431",
+        "background": "#FFF2EF",
+        "surface": "#FFF9F7",
+        "accent": "#DA6F8D",
+        "text": "#3B2930"
+      },
+      "artwork": {
+        "path": "assets/theme-art/japanese-idol.svg",
+        "position": "right center",
+        "size": "min(55vw, 820px) auto",
+        "mobile": "reduce"
+      }
+    },
+    {
+      "id": "korean-idol",
+      "labels": {
+        "en": "Korean Idol",
+        "zh-CN": "韩式偶像",
+        "zh-TW": "韓系偶像"
+      },
+      "descriptions": {
+        "en": "Cool white, periwinkle, holographic silver, and structured music glass.",
+        "zh-CN": "冷白与薰衣草色结合全息玻璃，采用利落的几何布局。",
+        "zh-TW": "冷白與薰衣草色結合全像玻璃，採用俐落的幾何編排。"
+      },
+      "swatches": ["#F7F6FF", "#8F78DF", "#C6B7F2", "#79D7E4"],
+      "preview": {
+        "chrome": "#241D43",
+        "background": "#F1EFFF",
+        "surface": "#FCFBFF",
+        "accent": "#7757D9",
+        "text": "#292244"
+      },
+      "artwork": {
+        "path": "assets/theme-art/korean-idol.svg",
+        "position": "right center",
+        "size": "min(56vw, 840px) auto",
+        "mobile": "reduce"
+      }
+    }
+  ]
+}
