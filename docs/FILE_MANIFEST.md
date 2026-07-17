@@ -7,6 +7,25 @@ local agent metadata, the unsafe reference composites, and the obsolete ignored
 `docs/preview.png`. The comparison screenshots were captured on 2026-07-17 and
 are listed under Visual evidence below.
 
+## Agent operations
+
+- `AGENTS.md`
+- `docs/PROGRESS.md`
+- `docs/THEME_KIT_SPEC.md`
+- `docs/contracts/ASSET_CONTRACT.md`
+- `docs/golden/README.md`
+- `docs/plans/BLOCKED.md`
+- `docs/plans/QUEUE.md`
+- `docs/plans/WORK_ORDERS.md`
+- `docs/recipes/RECIPES.md`
+
+## Aura Studio (design-frozen shell; hosted by WO-05)
+
+- `studio/app.js`
+- `studio/generated-themes.js`
+- `studio/index.html`
+- `studio/styles.css`
+
 ## Repository and policy
 
 - `.github/ISSUE_TEMPLATE/bug.yml`
@@ -41,7 +60,7 @@ are listed under Visual evidence below.
 
 Derived, isolated decorative assets for the japanese-idol (kawaii idol) theme —
 the runtime layered artwork (WebP) and the preview showcase (SVG motifs). The
-originals live in the gitignored source kit `themes/kawaii-idol/`; the WebP
+originals live in the gitignored source kit `themes/japanese-idol/`; the WebP
 copies are regenerated with `node scripts/convert-kawaii-assets.mjs`.
 
 - `assets/theme-art/kawaii-idol/logo-horizontal.svg`
@@ -87,7 +106,9 @@ copies are regenerated with `node scripts/convert-kawaii-assets.mjs`.
 - `scripts/state-cli.mjs`
 - `scripts/theme-cli.mjs`
 - `scripts/theme-core.mjs`
+- `scripts/verify-cycle.mjs`
 - `scripts/webview-cli.mjs`
+- `tests/fixtures/claude-dom.html`
 - `tests/run-tests.mjs`
 
 ## Offline QA

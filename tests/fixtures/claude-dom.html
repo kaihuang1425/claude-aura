@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- QA fixture: a static, claude-like DOM used ONLY to render the real
+     injected payload in scripts/verify-cycle.mjs. It is never shipped and is
+     not the production interface; in production the live claude.ai supplies
+     all structure. Keep the defect surfaces present: composer input, search
+     pill, focused control, selected nav item, cards, disabled button. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Claude Aura payload fixture</title>
+<style>
+  /* Minimal claude-ish baseline; the payload's CSS does the theming. */
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; }
+  .dframe-root { display: grid; grid-template-columns: 250px 1fr; height: 100vh; }
+  .dframe-sidebar { padding: 16px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .dframe-sidebar .claude-logo { font: 600 22px Georgia, serif; padding: 6px 8px; }
+  .dframe-sidebar a, .dframe-sidebar button {
+    display: block; width: 100%; text-align: left; padding: 8px 10px;
+    background: none; border: 1px solid transparent; border-radius: 8px;
+    font-size: 14px; color: inherit; text-decoration: none; cursor: pointer;
+  }
+  .dframe-main { display: flex; flex-direction: column; overflow: hidden; }
+  .dframe-content { flex: 1; padding: 40px 48px; overflow: auto; }
+  .search-pill input {
+    width: 340px; padding: 9px 14px; border-radius: 999px;
+    border: 1px solid currentColor; font-size: 14px; background: transparent;
+  }
+  h1 { font-size: 34px; margin: 24px 0 6px; }
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+  article { border: 1px solid rgb(0 0 0 / 0.14); border-radius: 14px; padding: 16px; }
+  article h2 { font-size: 16px; margin: 0 0 6px; }
+  article p, .body-copy { font-size: 14px; line-height: 1.5; margin: 0; }
+  .body-copy { max-width: 560px; margin-top: 18px; }
+  .composer-wrap { padding: 18px 48px 26px; }
+  .input-box {
+    border: 1px solid rgb(0 0 0 / 0.2); border-radius: 18px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .input-box textarea {
+    border: 1px solid currentColor; border-radius: 12px; padding: 10px 12px;
+    font: inherit; font-size: 15px; resize: none; background: transparent;
+  }
+  .composer-row { display: flex; gap: 8px; align-items: center; }
+  .composer-row button, .composer-row select {
+    padding: 7px 12px; border-radius: 10px; border: 1px solid rgb(0 0 0 / 0.2);
+    background: transparent; font-size: 13px; cursor: pointer;
+  }
+  .composer-row .send { margin-left: auto; }
+  hr { border: 0; border-top: 1px solid rgb(0 0 0 / 0.16); margin: 26px 0; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="dframe-root">
+    <nav class="dframe-sidebar" aria-label="Navigation">
+      <div class="claude-logo" data-testid="claude-logo">Claude</div>
+      <button type="button">＋ New chat</button>
+      <a href="#" aria-current="page">Chats</a>
+      <a href="#">Projects</a>
+      <a href="#">Artifacts</a>
+      <a href="#">Customize</a>
+      <button type="button" disabled>Disabled entry</button>
+    </nav>
+    <main class="dframe-main">
+      <div class="dframe-content">
+        <div class="search-pill">
+          <label><span hidden>Search chats</span>
+            <input type="text" placeholder="Search chats…">
+          </label>
+        </div>
+        <h1>Good evening, fixture</h1>
+        <p class="body-copy">This paragraph checks body readability over the
+          theme's artwork and surfaces. It must stay comfortably legible in
+          every theme, light and dark, at this exact position.</p>
+        <div class="cards">
+          <article data-testid="quick-card"><h2>Brainstorm ideas</h2><p>Turn thoughts into action.</p></article>
+          <article data-testid="quick-card"><h2>Continue your work</h2><p>Pick up where you left off.</p></article>
+          <article data-testid="quick-card"><h2>Analyze &amp; understand</h2><p>Explore patterns and insights.</p></article>
+        </div>
+        <hr>
+        <p class="body-copy">Secondary block below a separator, used for
+          divider and spacing checks.</p>
+      </div>
+      <div class="composer-wrap">
+        <div class="input-box" data-testid="chat-input">
+          <textarea rows="2" placeholder="How can I help you today?" aria-label="Message Claude"></textarea>
+          <div class="composer-row">
+            <button type="button" aria-label="Attach">＋</button>
+            <select aria-label="Model"><option>Fable 5</option><option>Opus</option></select>
+            <button type="button" aria-pressed="false" aria-label="Microphone">Mic</button>
+            <button type="button" class="send" autofocus>Send ↑</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

@@ -85,13 +85,15 @@ async function deliverableFiles(directory = PROJECT_ROOT, relativeDirectory = ""
   const files = [];
   const excludedRoots = new Set([".agents", ".codex", ".git", "dist", "node_modules", "release", "theme_demo_previews"]);
   const excludedNames = new Set([".DS_Store", "Thumbs.db", "config.local.json", "state.json"]);
-  // Supplied source-asset kit: preserved on disk and gitignored like the reference
-  // composites. Only the derived runtime copies under assets/theme-art/ ship.
-  const excludedPaths = new Set(["themes/kawaii-idol", "themes/customize_new_theme_prompt.md"]);
+  // Supplied per-theme source kits are DIRECTORIES under themes/ — preserved on
+  // disk and gitignored like the reference composites. Only the derived runtime
+  // copies under assets/theme-art/ ship.
+  const excludedPaths = new Set(["themes/customize_new_theme_prompt.md"]);
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
     const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
     if (!relativeDirectory && excludedRoots.has(entry.name)) continue;
     if (excludedPaths.has(relativePath)) continue;
+    if (relativeDirectory === "themes" && entry.isDirectory()) continue;
     if (relativePath === "docs/preview.png" || excludedNames.has(entry.name) || entry.name.startsWith(".tmp-") ||
         entry.name.includes(".corrupt-") ||
         entry.name.endsWith(".log") || entry.name.endsWith(".zip") || entry.name.endsWith(".sha256")) continue;
@@ -904,6 +906,8 @@ test("release and installers exclude unsafe composite references and binary patc
       "Release included local agent metadata");
     assert(!names.some((name) => name.includes("theme_demo_previews") || name === "claude-aura/docs/preview.png"),
       "Release included an unsafe reference composite");
+    assert(!names.some((name) => /^claude-aura\/themes\/[^/]+\//.test(name)),
+      "Release included files from a per-theme source kit directory");
   } finally {
     await fs.rm(privatePath, { force: true });
   }

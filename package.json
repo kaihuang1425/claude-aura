@@ -9,6 +9,7 @@
     "check": "node --check scripts/injector.mjs && node --check scripts/theme-core.mjs && node --check scripts/webview-cli.mjs && node --check assets/renderer-inject.js && node tests/run-tests.mjs",
     "preview:build": "node scripts/build-preview.mjs",
     "preview:serve": "node scripts/preview-server.mjs",
+    "verify:cycle": "node scripts/verify-cycle.mjs",
     "themes": "node scripts/theme-cli.mjs list",
     "release": "node scripts/build-release.mjs"
   },

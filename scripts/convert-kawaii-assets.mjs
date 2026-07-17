@@ -8,7 +8,7 @@ import http from "node:http";
 import path from "node:path";
 import { PROJECT_ROOT } from "./theme-core.mjs";
 
-const SOURCE_DIR = path.join(PROJECT_ROOT, "themes", "kawaii-idol");
+const SOURCE_DIR = path.join(PROJECT_ROOT, "themes", "japanese-idol");
 const OUTPUT_DIR = path.join(PROJECT_ROOT, "assets", "theme-art", "kawaii-idol");
 const EDGE_PATHS = [
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",

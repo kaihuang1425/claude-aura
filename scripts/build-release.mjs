@@ -59,7 +59,11 @@ function isLocalOrTemporary(segments) {
 
 function shouldEnterDirectory(relativePath) {
   const segments = pathSegments(relativePath);
-  return segments.length > 0 && !isLocalOrTemporary(segments) && RELEASE_DIRECTORIES.has(segments[0]);
+  if (segments.length === 0 || isLocalOrTemporary(segments) || !RELEASE_DIRECTORIES.has(segments[0])) return false;
+  // Directories under themes/ are supplied source kits (masters, specs, QA).
+  // They are never distributed; only top-level theme JSON files ship.
+  if (segments[0] === "themes" && segments.length > 1) return false;
+  return true;
 }
 
 function shouldIncludeFile(relativePath) {

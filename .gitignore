@@ -2,7 +2,9 @@ node_modules/
 dist/
 release/
 theme_demo_previews/
-themes/kawaii-idol/
+# Supplied per-theme source kits (PNG masters, specs, QA) live in directories
+# under themes/; only the derived copies in assets/theme-art ship.
+themes/*/
 themes/customize_new_theme_prompt.md
 docs/preview.png
 *.zip
