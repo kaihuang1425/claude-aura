@@ -185,12 +185,41 @@
         "accent": "#DA6F8D",
         "text": "#3B2930"
       },
-      "artwork": {
-        "path": "assets/theme-art/japanese-idol.svg",
-        "position": "right center",
-        "size": "min(46vw, 680px) auto",
-        "mobile": "reduce"
-      }
+      "artwork": null,
+      "artworkLayers": [
+        {
+          "path": "assets/theme-art/kawaii-idol/background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.5,
+          "mask": "none"
+        },
+        {
+          "path": "assets/theme-art/kawaii-idol/hero.webp",
+          "position": "right bottom",
+          "size": "auto min(86%, 760px)",
+          "mobile": "reduce",
+          "opacity": 0.92,
+          "mask": "soft-right"
+        },
+        {
+          "path": "assets/theme-art/kawaii-idol/sakura-top-right.webp",
+          "position": "right top",
+          "size": "min(18vw, 280px) auto",
+          "mobile": "hide",
+          "opacity": 0.9,
+          "mask": "none"
+        },
+        {
+          "path": "assets/theme-art/kawaii-idol/sakura-bottom-right.webp",
+          "position": "left bottom",
+          "size": "min(17vw, 260px) auto",
+          "mobile": "hide",
+          "opacity": 0.75,
+          "mask": "none"
+        }
+      ]
     },
     {
       "id": "korean-idol",

@@ -30,10 +30,19 @@ sparkles, signature, "keep shining" sticker, and per-card illustrations) are
 composed as inert, pointer-safe, independently positioned decorative layers over
 the live HTML/CSS components. The treatment is scoped to
 `[data-claude-aura-theme="japanese-idol"]`, is token-driven so it reads correctly
-in light and dark modes, and leaves the other seven themes unchanged. The runtime
-claude.ai skin (which embeds a single <100 KB SVG per theme) uses the original
-abstract kawaii-idol SVG plus the retuned tokens and component treatments, since
-the heavy raster hero is a preview-only asset.
+in light and dark modes, and leaves the other seven themes unchanged.
+
+The runtime claude.ai skin now ships the same real artwork through a layered
+artwork system: a theme may declare up to four `artworkLayers` (optimized WebP or
+SVG), each embedded as a data URL only when that theme is active and rendered as
+inert, pointer-safe backdrop divs with per-layer position, size, opacity,
+mobile behavior, and an optional right-anchored edge-fade mask. Japanese Idol
+uses four layers — the sakura watercolor background, the hero portrait, and the
+two sakura corner clusters — derived from the supplied kit via
+`scripts/convert-kawaii-assets.mjs`. Budgets are enforced by tests: chrome
+payload under 65 KB, embedded artwork under 1.4 MB (Japanese Idol totals about
+579 KB). The exact compiled payload was rendered in a standalone harness to
+confirm the layers paint correctly through the production injection path.
 
 ## Scope
 
@@ -54,7 +63,7 @@ real Claude interface with screenshots.
 | 4 | `cartoon-studio` | Cartoon Studio | `assets/theme-art/cartoon-studio.svg` |
 | 5 | `anime-twilight` | Anime Twilight | `assets/theme-art/anime-twilight.svg` |
 | 6 | `study-library` | Study Library | `assets/theme-art/study-library.svg` |
-| 7 | `japanese-idol` | Japanese Idol | `assets/theme-art/japanese-idol.svg` |
+| 7 | `japanese-idol` | Japanese Idol | Four layered `assets/theme-art/kawaii-idol/*.webp` assets (background, hero, two sakura clusters) |
 | 8 | `korean-idol` | Korean Idol | `assets/theme-art/korean-idol.svg` |
 
 The order is defined once in `themes/registry.json` and reused by command-line,
@@ -183,9 +192,12 @@ the unreadable source as a uniquely named `.corrupt-…json` diagnostic backup.
 
 ## Artwork and licensing
 
-The seven optional artwork files are original, self-contained project SVGs
-distributed under the repository's MIT License. They are separate from the
-functional interface, contain no embedded controls or UI text, and are marked
+Six themes use original, self-contained project SVGs; Japanese Idol uses the
+supplied kawaii-idol kit through derived, isolated WebP/SVG copies under
+`assets/theme-art/kawaii-idol/` (the untouched source kit stays gitignored in
+`themes/kawaii-idol/`). All decorative artwork ships under the repository's MIT
+License terms alongside the kit. Artwork is separate from the functional
+interface, contains no embedded controls or UI text, and is marked
 non-focusable, hidden from assistive technology, and pointer-inert. Human forms
 are abstract fictional adults and imply no real person or endorsement. Default
 uses no art asset.
@@ -202,10 +214,11 @@ Aura or the operating system requests reduced motion.
 ## Performance safeguards
 
 Only the selected theme's optional artwork is read and embedded in a renderer
-payload. The seven artwork files total 20,820 bytes and each stays below the
-100 KB asset ceiling. Warm local eight-theme compilation on 2026-07-16 had a
-median near 1–2 ms. Across all three locales, the largest built-in payload is
-64,924 bytes. A full native save, atomic configuration write, and payload-return
+payload. SVG artwork stays below the 100 KB ceiling and raster layers below
+400 KB each; the chrome portion of every payload stays under 65 KB and total
+embedded artwork under 1.4 MB (Japanese Idol's four layers total about 579 KB
+encoded). Warm local eight-theme compilation on 2026-07-16 had a
+median near 1–2 ms. A full native save, atomic configuration write, and payload-return
 audit measured about 52 ms median and below 60 ms maximum across the eight
 themes. The automated suite enforces a strict 65,000-byte budget for all 24
 locale/theme combinations without a user image and asserts exactly zero artwork

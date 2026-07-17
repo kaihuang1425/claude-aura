@@ -273,11 +273,26 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
         config: { ...DEFAULT_CONFIG, theme: theme.name },
         locale,
       });
-      assert(Buffer.byteLength(bundle.payload, "utf8") < 65_000,
-        `${locale}/${theme.name} payload exceeds the 65 KB built-in switching budget`);
-      const embeddedArtworkCount = bundle.payload.match(/data:image\/svg\+xml;base64/g)?.length ?? 0;
-      assert.equal(embeddedArtworkCount, theme.artwork ? 1 : 0, `${locale}/${theme.name} did not embed exactly its active artwork`);
+      // Budgets: the chrome (CSS + code + metadata) stays under 65 KB so theme
+      // switching remains instant; embedded decorative artwork has its own cap.
+      const artBytes = (bundle.settings.artLayers ?? [])
+        .reduce((total, layer) => total + Buffer.byteLength(layer.dataUrl, "utf8"), 0)
+        + (bundle.settings.artDataUrl ? Buffer.byteLength(bundle.settings.artDataUrl, "utf8") : 0);
+      const payloadBytes = Buffer.byteLength(bundle.payload, "utf8");
+      assert(payloadBytes - artBytes < 65_000,
+        `${locale}/${theme.name} chrome payload exceeds the 65 KB switching budget`);
+      assert(artBytes < 1_400_000,
+        `${locale}/${theme.name} embedded artwork exceeds the 1.4 MB decorative budget`);
+      const embeddedArtworkCount = bundle.payload.match(/data:image\/(?:svg\+xml|webp|png|avif);base64/g)?.length ?? 0;
+      const expectedArtwork = theme.artworkLayers ? theme.artworkLayers.length : (theme.artwork ? 1 : 0);
+      assert.equal(embeddedArtworkCount, expectedArtwork, `${locale}/${theme.name} did not embed exactly its active artwork`);
       if (theme.artwork) assert(bundle.artwork.path.endsWith(path.basename(theme.artwork.path)));
+      if (theme.artworkLayers) {
+        assert.equal(bundle.settings.artLayers?.length, theme.artworkLayers.length,
+          `${locale}/${theme.name} did not resolve every artwork layer`);
+        assert.equal(bundle.settings.artDataUrl, null,
+          `${locale}/${theme.name} must not duplicate layered artwork in the legacy slot`);
+      }
     }
   }
 });
@@ -451,17 +466,33 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
 
 test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedded UI text", async () => {
   const themes = await listThemes();
-  assert.equal(themes.filter((theme) => theme.artwork).length, 7);
-  for (const theme of themes.filter((item) => item.artwork)) {
-    const artworkPath = path.join(PROJECT_ROOT, theme.artwork.path);
+  assert.equal(themes.filter((theme) => theme.artwork || theme.artworkLayers).length, 7);
+  const validateSvgArtwork = async (themeName, artworkPath) => {
     const stat = await fs.stat(artworkPath);
     const source = await fs.readFile(artworkPath, "utf8");
-    assert(stat.isFile() && stat.size > 0 && stat.size < 100_000, `${theme.name} artwork size is unexpected`);
+    assert(stat.isFile() && stat.size > 0 && stat.size < 100_000, `${themeName} artwork size is unexpected`);
     assert.match(source, /<svg\b/);
     assert.match(source, /pointer-events="none"/);
-    assert(!/<text\b/i.test(source), `${theme.name} artwork contains embedded text`);
+    assert(!/<text\b/i.test(source), `${themeName} artwork contains embedded text`);
     assert(!/(?:https?:\/\/(?!www\.w3\.org\/2000\/svg)|data:|(?:xlink:)?href=)/i.test(source),
-      `${theme.name} artwork contains an external or embedded resource`);
+      `${themeName} artwork contains an external or embedded resource`);
+  };
+  const validateRasterArtwork = async (themeName, artworkPath) => {
+    const stat = await fs.stat(artworkPath);
+    assert(stat.isFile() && stat.size > 0 && stat.size < 400_000, `${themeName} raster artwork size is unexpected`);
+    const bytes = await fs.readFile(artworkPath);
+    assert(bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP",
+      `${themeName} raster artwork must be WebP`);
+  };
+  for (const theme of themes.filter((item) => item.artwork)) {
+    await validateSvgArtwork(theme.name, path.join(PROJECT_ROOT, theme.artwork.path));
+  }
+  for (const theme of themes.filter((item) => item.artworkLayers)) {
+    for (const layer of theme.artworkLayers) {
+      const artworkPath = path.join(PROJECT_ROOT, layer.path);
+      if (layer.path.endsWith(".svg")) await validateSvgArtwork(theme.name, artworkPath);
+      else await validateRasterArtwork(theme.name, artworkPath);
+    }
   }
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
   assert.match(baseCss, /#claude-aura-backdrop \*/);

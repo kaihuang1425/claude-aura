@@ -2723,12 +2723,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#DA6F8D",
       "text": "#3B2930"
     },
-    "artwork": {
-      "path": "assets/theme-art/japanese-idol.svg",
-      "position": "right center",
-      "size": "min(46vw, 680px) auto",
-      "mobile": "reduce"
-    },
+    "artwork": null,
     "radius": 20,
     "blur": 18,
     "typography": {

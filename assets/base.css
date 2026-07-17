@@ -72,6 +72,13 @@ html.claude-aura body {
   mask-image: radial-gradient(145% 122% at 100% 50%, #000 25%, transparent 80%);
 }
 
+/* Layered artwork (settings.artLayers): inline styles carry image, position,
+   size, and opacity per layer; these attributes select the mask treatment. */
+#claude-aura-backdrop .claude-aura-theme-art[data-art-mask="none"] {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 #claude-aura-backdrop .claude-aura-grain {
   background-image:
     radial-gradient(circle at 20% 20%, rgb(255 255 255 / 0.05) 0 0.55px, transparent 0.8px),
@@ -527,6 +534,11 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
     background-size: min(64vw, 720px) auto;
     opacity: calc(var(--aura-art-opacity, 0) * 0.66);
   }
+
+  /* Inline-styled layers need explicit weight to shrink on narrow windows. */
+  #claude-aura-backdrop .claude-aura-theme-art-layer[data-art-mobile="reduce"] {
+    opacity: 0.34 !important;
+  }
 }
 
 @media (max-width: 820px) {
@@ -538,6 +550,14 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
 
   html.claude-aura[data-claude-aura-art-mobile="hide"] #claude-aura-backdrop .claude-aura-theme-art {
     display: none;
+  }
+
+  #claude-aura-backdrop .claude-aura-theme-art-layer[data-art-mobile="reduce"] {
+    opacity: 0.2 !important;
+  }
+
+  #claude-aura-backdrop .claude-aura-theme-art-layer[data-art-mobile="hide"] {
+    display: none !important;
   }
 
   html.claude-aura .dframe-content,
@@ -553,6 +573,10 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
     --aura-sidebar-alpha: 1 !important;
     --aura-art-opacity: 0 !important;
     --aura-image-opacity: 0 !important;
+  }
+
+  #claude-aura-backdrop .claude-aura-theme-art-layer {
+    display: none !important;
   }
 
   html.claude-aura :focus-visible {

@@ -33,15 +33,16 @@ are listed under Visual evidence below.
 - `assets/theme-art/anime-twilight.svg`
 - `assets/theme-art/cartoon-studio.svg`
 - `assets/theme-art/japanese-film-editorial.svg`
-- `assets/theme-art/japanese-idol.svg`
 - `assets/theme-art/korean-idol.svg`
 - `assets/theme-art/korean-prestige.svg`
 - `assets/theme-art/study-library.svg`
 
 ### Kawaii idol runtime assets
 
-Derived, isolated decorative assets for the japanese-idol (kawaii idol) preview
-showcase. The originals live in the gitignored source kit `themes/kawaii-idol/`.
+Derived, isolated decorative assets for the japanese-idol (kawaii idol) theme —
+the runtime layered artwork (WebP) and the preview showcase (SVG motifs). The
+originals live in the gitignored source kit `themes/kawaii-idol/`; the WebP
+copies are regenerated with `node scripts/convert-kawaii-assets.mjs`.
 
 - `assets/theme-art/kawaii-idol/logo-horizontal.svg`
 - `assets/theme-art/kawaii-idol/mark.svg`
@@ -55,10 +56,10 @@ showcase. The originals live in the gitignored source kit `themes/kawaii-idol/`.
 - `assets/theme-art/kawaii-idol/card-brainstorm.svg`
 - `assets/theme-art/kawaii-idol/card-continue.svg`
 - `assets/theme-art/kawaii-idol/card-analyze.svg`
-- `assets/theme-art/kawaii-idol/background.png`
-- `assets/theme-art/kawaii-idol/hero.png`
-- `assets/theme-art/kawaii-idol/sakura-bottom-right.png`
-- `assets/theme-art/kawaii-idol/sakura-top-right.png`
+- `assets/theme-art/kawaii-idol/background.webp`
+- `assets/theme-art/kawaii-idol/hero.webp`
+- `assets/theme-art/kawaii-idol/sakura-bottom-right.webp`
+- `assets/theme-art/kawaii-idol/sakura-top-right.webp`
 
 ## Themes
 
@@ -80,6 +81,7 @@ showcase. The originals live in the gitignored source kit `themes/kawaii-idol/`.
 
 - `scripts/build-preview.mjs`
 - `scripts/build-release.mjs`
+- `scripts/convert-kawaii-assets.mjs`
 - `scripts/injector.mjs`
 - `scripts/preview-server.mjs`
 - `scripts/state-cli.mjs`

@@ -65,22 +65,45 @@
 
     if (!document.body) return;
     let backdrop = document.getElementById(BACKDROP_ID);
-    if (backdrop && backdrop.dataset.claudeAuraOwned !== settings.version) {
+    const backdropOwner = `${settings.version}:${settings.digest}`;
+    if (backdrop && backdrop.dataset.claudeAuraOwned !== backdropOwner) {
       backdrop.remove();
       backdrop = null;
     }
     if (!backdrop) {
       backdrop = document.createElement("div");
       backdrop.id = BACKDROP_ID;
-      backdrop.dataset.claudeAuraOwned = settings.version;
+      backdrop.dataset.claudeAuraOwned = backdropOwner;
       backdrop.setAttribute("aria-hidden", "true");
-      backdrop.innerHTML = [
-        '<div class="claude-aura-gradient"></div>',
-        '<div class="claude-aura-image"></div>',
-        '<div class="claude-aura-theme-art"></div>',
-        '<div class="claude-aura-grain"></div>',
-        '<div class="claude-aura-vignette"></div>',
-      ].join("");
+      const addLayerDiv = (className) => {
+        const element = document.createElement("div");
+        element.setAttribute("class", className);
+        backdrop.appendChild(element);
+        return element;
+      };
+      addLayerDiv("claude-aura-gradient");
+      addLayerDiv("claude-aura-image");
+      const artLayers = Array.isArray(settings.artLayers)
+        ? settings.artLayers.filter((layer) => layer && typeof layer.dataUrl === "string").slice(0, 4)
+        : [];
+      if (artLayers.length) {
+        // Layered artwork replaces the single var-driven art slot. Each layer is
+        // an inert positioned background; styling is inline so one shared style
+        // element serves every theme.
+        for (const layer of artLayers) {
+          const element = addLayerDiv("claude-aura-theme-art claude-aura-theme-art-layer");
+          element.dataset.artMask = layer.mask === "none" ? "none" : "soft-right";
+          element.dataset.artMobile = layer.mobile === "hide" || layer.mobile === "keep" ? layer.mobile : "reduce";
+          element.style.setProperty("background-image", `url(${JSON.stringify(layer.dataUrl)})`);
+          element.style.setProperty("background-position", layer.position || "right center");
+          element.style.setProperty("background-size", layer.size || "min(58vw, 860px) auto");
+          if (typeof layer.opacity === "number") element.style.setProperty("opacity", String(layer.opacity));
+        }
+      } else {
+        addLayerDiv("claude-aura-theme-art");
+      }
+      addLayerDiv("claude-aura-grain");
+      addLayerDiv("claude-aura-vignette");
       document.body.prepend(backdrop);
     }
     observeTargets();

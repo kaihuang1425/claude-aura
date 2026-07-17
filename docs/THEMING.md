@@ -86,8 +86,19 @@ Rules enforced by the registry validator:
 - `labels` and `descriptions` include `en`, `zh-CN`, and `zh-TW`;
 - three to six six-digit hexadecimal swatches are provided;
 - `preview` defines `chrome`, `background`, `surface`, `accent`, and `text`; and
-- artwork, when present, stays under `assets/theme-art` and uses an approved
-  SVG, PNG, WebP, or AVIF extension.
+- artwork, when present, stays under `assets/theme-art` (one subdirectory level
+  is allowed) and uses an approved SVG, PNG, WebP, or AVIF extension.
+
+A theme may declare either a single `artwork` slot or an `artworkLayers` array
+of one to four layers. Each layer supports `path`, `position`, `size`,
+`mobile` (`reduce`, `hide`, or `keep`), `opacity` (0–1), and `mask`
+(`soft-right` for the right-anchored edge fade, or `none`). Layers are embedded
+as data URLs only for the active theme and render as inert, pointer-safe
+backdrop divs behind the interface (see the japanese-idol entry for a layered
+example: watercolor background, hero portrait, and two sakura clusters). Keep
+raster layers optimized WebP; `scripts/convert-kawaii-assets.mjs` shows the
+local conversion pattern. The chrome portion of every payload must stay under
+65 KB and total embedded artwork under 1.4 MB (enforced by the tests).
 
 `listThemes({ locale })` resolves display copy from this registry. Windows uses
 the current UI culture when requesting picker metadata. Locale normalization

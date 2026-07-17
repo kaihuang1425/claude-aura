@@ -502,19 +502,33 @@ function validateRegistryEntry(entry, label) {
   for (const key of ["chrome", "background", "surface", "accent", "text"]) {
     if (!HEX_COLOR.test(preview[key] ?? "")) throw new Error(`${label}.preview.${key} must be a six-digit hex colour`);
   }
-  let artwork = null;
-  if (entry.artwork !== null && entry.artwork !== undefined) {
-    if (!isPlainObject(entry.artwork)) throw new Error(`${label}.artwork must be an object or null`);
-    const artworkPath = String(entry.artwork.path ?? "");
-    if (!/^assets\/theme-art\/[a-z0-9-]+\.(?:svg|png|webp|avif)$/.test(artworkPath)) {
-      throw new Error(`${label}.artwork.path is not a supported project artwork path`);
+  const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
+  const validateArtworkLayer = (layer, layerLabel) => {
+    if (!isPlainObject(layer)) throw new Error(`${layerLabel} must be an object`);
+    const artworkPath = String(layer.path ?? "");
+    if (!ARTWORK_PATH_PATTERN.test(artworkPath)) {
+      throw new Error(`${layerLabel}.path is not a supported project artwork path`);
     }
-    artwork = {
+    return {
       path: artworkPath,
-      position: safeCssValue(entry.artwork.position ?? "right center", `${label}.artwork.position`, 80),
-      size: safeCssValue(entry.artwork.size ?? "min(58vw, 860px) auto", `${label}.artwork.size`, 120),
-      mobile: entry.artwork.mobile === "hide" ? "hide" : "reduce",
+      position: safeCssValue(layer.position ?? "right center", `${layerLabel}.position`, 80),
+      size: safeCssValue(layer.size ?? "min(58vw, 860px) auto", `${layerLabel}.size`, 120),
+      mobile: ["hide", "keep"].includes(layer.mobile) ? layer.mobile : "reduce",
+      opacity: layer.opacity === undefined ? null : finiteNumber(layer.opacity, `${layerLabel}.opacity`, 0, 1),
+      mask: layer.mask === "none" ? "none" : "soft-right",
     };
+  };
+  let artwork = null;
+  let artworkLayers = null;
+  if (entry.artworkLayers !== null && entry.artworkLayers !== undefined) {
+    if (!Array.isArray(entry.artworkLayers) || entry.artworkLayers.length < 1 || entry.artworkLayers.length > 4) {
+      throw new Error(`${label}.artworkLayers must contain 1 to 4 layers`);
+    }
+    artworkLayers = entry.artworkLayers.map((layer, index) => validateArtworkLayer(layer, `${label}.artworkLayers[${index}]`));
+  } else if (entry.artwork !== null && entry.artwork !== undefined) {
+    if (!isPlainObject(entry.artwork)) throw new Error(`${label}.artwork must be an object or null`);
+    const validated = validateArtworkLayer(entry.artwork, `${label}.artwork`);
+    artwork = { path: validated.path, position: validated.position, size: validated.size, mobile: validated.mobile === "keep" ? "reduce" : validated.mobile };
   }
   return {
     id: entry.id,
@@ -524,6 +538,7 @@ function validateRegistryEntry(entry, label) {
     swatches: [...swatches],
     preview: Object.fromEntries(Object.entries(preview).map(([key, value]) => [key, value.toUpperCase()])),
     artwork,
+    artworkLayers,
   };
 }
 
@@ -562,6 +577,7 @@ async function readRegisteredTheme(entry, locale) {
     swatches: [...entry.swatches],
     preview: { ...entry.preview },
     artwork: entry.artwork ? { ...entry.artwork } : null,
+    artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
     filePath,
   };
 }
@@ -624,7 +640,7 @@ async function resolveTheme(config, configPath, locale) {
       try {
         const theme = validateTheme(await readJson(filePath), filePath);
         return {
-          theme: { ...theme, labels: { en: theme.label }, descriptions: { en: theme.description }, swatches: [], preview: null, artwork: null },
+          theme: { ...theme, labels: { en: theme.label }, descriptions: { en: theme.description }, swatches: [], preview: null, artwork: null, artworkLayers: null },
           filePath,
           requestedTheme: theme.name,
           fallbackFrom: null,
@@ -676,6 +692,16 @@ async function resolveImage(config, configPath) {
   if (detectedMime !== mime) throw new Error(`Image extension does not match its content: ${imagePath}`);
   const animated = isAnimatedImage(bytes);
   return { path: imagePath, mime, animated, dataUrl: `data:${mime};base64,${bytes.toString("base64")}`, bytes: bytes.length };
+}
+
+export async function resolveArtworkLayers(theme) {
+  if (!Array.isArray(theme.artworkLayers) || theme.artworkLayers.length === 0) return null;
+  const layers = [];
+  for (const layer of theme.artworkLayers) {
+    const resolved = await resolveArtwork({ artwork: layer });
+    if (resolved) layers.push(resolved);
+  }
+  return layers.length ? layers : null;
 }
 
 export async function resolveArtwork(theme) {
@@ -759,9 +785,10 @@ export async function compileTheme({ configPath, config: configOverride = null, 
     resolvedConfigPath,
     normalizeLocale(locale),
   );
-  const [image, artwork, baseCss, variantCss] = await Promise.all([
+  const [image, artwork, artworkLayers, baseCss, variantCss] = await Promise.all([
     resolveImage(config, resolvedConfigPath),
     resolveArtwork(theme),
+    resolveArtworkLayers(theme),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8"),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "theme-variants.css"), "utf8"),
   ]);
@@ -788,10 +815,20 @@ export async function compileTheme({ configPath, config: configOverride = null, 
     imageOpacity,
     imagePosition: config.imagePosition.trim(),
     artDataUrl: artwork?.dataUrl ?? null,
-    artUnavailable: Boolean(theme.artwork && !artwork),
+    artUnavailable: Boolean((theme.artwork && !artwork) || (theme.artworkLayers && !artworkLayers)),
     artPosition: artwork?.position ?? "right center",
     artSize: artwork?.size ?? "min(58vw, 860px) auto",
     artMobile: artwork?.mobile ?? "reduce",
+    artLayers: artworkLayers
+      ? artworkLayers.map((layer) => ({
+        dataUrl: layer.dataUrl,
+        position: layer.position,
+        size: layer.size,
+        mobile: layer.mobile,
+        opacity: layer.opacity,
+        mask: layer.mask,
+      }))
+      : null,
     reduceMotion: config.reduceMotion,
   };
   const digest = crypto.createHash("sha256")
@@ -809,6 +846,7 @@ export async function compileTheme({ configPath, config: configOverride = null, 
     themePath,
     image,
     artwork,
+    artworkLayers,
     css,
     settings: { ...settingsBase, digest },
     digest,

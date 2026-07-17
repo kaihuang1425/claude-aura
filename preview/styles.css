@@ -1711,7 +1711,7 @@ button:disabled {
 :root[data-claude-aura-theme="japanese-idol"] .app-backdrop {
   background-image:
     var(--aura-wallpaper-gradient),
-    url("../assets/theme-art/kawaii-idol/background.png");
+    url("../assets/theme-art/kawaii-idol/background.webp");
   background-size: cover, cover;
   background-position: center, center;
 }
