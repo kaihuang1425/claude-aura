@@ -48,7 +48,7 @@
       "surfaceAlpha": 0.84,
       "sidebarAlpha": 0.91,
       "imageOpacity": 0.12,
-      "artOpacity": 0.3,
+      "artOpacity": 0.44,
       "textureOpacity": 0.12
     }
   },
@@ -77,7 +77,7 @@
       "surfaceAlpha": 0.76,
       "sidebarAlpha": 0.88,
       "imageOpacity": 0.14,
-      "artOpacity": 0.3,
+      "artOpacity": 0.4,
       "textureOpacity": 0.12
     }
   }

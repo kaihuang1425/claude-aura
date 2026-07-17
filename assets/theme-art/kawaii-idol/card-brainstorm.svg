@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Brainstorm card illustration</title>
+  <desc id="desc">Decorative brainstorm illustration showing a kawaii idol-style microphone with sparkles, petals, and idea accents on a transparent background.</desc>
+  <defs>
+    <style>
+      .rose-strong { fill: #EC7F95; }
+      .rose { fill: #F69AAA; }
+      .rose-soft { fill: #F7BBC6; }
+      .rose-faint { fill: #FCE5EA; }
+      .lav { fill: #A79BE8; }
+      .lav-soft { fill: #D8D1F7; }
+      .apricot { fill: #F4A25D; }
+      .ivory { fill: #FFF8F4; }
+      .cocoa { fill: #3B2925; }
+      .outline { stroke: #EFB4C0; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .fine { stroke: #F5CCD5; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .shadow { fill: #EAC7CF; opacity: 0.22; }
+    </style>
+    <symbol id="brainstorm-card-illustration" viewBox="0 0 512 512">
+      <!-- airy ambient motifs in safe lower-right zone -->
+      <g opacity="0.9">
+        <path class="fine" d="M 115 306 C 124 296 136 291 148 291 C 160 291 171 296 180 306" />
+        <path class="fine" d="M 132 292 C 135 286 140 282 146 282 C 151 282 156 286 158 292" />
+      </g>
+
+      <!-- floating note / sparkle cloud -->
+      <g transform="translate(112 246)">
+        <path class="rose" d="M 0 0 C 0 -7 5 -12 12 -12 C 17 -12 22 -9 25 -4 C 28 -9 33 -12 38 -12 C 45 -12 50 -7 50 0 C 50 7 45 12 38 18 L 25 29 L 12 18 C 5 12 0 7 0 0 Z" opacity="0.55"/>
+        <path class="lav" d="M 72 -12 L 77 -1 L 88 4 L 77 9 L 72 20 L 67 9 L 56 4 L 67 -1 Z" opacity="0.82"/>
+        <path class="apricot" d="M 28 36 L 31 43 L 38 46 L 31 49 L 28 56 L 25 49 L 18 46 L 25 43 Z" opacity="0.88"/>
+        <path class="rose-strong" d="M 102 18 C 102 11 107 6 114 6 C 119 6 123 9 126 13 C 129 9 133 6 138 6 C 145 6 150 11 150 18 C 150 24 145 29 138 35 L 126 46 L 114 35 C 107 29 102 24 102 18 Z" opacity="0.72"/>
+      </g>
+
+      <!-- little brainstorm cards behind microphone -->
+      <g transform="translate(222 266) rotate(-5)">
+        <rect x="0" y="0" width="84" height="66" rx="15" class="ivory" stroke="#F2CDD6" stroke-width="4"/>
+        <path class="rose-soft" d="M 16 20 H 60" stroke="#F7BBC6" stroke-width="5" stroke-linecap="round" fill="none"/>
+        <path class="lav-soft" d="M 16 34 H 48" stroke="#D8D1F7" stroke-width="5" stroke-linecap="round" fill="none"/>
+        <circle cx="63" cy="47" r="8" class="rose" opacity="0.55"/>
+      </g>
+      <g transform="translate(272 224) rotate(8)">
+        <rect x="0" y="0" width="92" height="72" rx="16" class="ivory" stroke="#F2CDD6" stroke-width="4"/>
+        <path class="fine" d="M 20 20 C 28 12 39 8 51 8 C 61 8 71 12 79 20"/>
+        <path class="rose" d="M 22 46 C 22 39 27 34 34 34 C 39 34 43 37 46 41 C 49 37 53 34 58 34 C 65 34 70 39 70 46 C 70 52 65 57 58 63 L 46 74 L 34 63 C 27 57 22 52 22 46 Z" opacity="0.58"/>
+      </g>
+
+      <!-- microphone shadow -->
+      <g transform="translate(264 260) rotate(23)">
+        <rect x="84" y="118" width="42" height="176" rx="20" class="shadow"/>
+        <ellipse cx="103" cy="95" rx="62" ry="70" class="shadow"/>
+      </g>
+
+      <!-- microphone body -->
+      <g transform="translate(252 248) rotate(23)">
+        <rect x="92" y="108" width="34" height="180" rx="17" class="rose-soft" stroke="#EBAFBC" stroke-width="5"/>
+        <path d="M 95 238 C 109 228 118 228 125 238" class="fine"/>
+        <rect x="84" y="274" width="52" height="24" rx="12" class="rose" opacity="0.78"/>
+        <path d="M 63 18 C 78 2 99 -6 121 -6 C 147 -6 171 5 186 24 C 201 42 208 66 205 91 C 201 116 188 136 169 150 C 154 161 138 167 121 168 C 98 169 77 162 60 148 C 41 132 28 108 24 84 C 20 60 27 35 43 18 C 49 11 56 5 63 18 Z" class="rose-strong"/>
+        <path d="M 62 28 C 78 12 97 6 120 6 C 142 6 162 14 177 29 C 191 43 198 61 196 82 C 193 103 182 121 166 133 C 153 143 138 148 121 149 C 102 150 85 145 71 135 C 55 123 45 107 41 88 C 36 68 40 48 50 34 C 54 29 58 25 62 28 Z" class="ivory"/>
+        <path d="M 120 8 V 149" class="outline" opacity="0.82"/>
+        <path d="M 89 15 C 95 58 95 103 89 142" class="fine"/>
+        <path d="M 150 15 C 144 58 144 103 150 142" class="fine"/>
+        <path d="M 69 32 C 76 64 76 96 69 128" class="fine"/>
+        <path d="M 170 32 C 163 64 163 96 170 128" class="fine"/>
+        <rect x="81" y="149" width="78" height="18" rx="9" class="rose"/>
+        <path d="M 92 168 C 96 183 109 194 124 194 C 139 194 150 185 156 172" class="outline" opacity="0.82"/>
+      </g>
+
+      <!-- bow on handle -->
+      <g transform="translate(334 408)">
+        <path d="M 0 15 C -18 -3 -39 -7 -52 4 C -62 14 -59 31 -41 39 C -24 47 -9 40 0 15 Z" class="fine"/>
+        <path d="M 0 15 C 18 -3 39 -7 52 4 C 62 14 59 31 41 39 C 24 47 9 40 0 15 Z" class="fine"/>
+        <path d="M -10 8 C -3 2 3 2 10 8 C 14 12 14 20 10 24 C 3 30 -3 30 -10 24 C -14 20 -14 12 -10 8 Z" class="rose"/>
+        <path d="M -5 24 C -9 37 -14 47 -19 58 C -10 54 -3 54 4 58 C 1 47 -1 37 -5 24 Z" class="rose-soft"/>
+        <path d="M 5 24 C 9 37 14 47 19 58 C 10 54 3 54 -4 58 C -1 47 1 37 5 24 Z" class="rose-soft"/>
+      </g>
+
+      <!-- extra sparkles / petals -->
+      <g opacity="0.92">
+        <path class="lav" d="M 330 156 L 336 170 L 350 176 L 336 182 L 330 196 L 324 182 L 310 176 L 324 170 Z"/>
+        <path class="rose" d="M 388 178 C 394 168 402 163 412 163 C 422 163 431 168 436 178 C 441 168 450 163 460 163 C 471 163 480 171 480 182 C 480 193 472 202 462 209 C 451 217 444 224 436 235 C 428 224 420 217 409 209 C 399 202 391 193 391 182 C 391 180 391 179 388 178 Z" opacity="0.42"/>
+        <path class="apricot" d="M 219 197 L 223 206 L 232 210 L 223 214 L 219 223 L 215 214 L 206 210 L 215 206 Z"/>
+        <path class="rose-faint" d="M 422 286 C 431 276 440 271 451 271 C 462 271 472 276 480 286 C 472 295 462 300 451 300 C 440 300 431 295 422 286 Z"/>
+      </g>
+
+      <!-- ground accent for lower-right balance -->
+      <path d="M 256 454 C 296 445 334 441 368 441 C 404 441 437 445 469 455" class="fine" opacity="0.8"/>
+    </symbol>
+  </defs>
+  <use href="#brainstorm-card-illustration"/>
+</svg>

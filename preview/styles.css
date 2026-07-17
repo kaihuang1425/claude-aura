@@ -391,10 +391,36 @@ button:disabled {
   object-position: var(--aura-art-position);
   pointer-events: none;
   transition: opacity var(--aura-transition-duration) ease;
+  /* Match the runtime backdrop: anchor right, dissolve the other edges so the
+     artwork integrates instead of reading as a pasted rectangle. */
+  -webkit-mask-image: radial-gradient(142% 122% at 100% 50%, #000 24%, rgb(0 0 0 / 0.42) 56%, transparent 82%);
+  mask-image: radial-gradient(142% 122% at 100% 50%, #000 24%, rgb(0 0 0 / 0.42) 56%, transparent 82%);
 }
 
 .decorative-art img[data-fit="cover"] {
   object-fit: cover;
+}
+
+/* Kawaii idol decorative layers stay out of every other theme; the japanese-idol
+   block below opts them in. They are inert and never intercept pointer input. */
+.kawaii-decor,
+.kawaii-brand-logo {
+  display: none;
+}
+
+.kawaii-decor {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.kawaii-decor img {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
 }
 
 .app-sidebar,
@@ -1672,35 +1698,276 @@ button:disabled {
   background-image: repeating-linear-gradient(0deg, transparent 0 25px, hsl(var(--aura-accent-primary) / 0.06) 25px 26px);
 }
 
-:root[data-claude-aura-theme="japanese-idol"] .app-main::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  pointer-events: none;
+/* ============================================================================
+   Kawaii idol — deeply integrated interface skin for the japanese-idol theme.
+   Live HTML/CSS components; the supplied artwork is used only as inert,
+   independently positioned decorative layers. Everything is theme-scoped so the
+   other seven themes are untouched, and the UI stays usable if art fails to load.
+   ============================================================================ */
+
+/* Soft blush atmosphere: the supplied background sits under the token gradient.
+   The token gradient is mode-aware, so light mode reads warm and airy while dark
+   mode reads deep plum. The light photo is dropped in dark mode (below). */
+:root[data-claude-aura-theme="japanese-idol"] .app-backdrop {
+  background-image:
+    var(--aura-wallpaper-gradient),
+    url("../assets/theme-art/kawaii-idol/background.png");
+  background-size: cover, cover;
+  background-position: center, center;
+}
+
+:root[data-claude-aura-theme="japanese-idol"][data-mode="dark"] .app-backdrop {
+  background-image: var(--aura-wallpaper-gradient);
+}
+
+/* Opt the decorative layers in only for this theme. The kawaii hero replaces the
+   generic abstract idol SVG, so hide that single-layer art here. */
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-decor {
+  display: block;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .decorative-art {
+  display: none;
+}
+
+/* Let the atmosphere and hero read through the main canvas; cards keep their own
+   opaque surfaces so text contrast is preserved over the artwork. */
+:root[data-claude-aura-theme="japanese-idol"] .app-main {
+  background: transparent;
+}
+
+/* Hero idol: a right-margin presence, face kept in the safe area, soft-masked so
+   it never competes with text. object-fit contain preserves aspect ratio. */
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-hero {
+  right: -1%;
+  bottom: 0;
+  width: clamp(340px, 38vw, 600px);
+  height: min(100%, 820px);
+  object-fit: contain;
+  object-position: right bottom;
+  opacity: 1;
+  -webkit-mask-image: linear-gradient(102deg, transparent 0, rgb(0 0 0 / 0.35) 16%, #000 40%);
+  mask-image: linear-gradient(102deg, transparent 0, rgb(0 0 0 / 0.35) 16%, #000 40%);
+  filter: drop-shadow(-18px 22px 40px hsl(338 40% 55% / 0.18));
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-sakura-top {
+  top: -18px;
+  right: -14px;
+  width: clamp(150px, 15vw, 260px);
+  opacity: 0.9;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-sakura-bottom {
+  left: -22px;
+  bottom: -20px;
+  width: clamp(160px, 16vw, 280px);
+  opacity: 0.72;
+  transform: scaleX(-1);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-sparkle {
+  opacity: 0.85;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-sparkle-a {
+  top: 16%;
+  right: 30%;
+  width: 62px;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-sparkle-b {
+  top: 60%;
+  left: 20%;
+  width: 30px;
+  opacity: 0.6;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-signature {
+  right: 4%;
+  bottom: 8%;
+  width: clamp(120px, 12vw, 190px);
+  opacity: 0.8;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-sticker {
+  top: 12px;
+  right: 14px;
+  width: clamp(64px, 6vw, 96px);
+  opacity: 0.95;
+  filter: drop-shadow(0 6px 14px hsl(338 45% 55% / 0.22));
+}
+
+/* Brand: swap the generic starburst wordmark for the kawaii logo. */
+:root[data-claude-aura-theme="japanese-idol"] .sidebar-brand .aura-mark,
+:root[data-claude-aura-theme="japanese-idol"] .sidebar-brand > span {
+  display: none;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .kawaii-brand-logo {
+  display: block;
+  width: clamp(128px, 80%, 168px);
+  height: auto;
+}
+
+/* Sidebar: warm rail with a soft rose edge. Token-driven so it stays readable in
+   both light and dark modes (light blush / deep plum). */
+:root[data-claude-aura-theme="japanese-idol"] .app-sidebar {
   background:
-    radial-gradient(ellipse at 78% 3%, hsl(var(--aura-accent-primary) / 0.13), transparent 29%),
-    linear-gradient(115deg, transparent 0 78%, hsl(var(--aura-accent-secondary) / 0.08) 78% 79%, transparent 79%);
+    linear-gradient(180deg, hsl(var(--aura-sidebar-background) / 0.95), hsl(var(--aura-accent-secondary) / 0.12));
+  border-right-color: hsl(var(--aura-accent-primary) / 0.18);
 }
 
-:root[data-claude-aura-theme="japanese-idol"] .hero-heading::after {
+:root[data-claude-aura-theme="japanese-idol"] .new-task-button {
+  border-radius: 999px;
+  background: linear-gradient(120deg, hsl(var(--aura-accent-primary)), hsl(342 72% 62%));
+  box-shadow: 0 8px 20px hsl(var(--aura-accent-primary) / 0.28);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .side-item.is-current {
+  background: linear-gradient(100deg, hsl(var(--aura-accent-primary) / 0.16), hsl(var(--aura-accent-secondary) / 0.12));
+  box-shadow: inset 3px 0 0 hsl(var(--aura-accent-primary) / 0.8);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .profile-avatar {
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, hsl(342 80% 82%), hsl(266 45% 78%));
+  color: hsl(338 40% 24%);
+}
+
+/* Headings: refined serif display with a hand-drawn rose underline. */
+:root[data-claude-aura-theme="japanese-idol"] .hero-heading h2 {
+  font-family: var(--aura-font-display);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .hero-heading h2::after {
   content: "";
-  width: 60px;
-  height: 2px;
-  margin: 17px 0 0 4px;
-  background: linear-gradient(90deg, hsl(var(--aura-accent-primary)), hsl(var(--aura-accent-secondary)), transparent);
-  transform: rotate(-12deg);
-  transform-origin: left center;
+  display: block;
+  width: 96px;
+  height: 8px;
+  margin: 8px 0 0 2px;
+  background: no-repeat left center / contain
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12'%3E%3Cpath d='M2 7C22 1 38 1 58 6s40 5 60-1' fill='none' stroke='%23ec7f95' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
+:root[data-claude-aura-theme="japanese-idol"] .section-kicker {
+  letter-spacing: 0.12em;
+  color: hsl(var(--aura-accent-primary));
+}
+
+/* Category cards: rounded blush surfaces, tinted icon coins, and a supplied
+   illustration nested in the reserved bottom-right corner of each card. */
 :root[data-claude-aura-theme="japanese-idol"] .quick-card,
 :root[data-claude-aura-theme="japanese-idol"] .widget {
-  border-color: hsl(var(--aura-accent-primary) / 0.22);
+  position: relative;
+  border-radius: 22px;
+  border-color: hsl(var(--aura-accent-primary) / 0.2);
+  background:
+    linear-gradient(155deg, hsl(var(--aura-elevated-surface) / 0.97), hsl(var(--aura-card-background) / 0.93));
+  box-shadow: 0 14px 30px hsl(338 44% 40% / 0.14);
 }
 
-:root[data-claude-aura-theme="japanese-idol"] .quick-card:nth-child(2),
-:root[data-claude-aura-theme="japanese-idol"] .state-widget {
-  background-image: linear-gradient(145deg, hsl(var(--aura-card-background) / 0.82), hsl(var(--aura-accent-secondary) / 0.08));
+:root[data-claude-aura-theme="japanese-idol"] .quick-card {
+  padding-bottom: 46px;
+  overflow: hidden;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  width: clamp(58px, 6vw, 78px);
+  height: clamp(58px, 6vw, 78px);
+  background: no-repeat center / contain;
+  opacity: 0.96;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card:nth-child(1)::after {
+  background-image: url("../assets/theme-art/kawaii-idol/card-brainstorm.svg");
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card:nth-child(2)::after {
+  background-image: url("../assets/theme-art/kawaii-idol/card-continue.svg");
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card:nth-child(3)::after {
+  background-image: url("../assets/theme-art/kawaii-idol/card-analyze.svg");
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .card-icon {
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, hsl(342 78% 66%), hsl(342 62% 52%));
+  box-shadow: 0 6px 14px hsl(var(--aura-accent-primary) / 0.28);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card:nth-child(2) .card-icon {
+  background: linear-gradient(135deg, hsl(266 55% 74%), hsl(266 45% 60%));
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card:nth-child(3) .card-icon {
+  background: linear-gradient(135deg, hsl(24 88% 68%), hsl(14 78% 60%));
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .quick-card > span:last-child {
+  border-radius: 999px;
+  color: #fff;
+  background: hsl(var(--aura-accent-primary));
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+}
+
+/* Composer + controls: rounded, pill-shaped, ribboned. */
+:root[data-claude-aura-theme="japanese-idol"] .composer {
+  border-radius: 26px;
+  border-color: hsl(var(--aura-accent-primary) / 0.24);
+  background: linear-gradient(160deg, hsl(var(--aura-composer-background) / 0.97), hsl(var(--aura-accent-secondary) / 0.1));
+  box-shadow: 0 18px 40px hsl(338 44% 40% / 0.18);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .composer-mode label,
+:root[data-claude-aura-theme="japanese-idol"] .composer-icon-button,
+:root[data-claude-aura-theme="japanese-idol"] .model-control,
+:root[data-claude-aura-theme="japanese-idol"] .header-button {
+  border-radius: 999px;
+}
+
+:root[data-claude-aura-theme="japanese-idol"] .send-button {
+  border-radius: 999px;
+  background: linear-gradient(120deg, hsl(var(--aura-accent-primary)), hsl(342 74% 62%));
+  box-shadow: 0 8px 18px hsl(var(--aura-accent-primary) / 0.3);
+}
+
+:root[data-claude-aura-theme="japanese-idol"] [role="separator"],
+:root[data-claude-aura-theme="japanese-idol"] .side-section h2 {
+  --ribbon: linear-gradient(90deg, transparent, hsl(var(--aura-accent-primary) / 0.4), hsl(var(--aura-accent-secondary) / 0.35), transparent);
+}
+
+/* Keep the hero clear of the composer and cards on smaller desktops. */
+@media (max-width: 1180px) {
+  :root[data-claude-aura-theme="japanese-idol"] .kawaii-hero {
+    width: clamp(240px, 28vw, 380px);
+    opacity: 0.7;
+  }
+
+  :root[data-claude-aura-theme="japanese-idol"] .kawaii-signature,
+  :root[data-claude-aura-theme="japanese-idol"] .kawaii-sparkle-b {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  :root[data-claude-aura-theme="japanese-idol"] .kawaii-hero,
+  :root[data-claude-aura-theme="japanese-idol"] .kawaii-sticker {
+    opacity: 0.4;
+  }
+
+  :root[data-claude-aura-theme="japanese-idol"] .kawaii-sakura-bottom {
+    display: none;
+  }
 }
 
 :root[data-claude-aura-theme="korean-idol"] .app-main::before {
@@ -1823,6 +2090,7 @@ button:disabled {
   .app-backdrop::after,
   .app-main::before,
   .decorative-art,
+  .kawaii-decor,
   .theme-card::after {
     display: none;
   }

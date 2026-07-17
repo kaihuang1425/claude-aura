@@ -3,11 +3,11 @@
   "variant": "japanese-idol",
   "blur": 18,
   "typography": {
-    "ui": "Candara, \"Yu Gothic UI\", \"Segoe UI\", system-ui, sans-serif",
-    "display": "\"Palatino Linotype\", \"Book Antiqua\", \"Yu Mincho\", serif",
-    "body": "Candara, \"Yu Gothic UI\", \"Segoe UI\", system-ui, sans-serif",
+    "ui": "\"DM Sans\", Candara, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
+    "display": "\"Cormorant Garamond\", \"EB Garamond\", \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
+    "body": "\"DM Sans\", Candara, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
     "mono": "\"Lucida Console\", \"Cascadia Mono\", ui-monospace, monospace",
-    "displayWeight": 500,
+    "displayWeight": 600,
     "letterSpacing": "-0.025em"
   },
   "shape": {
@@ -48,7 +48,7 @@
       "surfaceAlpha": 0.9,
       "sidebarAlpha": 0.93,
       "imageOpacity": 0.12,
-      "artOpacity": 0.3,
+      "artOpacity": 0.42,
       "textureOpacity": 0.22
     }
   },
@@ -77,7 +77,7 @@
       "surfaceAlpha": 0.84,
       "sidebarAlpha": 0.9,
       "imageOpacity": 0.14,
-      "artOpacity": 0.27,
+      "artOpacity": 0.36,
       "textureOpacity": 0.24
     }
   }

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" color="#F69AAA" role="img" aria-labelledby="note-heart-title note-heart-desc">
+  <title id="note-heart-title">Heart note</title>
+  <desc id="note-heart-desc">A reusable kawaii music-note motif with a transparent background.</desc>
+      <g fill="currentColor">
+        <path d="M25.8 60C12.1 51.7 9.3 45.3 12.9 39.8c3.1-4.8 10-4.5 12.9.9 2.9-5.4 9.8-5.7 12.9-.9 3.6 5.5.8 11.9-12.9 20.2Z"/>
+        <rect x="33" y="11" width="6.2" height="34" rx="3.1"/>
+        <path d="M36 10.5C43.1 8.2 49.2 6.4 55 4.8v8.4c0 8.2-4.4 13.4-12.2 15.7v-6.8c3.9-1.3 6.2-3.3 7.2-5.9L36 20.3V10.5Z"/>
+      </g>
+</svg>

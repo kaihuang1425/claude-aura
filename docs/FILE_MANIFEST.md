@@ -38,6 +38,28 @@ are listed under Visual evidence below.
 - `assets/theme-art/korean-prestige.svg`
 - `assets/theme-art/study-library.svg`
 
+### Kawaii idol runtime assets
+
+Derived, isolated decorative assets for the japanese-idol (kawaii idol) preview
+showcase. The originals live in the gitignored source kit `themes/kawaii-idol/`.
+
+- `assets/theme-art/kawaii-idol/logo-horizontal.svg`
+- `assets/theme-art/kawaii-idol/mark.svg`
+- `assets/theme-art/kawaii-idol/sparkle-cluster.svg`
+- `assets/theme-art/kawaii-idol/sparkle-soft.svg`
+- `assets/theme-art/kawaii-idol/sparkle-8.svg`
+- `assets/theme-art/kawaii-idol/star-outline.svg`
+- `assets/theme-art/kawaii-idol/note-heart.svg`
+- `assets/theme-art/kawaii-idol/signature-hinata.svg`
+- `assets/theme-art/kawaii-idol/keep-shining-sticker.svg`
+- `assets/theme-art/kawaii-idol/card-brainstorm.svg`
+- `assets/theme-art/kawaii-idol/card-continue.svg`
+- `assets/theme-art/kawaii-idol/card-analyze.svg`
+- `assets/theme-art/kawaii-idol/background.png`
+- `assets/theme-art/kawaii-idol/hero.png`
+- `assets/theme-art/kawaii-idol/sakura-bottom-right.png`
+- `assets/theme-art/kawaii-idol/sakura-top-right.png`
+
 ## Themes
 
 - `themes/registry.json`

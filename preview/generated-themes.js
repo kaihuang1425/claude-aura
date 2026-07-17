@@ -2726,17 +2726,17 @@ window.CLAUDE_AURA_THEMES = {
     "artwork": {
       "path": "assets/theme-art/japanese-idol.svg",
       "position": "right center",
-      "size": "min(55vw, 820px) auto",
+      "size": "min(46vw, 680px) auto",
       "mobile": "reduce"
     },
     "radius": 20,
     "blur": 18,
     "typography": {
-      "ui": "Candara, \"Yu Gothic UI\", \"Segoe UI\", system-ui, sans-serif",
-      "display": "\"Palatino Linotype\", \"Book Antiqua\", \"Yu Mincho\", serif",
-      "body": "Candara, \"Yu Gothic UI\", \"Segoe UI\", system-ui, sans-serif",
+      "ui": "\"DM Sans\", Candara, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
+      "display": "\"Cormorant Garamond\", \"EB Garamond\", \"Palatino Linotype\", \"Book Antiqua\", Georgia, serif",
+      "body": "\"DM Sans\", Candara, \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
       "mono": "\"Lucida Console\", \"Cascadia Mono\", ui-monospace, monospace",
-      "displayWeight": 500,
+      "displayWeight": 600,
       "letterSpacing": "-0.025em"
     },
     "shape": {
@@ -2944,7 +2944,7 @@ window.CLAUDE_AURA_THEMES = {
         "surfaceAlpha": 0.9,
         "sidebarAlpha": 0.93,
         "imageOpacity": 0.12,
-        "artOpacity": 0.3,
+        "artOpacity": 0.42,
         "textureOpacity": 0.22
       }
     },
@@ -3140,7 +3140,7 @@ window.CLAUDE_AURA_THEMES = {
         "surfaceAlpha": 0.84,
         "sidebarAlpha": 0.9,
         "imageOpacity": 0.14,
-        "artOpacity": 0.27,
+        "artOpacity": 0.36,
         "textureOpacity": 0.24
       }
     }
@@ -3176,7 +3176,7 @@ window.CLAUDE_AURA_THEMES = {
     "artwork": {
       "path": "assets/theme-art/korean-idol.svg",
       "position": "right center",
-      "size": "min(56vw, 840px) auto",
+      "size": "min(46vw, 700px) auto",
       "mobile": "reduce"
     },
     "radius": 16,
@@ -3394,7 +3394,7 @@ window.CLAUDE_AURA_THEMES = {
         "surfaceAlpha": 0.84,
         "sidebarAlpha": 0.91,
         "imageOpacity": 0.12,
-        "artOpacity": 0.3,
+        "artOpacity": 0.44,
         "textureOpacity": 0.12
       }
     },
@@ -3590,7 +3590,7 @@ window.CLAUDE_AURA_THEMES = {
         "surfaceAlpha": 0.76,
         "sidebarAlpha": 0.88,
         "imageOpacity": 0.14,
-        "artOpacity": 0.3,
+        "artOpacity": 0.4,
         "textureOpacity": 0.12
       }
     }

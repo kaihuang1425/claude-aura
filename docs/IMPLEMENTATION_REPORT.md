@@ -1,5 +1,40 @@
 # Eight-theme implementation report
 
+## 0.3.x follow-up fixes
+
+Three changes landed after the initial eight-theme system:
+
+1. **First-sign-in blank screen (fixed).** The WebView loading cover only hid when
+   the async theme-injection script confirmed `"installed":true`. The first
+   sign-in's OAuth redirect/reload burst could invalidate that script, stranding
+   the opaque cover over a loaded, signed-in page until a restart. The cover is now
+   hidden on the real `NavigationCompleted` signal for a claude.ai document, with
+   theme injection running non-blockingly and self-healing; the opaque cover is
+   reserved for genuine navigation/process failures. See `windows/aura-ui.ps1`.
+2. **UTF-8 helper decoding (fixed).** `aura-ui.ps1` now sets an explicit UTF-8
+   `StandardOutputEncoding` on the Node helper and reads `config.json` as UTF-8, so
+   localized theme metadata no longer corrupts on OEM-code-page systems (Big5/GBK).
+3. **Idol artwork integration.** The theme-art backdrop layer previously rendered
+   each art SVG's opaque background as a hard, washed rectangle. `base.css` now
+   applies a right-anchored radial mask that dissolves the artwork's other edges, so
+   it reads as an integrated corner presence; the japanese-idol and korean-idol art
+   sizes and opacities were retuned to match.
+
+## Kawaii idol preview showcase
+
+The `themes/kawaii-idol/` production asset kit (supplied, gitignored source of
+truth) is integrated into the japanese-idol theme's offline preview as a deeply
+art-directed skin: derived, isolated runtime assets under
+`assets/theme-art/kawaii-idol/` (kawaii logo, hero portrait, sakura clusters,
+sparkles, signature, "keep shining" sticker, and per-card illustrations) are
+composed as inert, pointer-safe, independently positioned decorative layers over
+the live HTML/CSS components. The treatment is scoped to
+`[data-claude-aura-theme="japanese-idol"]`, is token-driven so it reads correctly
+in light and dark modes, and leaves the other seven themes unchanged. The runtime
+claude.ai skin (which embeds a single <100 KB SVG per theme) uses the original
+abstract kawaii-idol SVG plus the retuned tokens and component treatments, since
+the heavy raster hero is a preview-only asset.
+
 ## Scope
 
 Claude Aura 0.3 preserves the existing WebView2 companion, renderer injection,

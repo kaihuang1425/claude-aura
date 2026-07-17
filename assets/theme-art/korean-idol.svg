@@ -21,7 +21,6 @@
   <path d="M0 0h305L146 900H0z" fill="#fff" fill-opacity=".48"/>
   <path d="M216 0h277L349 900H55z" fill="url(#holo)" fill-opacity=".38"/>
   <g fill="none" stroke="#7770b6" stroke-opacity=".32">
-    <path d="M67 144h421M29 305h390M0 639h351"/>
     <path d="M130 82v682M267 0v900M438 0v716"/>
     <path d="M65 705l105-111 98 35 132-151 85 32" stroke="#5bcbdc" stroke-width="3"/>
   </g>
@@ -46,7 +45,6 @@
     <path d="M842 44h315l43 177-326 31z" fill-opacity=".35"/>
   </g>
   <g fill="#7267b7" opacity=".62">
-    <path d="M106 754h11v55h-11zm23-24h11v79h-11zm23 43h11v36h-11zm23-68h11v104h-11zm23 31h11v73h-11zm23-51h11v124h-11zm23 76h11v48h-11zm23-39h11v87h-11z"/>
     <circle cx="392" cy="202" r="13"/><path d="M403 202v-83h14v83z"/><path d="M410 119l68 21v17l-68-21z"/>
   </g>
   <path d="M1022 583l82 44-12 91-91 13-46-78z" fill="none" stroke="#5fd6df" stroke-width="4" stroke-opacity=".66"/>

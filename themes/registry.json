@@ -188,7 +188,7 @@
       "artwork": {
         "path": "assets/theme-art/japanese-idol.svg",
         "position": "right center",
-        "size": "min(55vw, 820px) auto",
+        "size": "min(46vw, 680px) auto",
         "mobile": "reduce"
       }
     },
@@ -215,7 +215,7 @@
       "artwork": {
         "path": "assets/theme-art/korean-idol.svg",
         "position": "right center",
-        "size": "min(56vw, 840px) auto",
+        "size": "min(46vw, 700px) auto",
         "mobile": "reduce"
       }
     }
