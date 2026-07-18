@@ -15,6 +15,19 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-19 — WO-06 — content-only main window
+
+- What changed: removed the main-window toolbar, WinForms theme gallery,
+  dynamic palette/title-bar plumbing, and their handlers from
+  `windows/aura-ui.ps1`. The main form now contains only the Claude WebView2
+  content panel and its loading/error cover; theme, background, Original look,
+  and Desktop actions remain available through Studio and the tray.
+- Evidence: PowerShell parse pass; `npm run check` 18/18; `npm run
+  verify:cycle` 33/33 with all golden diffs at zero. The refreshed sixteen-frame
+  `dist/verify/checkpoint-a-contact-sheet-corrected.png` plus representative
+  default-light and anime-twilight-dark renders were opened and inspected.
+- Follow-ups discovered: none.
+
 ## 2026-07-19 — WO-04 — theme-cli QA board
 
 - What changed: added `theme-cli qa <id>` and a dependency-free local

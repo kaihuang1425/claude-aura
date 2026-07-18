@@ -922,7 +922,7 @@ test("JavaScript and platform scripts parse", async () => {
   }
 });
 
-test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich theme gallery", async () => {
+test("Windows uses a content-only WebView2 window with Aura Studio and tray controls", async () => {
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
   const install = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
@@ -943,8 +943,37 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert.match(ui, /--locale/);
   assert.match(ui, /CurrentUICulture/);
   assert.match(ui, /AccessibleName/);
-  assert.match(ui, /FlowLayoutPanel|TableLayoutPanel/);
-  assert.match(ui, /swatches/i);
+  for (const removedMainWindowMarker of [
+    "ThemeGalleryForm",
+    "ThemeOptionButtons",
+    "New-AuraToolbarButton",
+    "$script:Toolbar",
+    "Set-AuraUiTitleBarPalette",
+    "Get-AuraUiThemePalette",
+    "DwmSetWindowAttribute",
+  ]) {
+    assert(!ui.includes(removedMainWindowMarker),
+      `The removed main-window gallery/palette plumbing still contains ${removedMainWindowMarker}`);
+  }
+  const mainFormControlAdds = [...ui.matchAll(/\$script:Form\.Controls\.Add\s*\(\s*(\$[\w:]+)\s*\)/g)]
+    .map((match) => match[1]);
+  assert.match(ui, /\$content\s*=\s*\[System\.Windows\.Forms\.Panel\]::new\(\)/,
+    "The main form's sole child must be a content panel");
+  assert.deepEqual(mainFormControlAdds, ["$content"],
+    "The main form must receive only the content panel");
+  assert(!/\$script:Form\.Controls\.AddRange\s*\(/.test(ui),
+    "The main form must not receive controls through an unverified AddRange call");
+  const contentControlAdds = [...ui.matchAll(/\$content\.Controls\.Add\s*\(\s*(\$script:[A-Za-z0-9]+)\s*\)/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(contentControlAdds, ["$script:WebView", "$script:LoadingPanel"],
+    "The content panel must contain only the Claude WebView and loading panel");
+  assert(!/\$content\.Controls\.AddRange\s*\(/.test(ui),
+    "The content panel must not receive controls through an unverified AddRange call");
+  assert.match(ui,
+    /\$script:LoadingPanel\.Controls\.AddRange\s*\(\s*@\([\s\S]{0,240}?\$script:RetryButton[\s\S]{0,120}?\)\s*\)/,
+    "The retry control must remain inside the loading panel");
+  assert.match(ui, /\$script:RetryButton\.add_Click\(\s*\{/,
+    "The loading-panel retry control must remain wired");
   assert.match(ui, /Get-AuraUiCopy/);
   assert.match(ui, /ui-copy\.json/);
   assert.match(ui, /\$script:StudioForm\.Text\s*=\s*"\$\(\$script:UiCopy\.studioTitle\)"/,
@@ -1007,6 +1036,10 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
     "The live image layer must use the same exact frame and zoom model as Studio");
   assert.match(studioApp, /send\(\{\s*type:\s*"set-image"\s*\}\)/,
     "The Studio page must let the host choose image paths");
+  for (const action of ["set-theme", "set-image", "clear-image", "set-enabled", "open-desktop"]) {
+    assert(new RegExp(`type:\\s*"${action}"`).test(studioApp),
+      `Studio must retain the ${action} capability removed from the main toolbar`);
+  }
   assert.match(studioApp, /\{\s*type:\s*"set-image-framing"\s*,\s*\.\.\.saved\s*\}/,
     "The Studio page must persist background framing without supplying a path");
   assert.match(studioApp, /\{\s*type:\s*"set-card-preview-crop"\s*,\s*theme:/,
@@ -1099,6 +1132,14 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
 
   assert.match(ui, /\[System\.Windows\.Forms\.NotifyIcon\]::new\(\)/);
   assert.match(ui, /\[System\.Windows\.Forms\.ContextMenuStrip\]::new\(\)/);
+  assert.match(ui, /\$script:TrayOpenStudioItem\.add_Click\(\s*\{\s*Show-AuraUiStudio\s*\}\)/,
+    "The tray must retain access to Studio after the main toolbar is removed");
+  assert.match(ui,
+    /\$script:TrayAppearanceItem\.add_Click\(\s*\{[\s\S]{0,300}?Invoke-AuraUiSetEnabled/,
+    "The tray must retain the Original look toggle after the main toolbar is removed");
+  assert.match(ui,
+    /\$script:TrayOpenDesktopItem\.add_Click\(\s*\{[\s\S]{0,300}?Invoke-AuraUiOpenDesktopApp/,
+    "The tray must retain the desktop-app action after the main toolbar is removed");
   assert.match(ui, /\$script:TrayIcon\.add_(?:Mouse)?DoubleClick\(\s*\{[\s\S]{0,300}?Show-AuraUiStudio/,
     "Double-clicking the tray icon must open Studio");
   assert.match(ui, /\$script:TrayIcon\.Dispose\(\)/,
@@ -1168,8 +1209,6 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
       assert.equal(uiCopy[locale][key], value, `${locale}.${key} must use approved native UI copy`);
     }
   }
-  assert.match(ui, /DwmSetWindowAttribute/);
-  assert.match(ui, /Set-AuraUiTitleBarPalette/);
   assert.match(ui, /Set-AuraUiFormWithinWorkingArea/);
   assert.match(ui, /Screen\]::FromControl\(\$Form\)\.WorkingArea/);
   assert.match(install, /WindowStyle Hidden/);

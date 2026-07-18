@@ -14,7 +14,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
       light+dark) for user review; user approvals become golden images
 - [x] WO-03 — `theme-cli scaffold` command + slot kit template
 - [x] WO-04 — `theme-cli qa` command (QA board generator, headless Edge)
-- [ ] WO-06 — Remove the main-window toolbar and the WinForms gallery
+- [x] WO-06 — Remove the main-window toolbar and the WinForms gallery
       (only after Checkpoint B approval)
 - [ ] WO-07 — User themes directory + Studio "Install theme from folder"
 - [ ] WO-08 — Asset production: japanese-film-editorial (ASSET_CONTRACT)
