@@ -95,6 +95,13 @@ Format:
 - Evidence: dist/verify/*-1440x900.png, 17/17 gates; hero crisp and clearly
   visible in japanese-idol light, grid + figure visible in korean-idol dark,
   body text readable in the fixture's check block in all renders.
+- Checkpoint A approval (2026-07-19): the user approved all sixteen light/dark
+  payload frames. Exact PNGs are locked under `docs/golden/` and hashed in
+  `docs/golden/REFERENCE_LOCK.md`. The capture harness now preloads artwork,
+  holds a short real-time loopback paint barrier, and flushes compositor stages
+  so layered WebP decode is deterministic. Korean Idol light reproduced with
+  SHA-256 `10225abb81e27c7c778c2df9394508af6c7847ec2c964025e0b200898e90f029`;
+  `npm run check` 16/16 and `npm run verify:cycle` 33/33.
 - Follow-ups discovered: korean-idol/korean-prestige/others still render
   stand-in SVG figures — replaced by WO-08..14 kit production.
 

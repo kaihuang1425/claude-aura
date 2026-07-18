@@ -19,6 +19,11 @@ const OUTPUT_DIR = path.join(PROJECT_ROOT, "dist", "verify");
 const GOLDEN_DIR = path.join(PROJECT_ROOT, "docs", "golden");
 const WIDTH = 1440;
 const HEIGHT = 900;
+const PAINT_SETTLE_MS = 1_200;
+const TRANSPARENT_PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
 // Golden drift thresholds: mean absolute channel delta and share of pixels
 // whose max channel delta exceeds 10/255.
 const MEAN_DELTA_LIMIT = 3;
@@ -45,6 +50,7 @@ function launchEdge(edge, extraArgs) {
   const profile = path.join(OUTPUT_DIR, `.edge-${process.pid}-${Math.random().toString(16).slice(2)}`);
   const child = spawn(edge, [
     "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+    "--run-all-compositor-stages-before-draw",
     `--user-data-dir=${profile}`, ...extraArgs,
   ], { stdio: "ignore" });
   return { child, profile };
@@ -74,8 +80,50 @@ async function waitForStableFile(filePath, timeoutMs, minimumBytes) {
   return false;
 }
 
-function fileUrl(filePath) {
-  return `file:///${filePath.replaceAll("\\", "/")}`;
+function buildArtworkPreloads(settings) {
+  const sources = [
+    settings.imageDataUrl,
+    settings.artDataUrl,
+    ...(Array.isArray(settings.artLayers) ? settings.artLayers.map((layer) => layer?.dataUrl) : []),
+  ].filter((source) => typeof source === "string" && source.startsWith("data:image/"));
+  const escapeAttribute = (value) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+  return sources.map((source, index) =>
+    `<img class="aura-verify-preload" data-aura-verify-image="${index}" aria-hidden="true" alt="" `
+    + `decoding="sync" loading="eager" fetchpriority="high" src="${escapeAttribute(source)}">`
+  ).join("");
+}
+
+async function openRenderServer(getPage) {
+  const server = http.createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/") {
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Type": "text/html; charset=utf-8",
+      }).end(getPage());
+      return;
+    }
+    if (request.method === "GET" && request.url === "/aura-verify-settle.png") {
+      setTimeout(() => {
+        if (response.destroyed) return;
+        response.writeHead(200, {
+          "Cache-Control": "no-store",
+          "Connection": "close",
+          "Content-Type": "image/png",
+        }).end(TRANSPARENT_PIXEL);
+      }, PAINT_SETTLE_MS);
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  return {
+    origin,
+    close: () => new Promise((resolve) => {
+      server.close(resolve);
+      server.closeAllConnections?.();
+    }),
+  };
 }
 
 async function renderTheme(edge, theme, mode) {
@@ -84,19 +132,39 @@ async function renderTheme(edge, theme, mode) {
   const darkSetup = mode === "dark"
     ? '<script>document.documentElement.classList.add("dark");document.documentElement.dataset.mode="dark";</script>'
     : "";
-  const html = fixture.replace("</body>", `${darkSetup}<script>\n${bundle.payload}\n</script></body>`);
+  const preloads = buildArtworkPreloads(bundle.settings);
+  const harnessStyle = `<style>`
+    + `.aura-verify-preload{position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;`
+    + `opacity:.001;pointer-events:none;z-index:2147483647}`
+    + `.aura-verify-settle{position:fixed;width:1px;height:1px;opacity:.001;pointer-events:none}`
+    + `</style>`;
+  // Static eager images participate in the document load event and request
+  // synchronous decoding. A same-origin delayed pixel keeps the load pending in
+  // real time while virtual time is paused; the final compositor flag then
+  // flushes the exact data-URL resources before Edge captures CSS backgrounds.
+  let html = "";
+  const renderServer = await openRenderServer(() => html);
+  html = fixture.replace("</body>",
+    `${darkSetup}${harnessStyle}${preloads}<script>\n${bundle.payload}\n</script>`
+      + `<img class="aura-verify-settle" aria-hidden="true" alt="" `
+      + `src="${renderServer.origin}/aura-verify-settle.png"></body>`);
   const name = `${theme.name}-${mode}-${WIDTH}x${HEIGHT}`;
   const htmlPath = path.join(OUTPUT_DIR, `${name}.html`);
   const pngPath = path.join(OUTPUT_DIR, `${name}.png`);
-  await fs.writeFile(htmlPath, html, "utf8");
-  await fs.rm(pngPath, { force: true });
-  const handle = launchEdge(edge, [
-    `--window-size=${WIDTH},${HEIGHT}`, "--virtual-time-budget=8000",
-    `--screenshot=${pngPath}`, fileUrl(htmlPath),
-  ]);
-  const ok = await waitForStableFile(pngPath, 30_000, 10_000);
-  await cleanupEdge(handle);
-  return { name, pngPath, ok };
+  let handle;
+  try {
+    await fs.writeFile(htmlPath, html, "utf8");
+    await fs.rm(pngPath, { force: true });
+    handle = launchEdge(edge, [
+      `--window-size=${WIDTH},${HEIGHT}`, "--virtual-time-budget=8000",
+      `--screenshot=${pngPath}`, `${renderServer.origin}/`,
+    ]);
+    const ok = await waitForStableFile(pngPath, 30_000, 10_000);
+    return { name, pngPath, ok };
+  } finally {
+    if (handle) await cleanupEdge(handle);
+    await renderServer.close();
+  }
 }
 
 // Serves the two PNGs plus a diff page to headless Edge; the page computes the

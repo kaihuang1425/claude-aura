@@ -524,6 +524,13 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
   assert.equal(await resolveArtwork({ artwork: { path: "assets/theme-art/not-present.svg" } }), null);
   await assert.rejects(resolveArtwork({ artwork: { path: "themes/default.json" } }), /inside/);
   assert.match(baseCss, /prefers-reduced-motion: reduce/);
+  const verifier = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "verify-cycle.mjs"), "utf8");
+  assert.match(verifier, /class="aura-verify-preload"/);
+  assert.match(verifier, /decoding="sync" loading="eager" fetchpriority="high"/);
+  assert.match(verifier, /aura-verify-settle\.png/);
+  assert.match(verifier, /run-all-compositor-stages-before-draw/);
+  assert.match(verifier, /--screenshot=/);
+  assert.match(verifier, /waitForStableFile/);
 });
 
 test("config writes are atomic, aliases migrate, and theme choice persists", async () => {

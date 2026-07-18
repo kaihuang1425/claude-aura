@@ -179,6 +179,28 @@ copies are regenerated with `node scripts/convert-theme-assets.mjs`.
 
 ## Visual evidence
 
+### User-approved payload goldens
+
+- `docs/golden/REFERENCE_LOCK.md`
+- `docs/golden/anime-twilight/anime-twilight-dark-1440x900.png`
+- `docs/golden/anime-twilight/anime-twilight-light-1440x900.png`
+- `docs/golden/cartoon-studio/cartoon-studio-dark-1440x900.png`
+- `docs/golden/cartoon-studio/cartoon-studio-light-1440x900.png`
+- `docs/golden/default/default-dark-1440x900.png`
+- `docs/golden/default/default-light-1440x900.png`
+- `docs/golden/japanese-film-editorial/japanese-film-editorial-dark-1440x900.png`
+- `docs/golden/japanese-film-editorial/japanese-film-editorial-light-1440x900.png`
+- `docs/golden/japanese-idol/japanese-idol-dark-1440x900.png`
+- `docs/golden/japanese-idol/japanese-idol-light-1440x900.png`
+- `docs/golden/korean-idol/korean-idol-dark-1440x900.png`
+- `docs/golden/korean-idol/korean-idol-light-1440x900.png`
+- `docs/golden/korean-prestige/korean-prestige-dark-1440x900.png`
+- `docs/golden/korean-prestige/korean-prestige-light-1440x900.png`
+- `docs/golden/study-library/study-library-dark-1440x900.png`
+- `docs/golden/study-library/study-library-light-1440x900.png`
+
+### Comparison and responsive captures
+
 - `docs/theme-screenshots/01-default-home-light-1440x900.png`
 - `docs/theme-screenshots/02-japanese-film-editorial-home-light-1440x900.png`
 - `docs/theme-screenshots/03-korean-prestige-home-light-1440x900.png`

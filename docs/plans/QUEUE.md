@@ -10,7 +10,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
       (virtual host mapping), wire the postMessage bridge, tray icon
 - [x] **HUMAN CHECKPOINT B** — Studio walkthrough screenshots (both locales,
       keyboard traversal evidence) for user review
-- [ ] **HUMAN CHECKPOINT A** — contact sheet of all 8 themes (payload harness,
+- [x] **HUMAN CHECKPOINT A** — contact sheet of all 8 themes (payload harness,
       light+dark) for user review; user approvals become golden images
 - [ ] WO-03 — `theme-cli scaffold` command + slot kit template
 - [ ] WO-04 — `theme-cli qa` command (QA board generator, headless Edge)
@@ -39,6 +39,9 @@ Notes:
   and custom-background framing through one pointer-drag editor with native
   keyboard-operable controls. The user approved the revised checkpoint on
   2026-07-19.
+- The user approved all sixteen Checkpoint A frames on 2026-07-19. Korean Idol
+  light was recaptured and approved after its original frame was found to
+  precede artwork decode; all sixteen payload renders are now locked goldens.
 - WO-08..14 each end with their own mini-checkpoint if provisional art was
   generated (user may replace generated art with supplied kits at any time).
 - If a work order blocks twice, log it in BLOCKED.md and continue.
