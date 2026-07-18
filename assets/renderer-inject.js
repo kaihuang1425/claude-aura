@@ -7,6 +7,7 @@
   const imageOpacityValue = settings.imageOpacity === null
     ? "var(--aura-default-image-opacity)"
     : String(settings.imageOpacity);
+  const imageScaleValue = String(settings.imageZoom || 1);
   const artCssValue = settings.artDataUrl ? `url(${JSON.stringify(settings.artDataUrl)})` : "none";
   let observeTargets = () => {};
   let styleDirty = true;
@@ -39,6 +40,7 @@
       html.style.setProperty("--aura-image", imageCssValue);
       html.style.setProperty("--aura-image-opacity", imageOpacityValue);
       html.style.setProperty("--aura-image-position", settings.imagePosition || "center");
+      html.style.setProperty("--aura-image-scale", imageScaleValue);
       html.style.setProperty("--aura-theme-art", artCssValue);
       html.style.setProperty("--aura-art-position", settings.artPosition || "right center");
       html.style.setProperty("--aura-art-size", settings.artSize || "min(58vw, 860px) auto");
@@ -122,6 +124,7 @@
     html?.style.removeProperty("--aura-image");
     html?.style.removeProperty("--aura-image-opacity");
     html?.style.removeProperty("--aura-image-position");
+    html?.style.removeProperty("--aura-image-scale");
     html?.style.removeProperty("--aura-theme-art");
     html?.style.removeProperty("--aura-art-position");
     html?.style.removeProperty("--aura-art-size");
@@ -162,6 +165,7 @@
     || root.style.getPropertyValue("--aura-image") !== imageCssValue
     || root.style.getPropertyValue("--aura-image-opacity") !== imageOpacityValue
     || root.style.getPropertyValue("--aura-image-position") !== (settings.imagePosition || "center")
+    || root.style.getPropertyValue("--aura-image-scale") !== imageScaleValue
     || root.style.getPropertyValue("--aura-theme-art") !== artCssValue
     || root.style.getPropertyValue("--aura-art-position") !== (settings.artPosition || "right center")
     || root.style.getPropertyValue("--aura-art-size") !== (settings.artSize || "min(58vw, 860px) auto");

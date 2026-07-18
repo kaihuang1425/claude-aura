@@ -15,6 +15,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   image: null,
   imageOpacity: null,
   imagePosition: "center",
+  imageZoom: 1,
+  studioPreviewCrops: {},
   reduceMotion: false,
 });
 
@@ -176,6 +178,32 @@ function finiteNumber(value, label, minimum, maximum) {
     throw new Error(`${label} must be between ${minimum} and ${maximum}`);
   }
   return number;
+}
+
+function validateStudioPreviewCrops(value) {
+  if (!isPlainObject(value)) throw new Error("studioPreviewCrops must be an object");
+  const entries = Object.entries(value);
+  if (entries.length > 64) throw new Error("studioPreviewCrops contains too many themes");
+  const result = {};
+  for (const [themeId, crop] of entries) {
+    if (!/^[a-z][a-z0-9-]{1,39}$/.test(themeId)) {
+      throw new Error(`studioPreviewCrops contains an invalid theme id: ${themeId}`);
+    }
+    if (!isPlainObject(crop)) throw new Error(`studioPreviewCrops.${themeId} must be an object`);
+    const keys = Object.keys(crop).sort();
+    if (keys.join(",") !== "x,y,zoom") {
+      throw new Error(`studioPreviewCrops.${themeId} must contain only x, y, and zoom`);
+    }
+    if (typeof crop.x !== "number" || typeof crop.y !== "number" || typeof crop.zoom !== "number") {
+      throw new Error(`studioPreviewCrops.${themeId} values must be numbers`);
+    }
+    result[themeId] = {
+      x: finiteNumber(crop.x, `studioPreviewCrops.${themeId}.x`, 0, 100),
+      y: finiteNumber(crop.y, `studioPreviewCrops.${themeId}.y`, 0, 100),
+      zoom: finiteNumber(crop.zoom, `studioPreviewCrops.${themeId}.zoom`, 1, 2),
+    };
+  }
+  return result;
 }
 
 function isUnavailableFileError(error) {
@@ -807,6 +835,9 @@ export async function compileTheme({ configPath, config: configOverride = null, 
   const imageOpacity = config.imageOpacity === null || config.imageOpacity === undefined
     ? null
     : finiteNumber(config.imageOpacity, "imageOpacity", 0, 0.55);
+  if (typeof config.imageZoom !== "number") throw new Error("imageZoom must be a number");
+  const imageZoom = finiteNumber(config.imageZoom, "imageZoom", 1, 2);
+  const studioPreviewCrops = validateStudioPreviewCrops(config.studioPreviewCrops ?? {});
   const variableCss = [
     renderMode(":root, [data-mode=\"light\"]", theme.light),
     renderMode(":root.darkTheme, :root.dark, .darkTheme, .dark, [data-mode=\"dark\"]", theme.dark),
@@ -826,6 +857,7 @@ export async function compileTheme({ configPath, config: configOverride = null, 
     imageUnavailable: Boolean(config.image && !image),
     imageOpacity,
     imagePosition: config.imagePosition.trim(),
+    imageZoom,
     artDataUrl: artwork?.dataUrl ?? null,
     artUnavailable: Boolean((theme.artwork && !artwork) || (theme.artworkLayers && !artworkLayers)),
     artPosition: artwork?.position ?? "right center",
@@ -848,7 +880,13 @@ export async function compileTheme({ configPath, config: configOverride = null, 
     .update("\0")
     .update(JSON.stringify(settingsBase))
     .digest("hex");
-  const effectiveConfig = { ...config, theme: theme.name };
+  const effectiveConfig = {
+    ...config,
+    theme: theme.name,
+    imagePosition: config.imagePosition.trim(),
+    imageZoom,
+    studioPreviewCrops,
+  };
   if (customThemeUnavailable) delete effectiveConfig.customTheme;
   return {
     config,

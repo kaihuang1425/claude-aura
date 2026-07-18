@@ -38,6 +38,7 @@
 
       <div class="actions-row" role="group" aria-labelledby="quick-actions-label">
         <span id="quick-actions-label" class="sr-only" data-i18n="quickActions">Quick actions</span>
+        <button type="button" id="adjust-theme-preview" class="ghost-button" data-i18n="adjustPreview" hidden>Adjust preview</button>
         <button type="button" id="toggle-enabled" class="ghost-button" aria-pressed="true" data-i18n="originalLook">Original look</button>
       </div>
     </section>
@@ -48,6 +49,7 @@
       <p class="lede" data-i18n="backgroundLede">A local image layered gently behind the interface. Decorative only — it never replaces Claude.</p>
       <div class="actions-row">
         <button type="button" id="pick-image" class="primary-button" data-i18n="chooseImage">Choose an image…</button>
+        <button type="button" id="adjust-background" class="ghost-button" data-i18n="adjustBackground" hidden>Adjust position</button>
         <button type="button" id="clear-image" class="ghost-button" data-i18n="clearImage">Clear image</button>
       </div>
       <p class="help" data-i18n="backgroundHelp">PNG, JPEG, WebP, GIF, or AVIF up to 16 MB. Quiet, wide images work best.</p>
@@ -70,6 +72,54 @@
     <output id="status" aria-live="polite">Ready.</output>
   </footer>
 </div>
+
+<dialog id="crop-dialog" class="crop-dialog" aria-labelledby="crop-title" aria-describedby="crop-help crop-notice crop-error">
+  <form method="dialog">
+    <div class="crop-dialog-head">
+      <div>
+        <p class="kicker" data-i18n="cropKicker">Framing</p>
+        <h2 id="crop-title">Adjust preview</h2>
+      </div>
+      <button type="submit" value="cancel" class="dialog-close" data-i18n-aria-label="cancel" aria-label="Cancel">×</button>
+    </div>
+    <p id="crop-help" class="lede"></p>
+    <p id="crop-notice" class="crop-notice" role="status" hidden></p>
+    <p id="crop-error" class="crop-error" role="status" aria-live="polite" hidden></p>
+
+    <div id="crop-stage" class="crop-stage" aria-hidden="true">
+      <img id="crop-image" alt="" aria-hidden="true" draggable="false">
+      <span class="crop-guides" aria-hidden="true"></span>
+      <span id="crop-drag-hint" class="crop-drag-hint" data-i18n="dragToReposition">Drag to reposition</span>
+    </div>
+
+    <div class="crop-controls">
+      <label for="crop-x">
+        <span data-i18n="horizontalPosition">Horizontal position</span>
+        <output id="crop-x-output" for="crop-x">50%</output>
+      </label>
+      <input id="crop-x" type="range" min="0" max="100" step="1" value="50">
+
+      <label for="crop-y">
+        <span data-i18n="verticalPosition">Vertical position</span>
+        <output id="crop-y-output" for="crop-y">50%</output>
+      </label>
+      <input id="crop-y" type="range" min="0" max="100" step="1" value="50">
+
+      <label for="crop-zoom">
+        <span data-i18n="zoom">Zoom</span>
+        <output id="crop-zoom-output" for="crop-zoom">100%</output>
+      </label>
+      <input id="crop-zoom" type="range" min="100" max="200" step="1" value="100">
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" id="crop-reset" class="ghost-button" data-i18n="resetPosition">Reset</button>
+      <span class="dialog-actions-spacer" aria-hidden="true"></span>
+      <button type="submit" value="cancel" class="ghost-button" data-i18n="cancel">Cancel</button>
+      <button type="button" id="crop-save" class="primary-button" data-i18n="saveChanges">Save</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="generated-themes.js"></script>
 <script src="app.js"></script>

@@ -4,5 +4,7 @@
   "image": null,
   "imageOpacity": null,
   "imagePosition": "center",
+  "imageZoom": 1,
+  "studioPreviewCrops": {},
   "reduceMotion": false
 }

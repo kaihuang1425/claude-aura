@@ -17,6 +17,8 @@ $LogPath = Join-Path $DataRoot 'aura-ui.log'
 $UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
 $StudioRoot = Join-Path $Root 'studio'
 $ThemeArtRoot = Join-Path $Root 'assets\theme-art'
+$StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
+$StudioBackgroundMaxBytes = 16 * 1024 * 1024
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 function Write-AuraUiLog {
@@ -685,10 +687,236 @@ function Update-AuraUiTrayAppearance {
   }
 }
 
+function ConvertTo-AuraUiStudioNumber {
+  param(
+    [AllowNull()][object]$Value,
+    [Parameter(Mandatory = $true)][double]$Minimum,
+    [Parameter(Mandatory = $true)][double]$Maximum,
+    [Parameter(Mandatory = $true)][string]$Label
+  )
+  if ($null -eq $Value -or $Value -is [bool] -or $Value -is [string] -or $Value -is [char]) {
+    throw "$Label must be a number."
+  }
+  try { $number = [Convert]::ToDouble($Value, [Globalization.CultureInfo]::InvariantCulture) }
+  catch { throw "$Label must be a number." }
+  if ([double]::IsNaN($number) -or [double]::IsInfinity($number) -or
+      $number -lt $Minimum -or $number -gt $Maximum) {
+    throw "$Label must be between $Minimum and $Maximum."
+  }
+  return [Math]::Round($number, 2, [MidpointRounding]::AwayFromZero)
+}
+
+function Get-AuraUiStudioBackgroundCrop {
+  $x = 50.0
+  $y = 50.0
+  $zoom = 1.0
+  $supported = $true
+  if ($null -ne $script:Config) {
+    $positionValue = Get-AuraUiPropertyValue -InputObject $script:Config -Names @('imagePosition')
+    if ($null -ne $positionValue) {
+      $position = "$positionValue".Trim().ToLowerInvariant()
+      $numberPattern = '[+-]?(?:\d+(?:\.\d+)?|\.\d+)'
+      $match = [regex]::Match($position, "^(?<x>$numberPattern)%\s+(?<y>$numberPattern)%$")
+      if ($match.Success) {
+        $x = [double]::Parse($match.Groups['x'].Value, [Globalization.CultureInfo]::InvariantCulture)
+        $y = [double]::Parse($match.Groups['y'].Value, [Globalization.CultureInfo]::InvariantCulture)
+        $supported = $x -ge 0 -and $x -le 100 -and $y -ge 0 -and $y -le 100
+      } else {
+        $singlePercent = [regex]::Match($position, "^(?<x>$numberPattern)%$")
+        if ($singlePercent.Success) {
+          $x = [double]::Parse($singlePercent.Groups['x'].Value, [Globalization.CultureInfo]::InvariantCulture)
+          $supported = $x -ge 0 -and $x -le 100
+        } else {
+          $keywordMatched = $true
+          switch ($position) {
+            'left' { $x = 0; break }
+            'right' { $x = 100; break }
+            'top' { $y = 0; break }
+            'bottom' { $y = 100; break }
+            'center' { break }
+            'left top' { $x = 0; $y = 0; break }
+            'top left' { $x = 0; $y = 0; break }
+            'left center' { $x = 0; break }
+            'center left' { $x = 0; break }
+            'left bottom' { $x = 0; $y = 100; break }
+            'bottom left' { $x = 0; $y = 100; break }
+            'center top' { $y = 0; break }
+            'top center' { $y = 0; break }
+            'center center' { break }
+            'center bottom' { $y = 100; break }
+            'bottom center' { $y = 100; break }
+            'right top' { $x = 100; $y = 0; break }
+            'top right' { $x = 100; $y = 0; break }
+            'right center' { $x = 100; break }
+            'center right' { $x = 100; break }
+            'right bottom' { $x = 100; $y = 100; break }
+            'bottom right' { $x = 100; $y = 100; break }
+            default { $keywordMatched = $false }
+          }
+          $supported = $keywordMatched
+        }
+      }
+    }
+    $zoomValue = Get-AuraUiPropertyValue -InputObject $script:Config -Names @('imageZoom')
+    if ($null -ne $zoomValue) {
+      try { $zoom = ConvertTo-AuraUiStudioNumber -Value $zoomValue -Minimum 1 -Maximum 2 -Label 'Background zoom' }
+      catch { $zoom = 1.0 }
+    }
+  }
+  return [ordered]@{
+    x = [Math]::Max(0, [Math]::Min(100, $x))
+    y = [Math]::Max(0, [Math]::Min(100, $y))
+    zoom = $zoom
+    supported = $supported
+  }
+}
+
+function Get-AuraUiStudioPreviewCrops {
+  $result = [ordered]@{}
+  if ($null -eq $script:Config) { return $result }
+  $source = Get-AuraUiPropertyValue -InputObject $script:Config -Names @('studioPreviewCrops')
+  if ($null -eq $source) { return $result }
+  foreach ($property in @($source.PSObject.Properties)) {
+    $themeId = [string]$property.Name
+    if ($themeId -cnotmatch '^[a-z][a-z0-9-]{1,39}$') { continue }
+    $crop = $property.Value
+    try {
+      $result[$themeId] = [ordered]@{
+        x = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('x')) -Minimum 0 -Maximum 100 -Label 'Studio preview x'
+        y = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('y')) -Minimum 0 -Maximum 100 -Label 'Studio preview y'
+        zoom = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('zoom')) -Minimum 1 -Maximum 2 -Label 'Studio preview zoom'
+      }
+    } catch {
+      Write-AuraUiLog -Message "Ignored invalid Studio preview crop for $themeId."
+    }
+  }
+  return $result
+}
+
+function Get-AuraUiStudioBackgroundSourcePath {
+  $imageValue = if ($null -ne $script:Config) {
+    Get-AuraUiPropertyValue -InputObject $script:Config -Names @('image')
+  } else { $null }
+  if ($null -eq $imageValue -or -not "$imageValue".Trim()) { return $null }
+  try {
+    if ([IO.Path]::IsPathRooted("$imageValue")) {
+      return [IO.Path]::GetFullPath("$imageValue")
+    }
+    return [IO.Path]::GetFullPath((Join-Path (Split-Path $ConfigPath -Parent) "$imageValue"))
+  } catch { return $null }
+}
+
+function Clear-AuraUiStudioBackgroundPreview {
+  param([AllowNull()][string]$PreservePath)
+  $preserveFullPath = if ($PreservePath) {
+    try { [IO.Path]::GetFullPath($PreservePath) } catch { $null }
+  } else { $null }
+  if (Test-Path -LiteralPath $StudioBackgroundRoot -PathType Container) {
+    foreach ($marker in @(Get-ChildItem -LiteralPath $StudioBackgroundRoot -Filter '*.aura-cache' -File -ErrorAction SilentlyContinue)) {
+      $targetPath = $marker.FullName.Substring(0, $marker.FullName.Length - '.aura-cache'.Length)
+      $targetName = [IO.Path]::GetFileName($targetPath)
+      if ($targetName -cnotmatch '^preview-[a-f0-9]{64}(?:-[a-f0-9]{32})?\.(?:png|jpe?g|webp|gif|avif)$') { continue }
+      try { Remove-Item -LiteralPath $marker.FullName -Force } catch {}
+      if ($preserveFullPath -and [string]::Equals($targetPath, $preserveFullPath, [StringComparison]::OrdinalIgnoreCase)) {
+        continue
+      }
+      if (Test-Path -LiteralPath $targetPath -PathType Leaf) {
+        try { Remove-Item -LiteralPath $targetPath -Force } catch {}
+      }
+    }
+  }
+  $script:StudioBackgroundFingerprint = $null
+  $script:StudioBackgroundPreviewUrl = $null
+  $script:StudioBackgroundPreviewPath = $null
+}
+
+function Sync-AuraUiStudioBackgroundPreview {
+  $sourceStream = $null
+  try {
+    $sourcePath = Get-AuraUiStudioBackgroundSourcePath
+    if (-not $sourcePath) {
+      Clear-AuraUiStudioBackgroundPreview
+      return $null
+    }
+    if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
+      Clear-AuraUiStudioBackgroundPreview -PreservePath $sourcePath
+      return $null
+    }
+    $extension = [IO.Path]::GetExtension($sourcePath).ToLowerInvariant()
+    if ($extension -notin @('.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif')) {
+      Clear-AuraUiStudioBackgroundPreview -PreservePath $sourcePath
+      return $null
+    }
+    $info = [IO.FileInfo]::new($sourcePath)
+    $sourceStream = [IO.File]::Open(
+      $sourcePath,
+      [IO.FileMode]::Open,
+      [IO.FileAccess]::Read,
+      [IO.FileShare]::Read)
+    $sourceLength = $sourceStream.Length
+    if ($sourceLength -gt $StudioBackgroundMaxBytes) {
+      Clear-AuraUiStudioBackgroundPreview -PreservePath $sourcePath
+      return $null
+    }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+      $hashBytes = $sha.ComputeHash($sourceStream)
+      $contentHash = [BitConverter]::ToString($hashBytes).Replace('-', '').ToLowerInvariant()
+    } finally {
+      $sha.Dispose()
+    }
+    $sourceStream.Position = 0
+    $fingerprint = "$sourcePath|$sourceLength|$($info.LastWriteTimeUtc.Ticks)|$contentHash"
+    if ($script:StudioBackgroundFingerprint -ne $fingerprint -or
+        -not $script:StudioBackgroundPreviewPath -or
+        -not (Test-Path -LiteralPath $script:StudioBackgroundPreviewPath -PathType Leaf)) {
+      [IO.Directory]::CreateDirectory($StudioBackgroundRoot) | Out-Null
+      $targetName = "preview-$contentHash$extension"
+      $targetPath = Join-Path $StudioBackgroundRoot $targetName
+      Clear-AuraUiStudioBackgroundPreview -PreservePath $sourcePath
+      while ([string]::Equals($sourcePath, $targetPath, [StringComparison]::OrdinalIgnoreCase) -or
+             (Test-Path -LiteralPath $targetPath)) {
+        $targetName = "preview-$contentHash-$([Guid]::NewGuid().ToString('N'))$extension"
+        $targetPath = Join-Path $StudioBackgroundRoot $targetName
+      }
+      $markerPath = "$targetPath.aura-cache"
+      $targetStream = [IO.File]::Open(
+        $targetPath,
+        [IO.FileMode]::CreateNew,
+        [IO.FileAccess]::Write,
+        [IO.FileShare]::None)
+      try { $sourceStream.CopyTo($targetStream) } finally { $targetStream.Dispose() }
+      [IO.File]::WriteAllText($markerPath, 'Claude Aura Studio background preview cache')
+      $script:StudioBackgroundFingerprint = $fingerprint
+      $script:StudioBackgroundPreviewPath = $targetPath
+      $script:StudioBackgroundPreviewUrl = "https://aura.background/$targetName?v=$contentHash"
+    }
+    return $script:StudioBackgroundPreviewUrl
+  } catch {
+    Write-AuraUiLog -Message "Studio background preview could not be prepared: $($_.Exception.Message)"
+    Clear-AuraUiStudioBackgroundPreview -PreservePath $sourcePath
+    return $null
+  } finally {
+    if ($null -ne $sourceStream) { $sourceStream.Dispose() }
+  }
+}
+
+function Get-AuraUiBackgroundAspectRatio {
+  try {
+    if ($null -ne $script:WebView -and -not $script:WebView.IsDisposed -and
+        $script:WebView.ClientSize.Width -gt 0 -and $script:WebView.ClientSize.Height -gt 0) {
+      return [Math]::Round($script:WebView.ClientSize.Width / $script:WebView.ClientSize.Height, 4)
+    }
+  } catch {}
+  return [Math]::Round(16 / 9, 4)
+}
+
 function Send-AuraUiStudioState {
   param(
     [AllowEmptyString()][string]$Status = '',
-    [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok'
+    [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok',
+    [ValidateSet('', 'set-image-framing', 'set-card-preview-crop')][string]$Action = '',
+    [bool]$ActionSucceeded = $true
   )
   if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
       $null -eq $script:StudioWebView.CoreWebView2) { return }
@@ -705,14 +933,27 @@ function Send-AuraUiStudioState {
         $Status = "$($script:UiCopy.originalActive)"
       }
     }
+    $imageValue = if ($null -ne $script:Config) {
+      Get-AuraUiPropertyValue -InputObject $script:Config -Names @('image')
+    } else { $null }
+    $imagePreviewUrl = Sync-AuraUiStudioBackgroundPreview
     $state = [ordered]@{
       type = 'state'
       theme = "$themeName"
       enabled = $enabled
+      hasImage = ($null -ne $imageValue -and "$imageValue".Trim().Length -gt 0)
+      imagePreviewUrl = $imagePreviewUrl
+      backgroundAspectRatio = Get-AuraUiBackgroundAspectRatio
+      backgroundCrop = Get-AuraUiStudioBackgroundCrop
+      studioPreviewCrops = Get-AuraUiStudioPreviewCrops
       status = $Status
       tone = $Tone
     }
-    $json = $state | ConvertTo-Json -Compress
+    if ($Action) {
+      $state['action'] = $Action
+      $state['actionSucceeded'] = $ActionSucceeded
+    }
+    $json = $state | ConvertTo-Json -Depth 6 -Compress
     $script:StudioWebView.CoreWebView2.PostWebMessageAsJson($json)
   } catch {
     Write-AuraUiLog -Message "Studio state update failed: $($_.Exception.Message)"
@@ -764,7 +1005,12 @@ function Invoke-AuraUiChooseBackground {
       Send-AuraUiStudioState
       return $false
     }
-    Set-AuraUiConfig -Options @('--image', $dialog.FileName, '--enabled', 'true')
+    Clear-AuraUiStudioBackgroundPreview -PreservePath (Get-AuraUiStudioBackgroundSourcePath)
+    Set-AuraUiConfig -Options @(
+      '--image', $dialog.FileName,
+      '--image-position', 'center',
+      '--image-zoom', '1',
+      '--enabled', 'true')
     Update-AuraUiAppearanceButton
     Apply-AuraUiTheme
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingBackground)" -Tone busy
@@ -775,10 +1021,67 @@ function Invoke-AuraUiChooseBackground {
 }
 
 function Invoke-AuraUiClearBackground {
-  Set-AuraUiConfig -Options @('--clear-image', '--enabled', 'true')
+  Clear-AuraUiStudioBackgroundPreview -PreservePath (Get-AuraUiStudioBackgroundSourcePath)
+  Set-AuraUiConfig -Options @(
+    '--clear-image',
+    '--image-position', 'center',
+    '--image-zoom', '1',
+    '--enabled', 'true')
   Update-AuraUiAppearanceButton
   Apply-AuraUiTheme
   Send-AuraUiStudioState -Status "$($script:UiCopy.removingBackground)" -Tone busy
+}
+
+function Invoke-AuraUiSetImageFraming {
+  param(
+    [Parameter(Mandatory = $true)][object]$X,
+    [Parameter(Mandatory = $true)][object]$Y,
+    [Parameter(Mandatory = $true)][object]$Zoom
+  )
+  $imageValue = if ($null -ne $script:Config) {
+    Get-AuraUiPropertyValue -InputObject $script:Config -Names @('image')
+  } else { $null }
+  if ($null -eq $imageValue -or -not "$imageValue".Trim()) { throw 'No background image is available to frame.' }
+  $xValue = ConvertTo-AuraUiStudioNumber -Value $X -Minimum 0 -Maximum 100 -Label 'Background x'
+  $yValue = ConvertTo-AuraUiStudioNumber -Value $Y -Minimum 0 -Maximum 100 -Label 'Background y'
+  $zoomValue = ConvertTo-AuraUiStudioNumber -Value $Zoom -Minimum 1 -Maximum 2 -Label 'Background zoom'
+  $culture = [Globalization.CultureInfo]::InvariantCulture
+  $position = $xValue.ToString('0.##', $culture) + '% ' + $yValue.ToString('0.##', $culture) + '%'
+  Set-AuraUiConfig -Options @(
+    '--image-position', $position,
+    '--image-zoom', $zoomValue.ToString('0.##', $culture),
+    '--enabled', 'true')
+  Update-AuraUiAppearanceButton
+  Apply-AuraUiTheme
+  Send-AuraUiStudioState -Status "$($script:UiCopy.backgroundPositionSaved)" -Action 'set-image-framing'
+}
+
+function Invoke-AuraUiSetCardPreviewCrop {
+  param(
+    [Parameter(Mandatory = $true)][string]$Theme,
+    [Parameter(Mandatory = $true)][object]$X,
+    [Parameter(Mandatory = $true)][object]$Y,
+    [Parameter(Mandatory = $true)][object]$Zoom
+  )
+  if ($Theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') { throw 'Invalid Studio preview theme id.' }
+  $knownTheme = $false
+  foreach ($themeItem in @($script:Themes)) {
+    if ([string]::Equals("$($themeItem.name)", $Theme, [StringComparison]::Ordinal)) {
+      $knownTheme = $true
+      break
+    }
+  }
+  if (-not $knownTheme) { throw 'The Studio requested an unknown preview theme.' }
+  $xValue = ConvertTo-AuraUiStudioNumber -Value $X -Minimum 0 -Maximum 100 -Label 'Studio preview x'
+  $yValue = ConvertTo-AuraUiStudioNumber -Value $Y -Minimum 0 -Maximum 100 -Label 'Studio preview y'
+  $zoomValue = ConvertTo-AuraUiStudioNumber -Value $Zoom -Minimum 1 -Maximum 2 -Label 'Studio preview zoom'
+  $culture = [Globalization.CultureInfo]::InvariantCulture
+  Set-AuraUiConfig -Options @(
+    '--studio-preview-theme', $Theme,
+    '--studio-preview-x', $xValue.ToString('0.##', $culture),
+    '--studio-preview-y', $yValue.ToString('0.##', $culture),
+    '--studio-preview-zoom', $zoomValue.ToString('0.##', $culture))
+  Send-AuraUiStudioState -Status "$($script:UiCopy.previewPositionSaved)" -Action 'set-card-preview-crop'
 }
 
 function Invoke-AuraUiSetEnabled {
@@ -819,6 +1122,8 @@ function Get-AuraUiStudioMessage {
   $expectedProperties = @(switch -CaseSensitive ($type) {
     'set-theme' { 'type'; 'theme'; break }
     'set-enabled' { 'type'; 'enabled'; break }
+    'set-image-framing' { 'type'; 'x'; 'y'; 'zoom'; break }
+    'set-card-preview-crop' { 'type'; 'theme'; 'x'; 'y'; 'zoom'; break }
     default { 'type'; break }
   })
   $propertyNames = @($message.PSObject.Properties | ForEach-Object { $_.Name })
@@ -845,6 +1150,15 @@ function Invoke-AuraUiStudioMessage {
     }
     'set-image' { [void](Invoke-AuraUiChooseBackground -Owner $script:StudioForm); break }
     'clear-image' { Invoke-AuraUiClearBackground; break }
+    'set-image-framing' {
+      Invoke-AuraUiSetImageFraming -X $message.x -Y $message.y -Zoom $message.zoom
+      break
+    }
+    'set-card-preview-crop' {
+      if ($message.theme -isnot [string]) { throw 'Studio preview theme must be a string.' }
+      Invoke-AuraUiSetCardPreviewCrop -Theme ([string]$message.theme) -X $message.x -Y $message.y -Zoom $message.zoom
+      break
+    }
     'set-enabled' {
       if ($message.enabled -isnot [bool]) { throw 'Studio enabled state must be a Boolean.' }
       Invoke-AuraUiSetEnabled -Enabled $message.enabled
@@ -894,6 +1208,8 @@ $script:StudioMessageTypes = @(
   'set-theme',
   'set-image',
   'clear-image',
+  'set-image-framing',
+  'set-card-preview-crop',
   'set-enabled',
   'open-desktop',
   'import-theme'
@@ -903,6 +1219,9 @@ $script:StudioWebView = $null
 $script:StudioEnsureTask = $null
 $script:StudioReady = $false
 $script:StudioInitializationFailed = $false
+$script:StudioBackgroundFingerprint = $null
+$script:StudioBackgroundPreviewUrl = $null
+$script:StudioBackgroundPreviewPath = $null
 $script:WebViewEnvironment = $null
 $script:TrayIcon = $null
 $script:TrayMenu = $null
@@ -919,7 +1238,7 @@ try {
     throw 'Claude Aura must run in a standard Windows desktop session.'
   }
 
-  New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot | Out-Null
+  New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot, $StudioBackgroundRoot | Out-Null
   $script:Node = Get-AuraNodeRuntime
   $locale = [Globalization.CultureInfo]::CurrentUICulture.Name
   if (-not $locale) { $locale = 'en' }
@@ -929,8 +1248,15 @@ try {
 
   $initialOptions = @()
   if ($Theme) { $initialOptions += @('--theme', $Theme) }
-  if ($Image) { $initialOptions += @('--image', [System.IO.Path]::GetFullPath($Image)) }
-  if ($ClearImage) { $initialOptions += '--clear-image' }
+  if ($Image) {
+    $initialOptions += @(
+      '--image', [System.IO.Path]::GetFullPath($Image),
+      '--image-position', 'center',
+      '--image-zoom', '1')
+  }
+  if ($ClearImage) {
+    $initialOptions += @('--clear-image', '--image-position', 'center', '--image-zoom', '1')
+  }
   if ($Mode -eq 'Restore') { $initialOptions += @('--enabled', 'false') }
   elseif ($Theme -or $Image -or $ClearImage) { $initialOptions += @('--enabled', 'true') }
   if ($initialOptions.Count -gt 0) { Set-AuraUiConfig -Options $initialOptions }
@@ -1292,6 +1618,9 @@ public static class AuraWindow {
   $script:WebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
   $script:WebView.Dock = 'Fill'
   $script:WebView.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
+  $script:WebView.add_Resize({
+    if ($null -ne $script:StudioForm -and $script:StudioForm.Visible) { Send-AuraUiStudioState }
+  })
 
   $script:StudioForm = [System.Windows.Forms.Form]::new()
   $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
@@ -1406,7 +1735,11 @@ public static class AuraWindow {
     if ($dialog.ShowDialog($script:Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
     try {
       $script:StatusLabel.Text = "$($script:UiCopy.applyingBackground)"
-      Set-AuraUiConfig -Options @('--image', $dialog.FileName, '--enabled', 'true')
+      Set-AuraUiConfig -Options @(
+        '--image', $dialog.FileName,
+        '--image-position', 'center',
+        '--image-zoom', '1',
+        '--enabled', 'true')
       Update-AuraUiAppearanceButton
       Apply-AuraUiTheme
     } catch {
@@ -1419,7 +1752,11 @@ public static class AuraWindow {
   $script:ClearButton.add_Click({
     try {
       $script:StatusLabel.Text = "$($script:UiCopy.removingBackground)"
-      Set-AuraUiConfig -Options @('--clear-image', '--enabled', 'true')
+      Set-AuraUiConfig -Options @(
+        '--clear-image',
+        '--image-position', 'center',
+        '--image-zoom', '1',
+        '--enabled', 'true')
       Update-AuraUiAppearanceButton
       Apply-AuraUiTheme
     } catch {
@@ -1510,6 +1847,10 @@ public static class AuraWindow {
           } else {
             Write-AuraUiLog -Message "Studio theme artwork folder is missing: $ThemeArtRoot"
           }
+          $studioCore.SetVirtualHostNameToFolderMapping(
+            'aura.background',
+            $StudioBackgroundRoot,
+            [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
           $studioCore.add_NavigationStarting({
             param($sender, $eventArgs)
             try {
@@ -1532,7 +1873,20 @@ public static class AuraWindow {
               Invoke-AuraUiStudioMessage -Json $eventArgs.WebMessageAsJson -Source $eventArgs.Source
             } catch {
               Write-AuraUiLog -Message "Studio message rejected: $($_.Exception.Message)"
-              Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error
+              $failedAction = ''
+              try {
+                $failedMessage = $eventArgs.WebMessageAsJson | ConvertFrom-Json
+                if ($failedMessage.type -is [string] -and
+                    $script:StudioMessageTypes -ccontains $failedMessage.type -and
+                    $failedMessage.type -in @('set-image-framing', 'set-card-preview-crop')) {
+                  $failedAction = [string]$failedMessage.type
+                }
+              } catch {}
+              if ($failedAction) {
+                Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error -Action $failedAction -ActionSucceeded $false
+              } else {
+                Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error
+              }
             }
           })
           $studioCore.add_NewWindowRequested({

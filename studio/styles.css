@@ -1,5 +1,5 @@
 /* Aura Studio — Claude design paradigm, theme-neutral, offline, both modes.
-   Checkpoint B polish is limited to the user-approved picker and focus fixes. */
+   Checkpoint B includes the user-approved picker, focus, and framing controls. */
 
 :root {
   --bg: #faf9f5;
@@ -189,19 +189,31 @@ h2 { font-size: 23px; }
   position: relative;
   display: grid;
   grid-template-columns: 34% 1fr;
-}
-
-.mini,
-.theme-card-preview {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 3 / 2;
+}
+
+.theme-card-preview-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--raised);
 }
 
 .theme-card-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
   object-fit: cover;
   object-position: center;
-  background: var(--raised);
+  pointer-events: none;
+  user-select: none;
 }
 
 .mini-chrome { padding: 8px 0 0 9px; }
@@ -273,6 +285,151 @@ h2 { font-size: 23px; }
 
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+/* ── Shared image-framing dialog ─────────────────────────────────── */
+.crop-dialog {
+  width: min(690px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgb(25 23 17 / 0.24);
+}
+
+.crop-dialog::backdrop { background: rgb(24 22 18 / 0.48); backdrop-filter: blur(3px); }
+.crop-dialog form { padding: 24px; }
+
+.crop-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.crop-dialog-head h2 { margin-bottom: 0; }
+.crop-dialog > form > .lede { margin-top: 8px; margin-bottom: 18px; }
+
+.crop-error {
+  margin: -8px 0 14px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, #c13d37 42%, var(--border));
+  border-radius: 9px;
+  background: color-mix(in srgb, #c13d37 8%, var(--surface));
+  color: #9f2924;
+  font-size: 12.5px;
+}
+
+.crop-notice {
+  margin: -8px 0 14px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+}
+
+.dialog-close {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  padding: 0 0 3px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-secondary);
+  font: 400 26px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.dialog-close:hover { background: var(--raised); color: var(--ink); }
+
+.crop-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--crop-aspect-ratio, 16 / 9);
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.crop-stage[data-kind="card"] { aspect-ratio: 3 / 2; }
+.crop-stage.is-dragging { cursor: grabbing; }
+.crop-stage.is-busy { cursor: wait; }
+.crop-stage > img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.crop-guides {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, transparent calc(33.333% - .5px), rgb(255 255 255 / .62) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.667% - .5px), rgb(255 255 255 / .62) calc(66.667% - .5px) calc(66.667% + .5px), transparent calc(66.667% + .5px)),
+    linear-gradient(to bottom, transparent calc(33.333% - .5px), rgb(255 255 255 / .62) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.667% - .5px), rgb(255 255 255 / .62) calc(66.667% - .5px) calc(66.667% + .5px), transparent calc(66.667% + .5px));
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / .34));
+  pointer-events: none;
+}
+
+.crop-drag-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  translate: -50% 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgb(20 19 16 / .72);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.crop-controls {
+  display: grid;
+  grid-template-columns: minmax(130px, 180px) minmax(180px, 1fr);
+  align-items: center;
+  gap: 13px 20px;
+  margin-top: 20px;
+}
+
+.crop-controls label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink-secondary);
+  font-weight: 600;
+}
+
+.crop-controls output { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.crop-controls input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.dialog-actions-spacer { flex: 1; }
+
 /* ── Status bar ───────────────────────────────────────────────────── */
 .statusbar {
   display: flex;
@@ -292,6 +449,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (max-width: 760px) {
   .studio { grid-template-columns: 190px minmax(0, 1fr); }
   .content { padding: 26px 24px 36px; }
+  .crop-controls { grid-template-columns: 1fr; gap: 6px; }
+  .crop-controls input[type="range"] { margin-bottom: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -301,4 +460,6 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 @media (forced-colors: active) {
   .theme-card input:checked + label { outline: 3px solid Highlight; }
   .mini, .mini-surface, .mini-accent, .mini-text, .swatches i { forced-color-adjust: none; }
+  .crop-stage { outline: 2px solid CanvasText; outline-offset: -2px; }
+  .crop-guides, .crop-drag-hint { display: none; }
 }

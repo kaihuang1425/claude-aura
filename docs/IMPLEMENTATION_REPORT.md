@@ -100,9 +100,9 @@ surface by responsibility.
 | --- | --- | --- |
 | Registry and themes | `themes/registry.json`, the eight canonical theme JSON files, and compatibility files `themes/midnight.json`, `themes/ember.json`, `themes/forest.json`, and `themes/sakura.json` | Canonical IDs, localized metadata, semantic light/dark roles, typography, shape, effects, wallpaper recipes, and legacy migration |
 | Shared renderer styling | `assets/base.css`, `assets/theme-variants.css`, `assets/renderer-inject.js` | Semantic production coverage, centralized component variants, root attributes, artwork layers, cleanup, and accessibility preferences |
-| Runtime artwork and Studio selectors | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers plus seven small local theme-card thumbnails and provenance |
+| Runtime artwork and Studio selectors | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers plus seven small local, user-framable theme-card thumbnails and provenance |
 | Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/build-preview.mjs`, `scripts/preview-server.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, preview generation/server, and release collection |
-| Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json` | DPI-aware localized native theme gallery, live application, accessibility, best-effort DWM title-bar palette, allowlisted install, verification/restore helpers, and explicit app/data removal |
+| Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | DPI-aware localized native gallery plus Aura Studio, live application, adjustable card/background framing, accessibility, best-effort DWM title-bar palette, allowlisted install, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
 | Offline QA | `preview/index.html`, `preview/styles.css`, `preview/app.js`, `preview/generated-themes.js` | Eight-theme Home/Code harness with representative controls and states |
 | Verification | `tests/run-tests.mjs`, `package.json`, `config.example.json` | Sixteen end-to-end/static checks, build commands, and Default baseline |
@@ -141,6 +141,15 @@ radio option includes a display name, short description, color swatches,
 miniature interface preview, and visible selected state. The gallery supports
 keyboard focus, Tab navigation, scrolling, Escape-to-close, high contrast, and
 DPI-scaled layout.
+
+Aura Studio provides the replacement path being reviewed at HUMAN CHECKPOINT B.
+Its eight cards use live localized labels and art-led 3:2 previews with one
+selection/focus treatment. The selected theme exposes an **Adjust card preview**
+action, while a chosen custom background exposes **Adjust framing**. Both open
+the same labelled dialog: users can drag the image, use native range controls
+for horizontal position, vertical position, and zoom, reset, cancel, or save.
+The background stage receives the live Claude WebView aspect ratio, and Studio
+waits for a host acknowledgement before reporting success or closing.
 
 On supported Windows versions, Aura also makes best-effort Desktop Window
 Manager calls for the dark-caption preference and the caption, caption-text,
@@ -217,6 +226,19 @@ validated for supported extension, matching content signature, and size before
 compilation. Animated GIF, APNG, WebP, and AVIF layers are suppressed whenever
 Aura or the operating system requests reduced motion.
 
+The background's focal point and zoom are persisted as strict numeric values and
+compiled into the renderer's exact cover geometry. For editing, the host copies
+the selected bytes into a marker-owned, content-addressed cache exposed only as
+the isolated `aura.background` virtual host; neither the source path nor an
+arbitrary page-supplied path crosses the bridge. Replacing an image with different
+bytes at the same size and timestamp produces a new preview URL, and junction
+aliases cannot turn cache cleanup into source deletion. The open source stream is
+also checked again against the 16 MB limit before hashing or copying, so replacing
+a selected file with an oversized one cannot bypass the original image guard.
+Existing advanced CSS
+positions that cannot be represented by the editor remain unchanged until the
+user explicitly saves a supported framing value.
+
 ## Performance safeguards
 
 Only the selected theme's optional artwork is read and embedded in a renderer
@@ -264,14 +286,16 @@ npm run check
 The automated suite covers the eight-theme registry, semantic completeness,
 contrast guardrails, locale metadata, fallback and persistence behavior,
 payload/root-attribute behavior, isolated artwork policy, script parsing,
-Windows picker metadata, preview coverage, and release exclusions.
+Windows picker metadata, Studio bridge/framing validation and cache regressions,
+preview coverage, and release exclusions.
 
-Results recorded on 2026-07-16:
+Results recorded through 2026-07-18:
 
 | Check | Result |
 | --- | --- |
 | `npm test` | Passed, 16/16 |
 | `npm run check` | Passed; JavaScript, Windows PowerShell, and shell parsing plus the 16-test suite |
+| `npm run verify:cycle` | Passed, 17/17; all sixteen 1440 x 900 light/dark theme renders under `dist/verify/` were opened and inspected for readability, clipping, artwork layering, and blank output |
 | Lint | Not configured in the repository; there is no linter dependency or lint script, so this gate is explicitly not applicable rather than represented by `npm run check` |
 | Typecheck | Not applicable; the project contains JavaScript, PowerShell, and shell sources with no TypeScript sources, `tsconfig.json`, or typecheck script |
 | `npm run preview:build` | Passed; regenerated metadata for all eight themes |
@@ -281,6 +305,7 @@ Results recorded on 2026-07-16:
 | Windows title-bar source check | Passed; best-effort DWM dark-caption and caption/text/border attributes are present with a non-fatal fallback path |
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
 | Browser interaction, console, responsive sizes, and screenshots | Passed on 2026-07-17 in the offline QA harness (Chromium/WebView2 engine). All eight themes switch through one stable `data-claude-aura-theme` root attribute with distinct accent, display font, radius, and border-width values; no console output, and only same-origin `/preview/` and local `data:`/SVG requests (zero remote or mixed-content requests) across all eight; decorative artwork stays `pointer-events:none` and never wins the hit-test at the composer center; persistence survives reload and query-parameter overrides do not overwrite saved state; visible focus ring, labelled modal dialog with focus trap, keyboard tab/arrow/Escape, and disabled styling all confirmed; no horizontal overflow. Fourteen screenshots recorded under `docs/theme-screenshots/` (see Visual evidence) |
+| Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Actual pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. Evidence is under `dist/verify/checkpoint-b-*-framing*.png` and the explicitly named files in `docs/PROGRESS.md` |
 
 Before creating an archive, run the checks and then:
 
@@ -335,7 +360,10 @@ treated as a substitute for it. An interactive 2026-07-18 run exercised all
 eight selections against the signed-in production `claude.ai` WebView2 window
 and persisted theme, enabled, and background state. The revised Aura Studio
 gallery was also inspected in a real WebView2 host in zh-TW and zh-CN, including
-immediate selection updates and keyboard focus traversal.
+immediate selection updates and keyboard focus traversal. Its later framing
+revision was exercised separately at the exact product viewport with a WebView
+bridge simulator, including pointer drag, host acknowledgement, reload
+persistence, both Chinese locales, and fresh-run console inspection.
 
 ## Supplied references and Studio selector derivatives
 

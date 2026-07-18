@@ -35,7 +35,9 @@ Notes:
   interface and Checkpoint B before returning to offline preview/tooling work.
 - Checkpoint B revision requested (2026-07-18): use impactful local artwork in
   the theme cards and correct card-label spacing and stacked selection/focus
-  treatments. The checkpoint remains pending user re-review.
+  treatments. A second revision adds user-adjustable, persisted card-preview
+  and custom-background framing through one pointer-drag editor with native
+  keyboard-operable controls. The checkpoint remains pending user re-review.
 - WO-08..14 each end with their own mini-checkpoint if provisional art was
   generated (user may replace generated art with supplied kits at any time).
 - If a work order blocks twice, log it in BLOCKED.md and continue.

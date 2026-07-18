@@ -453,6 +453,25 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     assert.equal(observers.size, 1, `${theme.name} left duplicate mutation observers`);
   }
 
+  const framedBundle = await buildPayload({
+    config: { ...DEFAULT_CONFIG, theme: "default", imagePosition: "12.5% 87.5%", imageZoom: 1.4 },
+  });
+  const injectFramed = new Function(
+    "window",
+    "document",
+    "MutationObserver",
+    "setInterval",
+    "clearInterval",
+    "setTimeout",
+    "clearTimeout",
+    framedBundle.payload,
+  );
+  injectFramed(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  assert.equal(document.documentElement.style.getPropertyValue("--aura-image-position"), "12.5% 87.5%");
+  assert.equal(document.documentElement.style.getPropertyValue("--aura-image-scale"), "1.4");
+  assert.equal(intervals.size, 1, "Framed background injection left a duplicate renderer timer");
+  assert.equal(observers.size, 1, "Framed background injection left a duplicate mutation observer");
+
   const writesAfterSwitch = document.documentElement.style.setCalls;
   for (let iteration = 0; iteration < 10; iteration += 1) window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(document.documentElement.style.setCalls, writesAfterSwitch, "Clean ensures rewrote root image values");
@@ -463,6 +482,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(observers.size, 0);
   assert.equal(document.getElementById("claude-aura-style"), null);
   assert.equal(document.getElementById("claude-aura-backdrop"), null);
+  assert.equal(document.documentElement.style.getPropertyValue("--aura-image-scale"), "");
   assert.equal(window.__CLAUDE_AURA_STATE__, undefined);
 });
 
@@ -519,6 +539,31 @@ test("config writes are atomic, aliases migrate, and theme choice persists", asy
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "default");
     run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath, "--theme", "study-library"]);
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "study-library");
+    run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
+      "--image-position", "23.5% 76.25%", "--image-zoom", "1.35",
+      "--studio-preview-theme", "japanese-idol", "--studio-preview-x", "18.5",
+      "--studio-preview-y", "64", "--studio-preview-zoom", "1.2"]);
+    let framedConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert.equal(framedConfig.imagePosition, "23.5% 76.25%");
+    assert.equal(framedConfig.imageZoom, 1.35);
+    assert.deepEqual(framedConfig.studioPreviewCrops["japanese-idol"], { x: 18.5, y: 64, zoom: 1.2 });
+    run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
+      "--studio-preview-theme", "korean-idol", "--studio-preview-x", "82",
+      "--studio-preview-y", "31.25", "--studio-preview-zoom", "1.5"]);
+    framedConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert.deepEqual(framedConfig.studioPreviewCrops["japanese-idol"], { x: 18.5, y: 64, zoom: 1.2 },
+      "Updating another card crop erased the first crop");
+    assert.deepEqual(framedConfig.studioPreviewCrops["korean-idol"], { x: 82, y: 31.25, zoom: 1.5 });
+    const framedBytes = await fs.readFile(configPath, "utf8");
+    assert.throws(() => run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
+      "--studio-preview-theme", "japanese-idol", "--studio-preview-x", "101",
+      "--studio-preview-y", "50", "--studio-preview-zoom", "1"]), /must be between 0 and 100/);
+    assert.equal(await fs.readFile(configPath, "utf8"), framedBytes,
+      "A rejected crop changed the persisted configuration");
+    assert.throws(() => run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
+      "--image-zoom", "NaN"]), /imageZoom must be between 1 and 2/);
+    assert.equal(await fs.readFile(configPath, "utf8"), framedBytes,
+      "A rejected background zoom changed the persisted configuration");
     const show = JSON.parse(run(process.execPath, ["scripts/theme-cli.mjs", "show", "--config", configPath, "--json"]));
     assert.equal(show.theme.name, "study-library");
     const localizedLabel = (await listThemes({ locale: "zh-TW" })).find((theme) => theme.name === "korean-idol").label;
@@ -584,6 +629,28 @@ test("enabled state, local images, and remote CSS safety are validated", async (
     compileTheme({ configPath: path.join(PROJECT_ROOT, "config.example.json"), config: { ...DEFAULT_CONFIG, enabled: "yes" } }),
     /enabled must be true or false/,
   );
+  await assert.rejects(
+    compileTheme({ config: { ...DEFAULT_CONFIG, imageZoom: 2.01 } }),
+    /imageZoom must be between 1 and 2/,
+  );
+  await assert.rejects(
+    compileTheme({ config: { ...DEFAULT_CONFIG, imageZoom: "1.2" } }),
+    /imageZoom must be a number/,
+  );
+  await assert.rejects(
+    compileTheme({ config: {
+      ...DEFAULT_CONFIG,
+      studioPreviewCrops: { "japanese-idol": { x: null, y: 50, zoom: 1 } },
+    } }),
+    /values must be numbers/,
+  );
+  await assert.rejects(
+    compileTheme({ config: {
+      ...DEFAULT_CONFIG,
+      studioPreviewCrops: { "japanese-idol": { x: 50, y: 50, zoom: 1, path: "C:\\private.png" } },
+    } }),
+    /must contain only x, y, and zoom/,
+  );
   const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
   try {
     const configPath = path.join(temporary, "config.json");
@@ -595,12 +662,20 @@ test("enabled state, local images, and remote CSS safety are validated", async (
     const imagePath = path.join(temporary, "pixel.png");
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
     await fs.writeFile(imagePath, png);
-    await writeConfig(configPath, { ...DEFAULT_CONFIG, image: imagePath, imageOpacity: 0.22 });
+    await writeConfig(configPath, {
+      ...DEFAULT_CONFIG,
+      image: imagePath,
+      imageOpacity: 0.22,
+      imagePosition: "12.5% 87.5%",
+      imageZoom: 1.4,
+    });
     const bundle = await compileTheme({ configPath });
     assert.equal(bundle.image.bytes, png.length);
     assert(bundle.settings.imageDataUrl.startsWith("data:image/png;base64,"));
     assert.equal(bundle.settings.imageAnimated, false);
     assert.equal(bundle.settings.imageOpacity, 0.22);
+    assert.equal(bundle.settings.imagePosition, "12.5% 87.5%");
+    assert.equal(bundle.settings.imageZoom, 1.4);
 
     const gifPath = path.join(temporary, "motion.gif");
     await fs.writeFile(gifPath, Buffer.from("GIF89a", "ascii"));
@@ -705,6 +780,7 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   const studioCss = await fs.readFile(path.join(PROJECT_ROOT, "studio", "styles.css"), "utf8");
   const studioHtml = await fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8");
   const studioGenerated = await fs.readFile(path.join(PROJECT_ROOT, "studio", "generated-themes.js"), "utf8");
+  const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
   const assetConverter = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"), "utf8");
   const uiCopy = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "ui-copy.json"), "utf8"));
   for (const [name, source] of [["start", start], ["UI", ui], ["installer", install]]) {
@@ -729,6 +805,9 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert.match(ui,
     /SetVirtualHostNameToFolderMapping\(\s*['"]aura\.assets['"]\s*,\s*\$ThemeArtRoot\s*,[\s\S]{0,160}?CoreWebView2HostResourceAccessKind\]::Allow\s*\)/,
     "Studio selector artwork must use its own local virtual host mapping");
+  assert.match(ui,
+    /SetVirtualHostNameToFolderMapping\(\s*['"]aura\.background['"]\s*,\s*\$StudioBackgroundRoot\s*,[\s\S]{0,160}?CoreWebView2HostResourceAccessKind\]::Allow\s*\)/,
+    "Studio background previews must come from the isolated app-data folder");
   assert.match(ui, /\.Navigate\(\s*['"]https:\/\/aura\.studio\/index\.html['"]\s*\)/,
     "Studio must navigate to its exact offline virtual-host URL");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
@@ -739,6 +818,8 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
     "set-theme",
     "set-image",
     "clear-image",
+    "set-image-framing",
+    "set-card-preview-crop",
     "set-enabled",
     "open-desktop",
     "import-theme",
@@ -748,7 +829,7 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   const studioMessageTypes = [...studioMessageTypesMatch[1].matchAll(/['"]([^'"]+)['"]/g)]
     .map((match) => match[1]);
   assert.deepEqual(studioMessageTypes, expectedStudioMessageTypes,
-    "Studio must expose exactly the seven WO-05 host actions");
+    "Studio must expose only the user-approved WO-05 host actions");
   assert.match(ui,
     /(?:\$script:StudioMessageTypes\s+-cnotcontains\s+\$message\.type|\$message\.type\s+-cnotin\s+\$script:StudioMessageTypes)/i,
     "Studio message actions must be checked case-sensitively against the allowlist");
@@ -760,8 +841,26 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
     "Studio theme IDs must use the canonical case-sensitive kebab-case check");
   assert.match(ui, /\$message\.enabled\s+-isnot\s+\[bool\]/i,
     "Studio enabled-state messages must carry a real Boolean");
+  assert.match(ui, /ConvertTo-AuraUiStudioNumber[\s\S]*?\[double\]::IsNaN[\s\S]*?\[double\]::IsInfinity/,
+    "Studio crop values must reject non-finite numbers");
+  assert.match(ui, /\[Globalization\.CultureInfo\]::InvariantCulture/,
+    "Studio crop values must serialize with a CSS-safe invariant decimal separator");
+  assert.match(ui, /backgroundAspectRatio\s*=\s*Get-AuraUiBackgroundAspectRatio/,
+    "Studio must receive the current Claude WebView aspect ratio for WYSIWYG background framing");
+  assert.match(ui, /\[IO\.FileShare\]::Read\)[\s\S]*?ComputeHash\(\$sourceStream\)[\s\S]*?Clear-AuraUiStudioBackgroundPreview[\s\S]*?\$sourceStream\.CopyTo\(\$targetStream\)/,
+    "Studio preview copies must hash and hold the source open while clearing owned cache files");
+  assert.match(ui, /\$StudioBackgroundMaxBytes\s*=\s*16\s*\*\s*1024\s*\*\s*1024[\s\S]*?\$sourceStream\.Length[\s\S]*?-gt\s+\$StudioBackgroundMaxBytes/,
+    "Studio preview copies must recheck the open source against the 16 MB limit");
+  assert.match(ui, /\.aura-cache/,
+    "Studio preview cleanup must be limited to marker-owned cache files");
+  assert.match(baseCss, /\.claude-aura-image\s*\{[^}]*inset:\s*0[^}]*transform:\s*scale\(var\(--aura-image-scale,\s*1\)\)/s,
+    "The live image layer must use the same exact frame and zoom model as Studio");
   assert.match(studioApp, /send\(\{\s*type:\s*"set-image"\s*\}\)/,
     "The Studio page must let the host choose image paths");
+  assert.match(studioApp, /\{\s*type:\s*"set-image-framing"\s*,\s*\.\.\.saved\s*\}/,
+    "The Studio page must persist background framing without supplying a path");
+  assert.match(studioApp, /\{\s*type:\s*"set-card-preview-crop"\s*,\s*theme:/,
+    "The Studio page must persist per-theme card framing");
   assert.match(studioApp, /send\(\{\s*type:\s*"import-theme"\s*\}\)/,
     "The Studio page must let the host choose import paths");
   assert.match(studioHtml, /class="rail-item is-current"[^>]*aria-current="page"/,
@@ -770,6 +869,28 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert.match(studioApp, /setAttribute\("aria-current",\s*"page"\)/);
   assert.match(studioApp, /<img class="theme-card-preview"[^>]*alt=""[^>]*aria-hidden="true"/,
     "Studio selector previews must be decorative images");
+  assert.match(studioHtml, /<dialog id="crop-dialog"[\s\S]*?id="crop-stage"[\s\S]*?id="crop-zoom"/,
+    "Studio must provide one reusable, labelled framing dialog with zoom");
+  assert.match(studioApp, /setPointerCapture\(event\.pointerId\)/,
+    "Studio framing must keep pointer drags captured outside the crop stage");
+  assert.match(studioHtml, /id="crop-x"[^>]*type="range"[\s\S]*id="crop-y"[^>]*type="range"[\s\S]*id="crop-zoom"[^>]*type="range"/,
+    "Studio framing must expose native keyboard-operable controls for every crop dimension");
+  assert(!/id="crop-stage"[^>]*tabindex/.test(studioHtml),
+    "The pointer-only crop canvas must not masquerade as a keyboard control");
+  assert.match(studioHtml, /id="crop-error"[^>]*role="status"[^>]*aria-live="polite"/,
+    "Crop failures must be announced inside the modal dialog");
+  assert.match(studioApp, /pendingCropSave[\s\S]*cropsEqual\(persisted,\s*pending\.crop\)/,
+    "Studio must wait for host-confirmed persisted crop state before closing the dialog");
+  assert.match(studioApp, /addEventListener\("pointerdown"[\s\S]{0,240}?pendingCropSave/,
+    "Studio must freeze pointer dragging while a framing save acknowledgement is pending");
+  assert.match(studioApp, /data\.action\s*===\s*pendingCropSave\.action[\s\S]*data\.actionSucceeded/,
+    "Studio must ignore unrelated host state while a framing save is pending");
+  assert.match(studioApp, /cropCancelButtons[\s\S]*button\.disabled\s*=\s*busy[\s\S]*addEventListener\("cancel"[\s\S]*pendingCropSave[\s\S]*preventDefault/,
+    "Studio must prevent closing and reopening a crop editor while its save acknowledgement is pending");
+  assert.match(studioHtml, /id="crop-notice"[^>]*role="status"/,
+    "Studio must disclose when an advanced CSS position will be normalized by the visual editor");
+  assert.match(studioCss, /\.crop-stage\s*\{[^}]*touch-action:\s*none[^}]*\}/,
+    "Touch gesture suppression must be scoped to the crop stage");
   assert.match(assetConverter, /const cardSelection = cardsOnly\s*\?[\s\S]{0,280}:\s*\{\};/,
     "Ordinary runtime-asset conversion must not depend on gitignored Studio reference images");
   const selectorWithoutFlag = spawnSync(process.execPath, [
@@ -793,6 +914,8 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert(!/0\s+0\s+0/.test(checkedCardRule),
     "Selected cards must not add a second ring-like box shadow");
   assert.match(studioCss, /\.theme-card-preview\s*\{[^}]*object-fit:\s*cover[^}]*\}/);
+  assert.match(studioCss, /\.theme-card-preview-frame\s*\{[^}]*aspect-ratio:\s*3\s*\/\s*2[^}]*\}/,
+    "Card framing needs a real crop window instead of the source image's identical 16:9 ratio");
 
   const generatedMatch = studioGenerated.match(/window\.CLAUDE_AURA_THEMES\s*=\s*([\s\S]+);\s*$/);
   assert(generatedMatch, "Studio theme metadata could not be parsed");
@@ -819,6 +942,8 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
     "Generated Studio metadata must never identify raw reference composites");
   assert(!/\$message\.(?:path|file|fileName)\b/i.test(ui),
     "The Studio host must never accept a page-supplied file path");
+  assert(!/SetVirtualHostNameToFolderMapping\([\s\S]{0,120}?\$imageValue/i.test(ui),
+    "Studio must never map the selected image's source directory");
   assert.match(ui, /\[System\.Windows\.Forms\.OpenFileDialog\]::new\(\)/,
     "Image paths must come from a host-side OpenFileDialog");
 
@@ -900,6 +1025,79 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert.match(install, /WindowStyle Hidden/);
   assert.match(install, /Claude Aura\.lnk/);
   assert(install.includes("'studio'"), "The Windows installer must copy Aura Studio");
+
+  if (process.platform === "win32") {
+    const cacheTestRoot = path.join(PROJECT_ROOT, "dist", `test-studio-cache-${process.pid}-${Date.now()}`);
+    const psPath = (value) => value.replaceAll("'", "''");
+    const cacheRegression = [
+      "$ErrorActionPreference='Stop'",
+      `$uiPath='${psPath(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"))}'`,
+      `$testRoot='${psPath(cacheTestRoot)}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for cache regression'}",
+      "foreach($name in @('ConvertTo-AuraUiStudioNumber','Get-AuraUiStudioBackgroundCrop','Get-AuraUiStudioBackgroundSourcePath','Clear-AuraUiStudioBackgroundPreview','Sync-AuraUiStudioBackgroundPreview')){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing cache function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "function Get-AuraUiPropertyValue { param($InputObject,[string[]]$Names); foreach($name in $Names){$property=$InputObject.PSObject.Properties[$name];if($null -ne $property){return $property.Value}};return $null }",
+      "function Write-AuraUiLog { param([string]$Message) }",
+      "$aliasRoot=$null",
+      "try {",
+      "  [IO.Directory]::CreateDirectory($testRoot)|Out-Null",
+      "  $StudioBackgroundRoot=Join-Path $testRoot 'cache'",
+      "  $StudioBackgroundMaxBytes=16*1024*1024",
+      "  [IO.Directory]::CreateDirectory($StudioBackgroundRoot)|Out-Null",
+      "  $ConfigPath=Join-Path $testRoot 'config.json'",
+      "  $sourcePath=Join-Path $testRoot 'source.png'",
+      "  [IO.File]::WriteAllText($sourcePath,'AAAA')",
+      "  $fixedStamp=[DateTime]::UtcNow.AddMinutes(-10)",
+      "  [IO.File]::SetLastWriteTimeUtc($sourcePath,$fixedStamp)",
+      "  $script:Config=[pscustomobject]@{image=$sourcePath}",
+      "  $script:StudioBackgroundFingerprint=$null;$script:StudioBackgroundPreviewUrl=$null;$script:StudioBackgroundPreviewPath=$null",
+      "  $firstUrl=Sync-AuraUiStudioBackgroundPreview",
+      "  if(-not $firstUrl -or [IO.File]::ReadAllText($script:StudioBackgroundPreviewPath) -cne 'AAAA'){throw 'Initial preview copy failed'}",
+      "  [IO.File]::WriteAllText($sourcePath,'BBBB')",
+      "  [IO.File]::SetLastWriteTimeUtc($sourcePath,$fixedStamp)",
+      "  $secondUrl=Sync-AuraUiStudioBackgroundPreview",
+      "  if($secondUrl -ceq $firstUrl){throw 'Equal-size equal-timestamp replacement reused its cache URL'}",
+      "  if([IO.File]::ReadAllText($script:StudioBackgroundPreviewPath) -cne 'BBBB'){throw 'Replacement preview kept stale bytes'}",
+      "  $ownedPreview=$script:StudioBackgroundPreviewPath",
+      "  $aliasRoot=Join-Path $testRoot 'cache-alias'",
+      "  New-Item -ItemType Junction -Path $aliasRoot -Target $StudioBackgroundRoot|Out-Null",
+      "  $aliasSource=Join-Path $aliasRoot ([IO.Path]::GetFileName($ownedPreview))",
+      "  $script:Config=[pscustomobject]@{image=$aliasSource}",
+      "  $aliasUrl=Sync-AuraUiStudioBackgroundPreview",
+      "  if(-not $aliasUrl){throw 'Junction-aliased source could not be copied'}",
+      "  if(-not (Test-Path -LiteralPath $aliasSource -PathType Leaf)){throw 'Cache cleanup deleted a junction-aliased source'}",
+      "  if(-not (Test-Path -LiteralPath $script:StudioBackgroundPreviewPath -PathType Leaf)){throw 'Junction-safe preview copy is missing'}",
+      "  if([IO.File]::ReadAllText($script:StudioBackgroundPreviewPath) -cne 'BBBB'){throw 'Junction-safe preview copied the wrong bytes'}",
+      "  $oversizePath=Join-Path $testRoot 'oversize.png'",
+      "  $oversizeStream=[IO.File]::Open($oversizePath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)",
+      "  try{$oversizeStream.SetLength($StudioBackgroundMaxBytes+1)}finally{$oversizeStream.Dispose()}",
+      "  $script:Config=[pscustomobject]@{image=$oversizePath}",
+      "  if(Sync-AuraUiStudioBackgroundPreview){throw 'Oversized replacement received a Studio preview URL'}",
+      "  if($script:StudioBackgroundPreviewPath){throw 'Oversized replacement remained in the Studio preview cache'}",
+      "  $positionCases=[ordered]@{'top'='50,0';'left'='0,50';'top left'='0,0';'bottom right'='100,100';'center right'='100,50';'25%'='25,50'}",
+      "  foreach($position in $positionCases.Keys){",
+      "    $script:Config=[pscustomobject]@{imagePosition=$position;imageZoom=1}",
+      "    $crop=Get-AuraUiStudioBackgroundCrop",
+      "    $actual=\"$($crop.x),$($crop.y)\"",
+      "    if(-not $crop.supported -or $actual -cne $positionCases[$position]){throw \"Position '$position' became $actual supported=$($crop.supported)\"}",
+      "  }",
+      "  $script:Config=[pscustomobject]@{imagePosition='right 20px bottom 10px';imageZoom=1}",
+      "  if((Get-AuraUiStudioBackgroundCrop).supported){throw 'Advanced CSS position was presented as a centered numeric crop'}",
+      "} finally {",
+      "  if($aliasRoot -and (Test-Path -LiteralPath $aliasRoot)){[IO.Directory]::Delete($aliasRoot)}",
+      "}",
+    ].join("\n");
+    try {
+      run("powershell.exe", ["-NoProfile", "-EncodedCommand", Buffer.from(cacheRegression, "utf16le").toString("base64")]);
+    } finally {
+      await fs.rm(cacheTestRoot, { recursive: true, force: true });
+    }
+  }
 
   for (const architecture of ["x64", "x86", "arm64"]) {
     const loader = path.join(PROJECT_ROOT, "vendor", "webview2", "runtimes", architecture, "WebView2Loader.dll");

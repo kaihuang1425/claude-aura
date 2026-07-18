@@ -49,13 +49,15 @@ html.claude-aura body {
 }
 
 #claude-aura-backdrop .claude-aura-image {
+  inset: 0;
   background-image: var(--aura-image, none);
   background-position: var(--aura-image-position, center);
   background-repeat: no-repeat;
   background-size: cover;
   filter: saturate(0.9) contrast(0.96);
   opacity: var(--aura-image-opacity, var(--aura-default-image-opacity, 0));
-  transform: scale(1.025);
+  transform: scale(var(--aura-image-scale, 1));
+  transform-origin: var(--aura-image-position, center);
 }
 
 #claude-aura-backdrop .claude-aura-theme-art {

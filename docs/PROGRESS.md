@@ -18,14 +18,20 @@ Format:
 ## 2026-07-18 — WO-05 — Aura Studio window and tray controls
 
 - What changed: added a normal resizable Studio WebView2 window on the local
-  `aura.studio` virtual host; strict seven-action host bridge; shared theme,
+  `aura.studio` virtual host; strict nine-action host bridge; shared theme,
   background, enabled-state, and Desktop actions; localized tray menu with
   Studio launch, appearance toggle, Desktop launch, and clean exit. A queued
   Restore now wins over an in-flight Apply so live state cannot diverge from
   the saved config. The user-requested Checkpoint B revision adds seven local
-  art-led theme-card thumbnails, contained label padding, one clean selection/
-  focus treatment, semantic rail state, and packaged Studio files on both
-  installers and in the release archive.
+  art-led 3:2 theme-card previews, contained label padding, one clean selection/
+  focus treatment, and one reusable framing dialog for both per-theme card
+  previews and the user-selected Claude background. Pointer dragging, native
+  keyboard-operable focal-point/zoom controls, reset/cancel/save, exact live
+  background aspect ratio, host-confirmed persistence, and native en/zh-CN/
+  zh-TW copy are included. Background preview bytes are served only from a
+  marker-owned, content-addressed `aura.background` cache; Studio never receives
+  or supplies the source path. The config schema and renderer now preserve the
+  strict focal-point/zoom values atomically and apply the same cover geometry.
 - Evidence: `dist/verify/wo05-studio-live-en.png`,
   `dist/verify/checkpoint-b-v2-zh-tw-themes.png`,
   `dist/verify/checkpoint-b-v2-zh-tw-keyboard.png`,
@@ -34,10 +40,25 @@ Format:
   eight themes and persisted theme/enabled/background changes through
   `config.json`; the revised gallery loaded all seven selector images in a real
   WebView2 host, applied selections immediately, and showed a single 2 px
-  keyboard ring. `npm run check` 16/16; PowerShell parse pass;
-  `npm run verify:cycle` 17/17 with all 16 light/dark renders inspected.
+  keyboard ring. The framing revision was exercised at the product's 1080 x 720
+  viewport with the WebView bridge contract: actual pointer drags changed and
+  saved both crops, the dialog waited for the host acknowledgement before
+  closing, reload restored both positions, zh-TW and zh-CN labels were inspected,
+  and a fresh run logged no warnings or errors. Screenshots:
+  `dist/verify/checkpoint-b-studio-framing-zh-tw.png`,
+  `dist/verify/checkpoint-b-card-framing-before.png`,
+  `dist/verify/checkpoint-b-card-framing-after-drag.png`,
+  `dist/verify/checkpoint-b-background-framing-before.png`,
+  `dist/verify/checkpoint-b-background-framing-after-drag.png`, and
+  `dist/verify/checkpoint-b-card-framing-zh-cn.png`. Executable regressions cover
+  same-size/same-timestamp and oversized background replacement, junction
+  aliases, strict numeric validation, atomic crop writes, pending-save input
+  freezing, and unsupported CSS-position notices.
+  `npm run check` 16/16; PowerShell parse pass; `npm run verify:cycle` 17/17
+  with all 16 light/dark renders opened and inspected.
 - Follow-ups discovered: theme-folder installation remains WO-07; the Studio
-  guide action stays outside WO-05's exact seven-action host allowlist.
+  guide action stays outside WO-05's exact nine-action host allowlist. HUMAN
+  CHECKPOINT B remains pending user approval.
 
 ## 2026-07-18 — WO-14 — korean-idol real artwork (out of order per user directive)
 

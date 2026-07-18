@@ -33,7 +33,9 @@ Commands:
   show --config <path> [--json] [--locale en|zh-CN|zh-TW]
   validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
-      [--image-opacity <0..0.55>] [--image-position <css-position>]
+      [--image-opacity <0..0.55>] [--image-position <css-position>] [--image-zoom <1..2>]
+      [--studio-preview-theme <id> --studio-preview-x <0..100>
+       --studio-preview-y <0..100> --studio-preview-zoom <1..2>]
       [--reduce-motion true|false] [--enabled true|false] [--payload]
 `);
 }
@@ -116,6 +118,25 @@ if (command === "help" || command === "--help") {
   if (options["clear-image"]) config.image = null;
   if (options["image-opacity"] !== undefined) config.imageOpacity = Number(options["image-opacity"]);
   if (options["image-position"] !== undefined) config.imagePosition = options["image-position"];
+  if (options["image-zoom"] !== undefined) config.imageZoom = Number(options["image-zoom"]);
+  const studioPreviewKeys = ["studio-preview-theme", "studio-preview-x", "studio-preview-y", "studio-preview-zoom"];
+  const suppliedStudioPreviewKeys = studioPreviewKeys.filter((key) => options[key] !== undefined);
+  if (suppliedStudioPreviewKeys.length) {
+    if (suppliedStudioPreviewKeys.length !== studioPreviewKeys.length) {
+      throw new Error("Studio preview crop requires theme, x, y, and zoom");
+    }
+    const themeId = options["studio-preview-theme"];
+    if (!/^[a-z][a-z0-9-]{1,39}$/.test(themeId)) throw new Error("Invalid Studio preview theme id");
+    config.studioPreviewCrops = {
+      ...(config.studioPreviewCrops && typeof config.studioPreviewCrops === "object" && !Array.isArray(config.studioPreviewCrops)
+        ? config.studioPreviewCrops : {}),
+      [themeId]: {
+        x: Number(options["studio-preview-x"]),
+        y: Number(options["studio-preview-y"]),
+        zoom: Number(options["studio-preview-zoom"]),
+      },
+    };
+  }
   if (options["reduce-motion"] !== undefined) config.reduceMotion = booleanValue(options["reduce-motion"], "--reduce-motion");
   if (options.enabled !== undefined) config.enabled = booleanValue(options.enabled, "--enabled");
   const compiled = await compileTheme({ configPath, config, locale: options.locale ?? "en" });

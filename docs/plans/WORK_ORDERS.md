@@ -108,9 +108,19 @@ Steps:
    desktop app / exit. Dispose the icon on close.
 4. Keep the existing toolbar functional in this order (removal is WO-06).
 
+Checkpoint B user-approved revisions: the frozen-design limit is lifted only
+for the requested theme-card polish and reusable framing editor. Add
+`set-image-framing` and `set-card-preview-crop` to the exact bridge allowlist;
+persist strict numeric focal-point/zoom values; serve the selected background
+preview only through an app-owned, isolated local folder; never expose or
+accept its source path. The same labelled dialog must support pointer drag,
+native keyboard-operable range controls, reset/cancel/save, host-confirmed
+persistence, and native en/zh-CN/zh-TW copy.
+
 Done when: Studio opens from the tray, lists all 8 themes with correct
 localized names, selection applies + persists (verify via config.json),
-background pick/clear works, `npm run check` green, PS parses.
+background pick/clear/framing and per-theme card framing work, `npm run check`
+green, PS parses.
 
 ---
 
