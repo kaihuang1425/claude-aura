@@ -24,6 +24,7 @@ const RELEASE_DIRECTORIES = new Map([
   ["macos", new Set([".command", ".sh"])],
   ["preview", new Set([".css", ".html", ".js"])],
   ["scripts", new Set([".mjs"])],
+  ["studio", new Set([".css", ".html", ".js"])],
   ["tests", new Set([".mjs"])],
   ["themes", new Set([".json"])],
   ["vendor", new Set([".dll", ".txt"])],

@@ -19,7 +19,7 @@ are listed under Visual evidence below.
 - `docs/plans/WORK_ORDERS.md`
 - `docs/recipes/RECIPES.md`
 
-## Aura Studio (design-frozen shell; hosted by WO-05)
+## Aura Studio (hosted by WO-05)
 
 - `studio/app.js`
 - `studio/generated-themes.js`
@@ -54,6 +54,19 @@ are listed under Visual evidence below.
 - `assets/theme-art/japanese-film-editorial.svg`
 - `assets/theme-art/korean-prestige.svg`
 - `assets/theme-art/study-library.svg`
+
+### Aura Studio selector thumbnails
+
+Small 640 × 360 WebP derivatives used only by the local Studio theme cards.
+The raw reference composites remain gitignored and are not distributed.
+
+- `assets/theme-art/anime-twilight/card-preview.webp`
+- `assets/theme-art/cartoon-studio/card-preview.webp`
+- `assets/theme-art/japanese-film-editorial/card-preview.webp`
+- `assets/theme-art/japanese-idol/card-preview.webp`
+- `assets/theme-art/korean-idol/card-preview.webp`
+- `assets/theme-art/korean-prestige/card-preview.webp`
+- `assets/theme-art/study-library/card-preview.webp`
 
 ### Kawaii idol runtime assets
 

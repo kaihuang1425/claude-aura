@@ -22,14 +22,22 @@ Format:
   background, enabled-state, and Desktop actions; localized tray menu with
   Studio launch, appearance toggle, Desktop launch, and clean exit. A queued
   Restore now wins over an in-flight Apply so live state cannot diverge from
-  the saved config.
-- Evidence: `dist/verify/wo05-studio-live-en.png`; live Studio exercised all
-  eight themes, persisted theme/enabled/background changes through
-  `config.json`, and initialized successfully while hidden before tray-style
-  opening; `npm run check` 16/16; PowerShell parse pass; `npm run verify:cycle`
-  17/17 with all 16 light/dark renders inspected.
-- Follow-ups discovered: theme-folder installation remains WO-07; the frozen
-  Studio's guide action stays outside WO-05's exact seven-action host allowlist.
+  the saved config. The user-requested Checkpoint B revision adds seven local
+  art-led theme-card thumbnails, contained label padding, one clean selection/
+  focus treatment, semantic rail state, and packaged Studio files on both
+  installers and in the release archive.
+- Evidence: `dist/verify/wo05-studio-live-en.png`,
+  `dist/verify/checkpoint-b-v2-zh-tw-themes.png`,
+  `dist/verify/checkpoint-b-v2-zh-tw-keyboard.png`,
+  `dist/verify/checkpoint-b-v2-zh-cn-themes.png`, and
+  `dist/verify/checkpoint-b-v2-zh-cn-keyboard.png`; live Studio exercised all
+  eight themes and persisted theme/enabled/background changes through
+  `config.json`; the revised gallery loaded all seven selector images in a real
+  WebView2 host, applied selections immediately, and showed a single 2 px
+  keyboard ring. `npm run check` 16/16; PowerShell parse pass;
+  `npm run verify:cycle` 17/17 with all 16 light/dark renders inspected.
+- Follow-ups discovered: theme-folder installation remains WO-07; the Studio
+  guide action stays outside WO-05's exact seven-action host allowlist.
 
 ## 2026-07-18 — WO-14 — korean-idol real artwork (out of order per user directive)
 

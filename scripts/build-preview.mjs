@@ -42,6 +42,7 @@ const compact = Object.fromEntries(themes.map((theme) => [theme.name, {
   descriptions: { ...theme.descriptions },
   swatches: [...theme.swatches],
   preview: { ...theme.preview },
+  studioPreview: theme.studioPreview,
   artwork: previewArtwork(theme.artwork, theme.name),
   radius: theme.radius,
   blur: theme.blur,

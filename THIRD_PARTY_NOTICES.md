@@ -65,16 +65,18 @@ The complete license and notice supplied with the package are included at
 
 Source: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4078.44
 
-## Project-owned theme artwork and reference exclusions
+## Project theme artwork and reference derivatives
 
-The seven SVG files under `assets/theme-art` are original Claude Aura project
-artwork licensed under the repository's MIT License. They contain no bundled
-third-party fonts, raster images, portraits, or remote resources and therefore
-do not add a third-party license requirement.
+The isolated SVG and WebP renderer layers under `assets/theme-art` are Claude
+Aura project assets licensed under the repository's MIT License. They contain
+no bundled third-party fonts or remote resources and do not add a software
+dependency or runtime service.
 
-The art-direction composites under `theme_demo_previews` are not runtime or
-release assets. They are not embedded by the renderer or offline preview, and
-the release builder excludes the entire directory.
+The raw art-direction composites under `theme_demo_previews` are not runtime or
+release assets. Six small text-free crops derived from the project-supplied
+references are distributed only as Aura Studio selector thumbnails; the seventh
+thumbnail is derived from the Study Library SVG. The renderer and offline
+preview never load these selector files as Claude artwork or backgrounds.
 
 Claude Aura 0.3 adds no npm package or runtime font dependency. Theme font
 stacks use locally available system fallbacks. The WebView2 SDK listed above is

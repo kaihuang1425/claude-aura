@@ -96,7 +96,7 @@ of one to four layers. Each layer supports `path`, `position`, `size`,
 as data URLs only for the active theme and render as inert, pointer-safe
 backdrop divs behind the interface (see the japanese-idol entry for a layered
 example: watercolor background, hero portrait, and two sakura clusters). Keep
-raster layers optimized WebP; `scripts/convert-kawaii-assets.mjs` shows the
+raster layers optimized WebP; `scripts/convert-theme-assets.mjs` shows the
 local conversion pattern. The chrome portion of every payload must stay under
 65 KB and total embedded artwork under 1.4 MB (enforced by the tests).
 
@@ -224,9 +224,14 @@ Bundled SVG requirements:
 - fictional, non-endorsing figures when a human form is used.
 
 The composites under `theme_demo_previews` are art-direction references only.
-Never register, read, crop, trace, vectorize, or embed them in a runtime theme.
-The preview builder does not read them, and the release builder excludes the
-directory.
+Never register, read, trace, vectorize, or embed them in a runtime theme. The
+renderer and preview builder do not read them, and the release builder excludes
+the directory. The built-in Studio selector pipeline is the only narrow
+exception: maintainers may use `convert-theme-assets.mjs --card-previews` to
+produce explicit text- and control-free 640 x 360 crops under
+`assets/theme-art/<id>/card-preview.webp`. Those files are decorative picker
+media, not theme backgrounds; user themes must provide their own distributable
+selector artwork.
 
 ## Contrast and accessibility
 

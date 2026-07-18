@@ -1,5 +1,5 @@
 /* Aura Studio — Claude design paradigm, theme-neutral, offline, both modes.
-   DESIGN IS FROZEN: work orders wire behavior; they do not restyle this file. */
+   Checkpoint B polish is limited to the user-approved picker and focus fixes. */
 
 :root {
   --bg: #faf9f5;
@@ -56,7 +56,7 @@ body {
 }
 
 :focus-visible {
-  outline: 3px solid var(--ring);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -97,7 +97,10 @@ body {
 .rail-brand small { color: var(--ink-muted); font-size: 11.5px; }
 
 .rail-item {
-  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
   border-radius: 10px;
   color: var(--ink-secondary);
   text-decoration: none;
@@ -105,10 +108,11 @@ body {
 }
 
 .rail-item:hover { background: var(--raised); color: var(--ink); }
+.rail-item:focus-visible { outline-width: 2px; outline-offset: 0; }
 .rail-item.is-current {
   background: var(--accent-soft);
   color: var(--ink);
-  box-shadow: inset 2.5px 0 0 var(--accent);
+  font-weight: 600;
 }
 
 .rail-foot { margin-top: auto; padding: 8px 4px 0; }
@@ -174,17 +178,30 @@ h2 { font-size: 23px; }
 }
 
 .theme-card:hover label { transform: translateY(-1px); box-shadow: var(--shadow); }
-.theme-card input:focus-visible + label { outline: 3px solid var(--ring); outline-offset: 2px; }
+.theme-card input:focus-visible + label { outline: 2px solid var(--ring); outline-offset: 2px; }
 .theme-card input:checked + label {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1.5px var(--accent), var(--shadow);
+  box-shadow: var(--shadow);
 }
+.theme-card input:checked:focus-visible + label { border-color: var(--border); }
 
 .mini {
-  height: 84px;
   position: relative;
   display: grid;
   grid-template-columns: 34% 1fr;
+}
+
+.mini,
+.theme-card-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.theme-card-preview {
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  background: var(--raised);
 }
 
 .mini-chrome { padding: 8px 0 0 9px; }
@@ -194,11 +211,11 @@ h2 { font-size: 23px; }
 .mini-accent { position: absolute; left: 9px; bottom: 9px; width: 34%; height: 7px; border-radius: 4px; }
 .mini-text { position: absolute; left: 9px; top: 10px; width: 55%; height: 5px; border-radius: 3px; opacity: 0.65; }
 
-.theme-card-body { padding: 11px 13px 12px; border-top: 1px solid var(--border-soft); }
+.theme-card-body { display: block; padding: 14px 16px 16px; border-top: 1px solid var(--border-soft); }
 .theme-card-body strong { display: block; font-size: 13.5px; letter-spacing: -0.01em; }
 .theme-card-body small {
   display: block;
-  margin-top: 2px;
+  margin-top: 4px;
   color: var(--ink-muted);
   font-size: 11.5px;
   line-height: 1.4;
@@ -219,6 +236,7 @@ h2 { font-size: 23px; }
   font-weight: 600;
   opacity: 0;
   transition: opacity 140ms ease;
+  pointer-events: none;
 }
 
 .theme-card input:checked ~ .selected-badge { opacity: 1; }

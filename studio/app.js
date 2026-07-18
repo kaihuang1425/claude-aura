@@ -128,6 +128,10 @@
   };
 
   const localized = (map, fallback) => (map && (map[locale] ?? map.en)) || fallback || "";
+  const studioPreviewUrl = (value) => {
+    if (typeof value !== "string" || !/^assets\/theme-art\/[a-z0-9-]+\/card-preview\.webp$/.test(value)) return null;
+    return `https://aura.assets/${value.slice("assets/theme-art/".length)}`;
+  };
 
   // ── HOST BRIDGE (WO-05 / WO-07 wire the other side in aura-ui.ps1) ──────
   const bridge = window.chrome?.webview ?? null;
@@ -163,15 +167,15 @@
 
   for (const theme of Object.values(themes)) {
     const preview = theme.preview ?? {};
+    const imageUrl = studioPreviewUrl(theme.studioPreview);
     const card = document.createElement("div");
     card.className = "theme-card";
     const inputId = `theme-${theme.name}`;
     const swatches = (theme.swatches ?? []).slice(0, 4)
       .map((color) => `<i style="background:${color}"></i>`).join("");
-    card.innerHTML = `
-      <input type="radio" name="theme" id="${inputId}" value="${theme.name}">
-      <label for="${inputId}">
-        <span class="mini" style="background:${preview.background ?? "#eee"}" aria-hidden="true">
+    const previewMarkup = imageUrl
+      ? `<img class="theme-card-preview" src="${imageUrl}" alt="" aria-hidden="true" draggable="false">`
+      : `<span class="mini" style="background:${preview.background ?? "#eee"}" aria-hidden="true">
           <span class="mini-chrome" style="background:${preview.chrome ?? "#222"}">
             <i style="background:${preview.text ?? "#fff"}"></i><i style="background:${preview.text ?? "#fff"}"></i>
           </span>
@@ -179,7 +183,11 @@
             <span class="mini-text" style="background:${preview.text ?? "#333"}"></span>
             <span class="mini-accent" style="background:${preview.accent ?? "#888"}"></span>
           </span>
-        </span>
+        </span>`;
+    card.innerHTML = `
+      <input type="radio" name="theme" id="${inputId}" value="${theme.name}">
+      <label for="${inputId}">
+        ${previewMarkup}
         <span class="theme-card-body">
           <strong></strong>
           <small></small>
@@ -215,8 +223,12 @@
 
   for (const link of document.querySelectorAll(".rail-item")) {
     link.addEventListener("click", () => {
-      for (const other of document.querySelectorAll(".rail-item")) other.classList.remove("is-current");
+      for (const other of document.querySelectorAll(".rail-item")) {
+        other.classList.remove("is-current");
+        other.removeAttribute("aria-current");
+      }
       link.classList.add("is-current");
+      link.setAttribute("aria-current", "page");
     });
   }
 

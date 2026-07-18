@@ -702,6 +702,10 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
   const install = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
   const studioApp = await fs.readFile(path.join(PROJECT_ROOT, "studio", "app.js"), "utf8");
+  const studioCss = await fs.readFile(path.join(PROJECT_ROOT, "studio", "styles.css"), "utf8");
+  const studioHtml = await fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8");
+  const studioGenerated = await fs.readFile(path.join(PROJECT_ROOT, "studio", "generated-themes.js"), "utf8");
+  const assetConverter = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"), "utf8");
   const uiCopy = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "ui-copy.json"), "utf8"));
   for (const [name, source] of [["start", start], ["UI", ui], ["installer", install]]) {
     assert(!/remote-debugging-(?:port|pipe)/i.test(source), `${name} still launches a debugging endpoint`);
@@ -722,6 +726,9 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert.match(ui,
     /SetVirtualHostNameToFolderMapping\(\s*['"]aura\.studio['"]\s*,[\s\S]{0,300}?CoreWebView2HostResourceAccessKind\]::Allow\s*\)/,
     "Studio must use the allowlisted aura.studio virtual host mapping");
+  assert.match(ui,
+    /SetVirtualHostNameToFolderMapping\(\s*['"]aura\.assets['"]\s*,\s*\$ThemeArtRoot\s*,[\s\S]{0,160}?CoreWebView2HostResourceAccessKind\]::Allow\s*\)/,
+    "Studio selector artwork must use its own local virtual host mapping");
   assert.match(ui, /\.Navigate\(\s*['"]https:\/\/aura\.studio\/index\.html['"]\s*\)/,
     "Studio must navigate to its exact offline virtual-host URL");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
@@ -757,6 +764,59 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
     "The Studio page must let the host choose image paths");
   assert.match(studioApp, /send\(\{\s*type:\s*"import-theme"\s*\}\)/,
     "The Studio page must let the host choose import paths");
+  assert.match(studioHtml, /class="rail-item is-current"[^>]*aria-current="page"/,
+    "Studio must expose the current navigation destination semantically");
+  assert.match(studioApp, /removeAttribute\("aria-current"\)/);
+  assert.match(studioApp, /setAttribute\("aria-current",\s*"page"\)/);
+  assert.match(studioApp, /<img class="theme-card-preview"[^>]*alt=""[^>]*aria-hidden="true"/,
+    "Studio selector previews must be decorative images");
+  assert.match(assetConverter, /const cardSelection = cardsOnly\s*\?[\s\S]{0,280}:\s*\{\};/,
+    "Ordinary runtime-asset conversion must not depend on gitignored Studio reference images");
+  const selectorWithoutFlag = spawnSync(process.execPath, [
+    path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"),
+    "japanese-film-editorial",
+  ], { cwd: PROJECT_ROOT, encoding: "utf8" });
+  assert.notEqual(selectorWithoutFlag.status, 0,
+    "Selector-only theme IDs must not become silent no-ops in runtime-asset mode");
+  assert.match(`${selectorWithoutFlag.stdout}\n${selectorWithoutFlag.stderr}`, /use --card-previews/);
+
+  const cardBodyRule = studioCss.match(/\.theme-card-body\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(cardBodyRule, /display:\s*block/,
+    "Theme-card body padding must contain its block children");
+  assert.match(cardBodyRule, /padding:\s*14px\s+16px\s+16px/,
+    "Theme-card labels need a comfortable inset from the border");
+  const currentRailRule = studioCss.match(/\.rail-item\.is-current\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert(!/box-shadow/.test(currentRailRule),
+    "Current navigation must not stack an inset shadow under the focus ring");
+  assert.match(studioCss, /\.rail-item:focus-visible\s*\{[^}]*outline-width:\s*2px[^}]*\}/);
+  const checkedCardRule = studioCss.match(/\.theme-card input:checked \+ label\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert(!/0\s+0\s+0/.test(checkedCardRule),
+    "Selected cards must not add a second ring-like box shadow");
+  assert.match(studioCss, /\.theme-card-preview\s*\{[^}]*object-fit:\s*cover[^}]*\}/);
+
+  const generatedMatch = studioGenerated.match(/window\.CLAUDE_AURA_THEMES\s*=\s*([\s\S]+);\s*$/);
+  assert(generatedMatch, "Studio theme metadata could not be parsed");
+  const studioThemes = JSON.parse(generatedMatch[1]);
+  assert.deepEqual(Object.keys(studioThemes), THEME_IDS);
+  let selectorPreviewCount = 0;
+  for (const themeId of THEME_IDS) {
+    const expectedPath = themeId === "default" ? null : `assets/theme-art/${themeId}/card-preview.webp`;
+    assert.equal(studioThemes[themeId].studioPreview, expectedPath,
+      `${themeId} Studio preview metadata is incorrect`);
+    if (!expectedPath) continue;
+    selectorPreviewCount += 1;
+    const bytes = await fs.readFile(path.join(PROJECT_ROOT, expectedPath));
+    assert(bytes.length > 0 && bytes.length < 400_000, `${themeId} Studio preview exceeds its raster budget`);
+    assert.equal(bytes.toString("ascii", 0, 4), "RIFF");
+    assert.equal(bytes.toString("ascii", 8, 12), "WEBP");
+    assert.equal(bytes.toString("ascii", 12, 16), "VP8X");
+    const readUInt24LE = (offset) => bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16);
+    assert.deepEqual([readUInt24LE(24) + 1, readUInt24LE(27) + 1], [640, 360],
+      `${themeId} Studio preview must be 640x360`);
+  }
+  assert.equal(selectorPreviewCount, 7);
+  assert(!/theme_demo_previews|Claude app interface with K-pop|Elegant Japanese-inspired/i.test(studioGenerated),
+    "Generated Studio metadata must never identify raw reference composites");
   assert(!/\$message\.(?:path|file|fileName)\b/i.test(ui),
     "The Studio host must never accept a page-supplied file path");
   assert.match(ui, /\[System\.Windows\.Forms\.OpenFileDialog\]::new\(\)/,
@@ -839,6 +899,7 @@ test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich 
   assert.match(ui, /Screen\]::FromControl\(\$Form\)\.WorkingArea/);
   assert.match(install, /WindowStyle Hidden/);
   assert.match(install, /Claude Aura\.lnk/);
+  assert(install.includes("'studio'"), "The Windows installer must copy Aura Studio");
 
   for (const architecture of ["x64", "x86", "arm64"]) {
     const loader = path.join(PROJECT_ROOT, "vendor", "webview2", "runtimes", architecture, "WebView2Loader.dll");
@@ -977,6 +1038,8 @@ test("release and installers exclude unsafe composite references and binary patc
   const releaseBuilder = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "build-release.mjs"), "utf8");
   assert.match(releaseBuilder, /RELEASE_ROOT_FILES/);
   assert.match(releaseBuilder, /RELEASE_DIRECTORIES/);
+  assert.match(releaseBuilder, /\["studio",\s*new Set\(\["\.css",\s*"\.html",\s*"\.js"\]\)\]/,
+    "The release allowlist must include Aura Studio");
   assert.match(releaseBuilder, /\.corrupt-/);
   for (const extension of [".avif", ".png", ".svg", ".webp"]) {
     assert(releaseBuilder.includes(`"${extension}"`), `Release allowlist omits supported artwork type ${extension}`);
@@ -989,6 +1052,13 @@ test("release and installers exclude unsafe composite references and binary patc
     const release = JSON.parse(run(process.execPath, ["scripts/build-release.mjs"]));
     const names = zipEntryNames(await fs.readFile(release.outputPath));
     assert(names.includes("claude-aura/package.json"), "Release allowlist omitted package.json");
+    for (const studioFile of ["app.js", "generated-themes.js", "index.html", "styles.css"]) {
+      assert(names.includes(`claude-aura/studio/${studioFile}`), `Release omitted Studio ${studioFile}`);
+    }
+    for (const themeId of THEME_IDS.filter((id) => id !== "default")) {
+      assert(names.includes(`claude-aura/assets/theme-art/${themeId}/card-preview.webp`),
+        `Release omitted ${themeId} Studio selector preview`);
+    }
     assert(!names.includes(`claude-aura/${privateName}`), "Release included an unlisted local file");
     assert(!names.some((name) => name.startsWith("claude-aura/.agents/") || name.startsWith("claude-aura/.codex/")),
       "Release included local agent metadata");

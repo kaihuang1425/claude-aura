@@ -504,6 +504,14 @@ function validateRegistryEntry(entry, label) {
   for (const key of ["chrome", "background", "surface", "accent", "text"]) {
     if (!HEX_COLOR.test(preview[key] ?? "")) throw new Error(`${label}.preview.${key} must be a six-digit hex colour`);
   }
+  let studioPreview = null;
+  if (entry.studioPreview !== null && entry.studioPreview !== undefined) {
+    const expectedStudioPreview = `assets/theme-art/${entry.id}/card-preview.webp`;
+    if (entry.studioPreview !== expectedStudioPreview) {
+      throw new Error(`${label}.studioPreview must be ${expectedStudioPreview}`);
+    }
+    studioPreview = entry.studioPreview;
+  }
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
   const validateArtworkLayer = (layer, layerLabel) => {
     if (!isPlainObject(layer)) throw new Error(`${layerLabel} must be an object`);
@@ -539,6 +547,7 @@ function validateRegistryEntry(entry, label) {
     descriptions: validateLocalizedMap(entry.descriptions, `${label}.descriptions`, 220),
     swatches: [...swatches],
     preview: Object.fromEntries(Object.entries(preview).map(([key, value]) => [key, value.toUpperCase()])),
+    studioPreview,
     artwork,
     artworkLayers,
   };
@@ -578,6 +587,7 @@ async function readRegisteredTheme(entry, locale) {
     descriptions: { ...entry.descriptions },
     swatches: [...entry.swatches],
     preview: { ...entry.preview },
+    studioPreview: entry.studioPreview,
     artwork: entry.artwork ? { ...entry.artwork } : null,
     artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
     filePath,
@@ -642,7 +652,7 @@ async function resolveTheme(config, configPath, locale) {
       try {
         const theme = validateTheme(await readJson(filePath), filePath);
         return {
-          theme: { ...theme, labels: { en: theme.label }, descriptions: { en: theme.description }, swatches: [], preview: null, artwork: null, artworkLayers: null },
+          theme: { ...theme, labels: { en: theme.label }, descriptions: { en: theme.description }, swatches: [], preview: null, studioPreview: null, artwork: null, artworkLayers: null },
           filePath,
           requestedTheme: theme.name,
           fallbackFrom: null,

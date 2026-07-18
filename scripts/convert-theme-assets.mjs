@@ -4,6 +4,7 @@
 // No npm dependencies; everything stays on 127.0.0.1.
 //
 //   node scripts/convert-theme-assets.mjs [theme-id]
+//   node scripts/convert-theme-assets.mjs --card-previews [theme-id]
 //
 // Omitting theme-id converts every theme listed below. Direct-copy assets
 // (already-optimized kit outputs) are listed under `copies`.
@@ -52,11 +53,66 @@ const THEMES = {
   },
 };
 
-const requested = process.argv[2];
-const selection = requested ? { [requested]: THEMES[requested] } : THEMES;
-if (requested && !THEMES[requested]) {
-  throw new Error(`Unknown theme "${requested}"; known: ${Object.keys(THEMES).join(", ")}`);
+// Small, selector-only thumbnails derived from the supplied visual references
+// or the theme's current isolated artwork. The opaque source screenshots remain
+// gitignored and are never shipped or used as renderer backgrounds; only these
+// compressed derivatives under assets/theme-art/<id>/ reach Aura Studio.
+const CARD_PREVIEWS = {
+  "japanese-film-editorial": {
+    sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
+    src: "Elegant Japanese-inspired app interface.png",
+    cropPixels: { x: 1000, y: 60, width: 448, height: 252 },
+  },
+  "korean-prestige": {
+    sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
+    src: "Sleek dark mode app dashboard.png",
+    cropPixels: { x: 1020, y: 55, width: 500, height: 281 },
+  },
+  "cartoon-studio": {
+    sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
+    src: "Claude's friendly productivity dashboard.png",
+    cropPixels: { x: 1200, y: 70, width: 448, height: 252 },
+  },
+  "anime-twilight": {
+    sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
+    src: "c1cad58a-97a8-4dd1-8270-14a52658fa4f.png",
+    cropPixels: { x: 1150, y: 55, width: 500, height: 281 },
+  },
+  "study-library": {
+    sourceDir: path.join(PROJECT_ROOT, "assets", "theme-art"),
+    src: "study-library.svg",
+    cropPixels: { x: 0, y: 112, width: 1200, height: 675 },
+  },
+  "japanese-idol": {
+    sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
+    src: "Kawaii idol-themed app interface.png",
+    cropPixels: { x: 1070, y: 60, width: 512, height: 288 },
+  },
+  "korean-idol": {
+    sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
+    src: "Claude app interface with K-pop theme.png",
+    cropPixels: { x: 1010, y: 80, width: 480, height: 270 },
+  },
+};
+
+const args = process.argv.slice(2);
+const cardsOnly = args[0] === "--card-previews";
+const requested = cardsOnly ? args[1] : args[0];
+const knownThemeIds = Object.keys(cardsOnly ? CARD_PREVIEWS : THEMES);
+if (requested && !knownThemeIds.includes(requested)) {
+  const hint = !cardsOnly && Object.hasOwn(CARD_PREVIEWS, requested)
+    ? "; use --card-previews for Studio selector assets"
+    : "";
+  throw new Error(`Unknown theme "${requested}"; known: ${knownThemeIds.join(", ")}${hint}`);
 }
+const selection = cardsOnly ? {} : requested
+  ? (THEMES[requested] ? { [requested]: THEMES[requested] } : {})
+  : THEMES;
+const cardSelection = cardsOnly
+  ? requested
+    ? (CARD_PREVIEWS[requested] ? { [requested]: CARD_PREVIEWS[requested] } : {})
+    : CARD_PREVIEWS
+  : {};
 
 async function findEdge() {
   for (const candidate of EDGE_PATHS) {
@@ -71,6 +127,9 @@ async function convertTheme(themeId, config) {
     try { await fs.access(path.join(config.sourceDir, entry.src)); } catch { missing.push(entry.src); }
   }
   if (missing.length) {
+    if (config.required) {
+      throw new Error(`${themeId}: required source files are missing:\n  ${missing.join("\n  ")}`);
+    }
     console.warn(`${themeId}: skipping — kit files missing:\n  ${missing.join("\n  ")}`);
     return;
   }
@@ -89,15 +148,34 @@ async function convertTheme(themeId, config) {
     for (const job of jobs) {
       const img = new Image();
       await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error(job.src)); img.src = "/src/" + encodeURIComponent(job.src); });
-      const sx = Math.round(img.naturalWidth * job.cropLeft);
-      const sw = img.naturalWidth - sx;
-      const scale = Math.min(1, job.width / sw);
-      const w = Math.round(sw * scale), h = Math.round(img.naturalHeight * scale);
+      let sx = job.cropPixels ? job.cropPixels.x : Math.round(img.naturalWidth * (job.cropLeft || 0));
+      let sy = job.cropPixels ? job.cropPixels.y : 0;
+      let sw = job.cropPixels ? job.cropPixels.width : img.naturalWidth - sx;
+      let sh = job.cropPixels ? job.cropPixels.height : img.naturalHeight;
+      let w, h;
+      if (job.height) {
+        const targetRatio = job.width / job.height;
+        if ((sw / sh) > targetRatio) {
+          const croppedWidth = Math.round(sh * targetRatio);
+          sx += Math.round((sw - croppedWidth) / 2);
+          sw = croppedWidth;
+        } else {
+          const croppedHeight = Math.round(sw / targetRatio);
+          sy += Math.round((sh - croppedHeight) / 2);
+          sh = croppedHeight;
+        }
+        w = job.width;
+        h = job.height;
+      } else {
+        const scale = Math.min(1, job.width / sw);
+        w = Math.round(sw * scale);
+        h = Math.round(sh * scale);
+      }
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext("2d");
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, sx, 0, sw, img.naturalHeight, 0, 0, w, h);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
       const blob = await new Promise((res) => canvas.toBlob(res, "image/webp", job.quality));
       await fetch("/out/" + encodeURIComponent(job.out), { method: "POST", body: blob });
     }
@@ -115,7 +193,16 @@ async function convertTheme(themeId, config) {
       } else if (request.method === "GET" && url.pathname.startsWith("/src/")) {
         const name = decodeURIComponent(url.pathname.slice(5));
         if (!config.jobs.some((job) => job.src === name)) { response.writeHead(403).end(); return; }
-        response.writeHead(200, { "Content-Type": "image/png" }).end(await fs.readFile(path.join(config.sourceDir, name)));
+        const isSvg = name.toLowerCase().endsWith(".svg");
+        let sourceBytes = await fs.readFile(path.join(config.sourceDir, name));
+        if (isSvg) {
+          const sourceText = sourceBytes.toString("utf8");
+          const viewBox = sourceText.match(/viewBox=["']0 0 ([\d.]+) ([\d.]+)["']/i);
+          if (viewBox) {
+            sourceBytes = Buffer.from(sourceText.replace(/<svg\b/, `<svg width="${viewBox[1]}" height="${viewBox[2]}"`), "utf8");
+          }
+        }
+        response.writeHead(200, { "Content-Type": isSvg ? "image/svg+xml" : "image/png" }).end(sourceBytes);
       } else if (request.method === "POST" && url.pathname.startsWith("/out/")) {
         const name = decodeURIComponent(url.pathname.slice(5));
         if (!config.jobs.some((job) => job.out === name)) { response.writeHead(403).end(); return; }
@@ -162,5 +249,21 @@ async function convertTheme(themeId, config) {
 
 for (const [themeId, config] of Object.entries(selection)) {
   await convertTheme(themeId, config);
+}
+for (const [themeId, source] of Object.entries(cardSelection)) {
+  await convertTheme(`${themeId} card preview`, {
+    sourceDir: source.sourceDir,
+    outputDir: path.join(PROJECT_ROOT, "assets", "theme-art", themeId),
+    jobs: [{
+      src: source.src,
+      out: "card-preview.webp",
+      width: 640,
+      height: 360,
+      cropPixels: source.cropPixels,
+      quality: 0.82,
+    }],
+    copies: [],
+    required: true,
+  });
 }
 console.log("done");

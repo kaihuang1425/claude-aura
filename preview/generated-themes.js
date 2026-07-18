@@ -28,6 +28,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#5D54C7",
       "text": "#242238"
     },
+    "studioPreview": null,
     "artwork": null,
     "radius": 18,
     "blur": 20,
@@ -473,6 +474,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#B64B32",
       "text": "#272824"
     },
+    "studioPreview": "assets/theme-art/japanese-film-editorial/card-preview.webp",
     "artwork": {
       "path": "assets/theme-art/japanese-film-editorial.svg",
       "position": "right center",
@@ -923,6 +925,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#5A91E6",
       "text": "#EDF3FA"
     },
+    "studioPreview": "assets/theme-art/korean-prestige/card-preview.webp",
     "artwork": {
       "path": "assets/theme-art/korean-prestige.svg",
       "position": "right center",
@@ -1373,6 +1376,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#248C88",
       "text": "#302820"
     },
+    "studioPreview": "assets/theme-art/cartoon-studio/card-preview.webp",
     "artwork": {
       "path": "assets/theme-art/cartoon-studio.svg",
       "position": "right bottom",
@@ -1823,6 +1827,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#A98FE8",
       "text": "#F1F1FF"
     },
+    "studioPreview": "assets/theme-art/anime-twilight/card-preview.webp",
     "artwork": {
       "path": "assets/theme-art/anime-twilight.svg",
       "position": "right bottom",
@@ -2273,6 +2278,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#2D614B",
       "text": "#292B26"
     },
+    "studioPreview": "assets/theme-art/study-library/card-preview.webp",
     "artwork": {
       "path": "assets/theme-art/study-library.svg",
       "position": "right bottom",
@@ -2723,6 +2729,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#DA6F8D",
       "text": "#3B2930"
     },
+    "studioPreview": "assets/theme-art/japanese-idol/card-preview.webp",
     "artwork": null,
     "radius": 20,
     "blur": 18,
@@ -3168,6 +3175,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#7757D9",
       "text": "#292244"
     },
+    "studioPreview": "assets/theme-art/korean-idol/card-preview.webp",
     "artwork": null,
     "radius": 16,
     "blur": 26,

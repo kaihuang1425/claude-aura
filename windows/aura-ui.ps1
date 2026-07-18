@@ -16,6 +16,7 @@ $WebDataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\webview'
 $LogPath = Join-Path $DataRoot 'aura-ui.log'
 $UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
 $StudioRoot = Join-Path $Root 'studio'
+$ThemeArtRoot = Join-Path $Root 'assets\theme-art'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 function Write-AuraUiLog {
@@ -1501,6 +1502,14 @@ public static class AuraWindow {
             'aura.studio',
             $StudioRoot,
             [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          if (Test-Path -LiteralPath $ThemeArtRoot -PathType Container) {
+            $studioCore.SetVirtualHostNameToFolderMapping(
+              'aura.assets',
+              $ThemeArtRoot,
+              [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          } else {
+            Write-AuraUiLog -Message "Studio theme artwork folder is missing: $ThemeArtRoot"
+          }
           $studioCore.add_NavigationStarting({
             param($sender, $eventArgs)
             try {

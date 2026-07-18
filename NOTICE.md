@@ -19,18 +19,20 @@ because current Claude releases require Anthropic-signed debugging
 authorization.
 
 The eight built-in Claude Aura interface systems, their registry metadata, and
-the seven isolated SVG files under `assets/theme-art` are original project work
+the isolated runtime artwork under `assets/theme-art` are project work
 distributed under the repository's MIT License. The Default theme intentionally
-has no artwork asset. Bundled human forms are abstract fictional adults; they do
-not depict or imply any real person, celebrity, performer, endorsement, or
-official collaboration. The Cartoon Studio mascot and Anime Twilight
-environment are also original project artwork. No third-party fonts, portrait
-files, raster images, or external resources are embedded in these SVG files.
+has no artwork asset. Runtime artwork is supplied as self-contained SVG or
+derived WebP layers; it contains no remote resources or bundled font files and
+remains separate from the functional Claude interface.
 
 Files under `theme_demo_previews` are supplied art-direction references, not
-runtime assets. Claude Aura does not use those composites as interface layers,
-backgrounds, previews, or sources for tracing or vectorization. The preview
-builder never reads them, and the release builder excludes the directory.
+runtime assets. The raw composites are ignored by Git and excluded from
+installers, preview generation, and releases. Six text-free 640 x 360 crops are
+distributed under `assets/theme-art/<id>/card-preview.webp` solely as decorative
+Aura Studio selector media; Study Library's selector is derived from its
+isolated runtime SVG. No full composite, baked interface control, or interface
+text is shipped, and selector thumbnails are never injected into Claude as
+backgrounds.
 
 User-provided images remain the property and responsibility of the user.
 Confirm image, trademark, likeness, and distribution rights before sharing a

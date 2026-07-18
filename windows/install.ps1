@@ -18,7 +18,7 @@ try {
   $dataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\data'
   New-Item -ItemType Directory -Force -Path $installRoot, $dataRoot | Out-Null
   if (-not (Test-AuraPathEqual -Left $SourceRoot -Right $installRoot)) {
-    foreach ($directory in @('assets', 'macos', 'preview', 'scripts', 'themes', 'tests', 'vendor', 'windows')) {
+    foreach ($directory in @('assets', 'macos', 'preview', 'scripts', 'studio', 'themes', 'tests', 'vendor', 'windows')) {
       Copy-Item -LiteralPath (Join-Path $SourceRoot $directory) -Destination $installRoot -Recurse -Force
     }
     $installedDocs = Join-Path $installRoot 'docs'

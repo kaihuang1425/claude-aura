@@ -22,7 +22,7 @@ Three changes landed after the initial eight-theme system:
 
 ## Kawaii idol preview showcase
 
-The `themes/kawaii-idol/` production asset kit (supplied, gitignored source of
+The `themes/japanese-idol/` production asset kit (supplied, gitignored source of
 truth) is integrated into the japanese-idol theme's offline preview as a deeply
 art-directed skin: derived, isolated runtime assets under
 `assets/theme-art/kawaii-idol/` (kawaii logo, hero portrait, sakura clusters,
@@ -38,8 +38,8 @@ SVG), each embedded as a data URL only when that theme is active and rendered as
 inert, pointer-safe backdrop divs with per-layer position, size, opacity,
 mobile behavior, and an optional right-anchored edge-fade mask. Japanese Idol
 uses four layers — the sakura watercolor background, the hero portrait, and the
-two sakura corner clusters — derived from the supplied kit via
-`scripts/convert-kawaii-assets.mjs`. Budgets are enforced by tests: chrome
+  two sakura corner clusters — derived from the supplied kit via
+  `scripts/convert-theme-assets.mjs`. Budgets are enforced by tests: chrome
 payload under 65 KB, embedded artwork under 1.4 MB (Japanese Idol totals about
 579 KB). The exact compiled payload was rendered in a standalone harness to
 confirm the layers paint correctly through the production injection path.
@@ -64,7 +64,7 @@ real Claude interface with screenshots.
 | 5 | `anime-twilight` | Anime Twilight | `assets/theme-art/anime-twilight.svg` |
 | 6 | `study-library` | Study Library | `assets/theme-art/study-library.svg` |
 | 7 | `japanese-idol` | Japanese Idol | Four layered `assets/theme-art/kawaii-idol/*.webp` assets (background, hero, two sakura clusters) |
-| 8 | `korean-idol` | Korean Idol | `assets/theme-art/korean-idol.svg` |
+| 8 | `korean-idol` | Korean Idol | Three layered `assets/theme-art/korean-idol/*.webp` assets (background, constellation, hero) |
 
 The order is defined once in `themes/registry.json` and reused by command-line,
 Windows picker, validation, and preview consumers.
@@ -100,7 +100,7 @@ surface by responsibility.
 | --- | --- | --- |
 | Registry and themes | `themes/registry.json`, the eight canonical theme JSON files, and compatibility files `themes/midnight.json`, `themes/ember.json`, `themes/forest.json`, and `themes/sakura.json` | Canonical IDs, localized metadata, semantic light/dark roles, typography, shape, effects, wallpaper recipes, and legacy migration |
 | Shared renderer styling | `assets/base.css`, `assets/theme-variants.css`, `assets/renderer-inject.js` | Semantic production coverage, centralized component variants, root attributes, artwork layers, cleanup, and accessibility preferences |
-| Original artwork | `assets/theme-art/*.svg`, `assets/theme-art/README.md` | Seven isolated, optional, self-contained decorative assets and provenance |
+| Runtime artwork and Studio selectors | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers plus seven small local theme-card thumbnails and provenance |
 | Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/build-preview.mjs`, `scripts/preview-server.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, preview generation/server, and release collection |
 | Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json` | DPI-aware localized native theme gallery, live application, accessibility, best-effort DWM title-bar palette, allowlisted install, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
@@ -192,19 +192,25 @@ the unreadable source as a uniquely named `.corrupt-…json` diagnostic backup.
 
 ## Artwork and licensing
 
-Six themes use original, self-contained project SVGs; Japanese Idol uses the
-supplied kawaii-idol kit through derived, isolated WebP/SVG copies under
-`assets/theme-art/kawaii-idol/` (the untouched source kit stays gitignored in
-`themes/kawaii-idol/`). All decorative artwork ships under the repository's MIT
-License terms alongside the kit. Artwork is separate from the functional
-interface, contains no embedded controls or UI text, and is marked
-non-focusable, hidden from assistive technology, and pointer-inert. Human forms
-are abstract fictional adults and imply no real person or endorsement. Default
-uses no art asset.
+Five themes use self-contained project SVG renderer art. Japanese Idol uses
+derived, isolated WebP/SVG copies from the supplied kit under
+`themes/japanese-idol/`, and Korean Idol uses three derived WebP layers from the
+kit currently supplied under `themes/korean-prestige/`; both source directories
+remain gitignored. Runtime artwork is separate from the functional interface,
+contains no embedded controls or UI text, and is non-focusable, hidden from
+assistive technology, and pointer-inert. Default uses no renderer artwork.
 
-The `theme_demo_previews` composites are art-direction references only. Neither
-the runtime compiler nor the offline preview builder reads or embeds them. The
-release builder skips the directory entirely.
+Studio selector media is a distinct asset class: six cards use small art-only
+crops from the supplied visual references and Study Library uses a rasterized
+crop of its implemented SVG. The photorealistic reference pixels occur only in
+these decorative selector thumbnails, next to live labels; they are never
+injected into Claude as renderer art.
+
+The raw `theme_demo_previews` composites remain art-direction sources only. The
+runtime compiler and offline preview builder never read or embed them, and the
+release builder skips the directory entirely. `convert-theme-assets.mjs` may
+derive small text-free Studio selector crops into `assets/theme-art/<id>/`; only
+those compressed derivatives are served by the local `aura.assets` virtual host.
 
 User-selected background images remain local decorative inputs and are
 validated for supported extension, matching content signature, and size before
@@ -325,15 +331,17 @@ Responsive, high-DPI, and interaction evidence:
 The offline preview shares the registry metadata, semantic design tokens, and
 renderer CSS with the runtime path. It is an illustrative QA harness, not a copy
 of the production Claude interface; automated and source-only checks are not
-treated as a substitute for it. Observation inside the signed-in production
-`claude.ai` WebView2 window was not performed in this environment (it requires an
-interactive signed-in session) and remains the one outstanding runtime check.
+treated as a substitute for it. An interactive 2026-07-18 run exercised all
+eight selections against the signed-in production `claude.ai` WebView2 window
+and persisted theme, enabled, and background state. The revised Aura Studio
+gallery was also inspected in a real WebView2 host in zh-TW and zh-CN, including
+immediate selection updates and keyboard focus traversal.
 
-## Supplied references excluded from production
+## Supplied references and Studio selector derivatives
 
-All seven supplied files were opaque full-interface composites rather than
-isolated, licensed decorative artwork. They were used only for art direction and
-are ignored by Git, installers, preview generation, and release collection:
+All seven supplied source files are opaque full-interface composites rather than
+isolated renderer artwork. The originals are ignored by Git, installers,
+preview generation, and release collection:
 
 - `theme_demo_previews/c1cad58a-97a8-4dd1-8270-14a52658fa4f.png`
 - `theme_demo_previews/Claude app interface with K-pop theme.png`
@@ -343,8 +351,12 @@ are ignored by Git, installers, preview generation, and release collection:
 - `theme_demo_previews/Kawaii idol-themed app interface.png`
 - `theme_demo_previews/Sleek dark mode app dashboard.png`
 
-No pixels, portraits, controls, or embedded text from those composites are
-present in runtime or release assets.
+No full composite, interface control, or baked interface text is distributed.
+For the Checkpoint B Studio picker, six small 640 × 360 art-led crops are
+derived from these references and stored under `assets/theme-art/<id>/`; the
+Study Library card is derived from its implemented SVG instead. These local
+thumbnails are decorative selector media with live adjacent labels. They are
+never injected into Claude or used as runtime backgrounds.
 
 ## Remaining limitations
 
@@ -355,9 +367,9 @@ present in runtime or release assets.
   unsupported attributes or system policy can leave some chrome unchanged. The
   themed toolbar and WebView remain independent of this enhancement, and no
   Claude or Windows binary is patched.
-- The supplied portraits could not be safely isolated from the composite
-  screenshots. The release therefore uses original abstract fictional artwork.
-  Closer portrait fidelity would require separately licensed, isolated source art.
+- Supplied portrait pixels appear only in the small Studio selector thumbnails.
+  Renderer backgrounds continue to use isolated project artwork; closer runtime
+  portrait fidelity still requires separately licensed, isolated source art.
 - The macOS scripts remain a reversible legacy launcher; the native, non-technical
   rich gallery is the supported Windows WebView2 experience.
 
@@ -368,4 +380,6 @@ present in runtime or release assets.
 - Preserve readable, operable UI when artwork is absent.
 - Update shared semantic styling before adding one-off selectors.
 - Recheck selectors when `claude.ai` changes its rendered structure.
-- Treat screenshot composites as references, never shippable interface assets.
+- Treat screenshot composites as raw references. Only explicit, text-free Studio
+  selector derivatives under `assets/theme-art/<id>/` may ship; never inject a
+  composite or selector thumbnail into Claude as runtime artwork.

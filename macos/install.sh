@@ -12,7 +12,7 @@ INSTALL_ROOT="$STATE_ROOT/app"
 /bin/mkdir -p "$STATE_ROOT" "$DATA_ROOT"
 if [ "$ROOT" != "$INSTALL_ROOT" ]; then
   /bin/mkdir -p "$INSTALL_ROOT"
-  for directory in assets macos preview scripts themes tests vendor windows; do
+  for directory in assets macos preview scripts studio themes tests vendor windows; do
     /usr/bin/ditto "$ROOT/$directory" "$INSTALL_ROOT/$directory"
   done
   /bin/mkdir -p "$INSTALL_ROOT/docs"

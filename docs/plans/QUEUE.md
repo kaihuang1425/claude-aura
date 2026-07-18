@@ -33,6 +33,9 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 Notes:
 - User-authorized priority change (2026-07-18): complete the real Studio
   interface and Checkpoint B before returning to offline preview/tooling work.
+- Checkpoint B revision requested (2026-07-18): use impactful local artwork in
+  the theme cards and correct card-label spacing and stacked selection/focus
+  treatments. The checkpoint remains pending user re-review.
 - WO-08..14 each end with their own mini-checkpoint if provisional art was
   generated (user may replace generated art with supplied kits at any time).
 - If a work order blocks twice, log it in BLOCKED.md and continue.

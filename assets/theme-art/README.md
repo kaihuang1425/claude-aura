@@ -1,23 +1,48 @@
 # Theme artwork
 
-This directory contains seven lightweight, self-contained SVG backgrounds for the optional Claude Aura themes. The Default theme intentionally has no theme-art asset.
+This directory contains optional, pointer-inert theme artwork plus small local
+theme-card thumbnails for Aura Studio. Default intentionally has no decorative
+runtime artwork and uses the Studio's neutral token miniature.
 
-## Provenance and licence
+## Provenance
 
-All artwork in this directory is original project artwork created specifically for Claude Aura. It is not a crop, trace, vectorization, or pixel-derived copy of any supplied reference image. The human figures are abstract fictional adults and do not depict or imply any real person, celebrity, performer, or endorsement.
+Runtime SVGs and the isolated Japanese/Korean Idol layers are project artwork
+created or derived from source kits supplied for Claude Aura. They remain
+separate from the real Claude interface and fail safely when unavailable.
 
-Copyright (c) 2026 I-Kai Huang and Claude Aura contributors. These files are distributed under the MIT License in the repository root (`LICENSE`). No third-party artwork, fonts, raster images, or external resources are embedded.
+The seven `*/card-preview.webp` files are 640 × 360 selector-only derivatives.
+Six are art-led, text-free crops of the project-supplied theme demo references;
+Study Library is rasterized from its current isolated SVG so the card represents
+the implemented theme honestly. The opaque reference composites remain
+gitignored and unshipped. Selector previews are never injected into Claude as
+backgrounds or treated as reconstructed product UI.
 
-## Assets
+Project assets are distributed under the repository's MIT License. No runtime
+font, image, or other resource is fetched from the network.
 
-- `japanese-film-editorial.svg` — warm paper, ink, film-frame details, and an abstract fictional adult male editorial portrait.
-- `korean-prestige.svg` — midnight architectural glass, silver structure, blue rim light, and an abstract fictional adult male profile.
-- `cartoon-studio.svg` — cream studio textures and an original non-human productivity mascot carrying a pencil.
-- `anime-twilight.svg` — an untexted twilight science-fiction city environment with glass architecture and constellation lines.
-- `study-library.svg` — books, index cards, a fountain pen, grid paper, and research diagrams; no character or mascot.
-- `japanese-idol.svg` — a warm editorial composition with an abstract fictional adult female portrait, ribbons, stage light, and restrained music motifs.
-- `korean-idol.svg` — a cool geometric composition with an abstract fictional adult female portrait, holographic facets, waveform rhythm, and music motifs.
+## Runtime assets
+
+- `japanese-film-editorial.svg` — warm paper, ink, film-frame details, and an editorial portrait.
+- `korean-prestige.svg` — midnight architectural glass and blue-silver structure.
+- `cartoon-studio.svg` — cream studio textures and a non-human productivity mascot.
+- `anime-twilight.svg` — a twilight science-fiction environment with constellation lines.
+- `study-library.svg` — books, index cards, a fountain pen, grid paper, and research diagrams.
+- `kawaii-idol/` — layered Japanese Idol background, hero, sakura, marks, and motifs.
+- `korean-idol/` — layered Korean Idol atmosphere, constellation, and hero.
+
+## Studio selector previews
+
+- `anime-twilight/card-preview.webp`
+- `cartoon-studio/card-preview.webp`
+- `japanese-film-editorial/card-preview.webp`
+- `japanese-idol/card-preview.webp`
+- `korean-idol/card-preview.webp`
+- `korean-prestige/card-preview.webp`
+- `study-library/card-preview.webp`
 
 ## Integration
 
-The SVG roots are marked `aria-hidden`, non-focusable, and pointer-inert. Use them only as optional decorative layers, retain an empty accessible name when rendered through an image element, and also apply `pointer-events: none` in host CSS. Keep functional controls and readable copy outside these files. Position artwork responsively with a stable aspect-ratio box or background layer so loading or failure cannot shift layout or block interaction.
+Renderer artwork is `aria-hidden`, non-focusable, and pointer-inert. Keep
+functional controls and readable copy outside artwork. Studio selector images
+use empty alternative text because each adjacent live card label names and
+describes the theme.

@@ -24,7 +24,7 @@ The update adds:
   focus, status, and other shared interface roles;
 - distinct typography, shape, shadow, control, and widget treatments for every
   theme;
-- original, isolated SVG artwork for the seven optional themes;
+- isolated SVG and WebP renderer artwork for the seven optional themes;
 - persistent stable theme IDs, safe fallback to Default, and migration aliases
   for the four earlier theme names; and
 - an offline QA preview covering Home, Code, composer controls, menus, dialogs,
@@ -161,11 +161,12 @@ overview. The exhaustive deliverable path list is in
 [docs/FILE_MANIFEST.md](docs/FILE_MANIFEST.md).
 
 The `theme_demo_previews` directory contains art-direction references only. Its
-composite images are never used as runtime UI or preview backgrounds, and the
-release builder excludes the entire directory. Only isolated artwork registered
-under `assets/theme-art` may be distributed with a theme. Release archives are
-built from an explicit file and directory allowlist, so local configuration,
-saved state, agent metadata, and unrelated workspace files are not packaged.
+raw composite images are never used as runtime UI or preview backgrounds, and
+the release builder excludes the entire directory. Six text-free derivatives
+under `assets/theme-art/<id>/card-preview.webp` are used only by Aura Studio's
+theme cards; they are never injected into Claude. Release archives are built
+from an explicit file and directory allowlist, so local configuration, saved
+state, agent metadata, and unrelated workspace files are not packaged.
 
 ## Troubleshooting and security
 
