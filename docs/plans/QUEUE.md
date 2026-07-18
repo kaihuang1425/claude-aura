@@ -4,7 +4,7 @@ Take the first unchecked item. Open its spec in `WORK_ORDERS.md`. Complete it
 end-to-end, verify per its verify block, commit (`WO-NN: subject`), check it
 off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 
-- [ ] WO-01 — Soften input/composer borders across all themes (defect D1)
+- [x] WO-01 — Soften input/composer borders across all themes (defect D1)
 - [ ] WO-02 — Reveal artwork: apply per-theme surface alphas from RECIPES.md (defect D2)
 - [ ] **HUMAN CHECKPOINT A** — contact sheet of all 8 themes (payload harness,
       light+dark) for user review; user approvals become golden images

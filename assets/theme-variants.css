@@ -1,6 +1,16 @@
 /* Theme-specific component recipes. The active theme is selected only through
    the stable root attribute installed by renderer-inject.js. */
 
+/* Per-theme input/composer border strength (docs/recipes/RECIPES.md). */
+html.claude-aura[data-claude-aura-theme="default"] { --aura-input-border-alpha: 0.14; }
+html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] { --aura-input-border-alpha: 0.16; }
+html.claude-aura[data-claude-aura-theme="korean-prestige"] { --aura-input-border-alpha: 0.15; }
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] { --aura-input-border-alpha: 0.2; }
+html.claude-aura[data-claude-aura-theme="anime-twilight"] { --aura-input-border-alpha: 0.16; }
+html.claude-aura[data-claude-aura-theme="study-library"] { --aura-input-border-alpha: 0.14; }
+html.claude-aura[data-claude-aura-theme="japanese-idol"] { --aura-input-border-alpha: 0.16; }
+html.claude-aura[data-claude-aura-theme="korean-idol"] { --aura-input-border-alpha: 0.15; }
+
 html.claude-aura[data-claude-aura-theme="default"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
   border-color: hsl(var(--aura-accent-primary) / 0.18) !important;
 }
@@ -34,7 +44,7 @@ html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(article, 
 
 html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
   border-block-width: 1px 2px !important;
-  border-color: hsl(var(--aura-accent-primary) / 0.52) !important;
+  border-color: hsl(var(--aura-accent-primary) / 0.24) !important;
   background-image: repeating-linear-gradient(0deg, transparent 0 27px, hsl(var(--aura-border-subtle) / 0.05) 27px 28px) !important;
 }
 
@@ -110,7 +120,7 @@ html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(article, [data-car
 }
 
 html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
-  outline: 1px dashed hsl(var(--aura-accent-primary) / 0.52);
+  outline: 1px dashed hsl(var(--aura-accent-primary) / 0.32);
   outline-offset: -7px;
 }
 
@@ -129,7 +139,7 @@ html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-main {
 
 html.claude-aura[data-claude-aura-theme="anime-twilight"] :is(article, [data-card], [data-testid*="card"]),
 html.claude-aura[data-claude-aura-theme="anime-twilight"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
-  border-color: hsl(var(--aura-accent-secondary) / 0.34) !important;
+  border-color: hsl(var(--aura-accent-secondary) / 0.22) !important;
   background-image: linear-gradient(135deg, hsl(var(--aura-accent-primary) / 0.1), transparent 54%) !important;
   box-shadow: inset 0 1px 0 hsl(var(--aura-text-primary) / 0.08), var(--aura-shadow-elevated) !important;
 }
@@ -180,7 +190,7 @@ html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(.input-box, [data-t
   background-image:
     radial-gradient(circle at 88% 12%, hsl(var(--aura-accent-secondary) / 0.13), transparent 28%),
     linear-gradient(135deg, hsl(var(--aura-accent-primary) / 0.05), transparent 52%) !important;
-  border-color: hsl(var(--aura-accent-primary) / 0.28) !important;
+  border-color: hsl(var(--aura-accent-primary) / 0.2) !important;
 }
 
 html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(button, [role="button"], [role="tab"]) {
@@ -211,7 +221,7 @@ html.claude-aura[data-claude-aura-theme="korean-idol"] .dframe-main {
 
 html.claude-aura[data-claude-aura-theme="korean-idol"] :is(article, [data-card], [data-testid*="card"]),
 html.claude-aura[data-claude-aura-theme="korean-idol"] :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
-  border-color: hsl(var(--aura-accent-primary) / 0.28) !important;
+  border-color: hsl(var(--aura-accent-primary) / 0.2) !important;
   background-image:
     linear-gradient(110deg, hsl(var(--aura-accent-secondary) / 0.1), transparent 32%),
     linear-gradient(290deg, hsl(var(--aura-accent-primary) / 0.12), transparent 36%) !important;

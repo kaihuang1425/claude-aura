@@ -353,8 +353,8 @@ function semanticToLegacy(semantic) {
     "--claude-foreground-color": "hsl(var(--aura-text-primary))",
     "--claude-secondary-color": "hsl(var(--aura-text-secondary))",
     "--claude-border": "hsl(var(--aura-border-subtle) / 0.22)",
-    "--claude-border-300": "hsl(var(--aura-border-emphasis) / 0.38)",
-    "--claude-border-300-more": "hsl(var(--aura-border-emphasis) / 0.62)",
+    "--claude-border-300": "hsl(var(--aura-border-emphasis) / var(--aura-input-border-alpha, 0.24))",
+    "--claude-border-300-more": "hsl(var(--aura-border-emphasis) / calc(var(--aura-input-border-alpha, 0.24) + 0.1))",
   });
 }
 

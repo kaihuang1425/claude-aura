@@ -15,6 +15,18 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-17 — WO-01 — Soften input/composer borders (D1)
+
+- What changed: new per-theme `--aura-input-border-alpha` token (base.css
+  default 0.15, per-theme values in theme-variants.css); `--claude-border-300*`
+  mappings in theme-core now var-driven (peak alpha 0.62 → ~0.26); harsh
+  accent composer borders softened (jfe 0.52→0.24, at 0.34→0.22, idols
+  0.28→0.2, cartoon dashed 0.52→0.32). Focus-visible ring untouched.
+- Evidence: dist/verify/*-light/dark-1440x900.png (17/17 gates); soft resting
+  borders on search pill + composer textarea in all 8 themes; strong ring only
+  on the autofocused control (intended).
+- Follow-ups discovered: none.
+
 ## 2026-07-17 — Scaffolding baseline (pre-queue)
 
 - Repo state: 16/16 tests green at commit b9fa75d; layered kawaii artwork

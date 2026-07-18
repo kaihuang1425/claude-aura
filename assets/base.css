@@ -302,10 +302,17 @@ html.claude-aura .text-black {
   color: hsl(var(--aura-text-primary)) !important;
 }
 
+html.claude-aura {
+  /* Inputs and the composer wear quiet borders; themes retune the alpha via
+     theme-variants.css. Focus visibility comes from :focus-visible, never
+     from loud resting borders. */
+  --aura-input-border-alpha: 0.15;
+}
+
 html.claude-aura :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
   color: hsl(var(--aura-text-primary)) !important;
   background: hsl(var(--aura-composer-background) / 0.94) !important;
-  border: var(--aura-border-width) solid hsl(var(--aura-border-emphasis) / 0.26) !important;
+  border: var(--aura-border-width) solid hsl(var(--aura-border-emphasis) / calc(var(--aura-input-border-alpha) + 0.04)) !important;
   border-radius: var(--aura-composer-radius) !important;
   box-shadow: var(--aura-shadow-elevated), 0 0 0 1px hsl(var(--aura-accent-primary) / 0.05) !important;
   backdrop-filter: blur(var(--aura-blur)) saturate(1.06);
@@ -318,7 +325,7 @@ html.claude-aura [contenteditable="true"],
 html.claude-aura .ProseMirror {
   color: hsl(var(--aura-text-primary)) !important;
   caret-color: hsl(var(--aura-accent-primary));
-  border-color: hsl(var(--aura-border-subtle) / 0.3) !important;
+  border-color: hsl(var(--aura-border-emphasis) / var(--aura-input-border-alpha)) !important;
   border-radius: var(--aura-control-radius);
   font-family: var(--aura-font-ui);
 }
