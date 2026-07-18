@@ -57,8 +57,8 @@ Format:
   `npm run check` 16/16; PowerShell parse pass; `npm run verify:cycle` 17/17
   with all 16 light/dark renders opened and inspected.
 - Follow-ups discovered: theme-folder installation remains WO-07; the Studio
-  guide action stays outside WO-05's exact nine-action host allowlist. HUMAN
-  CHECKPOINT B remains pending user approval.
+  guide action stays outside WO-05's exact nine-action host allowlist. The user
+  approved HUMAN CHECKPOINT B on 2026-07-19.
 
 ## 2026-07-18 — WO-14 — korean-idol real artwork (out of order per user directive)
 

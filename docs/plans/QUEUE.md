@@ -8,7 +8,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [x] WO-02 — Reveal artwork: apply per-theme surface alphas from RECIPES.md (defect D2)
 - [x] WO-05 — Aura Studio window: host `studio/` in a second WebView2 window
       (virtual host mapping), wire the postMessage bridge, tray icon
-- [ ] **HUMAN CHECKPOINT B** — Studio walkthrough screenshots (both locales,
+- [x] **HUMAN CHECKPOINT B** — Studio walkthrough screenshots (both locales,
       keyboard traversal evidence) for user review
 - [ ] **HUMAN CHECKPOINT A** — contact sheet of all 8 themes (payload harness,
       light+dark) for user review; user approvals become golden images
@@ -37,7 +37,8 @@ Notes:
   the theme cards and correct card-label spacing and stacked selection/focus
   treatments. A second revision adds user-adjustable, persisted card-preview
   and custom-background framing through one pointer-drag editor with native
-  keyboard-operable controls. The checkpoint remains pending user re-review.
+  keyboard-operable controls. The user approved the revised checkpoint on
+  2026-07-19.
 - WO-08..14 each end with their own mini-checkpoint if provisional art was
   generated (user may replace generated art with supplied kits at any time).
 - If a work order blocks twice, log it in BLOCKED.md and continue.

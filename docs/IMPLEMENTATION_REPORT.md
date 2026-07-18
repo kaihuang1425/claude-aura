@@ -142,7 +142,8 @@ miniature interface preview, and visible selected state. The gallery supports
 keyboard focus, Tab navigation, scrolling, Escape-to-close, high contrast, and
 DPI-scaled layout.
 
-Aura Studio provides the replacement path being reviewed at HUMAN CHECKPOINT B.
+Aura Studio provides the replacement path approved at HUMAN CHECKPOINT B on
+2026-07-19.
 Its eight cards use live localized labels and art-led 3:2 previews with one
 selection/focus treatment. The selected theme exposes an **Adjust card preview**
 action, while a chosen custom background exposes **Adjust framing**. Both open
