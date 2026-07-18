@@ -366,7 +366,9 @@ function validateWallpaper(value, label) {
       `${label}.gradient`,
       1600,
     ),
-    surfaceAlpha: finiteNumber(wallpaper.surfaceAlpha ?? 0.9, `${label}.surfaceAlpha`, 0.62, 1),
+    // Art-led themes may run a light content veil (floor 0.35); cards and the
+    // composer keep their own opaque surfaces, and prefers-contrast forces 1.
+    surfaceAlpha: finiteNumber(wallpaper.surfaceAlpha ?? 0.9, `${label}.surfaceAlpha`, 0.35, 1),
     sidebarAlpha: finiteNumber(wallpaper.sidebarAlpha ?? 0.9, `${label}.sidebarAlpha`, 0.62, 1),
     imageOpacity: finiteNumber(wallpaper.imageOpacity ?? 0.16, `${label}.imageOpacity`, 0, 0.55),
     artOpacity: finiteNumber(wallpaper.artOpacity ?? 0.18, `${label}.artOpacity`, 0, 0.46),

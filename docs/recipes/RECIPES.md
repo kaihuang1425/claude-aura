@@ -6,6 +6,14 @@ WO-01 (soft borders on claude inputs/composer — focus rings untouched).
 Slot lists name the PNG masters each theme's source kit needs (contract Tier
 2); layer numbers are registry `artworkLayers` values.
 
+Applied by WO-02 (final values; supersede any older numbers below):
+- Art-led themes run a light, UNBLURRED content veil (`backdrop-filter: none`
+  on the main canvas via theme-variants.css) so layered artwork stays crisp:
+  japanese-idol surface 0.48/0.60, korean-idol 0.52/0.55, anime-twilight
+  0.52/0.50, korean-prestige 0.58/0.55 (validator floor is now 0.35).
+- Paper themes keep blurred fuller veils: japanese-film-editorial 0.82/0.80,
+  cartoon-studio 0.86/0.82, study-library 0.86/0.84, default 0.90/0.84.
+
 Shared rules:
 - Focus ring: accent, 3px, always visible — never softened.
 - Every hero layer uses mask `soft-right` unless stated; corners use `none`.

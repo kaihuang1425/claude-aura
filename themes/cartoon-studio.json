@@ -45,8 +45,8 @@
     },
     "wallpaper": {
       "gradient": "radial-gradient(circle at 12% 16%, rgb(234 96 71 / .16), transparent 30%), radial-gradient(circle at 82% 18%, rgb(36 140 136 / .17), transparent 32%), linear-gradient(145deg, #fff8ea 0%, #f8eddb 100%)",
-      "surfaceAlpha": 0.95,
-      "sidebarAlpha": 0.94,
+      "surfaceAlpha": 0.86,
+      "sidebarAlpha": 0.92,
       "imageOpacity": 0.12,
       "artOpacity": 0.34,
       "textureOpacity": 0.38
@@ -74,8 +74,8 @@
     },
     "wallpaper": {
       "gradient": "radial-gradient(circle at 16% 10%, rgb(238 102 77 / .2), transparent 30%), radial-gradient(circle at 86% 76%, rgb(43 180 169 / .18), transparent 38%), linear-gradient(145deg, #102421 0%, #172c29 54%, #2d2520 100%)",
-      "surfaceAlpha": 0.9,
-      "sidebarAlpha": 0.92,
+      "surfaceAlpha": 0.82,
+      "sidebarAlpha": 0.88,
       "imageOpacity": 0.14,
       "artOpacity": 0.3,
       "textureOpacity": 0.36

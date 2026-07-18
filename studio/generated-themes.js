@@ -691,8 +691,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "linear-gradient(90deg, rgb(28 30 29 / .96) 0 18%, transparent 35%), radial-gradient(circle at 76% 22%, rgb(179 73 47 / .18), transparent 25%), linear-gradient(118deg, #f5ecdc 0%, #e8dcc5 58%, #d7c9af 100%)",
-        "surfaceAlpha": 0.91,
-        "sidebarAlpha": 0.96,
+        "surfaceAlpha": 0.82,
+        "sidebarAlpha": 0.94,
         "imageOpacity": 0.12,
         "artOpacity": 0.29,
         "textureOpacity": 0.54
@@ -887,8 +887,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(circle at 78% 22%, rgb(191 72 45 / .2), transparent 28%), linear-gradient(120deg, #111312 0%, #1d1d1a 58%, #29251f 100%)",
-        "surfaceAlpha": 0.88,
-        "sidebarAlpha": 0.94,
+        "surfaceAlpha": 0.8,
+        "sidebarAlpha": 0.92,
         "imageOpacity": 0.14,
         "artOpacity": 0.25,
         "textureOpacity": 0.52
@@ -1141,8 +1141,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "linear-gradient(90deg, rgb(7 20 38 / .95) 0 18%, transparent 36%), radial-gradient(circle at 82% 12%, rgb(77 132 216 / .22), transparent 30%), linear-gradient(135deg, #e7edf4 0%, #cfd9e7 100%)",
-        "surfaceAlpha": 0.86,
-        "sidebarAlpha": 0.94,
+        "surfaceAlpha": 0.58,
+        "sidebarAlpha": 0.88,
         "imageOpacity": 0.14,
         "artOpacity": 0.25,
         "textureOpacity": 0.2
@@ -1337,8 +1337,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "linear-gradient(100deg, #030b17 0%, #08182d 46%, #0f2440 100%), radial-gradient(circle at 78% 18%, rgb(86 147 236 / .22), transparent 34%)",
-        "surfaceAlpha": 0.78,
-        "sidebarAlpha": 0.9,
+        "surfaceAlpha": 0.55,
+        "sidebarAlpha": 0.86,
         "imageOpacity": 0.16,
         "artOpacity": 0.29,
         "textureOpacity": 0.16
@@ -1591,8 +1591,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(circle at 12% 16%, rgb(234 96 71 / .16), transparent 30%), radial-gradient(circle at 82% 18%, rgb(36 140 136 / .17), transparent 32%), linear-gradient(145deg, #fff8ea 0%, #f8eddb 100%)",
-        "surfaceAlpha": 0.95,
-        "sidebarAlpha": 0.94,
+        "surfaceAlpha": 0.86,
+        "sidebarAlpha": 0.92,
         "imageOpacity": 0.12,
         "artOpacity": 0.34,
         "textureOpacity": 0.38
@@ -1787,8 +1787,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(circle at 16% 10%, rgb(238 102 77 / .2), transparent 30%), radial-gradient(circle at 86% 76%, rgb(43 180 169 / .18), transparent 38%), linear-gradient(145deg, #102421 0%, #172c29 54%, #2d2520 100%)",
-        "surfaceAlpha": 0.9,
-        "sidebarAlpha": 0.92,
+        "surfaceAlpha": 0.82,
+        "sidebarAlpha": 0.88,
         "imageOpacity": 0.14,
         "artOpacity": 0.3,
         "textureOpacity": 0.36
@@ -2041,8 +2041,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(circle at 70% 10%, rgb(122 101 221 / .27), transparent 32%), radial-gradient(circle at 42% 84%, rgb(94 217 226 / .18), transparent 38%), linear-gradient(155deg, #eef1ff 0%, #d8dcf6 54%, #ebe3f5 100%)",
-        "surfaceAlpha": 0.84,
-        "sidebarAlpha": 0.91,
+        "surfaceAlpha": 0.52,
+        "sidebarAlpha": 0.84,
         "imageOpacity": 0.12,
         "artOpacity": 0.26,
         "textureOpacity": 0.18
@@ -2237,8 +2237,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(ellipse at 70% 5%, rgb(99 102 241 / .38), transparent 38%), radial-gradient(circle at 48% 70%, rgb(82 220 225 / .15), transparent 42%), linear-gradient(160deg, #080d2a 0%, #191447 48%, #2b1e59 100%)",
-        "surfaceAlpha": 0.76,
-        "sidebarAlpha": 0.88,
+        "surfaceAlpha": 0.5,
+        "sidebarAlpha": 0.8,
         "imageOpacity": 0.14,
         "artOpacity": 0.34,
         "textureOpacity": 0.16
@@ -2491,8 +2491,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "repeating-linear-gradient(0deg, transparent 0 27px, rgb(45 97 75 / .06) 27px 28px), linear-gradient(90deg, rgb(116 52 59 / .1) 0 1px, transparent 1px 76px), linear-gradient(135deg, #f7f0df 0%, #e9dfc7 100%)",
-        "surfaceAlpha": 0.94,
-        "sidebarAlpha": 0.96,
+        "surfaceAlpha": 0.86,
+        "sidebarAlpha": 0.92,
         "imageOpacity": 0.1,
         "artOpacity": 0.26,
         "textureOpacity": 0.5
@@ -2687,8 +2687,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "repeating-linear-gradient(0deg, transparent 0 27px, rgb(214 184 121 / .035) 27px 28px), radial-gradient(circle at 80% 18%, rgb(116 52 59 / .18), transparent 32%), linear-gradient(145deg, #0c1711 0%, #15241b 54%, #241f19 100%)",
-        "surfaceAlpha": 0.9,
-        "sidebarAlpha": 0.94,
+        "surfaceAlpha": 0.84,
+        "sidebarAlpha": 0.9,
         "imageOpacity": 0.12,
         "artOpacity": 0.24,
         "textureOpacity": 0.46
@@ -2936,8 +2936,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(circle at 78% 12%, rgb(239 135 154 / .25), transparent 30%), radial-gradient(circle at 16% 82%, rgb(199 179 230 / .2), transparent 36%), linear-gradient(145deg, #fff8f4 0%, #fce9ec 56%, #f4ebfb 100%)",
-        "surfaceAlpha": 0.9,
-        "sidebarAlpha": 0.93,
+        "surfaceAlpha": 0.48,
+        "sidebarAlpha": 0.88,
         "imageOpacity": 0.12,
         "artOpacity": 0.42,
         "textureOpacity": 0.22
@@ -3132,7 +3132,7 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "radial-gradient(circle at 78% 12%, rgb(233 113 150 / .26), transparent 32%), radial-gradient(circle at 18% 84%, rgb(171 135 226 / .18), transparent 38%), linear-gradient(145deg, #1a0e15 0%, #2a1420 52%, #20172d 100%)",
-        "surfaceAlpha": 0.84,
+        "surfaceAlpha": 0.6,
         "sidebarAlpha": 0.9,
         "imageOpacity": 0.14,
         "artOpacity": 0.36,
@@ -3386,8 +3386,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "linear-gradient(115deg, transparent 0 56%, rgb(121 215 228 / .12) 56% 57%, transparent 57%), radial-gradient(circle at 76% 12%, rgb(143 120 223 / .24), transparent 32%), radial-gradient(circle at 15% 84%, rgb(121 215 228 / .16), transparent 36%), linear-gradient(145deg, #fbfaff 0%, #ece8fb 54%, #eef8fb 100%)",
-        "surfaceAlpha": 0.84,
-        "sidebarAlpha": 0.91,
+        "surfaceAlpha": 0.52,
+        "sidebarAlpha": 0.88,
         "imageOpacity": 0.12,
         "artOpacity": 0.44,
         "textureOpacity": 0.12
@@ -3582,8 +3582,8 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "linear-gradient(115deg, transparent 0 56%, rgb(111 224 235 / .1) 56% 57%, transparent 57%), radial-gradient(circle at 78% 10%, rgb(139 105 232 / .3), transparent 34%), radial-gradient(circle at 14% 84%, rgb(81 204 218 / .16), transparent 38%), linear-gradient(145deg, #120e29 0%, #21183e 52%, #142a36 100%)",
-        "surfaceAlpha": 0.76,
-        "sidebarAlpha": 0.88,
+        "surfaceAlpha": 0.55,
+        "sidebarAlpha": 0.84,
         "imageOpacity": 0.14,
         "artOpacity": 0.4,
         "textureOpacity": 0.12

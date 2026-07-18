@@ -135,7 +135,7 @@ test("every theme provides complete semantic roles and a distinct component prof
         assert.match(theme[mode].semantic[token], /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/, `${theme.name}/${mode} emitted an invalid ${token}`);
         assert.equal(theme[mode].tokens[token], theme[mode].semantic[token], `${theme.name}/${mode} did not preserve ${token}`);
       }
-      assert(theme[mode].wallpaper.surfaceAlpha >= 0.62);
+      assert(theme[mode].wallpaper.surfaceAlpha >= 0.35);
       assert(theme[mode].wallpaper.sidebarAlpha >= 0.62);
       assert(theme[mode].wallpaper.artOpacity <= 0.46);
     }

@@ -15,6 +15,24 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-17 — WO-02 — Reveal artwork (D2)
+
+- What changed: per-theme surface/sidebar alphas applied; the surfaceAlpha
+  validator floor relaxed 0.62 → 0.35 (sidebar floor unchanged; the
+  prefers-contrast override still forces 1); art-led themes (japanese-idol,
+  korean-idol, anime-twilight, korean-prestige) additionally drop the content
+  canvas backdrop blur, which was smearing layered artwork behind the veil.
+  Variants CSS compacted to stay inside the 65 KB chrome budget (556 B
+  headroom on the worst theme).
+- Amendment to the order as written: the "wallpaper blocks only" scope was
+  insufficient — the blur and the 0.62 floor were the real blockers; both
+  changes recorded here and in RECIPES.md.
+- Evidence: dist/verify/*-1440x900.png, 17/17 gates; hero crisp and clearly
+  visible in japanese-idol light, grid + figure visible in korean-idol dark,
+  body text readable in the fixture's check block in all renders.
+- Follow-ups discovered: korean-idol/korean-prestige/others still render
+  stand-in SVG figures — replaced by WO-08..14 kit production.
+
 ## 2026-07-17 — WO-01 — Soften input/composer borders (D1)
 
 - What changed: new per-theme `--aura-input-border-alpha` token (base.css
