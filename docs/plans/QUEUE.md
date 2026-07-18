@@ -13,7 +13,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [x] **HUMAN CHECKPOINT A** — contact sheet of all 8 themes (payload harness,
       light+dark) for user review; user approvals become golden images
 - [x] WO-03 — `theme-cli scaffold` command + slot kit template
-- [ ] WO-04 — `theme-cli qa` command (QA board generator, headless Edge)
+- [x] WO-04 — `theme-cli qa` command (QA board generator, headless Edge)
 - [ ] WO-06 — Remove the main-window toolbar and the WinForms gallery
       (only after Checkpoint B approval)
 - [ ] WO-07 — User themes directory + Studio "Install theme from folder"

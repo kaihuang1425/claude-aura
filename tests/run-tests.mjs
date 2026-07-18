@@ -604,6 +604,77 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
   }
 });
 
+test("theme-cli qa renders every registered layer through the payload harness", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
+  const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
+  try {
+    assert.match(run(process.execPath, [cliPath, "help"], { cwd: temporary }), /^\s*qa <id>\s*$/m);
+    assert.throws(() => run(process.execPath, [cliPath, "qa", "not-installed"], { cwd: temporary }),
+      /Unknown theme|Theme not found/);
+    if (process.platform !== "win32") return;
+
+    const summary = JSON.parse(run(process.execPath, [cliPath, "qa", "japanese-idol"], {
+      cwd: temporary,
+      timeout: 180_000,
+    }));
+    assert.equal(summary.themeId, "japanese-idol");
+    assert.equal(summary.outputDir, "dist/qa/japanese-idol");
+    assert.equal(summary.boardPath, "dist/qa/japanese-idol/qa-board.png");
+    assert.equal(summary.statusPath, "dist/qa/japanese-idol/status.json");
+
+    const outputDirectory = path.join(temporary, "dist", "qa", "japanese-idol");
+    const board = await fs.readFile(path.join(outputDirectory, "qa-board.png"));
+    const status = JSON.parse(await fs.readFile(path.join(outputDirectory, "status.json"), "utf8"));
+    assert.equal(board.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "QA board is not a PNG");
+    assert(board.length > 10_000, "QA board is unexpectedly small");
+    assert(status.board.width > 1_000 && status.board.height > 1_000, "QA board dimensions are not useful for review");
+
+    const expectedPaths = [
+      "assets/theme-art/kawaii-idol/background.webp",
+      "assets/theme-art/kawaii-idol/hero.webp",
+      "assets/theme-art/kawaii-idol/sakura-top-right.webp",
+      "assets/theme-art/kawaii-idol/sakura-bottom-right.webp",
+    ];
+    assert.equal(status.theme.id, "japanese-idol");
+    assert.deepEqual(status.assets.map((asset) => asset.path), expectedPaths,
+      "QA status did not preserve every registry artwork layer in order");
+    for (const asset of status.assets) {
+      assert.equal(asset.decode, "pass", `${asset.path} did not decode in the QA browser`);
+      assert(asset.dimensions.width > 0 && asset.dimensions.height > 0,
+        `${asset.path} is missing decoded dimensions`);
+    }
+    assert.equal(status.payload.layerCount, expectedPaths.length,
+      "The in-context payload did not place every artwork layer");
+    assert.equal(status.payload.usesLegacyArtwork, false,
+      "The layered theme fell back to the legacy artwork slot");
+    assert.equal(status.payload.renderedDigest, status.payload.digest,
+      "The payload harness did not render the compiled theme digest");
+    assert.equal(status.assets[1].reference.crop.x, 0.28,
+      "The hero reference panel does not record the converter's source crop");
+
+    const panelIds = new Set(status.assets.flatMap((asset) => asset.panels));
+    for (const panel of [
+      "reference-crop",
+      "production-render",
+      "side-by-side",
+      "overlay-comparison",
+      "intended-surface",
+      "white-surface",
+      "dark-edge",
+      "small-scale",
+    ]) {
+      assert(panelIds.has(panel), `QA board is missing the ${panel} evidence panel`);
+    }
+    assert(panelIds.has("transparent-checker") || panelIds.has("responsive-cover"),
+      "QA board is missing transparency or responsive-cover evidence");
+    assert(status.panels.required.includes("in-context-payload") &&
+      status.panels.observed.includes("in-context-payload"),
+      "QA board is missing the in-context payload-harness panel");
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("config writes are atomic, aliases migrate, and theme choice persists", async () => {
   const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
   try {
@@ -825,6 +896,7 @@ test("JavaScript and platform scripts parse", async () => {
     "scripts/build-release.mjs",
     "scripts/injector.mjs",
     "scripts/preview-server.mjs",
+    "scripts/qa-board.mjs",
     "scripts/state-cli.mjs",
     "scripts/theme-cli.mjs",
     "scripts/theme-core.mjs",

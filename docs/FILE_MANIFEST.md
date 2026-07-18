@@ -118,6 +118,7 @@ copies are regenerated with `node scripts/convert-theme-assets.mjs`.
 - `scripts/convert-theme-assets.mjs`
 - `scripts/injector.mjs`
 - `scripts/preview-server.mjs`
+- `scripts/qa-board.mjs`
 - `scripts/state-cli.mjs`
 - `scripts/theme-cli.mjs`
 - `scripts/theme-core.mjs`

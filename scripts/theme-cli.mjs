@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import { generateQaBoard } from "./qa-board.mjs";
 import {
   buildPayloadFromCompiled,
   compileTheme,
@@ -186,6 +187,7 @@ function help() {
 Commands:
   list [--json] [--locale en|zh-CN|zh-TW]
   scaffold <id>
+  qa <id>
   init --config <path> [--locale en|zh-CN|zh-TW] [--payload]
   show --config <path> [--json] [--locale en|zh-CN|zh-TW]
   validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
@@ -198,7 +200,7 @@ Commands:
 }
 
 const { command, options, positionals } = parse(process.argv.slice(2));
-if (command !== "scaffold" && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
+if (!["qa", "scaffold"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
 if (command === "help" || command === "--help") {
   help();
 } else if (command === "scaffold") {
@@ -206,6 +208,18 @@ if (command === "help" || command === "--help") {
     throw new Error("Usage: theme-cli scaffold <id>");
   }
   await scaffold(positionals[0]);
+} else if (command === "qa") {
+  if (positionals.length !== 1 || Object.keys(options).length) {
+    throw new Error("Usage: theme-cli qa <id>");
+  }
+  const result = await generateQaBoard(positionals[0], { cwd: process.cwd() });
+  const relativePath = (filePath) => path.relative(process.cwd(), filePath).replaceAll(path.sep, "/");
+  console.log(JSON.stringify({
+    ...result,
+    outputDir: relativePath(result.outputDir),
+    boardPath: relativePath(result.boardPath),
+    statusPath: relativePath(result.statusPath),
+  }, null, 2));
 } else if (command === "list") {
   const locale = normalizeLocale(options.locale ?? "en");
   const themes = (await listThemes({ locale })).map(({

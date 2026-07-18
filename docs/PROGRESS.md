@@ -15,6 +15,28 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-19 — WO-04 — theme-cli QA board
+
+- What changed: added `theme-cli qa <id>` and a dependency-free local
+  Edge renderer that enumerates registry `artworkLayers` in order, rejects
+  partial or legacy fallback, decodes the delivered WebP/SVG bytes, generates
+  all contract §12 evidence panels, and embeds the real deterministic payload
+  fixture. Browser-observed dimensions, alpha, panels, placement, hashes, and
+  payload layer/digest evidence are written beside the board in `status.json`;
+  regeneration preserves review notes but invalidates approval when production
+  hashes change.
+- Evidence: `themes/japanese-idol/qa/qa-board.png` (2160 × 7680, opened and
+  inspected) and `themes/japanese-idol/qa/status.json`; all four files under
+  `assets/theme-art/kawaii-idol/` decoded with their native dimensions and the
+  payload harness rendered exactly four layers with no legacy slot.
+  `npm run check` 18/18; `npm run verify:cycle` 33/33, with the refreshed
+  sixteen-frame contact sheet opened and all golden diffs at zero.
+- Parity scores (visual orders only): japanese-idol:
+  atmosphere/artwork/typography/controls/composer/sidebar/states/readability →
+  green/green/green/green/green/green/green/green.
+- Follow-ups discovered: asset-producing WO-08..WO-13 must add their
+  source-master mapping when wiring new registry layers; no new work order.
+
 ## 2026-07-19 — WO-03 — theme-cli scaffold
 
 - What changed: added `theme-cli scaffold <id>` with exact ID validation,
