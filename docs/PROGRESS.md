@@ -15,6 +15,22 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-18 — WO-05 — Aura Studio window and tray controls
+
+- What changed: added a normal resizable Studio WebView2 window on the local
+  `aura.studio` virtual host; strict seven-action host bridge; shared theme,
+  background, enabled-state, and Desktop actions; localized tray menu with
+  Studio launch, appearance toggle, Desktop launch, and clean exit. A queued
+  Restore now wins over an in-flight Apply so live state cannot diverge from
+  the saved config.
+- Evidence: `dist/verify/wo05-studio-live-en.png`; live Studio exercised all
+  eight themes, persisted theme/enabled/background changes through
+  `config.json`, and initialized successfully while hidden before tray-style
+  opening; `npm run check` 16/16; PowerShell parse pass; `npm run verify:cycle`
+  17/17 with all 16 light/dark renders inspected.
+- Follow-ups discovered: theme-folder installation remains WO-07; the frozen
+  Studio's guide action stays outside WO-05's exact seven-action host allowlist.
+
 ## 2026-07-18 — WO-14 — korean-idol real artwork (out of order per user directive)
 
 - User directive: replace SVG stand-in characters; ONLY kawaii (japanese-idol)

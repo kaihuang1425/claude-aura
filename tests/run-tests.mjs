@@ -667,6 +667,7 @@ test("JavaScript and platform scripts parse", async () => {
   const jsFiles = [
     "assets/renderer-inject.js",
     "preview/app.js",
+    "studio/app.js",
     "scripts/build-preview.mjs",
     "scripts/build-release.mjs",
     "scripts/injector.mjs",
@@ -696,10 +697,11 @@ test("JavaScript and platform scripts parse", async () => {
   }
 });
 
-test("Windows uses WebView2 and an accessible rich theme gallery", async () => {
+test("Windows uses WebView2, Aura Studio, tray controls, and an accessible rich theme gallery", async () => {
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
   const install = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
+  const studioApp = await fs.readFile(path.join(PROJECT_ROOT, "studio", "app.js"), "utf8");
   const uiCopy = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "ui-copy.json"), "utf8"));
   for (const [name, source] of [["start", start], ["UI", ui], ["installer", install]]) {
     assert(!/remote-debugging-(?:port|pipe)/i.test(source), `${name} still launches a debugging endpoint`);
@@ -715,6 +717,60 @@ test("Windows uses WebView2 and an accessible rich theme gallery", async () => {
   assert.match(ui, /swatches/i);
   assert.match(ui, /Get-AuraUiCopy/);
   assert.match(ui, /ui-copy\.json/);
+  assert.match(ui, /\$script:StudioForm\.Text\s*=\s*"\$\(\$script:UiCopy\.studioTitle\)"/,
+    "The Studio window title must come from localized UI copy");
+  assert.match(ui,
+    /SetVirtualHostNameToFolderMapping\(\s*['"]aura\.studio['"]\s*,[\s\S]{0,300}?CoreWebView2HostResourceAccessKind\]::Allow\s*\)/,
+    "Studio must use the allowlisted aura.studio virtual host mapping");
+  assert.match(ui, /\.Navigate\(\s*['"]https:\/\/aura\.studio\/index\.html['"]\s*\)/,
+    "Studio must navigate to its exact offline virtual-host URL");
+  assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
+  assert.match(ui, /PostWebMessageAsJson\s*\(/);
+
+  const expectedStudioMessageTypes = [
+    "get-state",
+    "set-theme",
+    "set-image",
+    "clear-image",
+    "set-enabled",
+    "open-desktop",
+    "import-theme",
+  ];
+  const studioMessageTypesMatch = ui.match(/\$script:StudioMessageTypes\s*=\s*@\(([\s\S]*?)\)/);
+  assert(studioMessageTypesMatch, "The Studio host message allowlist is missing");
+  const studioMessageTypes = [...studioMessageTypesMatch[1].matchAll(/['"]([^'"]+)['"]/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(studioMessageTypes, expectedStudioMessageTypes,
+    "Studio must expose exactly the seven WO-05 host actions");
+  assert.match(ui,
+    /(?:\$script:StudioMessageTypes\s+-cnotcontains\s+\$message\.type|\$message\.type\s+-cnotin\s+\$script:StudioMessageTypes)/i,
+    "Studio message actions must be checked case-sensitively against the allowlist");
+  assert.match(ui, /\$message\.type\s+-isnot\s+\[string\]/i,
+    "Studio messages must carry a string action type");
+  assert.match(ui, /\$message\.PSObject\.Properties/i,
+    "Studio messages must validate their exact property shape");
+  assert.match(ui, /-c(?:not)?match\s+['"]\^\[a-z\]\[a-z0-9-\]\{1,39\}\$['"]/,
+    "Studio theme IDs must use the canonical case-sensitive kebab-case check");
+  assert.match(ui, /\$message\.enabled\s+-isnot\s+\[bool\]/i,
+    "Studio enabled-state messages must carry a real Boolean");
+  assert.match(studioApp, /send\(\{\s*type:\s*"set-image"\s*\}\)/,
+    "The Studio page must let the host choose image paths");
+  assert.match(studioApp, /send\(\{\s*type:\s*"import-theme"\s*\}\)/,
+    "The Studio page must let the host choose import paths");
+  assert(!/\$message\.(?:path|file|fileName)\b/i.test(ui),
+    "The Studio host must never accept a page-supplied file path");
+  assert.match(ui, /\[System\.Windows\.Forms\.OpenFileDialog\]::new\(\)/,
+    "Image paths must come from a host-side OpenFileDialog");
+
+  assert.match(ui, /\[System\.Windows\.Forms\.NotifyIcon\]::new\(\)/);
+  assert.match(ui, /\[System\.Windows\.Forms\.ContextMenuStrip\]::new\(\)/);
+  assert.match(ui, /\$script:TrayIcon\.add_(?:Mouse)?DoubleClick\(\s*\{[\s\S]{0,300}?Show-AuraUiStudio/,
+    "Double-clicking the tray icon must open Studio");
+  assert.match(ui, /\$script:TrayIcon\.Dispose\(\)/,
+    "The tray icon must be disposed when Claude Aura closes");
+  for (const copyKey of ["openStudio", "originalLook", "applyTheme", "openDesktopApp", "exitApp"]) {
+    assert(ui.includes(`UiCopy.${copyKey}`), `Tray action ${copyKey} must use localized UI copy`);
+  }
   // The Node helper emits UTF-8; decode it as UTF-8 so localized metadata does not
   // corrupt (and break JSON parsing) when the console falls back to an OEM code
   // page such as Big5 on a Traditional Chinese system.
@@ -733,6 +789,10 @@ test("Windows uses WebView2 and an accessible rich theme gallery", async () => {
     "A theme-injection failure over a ready page must not show the opaque cover");
   assert.match(ui, /\$script:PendingApply/,
     "A skipped navigation-time apply must be retried, not dropped");
+  assert.match(ui, /if\s*\(\$Action\s+-eq\s+['"]Restore['"]\)\s*\{[\s\S]{0,240}?\$script:PendingRestore\s*=\s*\$true[\s\S]{0,160}?\$script:PendingApply\s*=\s*\$false/,
+    "A busy renderer must queue Restore and cancel a stale pending Apply");
+  assert.match(ui, /if\s*\(\$script:PendingRestore\)\s*\{[\s\S]{0,500}?Start-AuraUiScript\s+-Source\s+\$cleanup\s+-Action\s+Restore/,
+    "Queued Restore must run as soon as the active renderer task completes");
   assert(!ui.includes("'Customize themes'"), "Picker chrome must come from localized UI copy");
   assert(!ui.includes("'Applying your look...'"), "Loading status must come from localized UI copy");
   assert.match(ui, /themeFallbackDescription/);
@@ -745,6 +805,34 @@ test("Windows uses WebView2 and an accessible rich theme gallery", async () => {
   assert.equal(uiCopy["zh-CN"].customizeThemes, "\u81ea\u5b9a\u4e49\u4e3b\u9898");
   assert.equal(uiCopy["zh-TW"].customizeThemes, "\u81ea\u8a02\u4e3b\u984c");
   assert.notEqual(uiCopy["zh-CN"].themeApplyDescription, uiCopy["zh-TW"].themeApplyDescription);
+  const expectedStudioCopy = {
+    en: {
+      studioTitle: "Claude Aura Studio",
+      openStudio: "Open Studio",
+      openDesktopApp: "Open desktop app",
+      exitApp: "Exit Claude Aura",
+      studioImportPending: "Theme installation isn't available yet.",
+    },
+    "zh-CN": {
+      studioTitle: "Claude Aura 工作室",
+      openStudio: "打开工作室",
+      openDesktopApp: "打开桌面版",
+      exitApp: "退出 Claude Aura",
+      studioImportPending: "主题安装功能暂不可用。",
+    },
+    "zh-TW": {
+      studioTitle: "Claude Aura 工作室",
+      openStudio: "開啟工作室",
+      openDesktopApp: "開啟桌面版",
+      exitApp: "結束 Claude Aura",
+      studioImportPending: "目前還不能安裝主題。",
+    },
+  };
+  for (const [locale, expected] of Object.entries(expectedStudioCopy)) {
+    for (const [key, value] of Object.entries(expected)) {
+      assert.equal(uiCopy[locale][key], value, `${locale}.${key} must use approved native UI copy`);
+    }
+  }
   assert.match(ui, /DwmSetWindowAttribute/);
   assert.match(ui, /Set-AuraUiTitleBarPalette/);
   assert.match(ui, /Set-AuraUiFormWithinWorkingArea/);

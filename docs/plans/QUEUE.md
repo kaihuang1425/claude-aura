@@ -6,14 +6,14 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 
 - [x] WO-01 — Soften input/composer borders across all themes (defect D1)
 - [x] WO-02 — Reveal artwork: apply per-theme surface alphas from RECIPES.md (defect D2)
+- [x] WO-05 — Aura Studio window: host `studio/` in a second WebView2 window
+      (virtual host mapping), wire the postMessage bridge, tray icon
+- [ ] **HUMAN CHECKPOINT B** — Studio walkthrough screenshots (both locales,
+      keyboard traversal evidence) for user review
 - [ ] **HUMAN CHECKPOINT A** — contact sheet of all 8 themes (payload harness,
       light+dark) for user review; user approvals become golden images
 - [ ] WO-03 — `theme-cli scaffold` command + slot kit template
 - [ ] WO-04 — `theme-cli qa` command (QA board generator, headless Edge)
-- [ ] WO-05 — Aura Studio window: host `studio/` in a second WebView2 window
-      (virtual host mapping), wire the postMessage bridge, tray icon
-- [ ] **HUMAN CHECKPOINT B** — Studio walkthrough screenshots (both locales,
-      keyboard traversal evidence) for user review
 - [ ] WO-06 — Remove the main-window toolbar and the WinForms gallery
       (only after Checkpoint B approval)
 - [ ] WO-07 — User themes directory + Studio "Install theme from folder"
@@ -31,6 +31,8 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [ ] WO-16 — Full verification sweep, release rebuild, final report
 
 Notes:
+- User-authorized priority change (2026-07-18): complete the real Studio
+  interface and Checkpoint B before returning to offline preview/tooling work.
 - WO-08..14 each end with their own mini-checkpoint if provisional art was
   generated (user may replace generated art with supplied kits at any time).
 - If a work order blocks twice, log it in BLOCKED.md and continue.

@@ -15,6 +15,7 @@ $ConfigPath = Join-Path $DataRoot 'config.json'
 $WebDataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\webview'
 $LogPath = Join-Path $DataRoot 'aura-ui.log'
 $UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
+$StudioRoot = Join-Path $Root 'studio'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 function Write-AuraUiLog {
@@ -372,6 +373,8 @@ function Set-AuraUiConfig {
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
   $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
   Set-AuraUiPayloadState -Payload $payload
+  Update-AuraUiTrayAppearance
+  Send-AuraUiStudioState
 }
 
 function Test-AuraUiClaudeUri {
@@ -554,6 +557,7 @@ function Update-AuraUiThemePresentation {
   }
   Set-AuraUiTitleBarPalette -Palette $palette -Form $script:Form
   Set-AuraUiTitleBarPalette -Palette $palette -Form $script:ThemeGalleryForm
+  Set-AuraUiTitleBarPalette -Palette $palette -Form $script:StudioForm
 }
 
 function Show-AuraUiThemeGallery {
@@ -620,9 +624,16 @@ function Start-AuraUiScript {
   if (-not $script:WebReady -or $null -eq $script:WebView.CoreWebView2) { return }
   if ($null -ne $script:ScriptTask -and -not $script:ScriptTask.IsCompleted) {
     # A script is already running (a common case during the sign-in redirect
-    # burst). Remember to re-apply once it finishes so a navigation-time apply is
-    # never silently dropped, and never leave the cover stranded behind the guard.
-    if ($Action -eq 'Apply') { $script:PendingApply = $true }
+    # burst). Keep the most recent user intent so Studio/tray changes cannot leave
+    # persisted state out of sync with the live Claude document. A later Apply
+    # supersedes Restore when the user turns the theme back on, and vice versa.
+    if ($Action -eq 'Restore') {
+      $script:PendingRestore = $true
+      $script:PendingApply = $false
+    } else {
+      $script:PendingApply = $true
+      $script:PendingRestore = $false
+    }
     return
   }
   if ($Cover) { Show-AuraUiLoading -Message "$($script:UiCopy.applyingTheme)" }
@@ -646,6 +657,7 @@ function Update-AuraUiAppearanceButton {
   $enabled = $true
   if ($null -ne $script:Config.PSObject.Properties['enabled']) { $enabled = [bool]$script:Config.enabled }
   $script:AppearanceButton.Text = if ($enabled) { "$($script:UiCopy.originalLook)" } else { "$($script:UiCopy.applyTheme)" }
+  Update-AuraUiTrayAppearance
 }
 
 function Fail-AuraUiStartup {
@@ -656,6 +668,193 @@ function Fail-AuraUiStartup {
     [Environment]::NewLine + [Environment]::NewLine + "$($script:UiCopy.technicalDetails)" +
     [Environment]::NewLine + $LogPath)
   $script:Form.Close()
+}
+
+function Get-AuraUiEnabled {
+  if ($null -eq $script:Config -or $null -eq $script:Config.PSObject.Properties['enabled']) { return $true }
+  return [bool]$script:Config.enabled
+}
+
+function Update-AuraUiTrayAppearance {
+  if ($null -eq $script:TrayAppearanceItem -or $script:TrayAppearanceItem.IsDisposed) { return }
+  $script:TrayAppearanceItem.Text = if (Get-AuraUiEnabled) {
+    "$($script:UiCopy.originalLook)"
+  } else {
+    "$($script:UiCopy.applyTheme)"
+  }
+}
+
+function Send-AuraUiStudioState {
+  param(
+    [AllowEmptyString()][string]$Status = '',
+    [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok'
+  )
+  if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
+      $null -eq $script:StudioWebView.CoreWebView2) { return }
+  try {
+    $themeName = Get-AuraUiSelectedThemeName
+    if (-not $themeName) { $themeName = 'default' }
+    $enabled = Get-AuraUiEnabled
+    if (-not $Status) {
+      if ($enabled) {
+        $theme = Get-AuraUiThemeByName -Name $themeName
+        $label = if ($null -ne $theme) { "$($theme.label)" } elseif ($script:ActiveLabel) { $script:ActiveLabel } else { $themeName }
+        $Status = "$($script:UiCopy.activeTheme)" -f $label
+      } else {
+        $Status = "$($script:UiCopy.originalActive)"
+      }
+    }
+    $state = [ordered]@{
+      type = 'state'
+      theme = "$themeName"
+      enabled = $enabled
+      status = $Status
+      tone = $Tone
+    }
+    $json = $state | ConvertTo-Json -Compress
+    $script:StudioWebView.CoreWebView2.PostWebMessageAsJson($json)
+  } catch {
+    Write-AuraUiLog -Message "Studio state update failed: $($_.Exception.Message)"
+  }
+}
+
+function Show-AuraUiStudio {
+  if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed) { return }
+  if (-not $script:StudioForm.Visible) { $script:StudioForm.Show() }
+  if ($script:StudioForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
+    $script:StudioForm.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+  }
+  Set-AuraUiFormWithinWorkingArea -Form $script:StudioForm
+  $script:StudioForm.Activate()
+  $script:StudioForm.BringToFront()
+}
+
+function Invoke-AuraUiOpenDesktopApp {
+  $claude = Get-AuraClaudeInstall
+  Start-Process -FilePath $claude.Executable | Out-Null
+}
+
+function Invoke-AuraUiSelectTheme {
+  param([Parameter(Mandatory = $true)][string]$Theme)
+  if ($Theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') { throw 'Invalid Studio theme id.' }
+  $knownTheme = $false
+  foreach ($themeItem in @($script:Themes)) {
+    if ([string]::Equals("$($themeItem.name)", $Theme, [StringComparison]::Ordinal)) {
+      $knownTheme = $true
+      break
+    }
+  }
+  if (-not $knownTheme) { throw 'The Studio requested an unknown theme.' }
+  Set-AuraUiConfig -Options @('--theme', $Theme, '--enabled', 'true')
+  Update-AuraUiAppearanceButton
+  Update-AuraUiThemePresentation
+  Apply-AuraUiTheme
+  Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
+}
+
+function Invoke-AuraUiChooseBackground {
+  param([AllowNull()][System.Windows.Forms.IWin32Window]$Owner)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseBackgroundTitle)"
+    $dialog.Filter = "$($script:UiCopy.imagesFilter)|*.png;*.jpg;*.jpeg;*.webp;*.gif;*.avif"
+    $dialog.CheckFileExists = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      Send-AuraUiStudioState
+      return $false
+    }
+    Set-AuraUiConfig -Options @('--image', $dialog.FileName, '--enabled', 'true')
+    Update-AuraUiAppearanceButton
+    Apply-AuraUiTheme
+    Send-AuraUiStudioState -Status "$($script:UiCopy.applyingBackground)" -Tone busy
+    return $true
+  } finally {
+    $dialog.Dispose()
+  }
+}
+
+function Invoke-AuraUiClearBackground {
+  Set-AuraUiConfig -Options @('--clear-image', '--enabled', 'true')
+  Update-AuraUiAppearanceButton
+  Apply-AuraUiTheme
+  Send-AuraUiStudioState -Status "$($script:UiCopy.removingBackground)" -Tone busy
+}
+
+function Invoke-AuraUiSetEnabled {
+  param([Parameter(Mandatory = $true)][bool]$Enabled)
+  Set-AuraUiConfig -Options @('--enabled', $Enabled.ToString().ToLowerInvariant())
+  Update-AuraUiAppearanceButton
+  if ($Enabled) {
+    Apply-AuraUiTheme
+    Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
+  } else {
+    $cleanup = '(() => { window.__CLAUDE_AURA_DISABLED__ = true; return window.__CLAUDE_AURA_STATE__?.cleanup?.() ?? true; })()'
+    if ($script:WebReady -and (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+      Start-AuraUiScript -Source $cleanup -Action Restore
+    } else {
+      $script:StatusLabel.Text = "$($script:UiCopy.originalActive)"
+      Set-AuraUiBusy -Busy $false
+    }
+    Send-AuraUiStudioState -Status "$($script:UiCopy.originalActive)"
+  }
+}
+
+function Get-AuraUiStudioMessage {
+  param(
+    [Parameter(Mandatory = $true)][string]$Json,
+    [Parameter(Mandatory = $true)][string]$Source
+  )
+  if ($Json.Length -gt 4096) { throw 'Studio message is too large.' }
+  try { $sourceUri = [Uri]$Source } catch { throw 'Studio message source is invalid.' }
+  if ($sourceUri.Scheme -cne 'https' -or $sourceUri.Host -cne 'aura.studio') {
+    throw 'Studio message source is not allowed.'
+  }
+  try { $message = $Json | ConvertFrom-Json } catch { throw 'Studio message is not valid JSON.' }
+  if ($message -isnot [System.Management.Automation.PSCustomObject]) { throw 'Studio message must be an object.' }
+  $typeProperty = $message.PSObject.Properties['type']
+  if ($null -eq $typeProperty -or $message.type -isnot [string]) { throw 'Studio message type is required.' }
+  if ($script:StudioMessageTypes -cnotcontains $message.type) { throw 'Studio message type is not allowed.' }
+  $type = [string]$message.type
+  $expectedProperties = @(switch -CaseSensitive ($type) {
+    'set-theme' { 'type'; 'theme'; break }
+    'set-enabled' { 'type'; 'enabled'; break }
+    default { 'type'; break }
+  })
+  $propertyNames = @($message.PSObject.Properties | ForEach-Object { $_.Name })
+  if ($propertyNames.Count -ne $expectedProperties.Count) { throw 'Studio message has unexpected properties.' }
+  foreach ($name in $expectedProperties) {
+    if ($propertyNames -cnotcontains $name) { throw 'Studio message is missing a required property.' }
+  }
+  return $message
+}
+
+function Invoke-AuraUiStudioMessage {
+  param(
+    [Parameter(Mandatory = $true)][string]$Json,
+    [Parameter(Mandatory = $true)][string]$Source
+  )
+  $message = Get-AuraUiStudioMessage -Json $Json -Source $Source
+  $type = [string]$message.type
+  switch -CaseSensitive ($type) {
+    'get-state' { Send-AuraUiStudioState; break }
+    'set-theme' {
+      if ($message.theme -isnot [string]) { throw 'Studio theme must be a string.' }
+      Invoke-AuraUiSelectTheme -Theme ([string]$message.theme)
+      break
+    }
+    'set-image' { [void](Invoke-AuraUiChooseBackground -Owner $script:StudioForm); break }
+    'clear-image' { Invoke-AuraUiClearBackground; break }
+    'set-enabled' {
+      if ($message.enabled -isnot [bool]) { throw 'Studio enabled state must be a Boolean.' }
+      Invoke-AuraUiSetEnabled -Enabled $message.enabled
+      break
+    }
+    'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
+    'import-theme' {
+      Send-AuraUiStudioState -Status "$($script:UiCopy.studioImportPending)" -Tone busy
+      break
+    }
+  }
 }
 
 $script:Node = $null
@@ -689,6 +888,27 @@ $script:ThemeCardDescriptionFont = $null
 $script:ThemeCardBadgeFont = $null
 $script:UiCopy = $null
 $script:Locale = 'en'
+$script:StudioMessageTypes = @(
+  'get-state',
+  'set-theme',
+  'set-image',
+  'clear-image',
+  'set-enabled',
+  'open-desktop',
+  'import-theme'
+)
+$script:StudioForm = $null
+$script:StudioWebView = $null
+$script:StudioEnsureTask = $null
+$script:StudioReady = $false
+$script:StudioInitializationFailed = $false
+$script:WebViewEnvironment = $null
+$script:TrayIcon = $null
+$script:TrayMenu = $null
+$script:TrayOpenStudioItem = $null
+$script:TrayAppearanceItem = $null
+$script:TrayOpenDesktopItem = $null
+$script:TrayExitItem = $null
 $script:Closing = $false
 $mutex = $null
 $ownsMutex = $false
@@ -1072,6 +1292,71 @@ public static class AuraWindow {
   $script:WebView.Dock = 'Fill'
   $script:WebView.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
 
+  $script:StudioForm = [System.Windows.Forms.Form]::new()
+  $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
+  $script:StudioForm.StartPosition = 'Manual'
+  $script:StudioForm.ClientSize = [Drawing.Size]::new(1080, 720)
+  $script:StudioForm.MinimumSize = [Drawing.Size]::new(760, 560)
+  $script:StudioForm.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
+  $script:StudioForm.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
+  $script:StudioForm.BackColor = [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
+  $script:StudioForm.ShowInTaskbar = $true
+  $script:StudioWebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
+  $script:StudioWebView.Dock = 'Fill'
+  $script:StudioWebView.BackColor = [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
+  $script:StudioForm.Controls.Add($script:StudioWebView)
+  $script:StudioForm.add_Shown({
+    Set-AuraUiFormWithinWorkingArea -Form $script:StudioForm
+    Send-AuraUiStudioState
+  })
+  $script:StudioForm.add_FormClosing({
+    param($sender, $eventArgs)
+    if (-not $script:Closing -and $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
+      $eventArgs.Cancel = $true
+      $sender.Hide()
+    }
+  })
+
+  $script:TrayOpenStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
+  $script:TrayAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
+  $script:TrayOpenDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
+  $script:TrayExitItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.exitApp)")
+  $script:TrayMenu = [System.Windows.Forms.ContextMenuStrip]::new()
+  [void]$script:TrayMenu.Items.AddRange(@(
+    $script:TrayOpenStudioItem,
+    $script:TrayAppearanceItem,
+    $script:TrayOpenDesktopItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
+    $script:TrayExitItem
+  ))
+  $script:TrayMenu.add_Opening({ Update-AuraUiTrayAppearance })
+  $script:TrayOpenStudioItem.add_Click({ Show-AuraUiStudio })
+  $script:TrayAppearanceItem.add_Click({
+    try {
+      Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
+    } catch {
+      Write-AuraUiLog -Message $_.Exception.ToString()
+      Show-AuraUiMessage -Title "$($script:UiCopy.appearanceNotChangedTitle)" -Icon Warning -Message "$($script:UiCopy.appearanceNotChangedMessage)"
+      Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error
+    }
+  })
+  $script:TrayOpenDesktopItem.add_Click({
+    try {
+      Invoke-AuraUiOpenDesktopApp
+    } catch {
+      Write-AuraUiLog -Message $_.Exception.ToString()
+      Show-AuraUiMessage -Title "$($script:UiCopy.desktopNotFoundTitle)" -Icon Information -Message "$($script:UiCopy.desktopNotFoundMessage)"
+    }
+  })
+  $script:TrayExitItem.add_Click({ $script:Form.Close() })
+  $script:TrayIcon = [System.Windows.Forms.NotifyIcon]::new()
+  $script:TrayIcon.Text = 'Claude Aura'
+  $script:TrayIcon.Icon = [Drawing.SystemIcons]::Application
+  $script:TrayIcon.ContextMenuStrip = $script:TrayMenu
+  $script:TrayIcon.add_DoubleClick({ Show-AuraUiStudio })
+  $script:TrayIcon.Visible = $true
+  Update-AuraUiTrayAppearance
+
   $script:LoadingPanel = [System.Windows.Forms.Panel]::new()
   $script:LoadingPanel.Dock = 'Fill'
   $script:LoadingPanel.BackColor = [Drawing.ColorTranslator]::FromHtml('#F7F3EB')
@@ -1191,7 +1476,68 @@ public static class AuraWindow {
         $task = $script:EnvironmentTask
         $script:EnvironmentTask = $null
         $environment = $task.GetAwaiter().GetResult()
+        $script:WebViewEnvironment = $environment
         $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment)
+        if (Test-Path -LiteralPath $StudioRoot -PathType Container) {
+          $script:StudioEnsureTask = $script:StudioWebView.EnsureCoreWebView2Async($environment)
+        } else {
+          $script:StudioInitializationFailed = $true
+          Write-AuraUiLog -Message "Studio folder is missing: $StudioRoot"
+        }
+      }
+      if ($null -ne $script:StudioEnsureTask -and $script:StudioEnsureTask.IsCompleted) {
+        try {
+          $task = $script:StudioEnsureTask
+          $script:StudioEnsureTask = $null
+          [void]$task.GetAwaiter().GetResult()
+          $studioCore = $script:StudioWebView.CoreWebView2
+          $studioCore.Settings.AreDevToolsEnabled = $false
+          $studioCore.Settings.IsStatusBarEnabled = $false
+          $studioCore.Settings.AreDefaultContextMenusEnabled = $false
+          $studioCore.Settings.AreBrowserAcceleratorKeysEnabled = $true
+          $studioCore.Settings.IsZoomControlEnabled = $true
+          $studioCore.Settings.IsWebMessageEnabled = $true
+          $studioCore.SetVirtualHostNameToFolderMapping(
+            'aura.studio',
+            $StudioRoot,
+            [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          $studioCore.add_NavigationStarting({
+            param($sender, $eventArgs)
+            try {
+              $uri = [Uri]$eventArgs.Uri
+              if ($uri.Scheme -cne 'https' -or $uri.Host -cne 'aura.studio') { $eventArgs.Cancel = $true }
+            } catch { $eventArgs.Cancel = $true }
+          })
+          $studioCore.add_NavigationCompleted({
+            param($sender, $eventArgs)
+            if ($eventArgs.IsSuccess) {
+              $script:StudioReady = $true
+              Send-AuraUiStudioState
+            } else {
+              Write-AuraUiLog -Message "Studio navigation failed: $($eventArgs.WebErrorStatus)"
+            }
+          })
+          $studioCore.add_WebMessageReceived({
+            param($sender, $eventArgs)
+            try {
+              Invoke-AuraUiStudioMessage -Json $eventArgs.WebMessageAsJson -Source $eventArgs.Source
+            } catch {
+              Write-AuraUiLog -Message "Studio message rejected: $($_.Exception.Message)"
+              Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error
+            }
+          })
+          $studioCore.add_NewWindowRequested({
+            param($sender, $eventArgs)
+            $eventArgs.Handled = $true
+          })
+          $script:StudioReady = $true
+          $studioCore.Navigate('https://aura.studio/index.html')
+        } catch {
+          $script:StudioEnsureTask = $null
+          $script:StudioReady = $false
+          $script:StudioInitializationFailed = $true
+          Write-AuraUiLog -Message "Studio initialization failed: $($_.Exception.ToString())"
+        }
       }
       if ($null -ne $script:EnsureTask -and $script:EnsureTask.IsCompleted) {
         $task = $script:EnsureTask
@@ -1272,7 +1618,13 @@ public static class AuraWindow {
         $script:StatusLabel.Text = if ($action -eq 'Apply') { "$($script:UiCopy.activeTheme)" -f "$($script:ActiveLabel)" } else { "$($script:UiCopy.originalActive)" }
         if ($covered) { Hide-AuraUiLoading }
         Set-AuraUiBusy -Busy $false
-        if ($script:PendingApply) {
+        Send-AuraUiStudioState
+        if ($script:PendingRestore) {
+          $script:PendingRestore = $false
+          $script:PendingApply = $false
+          $cleanup = '(() => { window.__CLAUDE_AURA_DISABLED__ = true; return window.__CLAUDE_AURA_STATE__?.cleanup?.() ?? true; })()'
+          Start-AuraUiScript -Source $cleanup -Action Restore
+        } elseif ($script:PendingApply) {
           $script:PendingApply = $false
           Apply-AuraUiTheme
         }
@@ -1281,6 +1633,8 @@ public static class AuraWindow {
       $script:EnvironmentTask = $null
       $script:EnsureTask = $null
       $script:ScriptTask = $null
+      $script:PendingApply = $false
+      $script:PendingRestore = $false
       Set-AuraUiBusy -Busy $false
       if (-not $script:WebReady) {
         Fail-AuraUiStartup -Exception $_.Exception
@@ -1303,6 +1657,7 @@ public static class AuraWindow {
   $script:Form.add_Shown({
     $script:PageReady = $false
     $script:PendingApply = $false
+    $script:PendingRestore = $false
     Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
     try {
       $script:EnvironmentTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $WebDataRoot, $null)
@@ -1312,6 +1667,13 @@ public static class AuraWindow {
   $script:Form.add_FormClosing({
     $script:Closing = $true
     $timer.Stop()
+    if ($script:TrayIcon) {
+      $script:TrayIcon.Visible = $false
+      $script:TrayIcon.Dispose()
+    }
+    if ($script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Close() }
+    if ($script:StudioWebView -and -not $script:StudioWebView.IsDisposed) { $script:StudioWebView.Dispose() }
+    if ($script:TrayMenu) { $script:TrayMenu.Dispose() }
     if ($script:ThemeGalleryForm -and -not $script:ThemeGalleryForm.IsDisposed) { $script:ThemeGalleryForm.Close() }
     foreach ($font in @($script:ThemeCardTitleFont, $script:ThemeCardDescriptionFont, $script:ThemeCardBadgeFont)) {
       if ($font) { $font.Dispose() }
