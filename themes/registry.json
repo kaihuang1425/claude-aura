@@ -241,12 +241,33 @@
         "accent": "#7757D9",
         "text": "#292244"
       },
-      "artwork": {
-        "path": "assets/theme-art/korean-idol.svg",
-        "position": "right center",
-        "size": "min(46vw, 700px) auto",
-        "mobile": "reduce"
-      }
+      "artwork": null,
+      "artworkLayers": [
+        {
+          "path": "assets/theme-art/korean-idol/background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.6,
+          "mask": "none"
+        },
+        {
+          "path": "assets/theme-art/korean-idol/constellation.webp",
+          "position": "right top",
+          "size": "min(44vw, 720px) auto",
+          "mobile": "hide",
+          "opacity": 0.85,
+          "mask": "none"
+        },
+        {
+          "path": "assets/theme-art/korean-idol/hero.webp",
+          "position": "right top",
+          "size": "min(38vw, 620px) auto",
+          "mobile": "reduce",
+          "opacity": 0.96,
+          "mask": "none"
+        }
+      ]
     }
   ]
 }

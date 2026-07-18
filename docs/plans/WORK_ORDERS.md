@@ -71,7 +71,7 @@ Goal: one command generates the contract §12 QA board from actual production
 files, plus an in-context payload-harness render.
 
 Files: `scripts/theme-cli.mjs`, may add `scripts/qa-board.mjs`; reuse the
-headless-Edge + local-loopback pattern from `scripts/convert-kawaii-assets.mjs`
+headless-Edge + local-loopback pattern from `scripts/convert-theme-assets.mjs`
 and `scripts/verify-cycle.mjs`. No new dependencies.
 
 Output: `themes/<id>/qa/qa-board.png` + `status.json` (or

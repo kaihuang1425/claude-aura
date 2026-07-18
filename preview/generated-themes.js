@@ -3168,12 +3168,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#7757D9",
       "text": "#292244"
     },
-    "artwork": {
-      "path": "assets/theme-art/korean-idol.svg",
-      "position": "right center",
-      "size": "min(46vw, 700px) auto",
-      "mobile": "reduce"
-    },
+    "artwork": null,
     "radius": 16,
     "blur": 26,
     "typography": {
@@ -3582,7 +3577,7 @@ window.CLAUDE_AURA_THEMES = {
       },
       "wallpaper": {
         "gradient": "linear-gradient(115deg, transparent 0 56%, rgb(111 224 235 / .1) 56% 57%, transparent 57%), radial-gradient(circle at 78% 10%, rgb(139 105 232 / .3), transparent 34%), radial-gradient(circle at 14% 84%, rgb(81 204 218 / .16), transparent 38%), linear-gradient(145deg, #120e29 0%, #21183e 52%, #142a36 100%)",
-        "surfaceAlpha": 0.55,
+        "surfaceAlpha": 0.42,
         "sidebarAlpha": 0.84,
         "imageOpacity": 0.14,
         "artOpacity": 0.4,

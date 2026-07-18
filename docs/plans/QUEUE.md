@@ -23,7 +23,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [ ] WO-11 — Asset production: anime-twilight (ASSET_CONTRACT)
 - [ ] WO-12 — Asset production: study-library (ASSET_CONTRACT)
 - [ ] WO-13 — Asset polish: japanese-idol parity pass (ASSET_CONTRACT)
-- [ ] WO-14 — Asset production: korean-idol (ASSET_CONTRACT)
+- [x] WO-14 — Asset production: korean-idol (real kit art wired; QA board pending WO-04; board-parity polish at Checkpoint C)
 - [ ] **HUMAN CHECKPOINT C** — per-theme parity contact sheets vs boards;
       approvals freeze goldens (REFERENCE_LOCK.md)
 - [ ] WO-15 — THEMING.md rewrite as the 30-minute tutorial; prove gate G6 by

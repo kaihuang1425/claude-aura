@@ -15,6 +15,26 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-18 — WO-14 — korean-idol real artwork (out of order per user directive)
+
+- User directive: replace SVG stand-in characters; ONLY kawaii (japanese-idol)
+  and the K-pop idol kit have assets ready — other themes keep their stand-ins
+  until their kits arrive. The kit at themes/korean-prestige/ is the
+  KOREAN-IDOL kit (its approved concept is the lavender K-pop board); mapping
+  recorded in scripts/convert-theme-assets.mjs.
+- What changed: generalized converter (convert-kawaii-assets.mjs →
+  convert-theme-assets.mjs, per-theme jobs/copies); derived
+  assets/theme-art/korean-idol/{background,constellation,hero}.webp (6 KB
+  lossy re-encode of the deliberately low-detail atmosphere master / 17 KB /
+  232 KB untouched kit hero); korean-idol switched to three artworkLayers;
+  stand-in korean-idol.svg deleted; ki dark surfaceAlpha 0.55 → 0.42 so the
+  pale portrait survives the dark veil.
+- Verified: switch mechanism probe (single backdrop, correct tokens after
+  ji→ki switch); 17/17 verify-cycle gates; renders inspected light+dark.
+- Follow-ups: user real-app symptom of kawaii art under Korean Idol is a
+  stale install or a user-set Background image (persists across themes by
+  design; Clear image removes it).
+
 ## 2026-07-17 — WO-02 — Reveal artwork (D2)
 
 - What changed: per-theme surface/sidebar alphas applied; the surfaceAlpha

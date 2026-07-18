@@ -52,7 +52,6 @@ are listed under Visual evidence below.
 - `assets/theme-art/anime-twilight.svg`
 - `assets/theme-art/cartoon-studio.svg`
 - `assets/theme-art/japanese-film-editorial.svg`
-- `assets/theme-art/korean-idol.svg`
 - `assets/theme-art/korean-prestige.svg`
 - `assets/theme-art/study-library.svg`
 
@@ -61,8 +60,11 @@ are listed under Visual evidence below.
 Derived, isolated decorative assets for the japanese-idol (kawaii idol) theme —
 the runtime layered artwork (WebP) and the preview showcase (SVG motifs). The
 originals live in the gitignored source kit `themes/japanese-idol/`; the WebP
-copies are regenerated with `node scripts/convert-kawaii-assets.mjs`.
+copies are regenerated with `node scripts/convert-theme-assets.mjs`.
 
+- `assets/theme-art/korean-idol/background.webp`
+- `assets/theme-art/korean-idol/constellation.webp`
+- `assets/theme-art/korean-idol/hero.webp`
 - `assets/theme-art/kawaii-idol/logo-horizontal.svg`
 - `assets/theme-art/kawaii-idol/mark.svg`
 - `assets/theme-art/kawaii-idol/sparkle-cluster.svg`
@@ -100,7 +102,7 @@ copies are regenerated with `node scripts/convert-kawaii-assets.mjs`.
 
 - `scripts/build-preview.mjs`
 - `scripts/build-release.mjs`
-- `scripts/convert-kawaii-assets.mjs`
+- `scripts/convert-theme-assets.mjs`
 - `scripts/injector.mjs`
 - `scripts/preview-server.mjs`
 - `scripts/state-cli.mjs`
