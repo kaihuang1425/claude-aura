@@ -533,6 +533,77 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
   assert.match(verifier, /waitForStableFile/);
 });
 
+test("theme-cli scaffolds a complete starter kit and validates it", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
+  const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
+  const themeId = "cedar-mist";
+  try {
+    const snippet = JSON.parse(run(process.execPath, [cliPath, "scaffold", themeId], { cwd: temporary }));
+    assert.equal(snippet.id, themeId);
+    assert.equal(snippet.labels.en, "Cedar Mist");
+    assert.equal(snippet.labels["zh-CN"], `自定义主题（${themeId}）`);
+    assert.equal(snippet.labels["zh-TW"], `自訂主題（${themeId}）`);
+    assert.equal(snippet.artwork, null);
+    assert.equal(snippet.swatches.length >= 3, true);
+
+    const themePath = path.join(temporary, "themes", `${themeId}.json`);
+    const checklistPath = path.join(temporary, "themes", themeId, "CHECKLIST.md");
+    const themeBytes = await fs.readFile(themePath, "utf8");
+    const checklistBytes = await fs.readFile(checklistPath, "utf8");
+    const theme = JSON.parse(themeBytes);
+    assert.equal(theme.name, themeId);
+    assert.equal(theme.variant, themeId);
+    assert.match(theme.$comment, /Starter theme copied from Default/);
+    for (const section of ["typography", "shape", "effects", "light", "dark"]) {
+      assert.equal(typeof theme[section].$comment, "string", `${section} lacks scaffold guidance`);
+    }
+    assert.equal(validateTheme(theme, themePath).name, themeId);
+
+    const slotSpecs = [
+      ["background.png", "≥1600 px wide"],
+      ["hero.png", "≥1000 px"],
+      ["corner-top-right.png", "safe to clip at the viewport edge"],
+      ["corner-bottom.png", "safe to clip at the viewport edge"],
+      ["card-1.png", "bottom-right 40%"],
+      ["card-2.png", "bottom-right 40%"],
+      ["card-3.png", "bottom-right 40%"],
+      ["brand-mark.png", "restyles the starburst identity"],
+    ];
+    for (const [slot, cue] of slotSpecs) {
+      assert(checklistBytes.includes(`\`${slot}\``), `Checklist is missing ${slot}`);
+      assert(checklistBytes.includes(cue), `Checklist is missing the ${slot} specification`);
+    }
+    assert.match(checklistBytes, /tokens-only theme with no artwork is valid/);
+
+    const validation = JSON.parse(run(process.execPath, [cliPath, "validate", "--theme", themeId], { cwd: temporary }));
+    assert.equal(validation.pass, true);
+    assert.equal(validation.theme, themeId);
+    assert.throws(() => run(process.execPath, [cliPath, "validate", "--theme", "not-installed"], { cwd: temporary }),
+      /Theme not found: not-installed/);
+
+    const edgeId = "a--b";
+    const edgeSnippet = JSON.parse(run(process.execPath, [cliPath, "scaffold", edgeId], { cwd: temporary }));
+    assert.equal(edgeSnippet.labels.en, "A B");
+    assert.equal(JSON.parse(await fs.readFile(path.join(temporary, "themes", `${edgeId}.json`), "utf8")).name, edgeId);
+    assert.equal(JSON.parse(run(process.execPath, [cliPath, "validate", "--theme", edgeId], { cwd: temporary })).theme, edgeId);
+
+    assert.throws(() => run(process.execPath, [cliPath, "scaffold", themeId], { cwd: temporary }), /already exists/);
+    assert.equal(await fs.readFile(themePath, "utf8"), themeBytes, "Repeated scaffold changed the theme template");
+    assert.equal(await fs.readFile(checklistPath, "utf8"), checklistBytes, "Repeated scaffold changed the slot checklist");
+
+    const beforeInvalid = (await fs.readdir(path.join(temporary, "themes"))).sort();
+    for (const invalidId of ["a", "Uppercase", "under_score", "../escape", "a".repeat(41)]) {
+      assert.throws(() => run(process.execPath, [cliPath, "scaffold", invalidId], { cwd: temporary }),
+        /Theme id must match/);
+      assert.deepEqual((await fs.readdir(path.join(temporary, "themes"))).sort(), beforeInvalid,
+        `Invalid id created output: ${invalidId}`);
+    }
+    assert.throws(() => run(process.execPath, [cliPath, "scaffold", "default"], { cwd: temporary }), /already exists/);
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("config writes are atomic, aliases migrate, and theme choice persists", async () => {
   const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
   try {

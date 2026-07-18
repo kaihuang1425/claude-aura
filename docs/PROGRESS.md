@@ -15,6 +15,23 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-19 — WO-03 — theme-cli scaffold
+
+- What changed: added `theme-cli scaffold <id>` with exact ID validation,
+  registered-ID/alias and filesystem collision protection, a valid commented
+  Default-token template, an eight-slot source-kit checklist, and a paste-ready
+  localized registry entry on stdout. Fresh unregistered scaffolds now validate
+  through the documented `validate --theme <id>` flow instead of silently
+  falling back to Default. Scaffold writes are exclusive and failed writes do
+  not overwrite an existing theme.
+- Evidence: the new temp-directory regression scaffolds ordinary and regex-edge
+  IDs, validates the generated theme through both `validateTheme` and the CLI,
+  checks every slot/spec and en/zh-CN/zh-TW metadata, proves reruns are
+  non-destructive, rejects invalid/reserved IDs, and cleans up; `npm run check`
+  17/17.
+- Follow-ups discovered: asset conversion/QA remains WO-04; Studio folder
+  installation remains WO-07.
+
 ## 2026-07-18 — WO-05 — Aura Studio window and tray controls
 
 - What changed: added a normal resizable Studio WebView2 window on the local
