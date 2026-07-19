@@ -15,6 +15,27 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-20 — WO-11 — Anime Twilight artwork
+
+- What changed: replaced the procedural Anime Twilight SVG with one approved,
+  checksum-frozen painterly cityscape WebP; added exact `center / cover / keep /
+  0.62 / none` layered-art metadata, conversion and QA-source support, preview
+  metadata, regression assertions, and approved light/dark golden locks.
+- Evidence: `themes/anime-twilight/qa/qa-board.png` and
+  `dist/verify/anime-twilight-{light,dark}-1440x900.png`; the 60,964-byte runtime
+  WebP decoded at 1600 x 900. `npm run check` passed 19/19 and `npm run
+  verify:cycle` passed 33/33 with the final light/dark images inspected and all
+  sixteen golden deltas at zero.
+- Parity scores (visual orders only): anime-twilight:
+  atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
+  green/green/green/green/green/green/green/green.
+- Follow-ups discovered: the user approved the artwork and deterministic
+  light/dark compositions with the unavailable live evidence disclosed. Actual
+  Aura light/dark and 1920 x 1080 dark captures remain deferred to HUMAN
+  CHECKPOINT C/WO-16 under WO-09; the separate two-attempt supplemental capture
+  failure is recorded under WO-11 in `docs/plans/BLOCKED.md`, and no fixture is
+  represented as live evidence.
+
 ## 2026-07-20 — WO-10 — Cartoon Studio artwork
 
 - What changed: replaced the procedural Cartoon Studio SVG with approved,

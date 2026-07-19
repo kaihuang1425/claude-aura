@@ -67,6 +67,9 @@ const REQUIRED_PANELS = [
 // kit is present they make conversion fidelity visible beside the exact
 // delivered file.
 const REFERENCE_MAP = {
+  "anime-twilight": {
+    "background.webp": { path: "themes/anime-twilight/provisional/selected/background.png" },
+  },
   "cartoon-studio": {
     "background.webp": { path: "themes/cartoon-studio/provisional/selected/background.png" },
     "hero.webp": { path: "themes/cartoon-studio/provisional/selected/hero.png" },

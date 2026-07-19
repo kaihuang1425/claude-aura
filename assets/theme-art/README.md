@@ -6,7 +6,7 @@ runtime artwork and uses the Studio's neutral token miniature.
 
 ## Provenance
 
-Runtime SVGs and the isolated Japanese/Korean Idol layers are project artwork
+Runtime artwork and the isolated Japanese/Korean Idol layers are project artwork
 created or derived from source kits supplied for Claude Aura. They remain
 separate from the real Claude interface and fail safely when unavailable.
 
@@ -25,7 +25,7 @@ font, image, or other resource is fetched from the network.
 - `japanese-film-editorial.svg` — warm paper, ink, film-frame details, and an editorial portrait.
 - `korean-prestige.svg` — midnight architectural glass and blue-silver structure.
 - `cartoon-studio/` — generated cream paper background and an original transparent non-human productivity mascot, plus the Studio selector preview.
-- `anime-twilight.svg` — a twilight science-fiction environment with constellation lines.
+- `anime-twilight/` — generated painterly twilight cityscape background plus the Studio selector preview.
 - `study-library.svg` — books, index cards, a fountain pen, grid paper, and research diagrams.
 - `kawaii-idol/` — layered Japanese Idol background, hero, sakura, marks, and motifs.
 - `korean-idol/` — layered Korean Idol atmosphere, constellation, and hero.

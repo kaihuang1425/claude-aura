@@ -49,7 +49,6 @@ are listed under Visual evidence below.
 - `assets/renderer-inject.js`
 - `assets/theme-variants.css`
 - `assets/theme-art/README.md`
-- `assets/theme-art/anime-twilight.svg`
 - `assets/theme-art/japanese-film-editorial.svg`
 - `assets/theme-art/korean-prestige.svg`
 - `assets/theme-art/study-library.svg`
@@ -62,6 +61,14 @@ kit lives under `themes/cartoon-studio/`; these WebPs are rebuilt with
 
 - `assets/theme-art/cartoon-studio/background.webp`
 - `assets/theme-art/cartoon-studio/hero.webp`
+
+### Anime Twilight runtime assets
+
+Derived inert artwork for the Anime Twilight theme. The ignored PNG source kit
+lives under `themes/anime-twilight/`; this WebP is rebuilt with
+`node scripts/convert-theme-assets.mjs anime-twilight`.
+
+- `assets/theme-art/anime-twilight/background.webp`
 
 ### Aura Studio selector thumbnails
 

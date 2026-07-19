@@ -20,7 +20,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [ ] WO-08 — Asset production: japanese-film-editorial (ASSET_CONTRACT)
 - [ ] WO-09 — Asset production: korean-prestige (ASSET_CONTRACT)
 - [x] WO-10 — Asset production: cartoon-studio (ASSET_CONTRACT)
-- [ ] WO-11 — Asset production: anime-twilight (ASSET_CONTRACT)
+- [x] WO-11 — Asset production: anime-twilight (ASSET_CONTRACT)
 - [ ] WO-12 — Asset production: study-library (ASSET_CONTRACT)
 - [ ] WO-13 — Asset polish: japanese-idol parity pass (ASSET_CONTRACT)
 - [x] WO-14 — Asset production: korean-idol (real kit art wired; QA board pending WO-04; board-parity polish at Checkpoint C)

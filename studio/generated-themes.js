@@ -1844,13 +1844,17 @@ window.CLAUDE_AURA_THEMES = {
       "text": "#F1F1FF"
     },
     "studioPreview": "assets/theme-art/anime-twilight/card-preview.webp",
-    "artwork": {
-      "path": "assets/theme-art/anime-twilight.svg",
-      "position": "right bottom",
-      "size": "cover",
-      "mobile": "reduce"
-    },
-    "artworkLayers": null,
+    "artwork": null,
+    "artworkLayers": [
+      {
+        "path": "assets/theme-art/anime-twilight/background.webp",
+        "position": "center",
+        "size": "cover",
+        "mobile": "keep",
+        "opacity": 0.62,
+        "mask": "none"
+      }
+    ],
     "radius": 16,
     "blur": 22,
     "typography": {

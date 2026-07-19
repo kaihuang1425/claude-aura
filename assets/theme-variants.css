@@ -7,9 +7,6 @@ html.claude-aura:is([data-claude-aura-theme="korean-prestige"], [data-claude-aur
 html.claude-aura:is([data-claude-aura-theme="japanese-film-editorial"], [data-claude-aura-theme="anime-twilight"], [data-claude-aura-theme="japanese-idol"]) { --aura-input-border-alpha: 0.16; }
 html.claude-aura[data-claude-aura-theme="cartoon-studio"] { --aura-input-border-alpha: 0.2; }
 
-/* Art-led themes keep the main canvas crisp: a light veil (surfaceAlpha in the
-   theme JSON) without backdrop blur, so layered artwork stays legible. Cards
-   and the composer keep their own glass surfaces. */
 html.claude-aura:is([data-claude-aura-theme="japanese-idol"], [data-claude-aura-theme="korean-idol"], [data-claude-aura-theme="anime-twilight"], [data-claude-aura-theme="korean-prestige"]) :is(.dframe-content, .dframe-main) {
   backdrop-filter: none !important;
 }
@@ -141,6 +138,10 @@ html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is([role="separator"]
 }
 
 /* Anime Twilight: cinematic glass, cyan edge light, restrained data lines. */
+html.claude-aura[data-claude-aura-theme="anime-twilight"] #claude-aura-backdrop .claude-aura-theme-art-layer {
+  animation: none;
+}
+
 html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-content,
 html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-main {
   background-image:

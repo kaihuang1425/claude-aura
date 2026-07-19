@@ -56,3 +56,21 @@ move to the next queue item. Format:
   whole-window light/dark captures plus the required viewport/scaling metadata.
   WO-09 also still needs explicit mini-checkpoint approval and replacement of
   both locked Korean Prestige deterministic goldens.
+
+## 2026-07-20 — WO-11 — 1920 × 1080 supplemental preview capture fails to launch
+- Attempt 1: started the local preview server and invoked headless Edge with a
+  1920 × 1080 window, a five-second virtual-time budget, and the selected Anime
+  Twilight dark capture URL → Edge returned a nonzero exit without creating the
+  screenshot.
+- Attempt 2: retried through `Start-Process` with explicit absolute screenshot,
+  profile, stdout, and stderr paths → Edge exited 13 and reported “Multiple
+  targets are not supported in headless mode”; no image was written.
+- Suspected cause: `Start-Process` did not preserve quoting around the
+  space-bearing `--user-data-dir` and `--screenshot` values, so Edge parsed
+  fragments as extra targets. The fixed 1440 × 900 payload renderer and QA-board
+  browser launches both work and are unaffected.
+- What would unblock it (tool, asset, or user decision): a later queued capture
+  sweep may use the existing Node spawn-based screenshot launcher, which passes
+  each argument without PowerShell re-tokenization. Per the two-attempt rule,
+  WO-11 makes no third capture attempt here. The actual Aura 1920 × 1080 dark
+  stress capture remains separately blocked by the WO-09 whole-window issue.

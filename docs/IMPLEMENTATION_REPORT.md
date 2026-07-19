@@ -63,6 +63,23 @@ authorized WO-10 completion with its real-Aura light/dark and 1280 x 720 stress
 evidence deferred to HUMAN CHECKPOINT C/WO-16. This exception does not relabel
 fixture or QA images as live evidence.
 
+## Anime Twilight approved artwork
+
+WO-11 replaces the procedural Anime Twilight stand-in with one approved inert
+1600 x 900 WebP background: a painterly indigo/violet cityscape with pale-cyan
+atmosphere and restrained warm window light. The generated source kit, exact
+prompt, checksum freeze, provenance, and 2160 x 3060 QA board live under the
+gitignored `themes/anime-twilight/`; the shippable derivative lives at
+`assets/theme-art/anime-twilight/background.webp`. Its exact light/dark payload
+renders are locked in `docs/golden/REFERENCE_LOCK.md` after the user-approved
+WO-11 mini-checkpoint.
+
+The actual Aura light/dark and 1920 x 1080 dark stress captures remain blocked
+by the WO-09 whole-window limitation and are deferred to HUMAN CHECKPOINT C and
+WO-16. A separate two-attempt failure for the supplemental deterministic stress
+capture is recorded under WO-11 in `docs/plans/BLOCKED.md`; no fixture image is
+represented as live evidence.
+
 ## Scope
 
 Claude Aura 0.3 preserves the existing WebView2 companion, renderer injection,
@@ -80,7 +97,7 @@ real Claude interface with screenshots.
 | 2 | `japanese-film-editorial` | Japanese Film Editorial | `assets/theme-art/japanese-film-editorial.svg` |
 | 3 | `korean-prestige` | Korean Prestige | `assets/theme-art/korean-prestige.svg` |
 | 4 | `cartoon-studio` | Cartoon Studio | Two layered `assets/theme-art/cartoon-studio/*.webp` assets (background and original mascot) |
-| 5 | `anime-twilight` | Anime Twilight | `assets/theme-art/anime-twilight.svg` |
+| 5 | `anime-twilight` | Anime Twilight | One layered `assets/theme-art/anime-twilight/background.webp` cityscape |
 | 6 | `study-library` | Study Library | `assets/theme-art/study-library.svg` |
 | 7 | `japanese-idol` | Japanese Idol | Four layered `assets/theme-art/kawaii-idol/*.webp` assets (background, hero, two sakura clusters) |
 | 8 | `korean-idol` | Korean Idol | Three layered `assets/theme-art/korean-idol/*.webp` assets (background, constellation, hero) |
@@ -221,10 +238,12 @@ the unreadable source as a uniquely named `.corrupt-…json` diagnostic backup.
 
 ## Artwork and licensing
 
-Four themes use self-contained project SVG renderer art. Cartoon Studio uses
+Three themes use self-contained project SVG renderer art. Cartoon Studio uses
 two project-generated, user-approved WebP layers with frozen source masters
-under `themes/cartoon-studio/`. Japanese Idol uses derived, isolated WebP/SVG
-copies from the supplied kit under
+under `themes/cartoon-studio/`, and Anime Twilight uses one project-generated,
+user-approved WebP background with its frozen source master under
+`themes/anime-twilight/`. Japanese Idol uses derived, isolated WebP/SVG copies
+from the supplied kit under
 `themes/japanese-idol/`, and Korean Idol uses three derived WebP layers from the
 kit currently supplied under `themes/korean-prestige/`; both source directories
 remain gitignored. Runtime artwork is separate from the functional interface,
@@ -311,7 +330,7 @@ payload/root-attribute behavior, isolated artwork policy, script parsing,
 Windows picker metadata, Studio bridge/framing validation and cache regressions,
 preview coverage, and release exclusions.
 
-Results recorded through 2026-07-18:
+Results recorded through 2026-07-20:
 
 | Check | Result |
 | --- | --- |
@@ -329,6 +348,7 @@ Results recorded through 2026-07-18:
 | Browser interaction, console, responsive sizes, and screenshots | Passed on 2026-07-17 in the offline QA harness (Chromium/WebView2 engine). All eight themes switch through one stable `data-claude-aura-theme` root attribute with distinct accent, display font, radius, and border-width values; no console output, and only same-origin `/preview/` and local `data:`/SVG requests (zero remote or mixed-content requests) across all eight; decorative artwork stays `pointer-events:none` and never wins the hit-test at the composer center; persistence survives reload and query-parameter overrides do not overwrite saved state; visible focus ring, labelled modal dialog with focus trap, keyboard tab/arrow/Escape, and disabled styling all confirmed; no horizontal overflow. Fourteen screenshots recorded under `docs/theme-screenshots/` (see Visual evidence) |
 | Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Actual pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. Evidence is under `dist/verify/checkpoint-b-*-framing*.png` and the explicitly named files in `docs/PROGRESS.md` |
 | WO-10 Cartoon Studio asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, two-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. The user-authorized live-capture deferral remains explicit for Checkpoint C/WO-16. |
+| WO-11 Anime Twilight asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, one-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. Actual Aura light/dark and 1920 x 1080 dark evidence remains explicitly deferred to Checkpoint C/WO-16 under WO-09. |
 
 Before creating an archive, run the checks and then:
 
@@ -360,7 +380,7 @@ Eight-theme comparison — Home, light, 1440 × 900:
 | `02-japanese-film-editorial-home-light-1440x900.png` | Japanese Film Editorial | Serif display, vermilion accents, charcoal sidebar, editorial rules, ruled paper texture |
 | `03-korean-prestige-home-light-1440x900.png` | Korean Prestige | Midnight navy, silver borders, architectural glass panels, geometric icon containers |
 | `04-cartoon-studio-home-light-1440x900.png` | Cartoon Studio | Inked 2 px outlines, rounded pill controls, teal/coral on cream, dashed composer |
-| `05-anime-twilight-home-light-1440x900.png` | Anime Twilight | Twilight-blue glass, cyan edge light, constellation dot texture |
+| `05-anime-twilight-home-light-1440x900.png` | Anime Twilight | Historical pre-WO-11 twilight-glass frame; the approved painterly cityscape is locked under `docs/golden/anime-twilight/` |
 | `06-study-library-home-light-1440x900.png` | Study Library | Ruled-paper background, forest-green/oxblood, index-tab sidebar, no character artwork |
 | `07-japanese-idol-home-light-1440x900.png` | Japanese Idol | Warm cream/blush, rounded pill controls, ribbon dividers, pearlescent cards |
 | `08-korean-idol-home-light-1440x900.png` | Korean Idol | Periwinkle/lavender, holographic grid, music-player controls, sharper type |

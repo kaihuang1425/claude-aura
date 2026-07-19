@@ -24,6 +24,15 @@ const EDGE_PATHS = [
 // KOREAN-IDOL asset packages (its approved concept is the lavender K-pop
 // board); korean-prestige's own art is still awaited.
 const THEMES = {
+  "anime-twilight": {
+    sourceDir: path.join(PROJECT_ROOT, "themes", "anime-twilight"),
+    outputDir: path.join(PROJECT_ROOT, "assets", "theme-art", "anime-twilight"),
+    jobs: [
+      { src: "provisional/selected/background.png", out: "background.webp", width: 1600, cropLeft: 0, quality: 0.78 },
+    ],
+    copies: [],
+    required: true,
+  },
   "cartoon-studio": {
     sourceDir: path.join(PROJECT_ROOT, "themes", "cartoon-studio"),
     outputDir: path.join(PROJECT_ROOT, "assets", "theme-art", "cartoon-studio"),

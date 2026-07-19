@@ -3,6 +3,25 @@
 This ledger records user-approved visual baselines. Hashes are SHA-256 over the
 unchanged PNG bytes copied from `dist/verify/`; dimensions are native pixels.
 
+## WO-11 Anime Twilight mini-checkpoint — approved 2026-07-20
+
+These two frames supersede only the Anime Twilight rows from HUMAN CHECKPOINT
+A. The earlier hashes remain below as historical records; the paths now contain
+the explicitly approved WO-11 replacements. The light render is the canonical
+approved concept for asset specifications, with the dark render locked as its
+mode companion. The selected PNG source defines the exact cityscape appearance,
+the recipe defines `center / cover / keep / 0.62 / none`, real Claude remains
+authoritative for interface behavior and structure, and the supplied aurora
+preview is secondary visual-language evidence only.
+
+Approved visible decorative strings: none. Approved runtime bounding box:
+background `center / cover`, full 1440 x 900 payload backdrop.
+
+| Golden | SHA-256 | Dimensions | Approved |
+| --- | --- | --- | --- |
+| `docs/golden/anime-twilight/anime-twilight-dark-1440x900.png` | `14dad8eb0785710b4792ea745138775345e8380344ae05733d1c60d47ec7ea64` | 1440 x 900 | 2026-07-20 |
+| `docs/golden/anime-twilight/anime-twilight-light-1440x900.png` | `311171469457be7fcdbdfb078795004b1a8463f39d3011d668e55b0558bd4580` | 1440 x 900 | 2026-07-20 |
+
 ## WO-10 Cartoon Studio mini-checkpoint — approved 2026-07-19
 
 These two frames supersede only the Cartoon Studio rows from HUMAN CHECKPOINT

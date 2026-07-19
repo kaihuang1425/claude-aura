@@ -135,6 +135,16 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mask: "none",
     },
   ]);
+  assert.deepEqual(themes.find((theme) => theme.name === "anime-twilight")?.artworkLayers, [
+    {
+      path: "assets/theme-art/anime-twilight/background.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.62,
+      mask: "none",
+    },
+  ]);
 });
 
 test("every theme provides complete semantic roles and a distinct component profile", async () => {
@@ -185,6 +195,9 @@ test("every theme provides complete semantic roles and a distinct component prof
     const selector = `html.claude-aura[data-claude-aura-theme="${id}"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {`;
     assert(variants.includes(selector), `${id} lacks a complete interactive-role icon treatment`);
   }
+  const animeArtworkSelector = 'html.claude-aura[data-claude-aura-theme="anime-twilight"] #claude-aura-backdrop .claude-aura-theme-art-layer';
+  assert(variants.includes(`${animeArtworkSelector} {\n  animation: none;\n}`),
+    "Anime Twilight must preserve its exact recipe layer opacity");
 });
 
 test("all theme text, focus colours, and accents clear contrast guardrails", async () => {
@@ -284,8 +297,11 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
     configPath: path.join(PROJECT_ROOT, "config.example.json"),
     config: { ...DEFAULT_CONFIG, theme: "anime-twilight" },
   });
-  assert.match(themed.settings.artDataUrl, /^data:image\/svg\+xml;base64,/);
-  assert.equal(themed.artwork.path.endsWith("anime-twilight.svg"), true);
+  assert.equal(themed.settings.artDataUrl, null);
+  assert.equal(themed.settings.artLayers?.length, 1);
+  assert.match(themed.settings.artLayers[0].dataUrl, /^data:image\/webp;base64,/);
+  assert.equal(themed.artwork, null);
+  assert.equal(themed.artworkLayers[0].path.endsWith(path.join("anime-twilight", "background.webp")), true);
   assert.equal(themed.settings.artUnavailable, false);
 
   for (const locale of ["en", "zh-CN", "zh-TW"]) {
