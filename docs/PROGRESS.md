@@ -15,6 +15,24 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-19 — WO-07 — user theme installation
+
+- What changed: added standalone `theme.json` kits, merged user themes from
+  `%LOCALAPPDATA%\ClaudeAura\data\themes\<id>\` after built-ins, preserved
+  built-in/alias precedence with warnings, and wired Studio's host-owned folder
+  picker through helper validation, staged copy, registry refresh, immediate
+  apply, restart persistence, and one-folder uninstall fallback. Standalone
+  kits reject non-empty custom CSS, unsafe SVG artwork, malformed explicit
+  metadata, linked install roots, and path-redirected rollback targets; failed
+  post-copy imports restore the complete prior config atomically.
+- Evidence: `npm run check` 19/19, including a `constructor`-ID lifecycle,
+  invalid-kit validator messages, collision warnings, restart/uninstall, exact
+  PowerShell copy/delete, junction-root rejection, and full-config rollback.
+  `npm run verify:cycle` 33/33; all sixteen light/dark renders and the contact
+  sheet opened and inspected with zero golden diffs.
+- Follow-ups discovered: named-slot discovery/conversion and full asset-quality
+  validation remain part of the queued end-user tutorial/proof work in WO-15.
+
 ## 2026-07-19 — WO-06 — content-only main window
 
 - What changed: removed the main-window toolbar, WinForms theme gallery,

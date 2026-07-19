@@ -8,6 +8,7 @@ export const AURA_VERSION = "0.3.0";
 export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const THEMES_DIR = path.join(PROJECT_ROOT, "themes");
 export const THEME_REGISTRY_PATH = path.join(THEMES_DIR, "registry.json");
+export const THEME_KIT_FILENAME = "theme.json";
 export const SUPPORTED_LOCALES = Object.freeze(["en", "zh-CN", "zh-TW"]);
 export const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
@@ -98,9 +99,24 @@ const ARTWORK_TYPES = new Map([
 ]);
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 const MAX_ARTWORK_BYTES = 3 * 1024 * 1024;
+const MAX_USER_RASTER_ARTWORK_BYTES = 400_000;
+const MAX_USER_ARTWORK_TOTAL_BYTES = 1_400_000;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const THEME_ID_PATTERN = /^[a-z][a-z0-9-]{1,39}$/;
+const USER_ARTWORK_PATH_PATTERN = /^(?:background|hero|corner-top-right|corner-bottom|card-[1-3]|brand-mark)\.(?:png|webp|avif)$/;
 const AVIF_BRANDS = new Set(["avif", "avis"]);
 const ANIMATED_AVIF_BRANDS = new Set(["avis"]);
+
+function isPathWithin(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`));
+}
+
+function resolveUserThemesDirectory(value) {
+  if (value === undefined || value === null || value === false) return null;
+  if (typeof value !== "string" || !value.trim()) throw new Error("userThemesDir must be a non-empty path");
+  return path.resolve(value);
+}
 
 function hasIsoBrand(bytes, expectedBrands) {
   if (bytes.length < 16 || bytes.subarray(4, 8).toString("ascii") !== "ftyp") return false;
@@ -517,13 +533,14 @@ function validateLocalizedMap(value, label, maximum) {
   return result;
 }
 
-function validateRegistryEntry(entry, label) {
+function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
   if (!isPlainObject(entry)) throw new Error(`${label} must be an object`);
-  if (typeof entry.id !== "string" || !/^[a-z][a-z0-9-]{1,39}$/.test(entry.id)) {
+  if (typeof entry.id !== "string" || !THEME_ID_PATTERN.test(entry.id)) {
     throw new Error(`${label}.id must be lowercase kebab-case`);
   }
-  const file = entry.file ?? `${entry.id}.json`;
-  if (file !== `${entry.id}.json`) throw new Error(`${label}.file must be ${entry.id}.json`);
+  const file = source === "builtin" ? (entry.file ?? `${entry.id}.json`) : null;
+  if (source === "builtin" && file !== `${entry.id}.json`) throw new Error(`${label}.file must be ${entry.id}.json`);
+  if (source === "user" && entry.file !== undefined) throw new Error(`${label}.file is not allowed in a standalone kit`);
   const swatches = Array.isArray(entry.swatches) ? entry.swatches : [];
   if (swatches.length < 3 || swatches.length > 6 || swatches.some((value) => !HEX_COLOR.test(value))) {
     throw new Error(`${label}.swatches must contain 3 to 6 six-digit hex colours`);
@@ -534,18 +551,31 @@ function validateRegistryEntry(entry, label) {
   }
   let studioPreview = null;
   if (entry.studioPreview !== null && entry.studioPreview !== undefined) {
-    const expectedStudioPreview = `assets/theme-art/${entry.id}/card-preview.webp`;
+    const expectedStudioPreview = source === "builtin"
+      ? `assets/theme-art/${entry.id}/card-preview.webp`
+      : "card-preview.webp";
     if (entry.studioPreview !== expectedStudioPreview) {
       throw new Error(`${label}.studioPreview must be ${expectedStudioPreview}`);
     }
     studioPreview = entry.studioPreview;
   }
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
-  const validateArtworkLayer = (layer, layerLabel) => {
+  const validateArtworkLayer = (layer, layerLabel, { allowKeep = true } = {}) => {
     if (!isPlainObject(layer)) throw new Error(`${layerLabel} must be an object`);
     const artworkPath = String(layer.path ?? "");
-    if (!ARTWORK_PATH_PATTERN.test(artworkPath)) {
-      throw new Error(`${layerLabel}.path is not a supported project artwork path`);
+    const validArtworkPath = source === "builtin"
+      ? ARTWORK_PATH_PATTERN.test(artworkPath)
+      : USER_ARTWORK_PATH_PATTERN.test(artworkPath);
+    if (!validArtworkPath) {
+      const detail = source === "builtin" ? "project artwork path" : "theme-kit slot path";
+      throw new Error(`${layerLabel}.path is not a supported ${detail}`);
+    }
+    if (source === "user" && layer.mobile !== undefined
+        && !["hide", "reduce", ...(allowKeep ? ["keep"] : [])].includes(layer.mobile)) {
+      throw new Error(`${layerLabel}.mobile has an unsupported value`);
+    }
+    if (source === "user" && layer.mask !== undefined && !["none", "soft-right"].includes(layer.mask)) {
+      throw new Error(`${layerLabel}.mask has an unsupported value`);
     }
     return {
       path: artworkPath,
@@ -565,7 +595,10 @@ function validateRegistryEntry(entry, label) {
     artworkLayers = entry.artworkLayers.map((layer, index) => validateArtworkLayer(layer, `${label}.artworkLayers[${index}]`));
   } else if (entry.artwork !== null && entry.artwork !== undefined) {
     if (!isPlainObject(entry.artwork)) throw new Error(`${label}.artwork must be an object or null`);
-    const validated = validateArtworkLayer(entry.artwork, `${label}.artwork`);
+    if (source === "user" && (entry.artwork.opacity !== undefined || entry.artwork.mask !== undefined)) {
+      throw new Error(`${label}.artwork.opacity and mask are only supported in artworkLayers`);
+    }
+    const validated = validateArtworkLayer(entry.artwork, `${label}.artwork`, { allowKeep: false });
     artwork = { path: validated.path, position: validated.position, size: validated.size, mobile: validated.mobile === "keep" ? "reduce" : validated.mobile };
   }
   return {
@@ -581,11 +614,154 @@ function validateRegistryEntry(entry, label) {
   };
 }
 
-export async function readThemeRegistry() {
+async function validateUserArtworkFile(kitRoot, relativePath, label) {
+  const candidate = path.resolve(kitRoot, relativePath);
+  if (!isPathWithin(kitRoot, candidate)) throw new Error(`${label} must remain inside the theme kit`);
+  let stat;
+  try {
+    stat = await fs.lstat(candidate);
+  } catch (error) {
+    if (error.code === "ENOENT") throw new Error(`${label} is missing: ${relativePath}`);
+    throw error;
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${label} must be a regular file`);
+  const [realRoot, realCandidate] = await Promise.all([fs.realpath(kitRoot), fs.realpath(candidate)]);
+  if (!isPathWithin(realRoot, realCandidate)) throw new Error(`${label} must remain inside the theme kit`);
+  const extension = path.extname(relativePath).toLowerCase();
+  const expectedMime = ARTWORK_TYPES.get(extension);
+  if (!expectedMime) throw new Error(`${label} has an unsupported file type`);
+  const maximum = MAX_USER_RASTER_ARTWORK_BYTES;
+  if (stat.size <= 0 || stat.size >= maximum) {
+    throw new Error(`${label} must be smaller than ${Math.round(maximum / 1000)} KB`);
+  }
+  const bytes = await fs.readFile(candidate);
+  if (bytes.length <= 0 || bytes.length >= maximum) {
+    throw new Error(`${label} must be smaller than ${Math.round(maximum / 1000)} KB`);
+  }
+  const detectedMime = detectImageMime(bytes);
+  if (detectedMime !== expectedMime) throw new Error(`${label} extension does not match its content`);
+  return bytes.length;
+}
+
+async function validateUserThemeArtwork(kitRoot, entry, label) {
+  const artworkItems = entry.artworkLayers ?? (entry.artwork ? [entry.artwork] : []);
+  let total = 0;
+  for (let index = 0; index < artworkItems.length; index += 1) {
+    const itemLabel = entry.artworkLayers ? `${label}.artworkLayers[${index}].path` : `${label}.artwork.path`;
+    total += await validateUserArtworkFile(kitRoot, artworkItems[index].path, itemLabel);
+  }
+  if (total >= MAX_USER_ARTWORK_TOTAL_BYTES) {
+    throw new Error(`${label} embedded artwork must total less than 1.4 MB`);
+  }
+  if (entry.studioPreview) {
+    await validateUserArtworkFile(kitRoot, entry.studioPreview, `${label}.studioPreview`);
+  }
+}
+
+export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
+  if (typeof kitDirectory !== "string" || !kitDirectory.trim()) throw new Error("Theme kit folder is required");
+  const kitRoot = path.resolve(kitDirectory);
+  let rootStat;
+  try {
+    rootStat = await fs.lstat(kitRoot);
+  } catch (error) {
+    if (error.code === "ENOENT") throw new Error(`Theme kit folder does not exist: ${kitRoot}`);
+    throw error;
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Theme kit path must be a regular folder");
+  const kitPath = path.join(kitRoot, THEME_KIT_FILENAME);
+  let kitStat;
+  try {
+    kitStat = await fs.lstat(kitPath);
+  } catch (error) {
+    if (error.code === "ENOENT") throw new Error(`Theme kit is missing ${THEME_KIT_FILENAME}`);
+    throw error;
+  }
+  if (!kitStat.isFile() || kitStat.isSymbolicLink()) throw new Error(`${THEME_KIT_FILENAME} must be a regular file`);
+  const [realKitRoot, realKitPath] = await Promise.all([fs.realpath(kitRoot), fs.realpath(kitPath)]);
+  if (!isPathWithin(realKitRoot, realKitPath)) throw new Error(`${THEME_KIT_FILENAME} must remain inside the theme kit`);
+  const raw = await readJson(kitPath);
+  if (!isPlainObject(raw) || raw.schemaVersion !== 1) {
+    throw new Error(`${THEME_KIT_FILENAME} must use schemaVersion 1`);
+  }
+  const entry = validateRegistryEntry(raw, THEME_KIT_FILENAME, { source: "user" });
+  if (expectedId !== null && entry.id !== expectedId) {
+    throw new Error(`${THEME_KIT_FILENAME} id "${entry.id}" must match its installed folder "${expectedId}"`);
+  }
+  if (!isPlainObject(raw.theme)) throw new Error(`${THEME_KIT_FILENAME}.theme must be an object`);
+  if (raw.theme.variant !== entry.id) {
+    throw new Error(`${THEME_KIT_FILENAME}.theme.variant must match id "${entry.id}"`);
+  }
+  const theme = validateTheme(raw.theme, `${kitPath}.theme`);
+  if (theme.name !== entry.id) throw new Error(`${THEME_KIT_FILENAME}.theme.name must match id "${entry.id}"`);
+  if (theme.customCss.trim()) throw new Error(`${THEME_KIT_FILENAME}.theme.customCss must be empty in a standalone kit`);
+  await validateUserThemeArtwork(kitRoot, entry, THEME_KIT_FILENAME);
+  const metadata = {
+    id: entry.id,
+    labels: { ...entry.labels },
+    descriptions: { ...entry.descriptions },
+    swatches: [...entry.swatches],
+    preview: { ...entry.preview },
+    studioPreview: entry.studioPreview,
+    artwork: entry.artwork ? { ...entry.artwork } : null,
+    artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
+  };
+  return {
+    schemaVersion: 1,
+    id: entry.id,
+    source: "user",
+    sourceDirectory: kitRoot,
+    kitPath,
+    metadata,
+    entry: { ...entry, source: "user", sourceDirectory: kitRoot, kitPath, kitTheme: theme },
+    theme,
+  };
+}
+
+async function discoverUserThemeEntries(userThemesDir, builtInIds, aliases, warn) {
+  if (!userThemesDir) return [];
+  let directoryEntries;
+  try {
+    directoryEntries = await fs.readdir(userThemesDir, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    warn(`User themes could not be read from ${userThemesDir}: ${error.message}`);
+    return [];
+  }
+  const discovered = [];
+  for (const directoryEntry of directoryEntries.sort((left, right) => left.name.localeCompare(right.name, "en"))) {
+    if (!directoryEntry.isDirectory() || directoryEntry.isSymbolicLink()) continue;
+    const folderId = directoryEntry.name;
+    if (!THEME_ID_PATTERN.test(folderId)) {
+      warn(`User theme folder "${folderId}" was ignored because its name is not a lowercase kebab-case id.`);
+      continue;
+    }
+    if (builtInIds.has(folderId) || Object.hasOwn(aliases, folderId)) {
+      warn(`User theme "${folderId}" was ignored because the built-in theme or alias takes precedence.`);
+      continue;
+    }
+    try {
+      const kit = await readThemeKit(path.join(userThemesDir, folderId), { expectedId: folderId });
+      discovered.push(kit.entry);
+    } catch (error) {
+      warn(`User theme "${folderId}" was ignored: ${error.message}`);
+    }
+  }
+  return discovered;
+}
+
+export async function readThemeRegistry({ userThemesDir = null, onWarning = null } = {}) {
   const raw = await readJson(THEME_REGISTRY_PATH);
   if (!isPlainObject(raw) || raw.schemaVersion !== 1) throw new Error("themes/registry.json must use schemaVersion 1");
   if (!Array.isArray(raw.themes) || raw.themes.length === 0) throw new Error("themes/registry.json must list themes");
-  const themes = raw.themes.map((entry, index) => validateRegistryEntry(entry, `registry.themes[${index}]`));
+  const themes = raw.themes.map((entry, index) => ({
+    ...validateRegistryEntry(entry, `registry.themes[${index}]`),
+    source: "builtin",
+    sourceDirectory: THEMES_DIR,
+    themePath: path.join(THEMES_DIR, entry.file ?? `${entry.id}.json`),
+    artworkRoot: PROJECT_ROOT,
+    artworkAllowedRoot: path.join(PROJECT_ROOT, "assets", "theme-art"),
+  }));
   const ids = themes.map((entry) => entry.id);
   if (new Set(ids).size !== ids.length) throw new Error("Theme registry IDs must be unique");
   if (!ids.includes(raw.defaultTheme)) throw new Error("Theme registry defaultTheme must reference a listed theme");
@@ -594,18 +770,34 @@ export async function readThemeRegistry() {
     throw new Error("Theme registry legacyAliases must be an object");
   }
   for (const [from, to] of Object.entries(raw.legacyAliases ?? {})) {
-    if (!/^[a-z][a-z0-9-]{1,39}$/.test(from) || !ids.includes(to)) {
+    if (!THEME_ID_PATTERN.test(from) || !ids.includes(to)) {
       throw new Error(`Invalid legacy theme alias: ${from} -> ${to}`);
     }
     aliases[from] = to;
   }
-  return { schemaVersion: 1, defaultTheme: raw.defaultTheme, legacyAliases: aliases, themes };
+  const warnings = [];
+  const warn = (message) => {
+    warnings.push(message);
+    if (typeof onWarning === "function") onWarning(message);
+  };
+  const resolvedUserThemesDir = resolveUserThemesDirectory(userThemesDir);
+  const userThemes = await discoverUserThemeEntries(resolvedUserThemesDir, new Set(ids), aliases, warn);
+  return {
+    schemaVersion: 1,
+    defaultTheme: raw.defaultTheme,
+    legacyAliases: aliases,
+    themes: [...themes, ...userThemes],
+    warnings,
+    userThemesDir: resolvedUserThemesDir,
+  };
 }
 
 async function readRegisteredTheme(entry, locale) {
-  const filePath = path.join(THEMES_DIR, entry.file);
-  const theme = validateTheme(await readJson(filePath), filePath);
-  if (theme.name !== entry.id) throw new Error(`Theme file name must match its registered ID: ${entry.file}`);
+  const filePath = entry.source === "user" ? entry.kitPath : entry.themePath;
+  const theme = entry.source === "user"
+    ? entry.kitTheme
+    : validateTheme(await readJson(filePath), filePath);
+  if (theme.name !== entry.id) throw new Error(`Theme file name must match its registered ID: ${entry.file ?? THEME_KIT_FILENAME}`);
   const normalizedLocale = normalizeLocale(locale);
   return {
     ...theme,
@@ -619,11 +811,15 @@ async function readRegisteredTheme(entry, locale) {
     artwork: entry.artwork ? { ...entry.artwork } : null,
     artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
     filePath,
+    source: entry.source,
+    sourceDirectory: entry.sourceDirectory,
+    artworkRoot: entry.source === "user" ? entry.sourceDirectory : entry.artworkRoot,
+    artworkAllowedRoot: entry.source === "user" ? entry.sourceDirectory : entry.artworkAllowedRoot,
   };
 }
 
-export async function listThemes({ locale = "en" } = {}) {
-  const registry = await readThemeRegistry();
+export async function listThemes({ locale = "en", userThemesDir = null, onWarning = null } = {}) {
+  const registry = await readThemeRegistry({ userThemesDir, onWarning });
   const themes = [];
   for (const entry of registry.themes) themes.push(await readRegisteredTheme(entry, locale));
   return themes;
@@ -670,7 +866,7 @@ async function preserveCorruptConfig(configPath) {
   return backupPath;
 }
 
-async function resolveTheme(config, configPath, locale) {
+async function resolveTheme(config, configPath, locale, { userThemesDir = null, onWarning = null } = {}) {
   let customThemeUnavailable = false;
   if (config.customTheme) {
     if (typeof config.customTheme !== "string" || !config.customTheme.trim()) {
@@ -680,7 +876,18 @@ async function resolveTheme(config, configPath, locale) {
       try {
         const theme = validateTheme(await readJson(filePath), filePath);
         return {
-          theme: { ...theme, labels: { en: theme.label }, descriptions: { en: theme.description }, swatches: [], preview: null, studioPreview: null, artwork: null, artworkLayers: null },
+          theme: {
+            ...theme,
+            labels: { en: theme.label },
+            descriptions: { en: theme.description },
+            swatches: [],
+            preview: null,
+            studioPreview: null,
+            artwork: null,
+            artworkLayers: null,
+            source: "custom",
+            sourceDirectory: path.dirname(filePath),
+          },
           filePath,
           requestedTheme: theme.name,
           fallbackFrom: null,
@@ -691,11 +898,13 @@ async function resolveTheme(config, configPath, locale) {
       }
     }
   }
-  const registry = await readThemeRegistry();
-  const requestedTheme = typeof config.theme === "string" && /^[a-z][a-z0-9-]{1,39}$/.test(config.theme)
+  const registry = await readThemeRegistry({ userThemesDir, onWarning });
+  const requestedTheme = typeof config.theme === "string" && THEME_ID_PATTERN.test(config.theme)
     ? config.theme
     : registry.defaultTheme;
-  const canonicalTheme = registry.legacyAliases[requestedTheme] ?? requestedTheme;
+  const canonicalTheme = Object.hasOwn(registry.legacyAliases, requestedTheme)
+    ? registry.legacyAliases[requestedTheme]
+    : requestedTheme;
   const entry = registry.themes.find((item) => item.id === canonicalTheme)
     ?? registry.themes.find((item) => item.id === registry.defaultTheme);
   const fallbackFrom = customThemeUnavailable ? "custom-theme" : (entry.id === canonicalTheme ? null : requestedTheme);
@@ -738,7 +947,11 @@ export async function resolveArtworkLayers(theme) {
   if (!Array.isArray(theme.artworkLayers) || theme.artworkLayers.length === 0) return null;
   const layers = [];
   for (const layer of theme.artworkLayers) {
-    const resolved = await resolveArtwork({ artwork: layer });
+    const resolved = await resolveArtwork({
+      artwork: layer,
+      artworkRoot: theme.artworkRoot,
+      artworkAllowedRoot: theme.artworkAllowedRoot,
+    });
     if (resolved) layers.push(resolved);
   }
   return layers.length ? layers : null;
@@ -746,10 +959,11 @@ export async function resolveArtworkLayers(theme) {
 
 export async function resolveArtwork(theme) {
   if (!theme.artwork) return null;
-  const artworkRoot = path.resolve(PROJECT_ROOT, "assets", "theme-art");
-  const artworkPath = path.resolve(PROJECT_ROOT, theme.artwork.path);
-  if (artworkPath !== artworkRoot && !artworkPath.startsWith(`${artworkRoot}${path.sep}`)) {
-    throw new Error(`Theme artwork must remain inside ${artworkRoot}`);
+  const pathRoot = path.resolve(theme.artworkRoot ?? PROJECT_ROOT);
+  const allowedRoot = path.resolve(theme.artworkAllowedRoot ?? path.join(PROJECT_ROOT, "assets", "theme-art"));
+  const artworkPath = path.resolve(pathRoot, theme.artwork.path);
+  if (!isPathWithin(allowedRoot, artworkPath)) {
+    throw new Error(`Theme artwork must remain inside ${allowedRoot}`);
   }
   const extension = path.extname(artworkPath).toLowerCase();
   const mime = ARTWORK_TYPES.get(extension);
@@ -762,6 +976,15 @@ export async function resolveArtwork(theme) {
     throw error;
   }
   if (!stat.isFile() || stat.size > MAX_ARTWORK_BYTES) return null;
+  try {
+    const [realAllowedRoot, realArtworkPath] = await Promise.all([fs.realpath(allowedRoot), fs.realpath(artworkPath)]);
+    if (!isPathWithin(realAllowedRoot, realArtworkPath)) {
+      throw new Error(`Theme artwork must remain inside ${allowedRoot}`);
+    }
+  } catch (error) {
+    if (isUnavailableFileError(error)) return null;
+    throw error;
+  }
   let bytes;
   try {
     bytes = await fs.readFile(artworkPath);
@@ -811,7 +1034,13 @@ function renderThemePrimitives(theme) {
 }`;
 }
 
-export async function compileTheme({ configPath, config: configOverride = null, locale = "en" } = {}) {
+export async function compileTheme({
+  configPath,
+  config: configOverride = null,
+  locale = "en",
+  userThemesDir = null,
+  onWarning = null,
+} = {}) {
   const resolvedConfigPath = path.resolve(configPath ?? path.join(PROJECT_ROOT, "config.example.json"));
   const config = configOverride ? { ...DEFAULT_CONFIG, ...configOverride } : await readConfig(resolvedConfigPath);
   if (typeof config.enabled !== "boolean") throw new Error("enabled must be true or false");
@@ -824,6 +1053,7 @@ export async function compileTheme({ configPath, config: configOverride = null, 
     config,
     resolvedConfigPath,
     normalizeLocale(locale),
+    { userThemesDir, onWarning },
   );
   const [image, artwork, artworkLayers, baseCss, variantCss] = await Promise.all([
     resolveImage(config, resolvedConfigPath),

@@ -16,7 +16,7 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [x] WO-04 — `theme-cli qa` command (QA board generator, headless Edge)
 - [x] WO-06 — Remove the main-window toolbar and the WinForms gallery
       (only after Checkpoint B approval)
-- [ ] WO-07 — User themes directory + Studio "Install theme from folder"
+- [x] WO-07 — User themes directory + Studio "Install theme from folder"
 - [ ] WO-08 — Asset production: japanese-film-editorial (ASSET_CONTRACT)
 - [ ] WO-09 — Asset production: korean-prestige (ASSET_CONTRACT)
 - [ ] WO-10 — Asset production: cartoon-studio (ASSET_CONTRACT)

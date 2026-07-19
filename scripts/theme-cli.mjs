@@ -10,6 +10,7 @@ import {
   normalizeLocale,
   PROJECT_ROOT,
   readConfig,
+  readThemeKit,
   readThemeRegistry,
   writeConfig,
 } from "./theme-core.mjs";
@@ -131,6 +132,15 @@ function registrySnippet(id, defaultEntry) {
   };
 }
 
+function standaloneKit(theme, metadata) {
+  return {
+    "$comment": "Standalone Claude Aura theme kit. Keep id, theme.name, and theme.variant identical.",
+    schemaVersion: 1,
+    ...metadata,
+    theme,
+  };
+}
+
 async function scaffold(id) {
   if (!THEME_ID_PATTERN.test(id ?? "")) {
     throw new Error("Theme id must match ^[a-z][a-z0-9-]{1,39}$");
@@ -153,9 +163,12 @@ async function scaffold(id) {
   const defaultEntry = registry.themes.find((theme) => theme.id === registry.defaultTheme);
   const themeBytes = `${JSON.stringify(scaffoldTemplate(defaultTheme, id), null, 2)}\n`;
   const checklistBytes = checklist(id);
-  const snippetBytes = `${JSON.stringify(registrySnippet(id, defaultEntry), null, 2)}\n`;
+  const snippet = registrySnippet(id, defaultEntry);
+  const snippetBytes = `${JSON.stringify(snippet, null, 2)}\n`;
+  const kitBytes = `${JSON.stringify(standaloneKit(scaffoldTemplate(defaultTheme, id), snippet), null, 2)}\n`;
   let themeCreated = false;
   let kitCreated = false;
+  let standaloneKitCreated = false;
   let checklistCreated = false;
   try {
     await fs.mkdir(themesDirectory, { recursive: true });
@@ -163,10 +176,13 @@ async function scaffold(id) {
     themeCreated = true;
     await fs.mkdir(kitDirectory);
     kitCreated = true;
+    await fs.writeFile(path.join(kitDirectory, "theme.json"), kitBytes, { encoding: "utf8", flag: "wx" });
+    standaloneKitCreated = true;
     await fs.writeFile(path.join(kitDirectory, "CHECKLIST.md"), checklistBytes, { encoding: "utf8", flag: "wx" });
     checklistCreated = true;
   } catch (error) {
     if (checklistCreated) await fs.rm(path.join(kitDirectory, "CHECKLIST.md"), { force: true });
+    if (standaloneKitCreated) await fs.rm(path.join(kitDirectory, "theme.json"), { force: true });
     if (kitCreated) await fs.rmdir(kitDirectory).catch(() => {});
     if (themeCreated) await fs.rm(themePath, { force: true });
     if (error.code === "EEXIST") throw new Error(`Theme id already exists: ${id}`);
@@ -185,22 +201,29 @@ function help() {
   console.log(`Claude Aura theme tool
 
 Commands:
-  list [--json] [--locale en|zh-CN|zh-TW]
+  list [--json] [--locale en|zh-CN|zh-TW] [--user-themes <path>]
   scaffold <id>
   qa <id>
-  init --config <path> [--locale en|zh-CN|zh-TW] [--payload]
-  show --config <path> [--json] [--locale en|zh-CN|zh-TW]
+  init --config <path> [--locale en|zh-CN|zh-TW] [--user-themes <path>] [--payload]
+  show --config <path> [--json] [--locale en|zh-CN|zh-TW] [--user-themes <path>]
+  validate <kit-folder>
   validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
+      [--user-themes <path>]
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
       [--image-opacity <0..0.55>] [--image-position <css-position>] [--image-zoom <1..2>]
       [--studio-preview-theme <id> --studio-preview-x <0..100>
        --studio-preview-y <0..100> --studio-preview-zoom <1..2>]
-      [--reduce-motion true|false] [--enabled true|false] [--payload]
+      [--reduce-motion true|false] [--enabled true|false]
+      [--user-themes <path>] [--payload]
 `);
 }
 
+async function main() {
 const { command, options, positionals } = parse(process.argv.slice(2));
-if (!["qa", "scaffold"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
+if (!["qa", "scaffold", "validate"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
+const userThemesDir = options["user-themes"] === undefined ? null : path.resolve(options["user-themes"]);
+const emitWarning = (message) => process.stderr.write(`Warning: ${message}\n`);
+const runtimeOptions = { userThemesDir, onWarning: emitWarning };
 if (command === "help" || command === "--help") {
   help();
 } else if (command === "scaffold") {
@@ -222,7 +245,7 @@ if (command === "help" || command === "--help") {
   }, null, 2));
 } else if (command === "list") {
   const locale = normalizeLocale(options.locale ?? "en");
-  const themes = (await listThemes({ locale })).map(({
+  const themes = (await listThemes({ locale, ...runtimeOptions })).map(({
     name,
     label,
     description,
@@ -231,6 +254,7 @@ if (command === "help" || command === "--help") {
     swatches,
     preview,
     artwork,
+    source,
   }) => ({
     name,
     label,
@@ -239,6 +263,7 @@ if (command === "help" || command === "--help") {
     descriptions,
     swatches,
     preview,
+    source,
     artwork: artwork ? {
       path: artwork.path,
       position: artwork.position,
@@ -252,14 +277,14 @@ if (command === "help" || command === "--help") {
   if (!options.config) throw new Error("--config is required");
   const configPath = path.resolve(options.config);
   const existing = await readConfig(configPath);
-  const compiled = await compileTheme({ configPath, config: existing, locale: options.locale ?? "en" });
+  const compiled = await compileTheme({ configPath, config: existing, locale: options.locale ?? "en", ...runtimeOptions });
   const bundle = options.payload ? await buildPayloadFromCompiled(compiled) : null;
   await writeConfig(configPath, compiled.effectiveConfig);
   if (options.payload) process.stdout.write(bundle.payload);
   else console.log(configPath);
 } else if (command === "show") {
   if (!options.config) throw new Error("--config is required");
-  const compiled = await compileTheme({ configPath: options.config, locale: options.locale ?? "en" });
+  const compiled = await compileTheme({ configPath: options.config, locale: options.locale ?? "en", ...runtimeOptions });
   const result = {
     config: compiled.effectiveConfig,
     theme: { name: compiled.theme.name, label: compiled.theme.label, description: compiled.theme.description },
@@ -271,13 +296,28 @@ if (command === "help" || command === "--help") {
   };
   console.log(options.json ? JSON.stringify(result, null, 2) : `${result.theme.label} (${result.theme.name})\n${result.digest}`);
 } else if (command === "validate") {
+  if (positionals.length > 1) throw new Error("Usage: theme-cli validate <kit-folder>");
+  if (positionals.length === 1) {
+    if (options.theme || options.config) throw new Error("A kit folder cannot be combined with --theme or --config");
+    const kit = await readThemeKit(path.resolve(positionals[0]));
+    console.log(JSON.stringify({
+      pass: true,
+      theme: kit.id,
+      source: "folder",
+      sourceFolder: kit.sourceDirectory,
+      metadata: kit.metadata,
+    }));
+    return;
+  }
   const configPath = path.resolve(options.config ?? path.join(process.cwd(), "config.example.json"));
   let config;
   let expectedTheme = null;
   if (options.theme) {
     if (!THEME_ID_PATTERN.test(options.theme)) throw new Error("--theme must be a lowercase kebab-case id");
-    const registry = await readThemeRegistry();
-    expectedTheme = registry.legacyAliases[options.theme] ?? options.theme;
+    const registry = await readThemeRegistry({ userThemesDir });
+    expectedTheme = Object.hasOwn(registry.legacyAliases, options.theme)
+      ? registry.legacyAliases[options.theme]
+      : options.theme;
     const registered = registry.themes.some((theme) => theme.id === expectedTheme);
     const scaffoldPath = path.join(process.cwd(), "themes", `${options.theme}.json`);
     config = !registered && expectedTheme === options.theme && await pathExists(scaffoldPath)
@@ -286,7 +326,7 @@ if (command === "help" || command === "--help") {
   } else {
     config = await readConfig(configPath);
   }
-  const compiled = await compileTheme({ configPath, config, locale: options.locale ?? "en" });
+  const compiled = await compileTheme({ configPath, config, locale: options.locale ?? "en", ...runtimeOptions });
   if (compiled.settings.customThemeUnavailable) throw new Error("The configured custom theme is unavailable or invalid");
   if (expectedTheme && compiled.theme.name !== expectedTheme) throw new Error(`Theme not found: ${options.theme}`);
   console.log(JSON.stringify({
@@ -330,7 +370,7 @@ if (command === "help" || command === "--help") {
   }
   if (options["reduce-motion"] !== undefined) config.reduceMotion = booleanValue(options["reduce-motion"], "--reduce-motion");
   if (options.enabled !== undefined) config.enabled = booleanValue(options.enabled, "--enabled");
-  const compiled = await compileTheme({ configPath, config, locale: options.locale ?? "en" });
+  const compiled = await compileTheme({ configPath, config, locale: options.locale ?? "en", ...runtimeOptions });
   const bundle = options.payload ? await buildPayloadFromCompiled(compiled) : null;
   await writeConfig(configPath, compiled.effectiveConfig);
   if (options.payload) {
@@ -341,3 +381,10 @@ if (command === "help" || command === "--help") {
 } else {
   throw new Error(`Unknown command: ${command}`);
 }
+}
+
+main().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`${message}\n`);
+  process.exitCode = 1;
+});

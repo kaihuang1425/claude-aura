@@ -11,6 +11,7 @@ import {
   listThemes,
   normalizeLocale,
   PROJECT_ROOT,
+  readThemeKit,
   readThemeRegistry,
   REQUIRED_SEMANTIC_TOKENS,
   resolveArtwork,
@@ -547,10 +548,13 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
     assert.equal(snippet.swatches.length >= 3, true);
 
     const themePath = path.join(temporary, "themes", `${themeId}.json`);
+    const kitPath = path.join(temporary, "themes", themeId, "theme.json");
     const checklistPath = path.join(temporary, "themes", themeId, "CHECKLIST.md");
     const themeBytes = await fs.readFile(themePath, "utf8");
+    const kitBytes = await fs.readFile(kitPath, "utf8");
     const checklistBytes = await fs.readFile(checklistPath, "utf8");
     const theme = JSON.parse(themeBytes);
+    const kitDocument = JSON.parse(kitBytes);
     assert.equal(theme.name, themeId);
     assert.equal(theme.variant, themeId);
     assert.match(theme.$comment, /Starter theme copied from Default/);
@@ -558,6 +562,11 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
       assert.equal(typeof theme[section].$comment, "string", `${section} lacks scaffold guidance`);
     }
     assert.equal(validateTheme(theme, themePath).name, themeId);
+    assert.equal(kitDocument.schemaVersion, 1);
+    assert.equal(kitDocument.id, themeId);
+    assert.equal(kitDocument.theme.name, themeId);
+    assert.equal(kitDocument.theme.variant, themeId);
+    assert.equal((await readThemeKit(path.dirname(kitPath))).id, themeId);
 
     const slotSpecs = [
       ["background.png", "≥1600 px wide"],
@@ -578,6 +587,10 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
     const validation = JSON.parse(run(process.execPath, [cliPath, "validate", "--theme", themeId], { cwd: temporary }));
     assert.equal(validation.pass, true);
     assert.equal(validation.theme, themeId);
+    const folderValidation = JSON.parse(run(process.execPath, [cliPath, "validate", path.dirname(kitPath)], { cwd: temporary }));
+    assert.deepEqual({ pass: folderValidation.pass, theme: folderValidation.theme, source: folderValidation.source },
+      { pass: true, theme: themeId, source: "folder" });
+    assert.equal(folderValidation.sourceFolder, path.dirname(kitPath));
     assert.throws(() => run(process.execPath, [cliPath, "validate", "--theme", "not-installed"], { cwd: temporary }),
       /Theme not found: not-installed/);
 
@@ -589,6 +602,7 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
 
     assert.throws(() => run(process.execPath, [cliPath, "scaffold", themeId], { cwd: temporary }), /already exists/);
     assert.equal(await fs.readFile(themePath, "utf8"), themeBytes, "Repeated scaffold changed the theme template");
+    assert.equal(await fs.readFile(kitPath, "utf8"), kitBytes, "Repeated scaffold changed the standalone theme kit");
     assert.equal(await fs.readFile(checklistPath, "utf8"), checklistBytes, "Repeated scaffold changed the slot checklist");
 
     const beforeInvalid = (await fs.readdir(path.join(temporary, "themes"))).sort();
@@ -599,6 +613,150 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
         `Invalid id created output: ${invalidId}`);
     }
     assert.throws(() => run(process.execPath, [cliPath, "scaffold", "default"], { cwd: temporary }), /already exists/);
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("user theme kits append, apply, persist, warn on collisions, and uninstall by one folder", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
+  const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
+  const authoringRoot = path.join(temporary, "authoring");
+  const userThemesDir = path.join(temporary, "user-themes");
+  const themeId = "constructor";
+  try {
+    await fs.mkdir(authoringRoot, { recursive: true });
+    run(process.execPath, [cliPath, "scaffold", themeId], { cwd: authoringRoot });
+    const sourceKit = path.join(authoringRoot, "themes", themeId);
+    const validated = JSON.parse(run(process.execPath, [cliPath, "validate", sourceKit], { cwd: authoringRoot }));
+    assert.deepEqual({ pass: validated.pass, theme: validated.theme, source: validated.source },
+      { pass: true, theme: themeId, source: "folder" });
+
+    await fs.mkdir(userThemesDir, { recursive: true });
+    const installedFolder = path.join(userThemesDir, themeId);
+    await fs.cp(sourceKit, installedFolder, { recursive: true, force: false, errorOnExist: true });
+
+    const initialWarnings = [];
+    const registry = await readThemeRegistry({
+      userThemesDir,
+      onWarning: (message) => initialWarnings.push(message),
+    });
+    assert.deepEqual(registry.themes.slice(0, THEME_IDS.length).map((theme) => theme.id), THEME_IDS,
+      "User themes changed the frozen built-in order");
+    assert.deepEqual(registry.themes.slice(THEME_IDS.length).map((theme) => theme.id), [themeId],
+      "Validated user themes must append after built-ins");
+    assert.equal(registry.themes.at(-1).source, "user");
+    assert.deepEqual(initialWarnings, []);
+    const localizedThemes = await listThemes({ locale: "zh-TW", userThemesDir });
+    const installedTheme = localizedThemes.find((theme) => theme.name === themeId);
+    assert(installedTheme, "The installed user theme did not appear in the runtime list");
+    assert.equal(installedTheme.source, "user");
+    assert.equal(installedTheme.label, `自訂主題（${themeId}）`);
+
+    const configPath = path.join(temporary, "config.json");
+    await writeConfig(configPath, { ...DEFAULT_CONFIG });
+    const applied = JSON.parse(run(process.execPath, [
+      cliPath, "set", "--config", configPath, "--theme", themeId,
+      "--user-themes", userThemesDir,
+    ]));
+    assert.equal(applied.theme, themeId, "Studio-equivalent set did not apply the imported theme immediately");
+    assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, themeId);
+    const appliedBundle = await buildPayload({ configPath, userThemesDir });
+    assert.equal(appliedBundle.theme.name, themeId);
+    assert.equal(appliedBundle.settings.theme, themeId);
+    new Function(appliedBundle.payload);
+
+    run(process.execPath, [cliPath, "init", "--config", configPath, "--user-themes", userThemesDir]);
+    const restarted = JSON.parse(run(process.execPath, [
+      cliPath, "show", "--config", configPath, "--json", "--user-themes", userThemesDir,
+    ]));
+    assert.equal(restarted.theme.name, themeId, "The imported theme did not survive restart initialization");
+
+    const collisionFolder = path.join(userThemesDir, "default");
+    await fs.cp(sourceKit, collisionFolder, { recursive: true, force: false, errorOnExist: true });
+    const collisionWarnings = [];
+    const collisionRegistry = await readThemeRegistry({
+      userThemesDir,
+      onWarning: (message) => collisionWarnings.push(message),
+    });
+    assert.equal(collisionRegistry.themes.filter((theme) => theme.id === "default").length, 1);
+    assert.equal(collisionRegistry.themes.find((theme) => theme.id === "default").source, "builtin");
+    assert(collisionWarnings.some((message) => /built-in theme or alias takes precedence/.test(message)),
+      "A user/built-in id collision did not surface a warning");
+    const cliList = spawnSync(process.execPath, [
+      cliPath, "list", "--json", "--user-themes", userThemesDir,
+    ], { cwd: PROJECT_ROOT, encoding: "utf8" });
+    assert.equal(cliList.status, 0, cliList.stderr);
+    assert.match(cliList.stderr, /Warning: User theme "default" was ignored/,
+      "The CLI hid the built-in collision warning");
+    assert.equal(JSON.parse(cliList.stdout).filter((theme) => theme.name === "default").length, 1);
+
+    const invalidKit = path.join(temporary, "invalid-kit");
+    await fs.cp(sourceKit, invalidKit, { recursive: true, force: false, errorOnExist: true });
+    const invalidDocumentPath = path.join(invalidKit, "theme.json");
+    const invalidDocument = JSON.parse(await fs.readFile(invalidDocumentPath, "utf8"));
+    invalidDocument.theme.name = "Invalid Theme";
+    await fs.writeFile(invalidDocumentPath, `${JSON.stringify(invalidDocument, null, 2)}\n`, "utf8");
+    const beforeInvalid = (await fs.readdir(userThemesDir)).sort();
+    const invalidResult = spawnSync(process.execPath, [cliPath, "validate", invalidKit], {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+    });
+    assert.notEqual(invalidResult.status, 0);
+    assert.match(invalidResult.stderr, /theme\.json\.theme\.name must be lowercase kebab-case/,
+      "Invalid kit rejection did not surface the validator's message");
+    assert(!/\n\s+at\s/.test(invalidResult.stderr), "Kit validation leaked a stack instead of a usable message");
+    assert.deepEqual((await fs.readdir(userThemesDir)).sort(), beforeInvalid,
+      "Rejected validation copied files into the user themes directory");
+
+    const invalidMutations = [
+      ["custom-css", (document) => { document.theme.customCss = "body { display: none }"; }, /customCss must be empty/],
+      ["variant", (document) => { document.theme.variant = "different-theme"; }, /variant must match id/],
+      ["mobile", (document) => {
+        document.artwork = null;
+        document.artworkLayers = [{ path: "hero.png", mobile: "sideways" }];
+      }, /mobile has an unsupported value/],
+      ["mask", (document) => {
+        document.artwork = null;
+        document.artworkLayers = [{ path: "hero.png", mask: "unsafe" }];
+      }, /mask has an unsupported value/],
+      ["svg", (document) => {
+        document.artwork = { path: "hero.svg" };
+        document.artworkLayers = null;
+      }, /not a supported theme-kit slot path/],
+    ];
+    for (const [name, mutate, expected] of invalidMutations) {
+      const caseFolder = path.join(temporary, `invalid-${name}`);
+      await fs.cp(sourceKit, caseFolder, { recursive: true, force: false, errorOnExist: true });
+      const casePath = path.join(caseFolder, "theme.json");
+      const caseDocument = JSON.parse(await fs.readFile(casePath, "utf8"));
+      mutate(caseDocument);
+      await fs.writeFile(casePath, `${JSON.stringify(caseDocument, null, 2)}\n`, "utf8");
+      await assert.rejects(() => readThemeKit(caseFolder), expected,
+        `Standalone kit mutation ${name} was silently accepted`);
+    }
+
+    const invalidInstalledFolder = path.join(userThemesDir, "broken-user");
+    await fs.cp(invalidKit, invalidInstalledFolder, { recursive: true, force: false, errorOnExist: true });
+    const invalidWarnings = [];
+    const registryWithInvalid = await readThemeRegistry({
+      userThemesDir,
+      onWarning: (message) => invalidWarnings.push(message),
+    });
+    assert(!registryWithInvalid.themes.some((theme) => theme.id === "broken-user"));
+    assert(invalidWarnings.some((message) => /User theme "broken-user" was ignored:/.test(message)),
+      "An invalid installed kit was not ignored with a warning");
+
+    await fs.rm(installedFolder, { recursive: true, force: false });
+    const afterDelete = await compileTheme({ configPath, userThemesDir });
+    assert.equal(afterDelete.theme.name, "default", "Deleting the installed folder did not restore the safe fallback");
+    assert.equal(afterDelete.settings.fallbackFrom, themeId);
+    run(process.execPath, [cliPath, "init", "--config", configPath, "--user-themes", userThemesDir]);
+    assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "default",
+      "Restart did not persist the fallback after uninstall");
+    assert.equal((await listThemes({ userThemesDir })).some((theme) => theme.name === themeId), false);
+    assert.equal((await fs.stat(collisionFolder)).isDirectory(), true,
+      "One-folder uninstall removed a different user theme folder");
   } finally {
     await fs.rm(temporary, { recursive: true, force: true });
   }
@@ -1046,6 +1204,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Studio page must persist per-theme card framing");
   assert.match(studioApp, /send\(\{\s*type:\s*"import-theme"\s*\}\)/,
     "The Studio page must let the host choose import paths");
+  assert.match(studioApp, /syncHostThemes\(data\.themes\)/,
+    "Studio must refresh its theme cards from validated host metadata after import");
+  assert.match(studioApp, /source !== "builtin"[\s\S]{0,80}?source !== "user"/,
+    "Studio must reject unknown host theme sources");
+  assert.match(studioApp, /Object\.hasOwn\(themes,\s*incomingTheme\.name\)\s*\?\s*themes\[incomingTheme\.name\]\s*:\s*null/,
+    "Studio must treat valid ids such as constructor as own theme keys, not inherited object properties");
   assert.match(studioHtml, /class="rail-item is-current"[^>]*aria-current="page"/,
     "Studio must expose the current navigation destination semantically");
   assert.match(studioApp, /removeAttribute\("aria-current"\)/);
@@ -1125,6 +1289,28 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Generated Studio metadata must never identify raw reference composites");
   assert(!/\$message\.(?:path|file|fileName)\b/i.test(ui),
     "The Studio host must never accept a page-supplied file path");
+  assert.match(ui, /\$UserThemesRoot\s*=\s*Join-Path\s+\$DataRoot\s+['"]themes['"]/,
+    "Installed themes must live under the user data themes folder");
+  assert.match(ui, /\[System\.Windows\.Forms\.FolderBrowserDialog\]::new\(\)/,
+    "Theme kit paths must come from a host-owned folder picker");
+  assert.match(ui, /Invoke-AuraUiNode[\s\S]{0,400}?['"]validate['"][\s\S]{0,240}?\$dialog\.SelectedPath/,
+    "The host must validate the selected kit folder through the Node helper before copying it");
+  assert.match(ui, /Assert-AuraUiThemeKitTree[\s\S]{0,1400}?ReparsePoint/,
+    "Theme installation must reject junctions and symbolic links");
+  assert.match(ui, /function Assert-AuraUiThemeInstallRoot[\s\S]{0,2400}?ReparsePoint/,
+    "Theme installation must reject a redirected app-data destination root");
+  const stagingIndex = ui.indexOf("'.install-{0}-{1}' -f $Id");
+  const atomicMoveIndex = ui.indexOf("[IO.Directory]::Move($staging, $destination)", stagingIndex);
+  assert(stagingIndex >= 0 && atomicMoveIndex > stagingIndex,
+    "Theme installation must copy to a private staging folder before an atomic directory move");
+  assert.match(ui, /\$expectedTarget\s*=\s*\[IO\.Path\]::GetFullPath\(\(Join-Path \$userRoot \$Id\)\)/,
+    "Theme rollback must only remove the exact user-root/id destination");
+  assert.match(ui, /Update-AuraUiThemes[\s\S]{0,500}?Invoke-AuraUiSelectTheme\s+-Theme\s+\$importedId/,
+    "A validated imported theme must refresh the registry and apply immediately");
+  const configSnapshotIndex = ui.indexOf("$previousConfigJson = [IO.File]::ReadAllText");
+  const configRestoreIndex = ui.indexOf("Restore-AuraUiConfigSnapshot -Json $previousConfigJson", configSnapshotIndex);
+  assert(configSnapshotIndex >= 0 && configRestoreIndex > configSnapshotIndex,
+    "A failed post-copy import must restore the complete pre-import configuration");
   assert(!/SetVirtualHostNameToFolderMapping\([\s\S]{0,120}?\$imageValue/i.test(ui),
     "Studio must never map the selected image's source directory");
   assert.match(ui, /\[System\.Windows\.Forms\.OpenFileDialog\]::new\(\)/,
@@ -1188,6 +1374,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       openDesktopApp: "Open desktop app",
       exitApp: "Exit Claude Aura",
       studioImportPending: "Theme installation isn't available yet.",
+      chooseThemeFolder: "Choose a Claude Aura theme kit folder.",
+      installingTheme: "Validating and installing theme...",
+      themeInstalled: "{0} was installed and applied.",
+      themeInstallFailed: "Theme could not be installed: {0}",
+      themeAlreadyInstalled: "A theme named {0} is already installed.",
     },
     "zh-CN": {
       studioTitle: "Claude Aura 工作室",
@@ -1195,6 +1386,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       openDesktopApp: "打开桌面版",
       exitApp: "退出 Claude Aura",
       studioImportPending: "主题安装功能暂不可用。",
+      chooseThemeFolder: "请选择 Claude Aura 主题包文件夹。",
+      installingTheme: "正在校验并安装主题…",
+      themeInstalled: "{0}已安装并应用。",
+      themeInstallFailed: "主题安装失败：{0}",
+      themeAlreadyInstalled: "名为{0}的主题已安装。",
     },
     "zh-TW": {
       studioTitle: "Claude Aura 工作室",
@@ -1202,6 +1398,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       openDesktopApp: "開啟桌面版",
       exitApp: "結束 Claude Aura",
       studioImportPending: "目前還不能安裝主題。",
+      chooseThemeFolder: "選擇 Claude Aura 主題套件資料夾。",
+      installingTheme: "正在檢查並安裝主題…",
+      themeInstalled: "已安裝並套用{0}。",
+      themeInstallFailed: "無法安裝主題：{0}",
+      themeAlreadyInstalled: "已安裝名為{0}的主題。",
     },
   };
   for (const [locale, expected] of Object.entries(expectedStudioCopy)) {
@@ -1216,8 +1417,101 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(install.includes("'studio'"), "The Windows installer must copy Aura Studio");
 
   if (process.platform === "win32") {
-    const cacheTestRoot = path.join(PROJECT_ROOT, "dist", `test-studio-cache-${process.pid}-${Date.now()}`);
+    const importCopyTestRoot = path.join(PROJECT_ROOT, "dist", `test-theme-import-${process.pid}-${Date.now()}`);
     const psPath = (value) => value.replaceAll("'", "''");
+    const importCopyRegression = [
+      "$ErrorActionPreference='Stop'",
+      `$uiPath='${psPath(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"))}'`,
+      `$testRoot='${psPath(importCopyTestRoot)}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for theme import regression'}",
+      "foreach($name in @('Assert-AuraUiThemeKitTree','Assert-AuraUiThemeInstallRoot','Copy-AuraUiThemeKit','Remove-AuraUiInstalledTheme','Restore-AuraUiConfigSnapshot')){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing theme import function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "function Invoke-AuraUiNode { param([string[]]$CommandArguments); return 'restored-payload' }",
+      "function Set-AuraUiPayloadState { param([string]$Payload); $script:RestoredPayload=$Payload }",
+      "function Update-AuraUiTrayAppearance { $script:TrayRestored=$true }",
+      "function Apply-AuraUiTheme { $script:ThemeRestored=$true }",
+      "$script:UiCopy=[pscustomobject]@{themeAlreadyInstalled='A theme named {0} is already installed.'}",
+      "$script:Locale='en'",
+      "$sourceRoot=Join-Path $testRoot 'source-kit'",
+      "$outsideRoot=Join-Path $testRoot 'outside'",
+      "$originalLocalAppData=$env:LOCALAPPDATA",
+      "$env:LOCALAPPDATA=Join-Path $testRoot 'local-app-data'",
+      "$DataRoot=Join-Path $env:LOCALAPPDATA 'ClaudeAura\\data'",
+      "$UserThemesRoot=Join-Path $DataRoot 'themes'",
+      "$ConfigPath=Join-Path $DataRoot 'config.json'",
+      "$ThemeCli='theme-cli.mjs'",
+      "$userRootJunction=$false",
+      "try {",
+      "  [IO.Directory]::CreateDirectory((Join-Path $sourceRoot 'notes'))|Out-Null",
+      "  [IO.Directory]::CreateDirectory($outsideRoot)|Out-Null",
+      "  [IO.File]::WriteAllText((Join-Path $sourceRoot 'theme.json'),'{}')",
+      "  [IO.File]::WriteAllText((Join-Path $sourceRoot 'notes\\CHECKLIST.md'),'copy proof')",
+      "  $destination=Copy-AuraUiThemeKit -Source $sourceRoot -Id 'demo-theme'",
+      "  if($destination -cne (Join-Path $UserThemesRoot 'demo-theme')){throw 'Theme copy returned the wrong destination'}",
+      "  if([IO.File]::ReadAllText((Join-Path $destination 'notes\\CHECKLIST.md')) -cne 'copy proof'){throw 'Theme copy lost nested kit files'}",
+      "  $duplicateRejected=$false",
+      "  try { Copy-AuraUiThemeKit -Source $sourceRoot -Id 'demo-theme'|Out-Null } catch { $duplicateRejected=$_.Exception.Message -like '*demo-theme*' }",
+      "  if(-not $duplicateRejected){throw 'Theme copy accepted an existing destination'}",
+      "  Remove-AuraUiInstalledTheme -Path $destination -Id 'demo-theme'",
+      "  if(Test-Path -LiteralPath $destination){throw 'Theme uninstall left its destination folder behind'}",
+      "  $outsideMarker=Join-Path $outsideRoot 'keep.txt'",
+      "  [IO.File]::WriteAllText($outsideMarker,'keep')",
+      "  $outsideRejected=$false",
+      "  try { Remove-AuraUiInstalledTheme -Path $outsideRoot -Id 'outside' } catch { $outsideRejected=$true }",
+      "  if(-not $outsideRejected -or -not (Test-Path -LiteralPath $outsideMarker -PathType Leaf)){throw 'Theme rollback escaped the exact user-theme destination'}",
+      "  $nestedFake=Join-Path $UserThemesRoot 'other\\demo-theme'",
+      "  [IO.Directory]::CreateDirectory($nestedFake)|Out-Null",
+      "  $nestedMarker=Join-Path $nestedFake 'keep.txt'",
+      "  [IO.File]::WriteAllText($nestedMarker,'keep')",
+      "  $nestedRemovalRejected=$false",
+      "  try { Remove-AuraUiInstalledTheme -Path $nestedFake -Id 'demo-theme' } catch { $nestedRemovalRejected=$true }",
+      "  if(-not $nestedRemovalRejected -or -not (Test-Path -LiteralPath $nestedMarker -PathType Leaf)){throw 'Theme rollback accepted a nested lookalike destination'}",
+      "  [IO.Directory]::Delete((Join-Path $UserThemesRoot 'other'),$true)",
+      "  [IO.Directory]::Delete($UserThemesRoot)",
+      "  $redirectTarget=Join-Path $outsideRoot 'redirect-target'",
+      "  [IO.Directory]::CreateDirectory($redirectTarget)|Out-Null",
+      "  New-Item -ItemType Junction -Path $UserThemesRoot -Target $redirectTarget|Out-Null",
+      "  $userRootJunction=$true",
+      "  $junctionRejected=$false",
+      "  try { Copy-AuraUiThemeKit -Source $sourceRoot -Id 'redirected-theme'|Out-Null } catch { $junctionRejected=$_.Exception.Message -like '*symbolic links or junctions*' }",
+      "  if(-not $junctionRejected -or (Test-Path -LiteralPath (Join-Path $redirectTarget 'redirected-theme'))){throw 'Theme copy followed a redirected install root'}",
+      "  [IO.Directory]::Delete($UserThemesRoot)",
+      "  $userRootJunction=$false",
+      "  [IO.Directory]::CreateDirectory($UserThemesRoot)|Out-Null",
+      "  [IO.File]::WriteAllText((Join-Path $DataRoot 'theme.json'),'{}')",
+      "  $nestedRejected=$false",
+      "  try { Copy-AuraUiThemeKit -Source $DataRoot -Id 'nested-theme'|Out-Null } catch { $nestedRejected=$_.Exception.Message -like '*outside the installed user themes folder*' }",
+      "  if(-not $nestedRejected -or (Test-Path -LiteralPath (Join-Path $UserThemesRoot 'nested-theme'))){throw 'Theme copy allowed its staging root inside the selected source'}",
+      "  $insideSource=Join-Path $UserThemesRoot 'inside-source'",
+      "  [IO.Directory]::CreateDirectory($insideSource)|Out-Null",
+      "  [IO.File]::WriteAllText((Join-Path $insideSource 'theme.json'),'{}')",
+      "  $insideRejected=$false",
+      "  try { Copy-AuraUiThemeKit -Source $insideSource -Id 'inside-theme'|Out-Null } catch { $insideRejected=$_.Exception.Message -like '*outside the installed user themes folder*' }",
+      "  if(-not $insideRejected){throw 'Theme copy accepted a source inside the install root'}",
+      "  $snapshot='{\"theme\":\"default\",\"enabled\":false,\"customTheme\":\"legacy.json\"}'",
+      "  [IO.File]::WriteAllText($ConfigPath,'{\"theme\":\"constructor\",\"enabled\":true}')",
+      "  Restore-AuraUiConfigSnapshot -Json $snapshot",
+      "  $restored=[IO.File]::ReadAllText($ConfigPath)|ConvertFrom-Json",
+      "  if($restored.theme -cne 'default' -or $restored.enabled -ne $false -or $restored.customTheme -cne 'legacy.json'){throw 'Theme import rollback did not restore the complete config'}",
+      "  if($script:RestoredPayload -cne 'restored-payload' -or -not $script:TrayRestored -or -not $script:ThemeRestored){throw 'Theme import rollback did not rebuild runtime state'}",
+      "} finally {",
+      "  if($userRootJunction -and (Test-Path -LiteralPath $UserThemesRoot)){[IO.Directory]::Delete($UserThemesRoot)}",
+      "  $env:LOCALAPPDATA=$originalLocalAppData",
+      "  if(Test-Path -LiteralPath $testRoot){[IO.Directory]::Delete($testRoot,$true)}",
+      "}",
+    ].join("\n");
+    try {
+      run("powershell.exe", ["-NoProfile", "-EncodedCommand", Buffer.from(importCopyRegression, "utf16le").toString("base64")]);
+    } finally {
+      await fs.rm(importCopyTestRoot, { recursive: true, force: true });
+    }
+
+    const cacheTestRoot = path.join(PROJECT_ROOT, "dist", `test-studio-cache-${process.pid}-${Date.now()}`);
     const cacheRegression = [
       "$ErrorActionPreference='Stop'",
       `$uiPath='${psPath(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"))}'`,

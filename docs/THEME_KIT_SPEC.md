@@ -17,9 +17,10 @@ Creates:
 
 - `themes/my-theme.json` — a commented token template (both light and dark
   modes, typography, shape, effects, wallpaper) ready to edit;
-- a registry snippet to paste into `themes/registry.json` (or, for installed
-  apps, a standalone `theme.json` kit for Studio import);
-- an asset kit folder with named SLOTS and a `CHECKLIST.md`.
+- `themes/my-theme/theme.json` — the standalone kit that Studio validates and
+  installs;
+- `themes/my-theme/CHECKLIST.md` — the named asset-slot checklist;
+- a registry snippet on stdout for source-tree development.
 
 Slot table (drop a PNG into any slot you want; empty slots are simply
 skipped — a tokens-only theme with zero artwork is completely valid):
@@ -36,7 +37,7 @@ skipped — a tokens-only theme with zero artwork is completely valid):
 ### 2. Validate
 
 ```powershell
-node scripts/theme-cli.mjs validate --theme my-theme
+node scripts/theme-cli.mjs validate themes/my-theme
 ```
 
 Mechanical checks with slot-specific error messages: files decode, dimensions

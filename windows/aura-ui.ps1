@@ -12,6 +12,7 @@ $ThemeCli = Join-Path $Root 'scripts\theme-cli.mjs'
 $VendorRoot = Join-Path $Root 'vendor\webview2'
 $DataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\data'
 $ConfigPath = Join-Path $DataRoot 'config.json'
+$UserThemesRoot = Join-Path $DataRoot 'themes'
 $WebDataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\webview'
 $LogPath = Join-Path $DataRoot 'aura-ui.log'
 $UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
@@ -100,6 +101,12 @@ function ConvertTo-AuraUiThemeMetadata {
     name = $name
     label = $label
     description = $description
+    labels = Get-AuraUiPropertyValue -InputObject $Item -Names @('labels')
+    descriptions = Get-AuraUiPropertyValue -InputObject $Item -Names @('descriptions')
+    swatches = @(Get-AuraUiPropertyValue -InputObject $Item -Names @('swatches'))
+    preview = Get-AuraUiPropertyValue -InputObject $Item -Names @('preview')
+    studioPreview = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreview')
+    source = Get-AuraUiPropertyValue -InputObject $Item -Names @('source')
   }
 }
 
@@ -161,7 +168,23 @@ function Invoke-AuraUiNode {
     $detail = if ($stderr.Trim()) { $stderr.Trim() } else { "Helper exited with code $($process.ExitCode)." }
     throw $detail
   }
+  if ($stderr.Trim()) { Write-AuraUiLog -Message "Theme helper warning: $($stderr.Trim())" }
   return $stdout
+}
+
+function Update-AuraUiThemes {
+  $arguments = @($ThemeCli, 'list', '--json', '--locale', $script:Locale, '--user-themes', $UserThemesRoot)
+  $themesJson = Invoke-AuraUiNode -CommandArguments $arguments
+  $parsedThemes = $themesJson | ConvertFrom-Json
+  $themeItems = @($parsedThemes)
+  $normalizedThemes = @()
+  for ($index = 0; $index -lt $themeItems.Count; $index++) {
+    $metadata = ConvertTo-AuraUiThemeMetadata -Item $themeItems[$index] -Index $index
+    if ($null -ne $metadata) { $normalizedThemes += $metadata }
+  }
+  if ($normalizedThemes.Count -eq 0) { throw "$($script:UiCopy.noThemes)" }
+  $script:Themes = @($normalizedThemes)
+  return $script:Themes
 }
 
 function Set-AuraUiPayloadState {
@@ -175,7 +198,7 @@ function Set-AuraUiPayloadState {
 
 function Set-AuraUiConfig {
   param([string[]]$Options)
-  $arguments = @($ThemeCli, 'set', '--config', $ConfigPath) + $Options
+  $arguments = @($ThemeCli, 'set', '--config', $ConfigPath, '--user-themes', $UserThemesRoot) + $Options
   if ($script:Locale) { $arguments += @('--locale', $script:Locale) }
   $arguments += '--payload'
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
@@ -542,6 +565,7 @@ function Send-AuraUiStudioState {
       backgroundAspectRatio = Get-AuraUiBackgroundAspectRatio
       backgroundCrop = Get-AuraUiStudioBackgroundCrop
       studioPreviewCrops = Get-AuraUiStudioPreviewCrops
+      themes = @($script:Themes)
       status = $Status
       tone = $Tone
     }
@@ -570,6 +594,258 @@ function Show-AuraUiStudio {
 function Invoke-AuraUiOpenDesktopApp {
   $claude = Get-AuraClaudeInstall
   Start-Process -FilePath $claude.Executable | Out-Null
+}
+
+function Assert-AuraUiThemeKitTree {
+  param([Parameter(Mandatory = $true)][string]$Source)
+  $sourceItem = Get-Item -LiteralPath $Source -Force
+  if (-not $sourceItem.PSIsContainer) { throw 'The selected theme kit must be a folder.' }
+  if (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'Theme kit folders cannot be symbolic links or junctions.'
+  }
+  $sourceRoot = [IO.Path]::GetFullPath($sourceItem.FullName).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $sourcePrefix = $sourceRoot + [IO.Path]::DirectorySeparatorChar
+  $pending = [Collections.Generic.Queue[IO.DirectoryInfo]]::new()
+  $pending.Enqueue([IO.DirectoryInfo]$sourceItem)
+  while ($pending.Count -gt 0) {
+    $directory = $pending.Dequeue()
+    foreach ($entry in $directory.GetFileSystemInfos()) {
+      if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Theme kit entries cannot be symbolic links or junctions: $($entry.Name)"
+      }
+      $entryPath = [IO.Path]::GetFullPath($entry.FullName)
+      if (-not $entryPath.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A theme kit entry resolves outside the selected folder.'
+      }
+      if ($entry -is [IO.DirectoryInfo]) { $pending.Enqueue($entry) }
+      elseif ($entry -isnot [IO.FileInfo]) { throw "Unsupported theme kit entry: $($entry.Name)" }
+    }
+  }
+  return $sourceRoot
+}
+
+function Assert-AuraUiThemeInstallRoot {
+  param([switch]$Create)
+  $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $expectedDataRoot = [IO.Path]::GetFullPath((Join-Path (Join-Path $localRoot 'ClaudeAura') 'data')).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $dataRootPath = [IO.Path]::GetFullPath($DataRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $userRoot = [IO.Path]::GetFullPath($UserThemesRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $expectedUserRoot = [IO.Path]::GetFullPath((Join-Path $dataRootPath 'themes')).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  if (-not [string]::Equals($dataRootPath, $expectedDataRoot, [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals($userRoot, $expectedUserRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The installed user themes folder is outside Claude Aura app data.'
+  }
+
+  $paths = @((Join-Path $localRoot 'ClaudeAura'), $dataRootPath, $userRoot)
+  foreach ($candidate in $paths) {
+    if (-not (Test-Path -LiteralPath $candidate)) {
+      if (-not $Create) { throw 'The installed user themes folder is unavailable.' }
+      [void][IO.Directory]::CreateDirectory($candidate)
+    }
+    $item = Get-Item -LiteralPath $candidate -Force
+    if (-not $item.PSIsContainer -or
+        ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Claude Aura theme install folders cannot be symbolic links or junctions.'
+    }
+  }
+  return $userRoot
+}
+
+function Copy-AuraUiThemeKit {
+  param(
+    [Parameter(Mandatory = $true)][string]$Source,
+    [Parameter(Mandatory = $true)][string]$Id
+  )
+  if ($Id -cnotmatch '^[a-z][a-z0-9-]{1,39}$') { throw 'The validated theme id is invalid.' }
+  $sourceRoot = Assert-AuraUiThemeKitTree -Source $Source
+  $userRoot = Assert-AuraUiThemeInstallRoot -Create
+  $userPrefix = $userRoot + [IO.Path]::DirectorySeparatorChar
+  $sourcePrefix = $sourceRoot + [IO.Path]::DirectorySeparatorChar
+  if ([string]::Equals($sourceRoot, $userRoot, [StringComparison]::OrdinalIgnoreCase) -or
+      $sourceRoot.StartsWith($userPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+      $userRoot.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Select a theme kit folder outside the installed user themes folder.'
+  }
+  $destination = [IO.Path]::GetFullPath((Join-Path $userRoot $Id))
+  if (-not $destination.StartsWith($userPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The theme destination resolves outside the user themes folder.'
+  }
+  if ([IO.Directory]::Exists($destination) -or [IO.File]::Exists($destination)) {
+    throw ("$($script:UiCopy.themeAlreadyInstalled)" -f $Id)
+  }
+  $staging = [IO.Path]::GetFullPath((Join-Path $userRoot ('.install-{0}-{1}' -f $Id, [Guid]::NewGuid().ToString('N'))))
+  if (-not $staging.StartsWith($userPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The staging folder resolves outside the user themes folder.'
+  }
+  [void][IO.Directory]::CreateDirectory($staging)
+  try {
+    $pending = [Collections.Generic.Queue[object]]::new()
+    $pending.Enqueue([PSCustomObject]@{
+      Source = [IO.DirectoryInfo]::new($sourceRoot)
+      Target = $staging
+    })
+    while ($pending.Count -gt 0) {
+      $item = $pending.Dequeue()
+      foreach ($entry in $item.Source.GetFileSystemInfos()) {
+        if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+          throw "Theme kit entries cannot be symbolic links or junctions: $($entry.Name)"
+        }
+        $entryPath = [IO.Path]::GetFullPath($entry.FullName)
+        if (-not $entryPath.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+          throw 'A theme kit entry resolves outside the selected folder.'
+        }
+        $targetPath = [IO.Path]::GetFullPath((Join-Path $item.Target $entry.Name))
+        if (-not $targetPath.StartsWith(($staging + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) {
+          throw 'A copied theme kit entry resolves outside the staging folder.'
+        }
+        if ($entry -is [IO.DirectoryInfo]) {
+          [void][IO.Directory]::CreateDirectory($targetPath)
+          $pending.Enqueue([PSCustomObject]@{ Source = $entry; Target = $targetPath })
+        } elseif ($entry -is [IO.FileInfo]) {
+          [IO.File]::Copy($entry.FullName, $targetPath, $false)
+        } else {
+          throw "Unsupported theme kit entry: $($entry.Name)"
+        }
+      }
+    }
+    $verifiedUserRoot = Assert-AuraUiThemeInstallRoot
+    if (-not [string]::Equals($verifiedUserRoot, $userRoot, [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'The installed user themes folder changed during import.'
+    }
+    $stagingItem = Get-Item -LiteralPath $staging -Force
+    if (-not $stagingItem.PSIsContainer -or
+        ($stagingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'The theme staging folder changed during import.'
+    }
+    [IO.Directory]::Move($staging, $destination)
+    return $destination
+  } catch {
+    $copyFailure = $_
+    try {
+      $cleanupRoot = Assert-AuraUiThemeInstallRoot
+      if ([string]::Equals($cleanupRoot, $userRoot, [StringComparison]::OrdinalIgnoreCase) -and
+          [IO.Directory]::Exists($staging) -and
+          $staging.StartsWith($userPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        $cleanupItem = Get-Item -LiteralPath $staging -Force
+        if ($cleanupItem.PSIsContainer -and
+            ($cleanupItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+          [IO.Directory]::Delete($staging, $true)
+        }
+      }
+    } catch {}
+    throw $copyFailure
+  }
+}
+
+function Remove-AuraUiInstalledTheme {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Id
+  )
+  if ($Id -cnotmatch '^[a-z][a-z0-9-]{1,39}$') { throw 'The installed theme id is invalid.' }
+  $userRoot = Assert-AuraUiThemeInstallRoot
+  $target = [IO.Path]::GetFullPath($Path)
+  $expectedTarget = [IO.Path]::GetFullPath((Join-Path $userRoot $Id))
+  if (-not [string]::Equals($target, $expectedTarget, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Refusing to remove a theme outside its exact user-theme destination.'
+  }
+  if ([IO.Directory]::Exists($target)) {
+    $targetItem = Get-Item -LiteralPath $target -Force
+    if (-not $targetItem.PSIsContainer -or
+        ($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Refusing to recursively remove a linked theme destination.'
+    }
+    [IO.Directory]::Delete($target, $true)
+  }
+}
+
+function Restore-AuraUiConfigSnapshot {
+  param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Json)
+  [void]($Json | ConvertFrom-Json)
+  $configDirectory = Split-Path $ConfigPath -Parent
+  [void][IO.Directory]::CreateDirectory($configDirectory)
+  $temporary = Join-Path $configDirectory ('.config-rollback-{0}.json' -f [Guid]::NewGuid().ToString('N'))
+  $backup = Join-Path $configDirectory ('.config-backup-{0}.json' -f [Guid]::NewGuid().ToString('N'))
+  try {
+    [IO.File]::WriteAllText($temporary, $Json, [Text.UTF8Encoding]::new($false))
+    if ([IO.File]::Exists($ConfigPath)) {
+      [IO.File]::Replace($temporary, $ConfigPath, $backup)
+    } else {
+      [IO.File]::Move($temporary, $ConfigPath)
+    }
+  } finally {
+    if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
+    if ([IO.File]::Exists($backup)) { [IO.File]::Delete($backup) }
+  }
+  $payload = Invoke-AuraUiNode -CommandArguments @(
+    $ThemeCli, 'init', '--config', $ConfigPath, '--locale', $script:Locale,
+    '--user-themes', $UserThemesRoot, '--payload')
+  $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  Set-AuraUiPayloadState -Payload $payload
+  Update-AuraUiTrayAppearance
+  Apply-AuraUiTheme
+}
+
+function Invoke-AuraUiImportTheme {
+  param([AllowNull()][System.Windows.Forms.IWin32Window]$Owner)
+  $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
+  $installedPath = $null
+  $importedId = $null
+  $previousConfigJson = $null
+  try {
+    $previousConfigJson = [IO.File]::ReadAllText($ConfigPath, [Text.Encoding]::UTF8)
+    $dialog.Description = "$($script:UiCopy.chooseThemeFolder)"
+    $dialog.ShowNewFolderButton = $false
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      Send-AuraUiStudioState
+      return $false
+    }
+    Send-AuraUiStudioState -Status "$($script:UiCopy.installingTheme)" -Tone busy
+    $validationJson = Invoke-AuraUiNode -CommandArguments @(
+      $ThemeCli, 'validate', $dialog.SelectedPath, '--locale', $script:Locale,
+      '--user-themes', $UserThemesRoot)
+    $validation = $validationJson | ConvertFrom-Json
+    if ($validation.pass -isnot [bool] -or -not $validation.pass -or
+        $validation.theme -isnot [string] -or $validation.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
+      throw 'The theme validator did not return a valid theme id.'
+    }
+    $importedId = [string]$validation.theme
+    if ($null -ne (Get-AuraUiThemeByName -Name $importedId)) {
+      throw ("$($script:UiCopy.themeAlreadyInstalled)" -f $importedId)
+    }
+    $installedPath = Copy-AuraUiThemeKit -Source $dialog.SelectedPath -Id $importedId
+    [void](Update-AuraUiThemes)
+    $importedTheme = Get-AuraUiThemeByName -Name $importedId
+    if ($null -eq $importedTheme -or "$($importedTheme.source)" -cne 'user') {
+      throw 'The installed theme did not appear in the user theme registry.'
+    }
+    Invoke-AuraUiSelectTheme -Theme $importedId
+    Send-AuraUiStudioState -Status ("$($script:UiCopy.themeInstalled)" -f "$($importedTheme.label)")
+    return $true
+  } catch {
+    $failure = $_
+    if ($installedPath) {
+      try { Remove-AuraUiInstalledTheme -Path $installedPath -Id $importedId }
+      catch { Write-AuraUiLog -Message "Theme import rollback failed: $($_.Exception.Message)" }
+      try {
+        [void](Update-AuraUiThemes)
+        Restore-AuraUiConfigSnapshot -Json $previousConfigJson
+      } catch { Write-AuraUiLog -Message "Theme import state recovery failed: $($_.Exception.Message)" }
+    }
+    $detail = ($failure.Exception.Message -replace '[\r\n]+', ' ').Trim()
+    if ($detail.Length -gt 600) { $detail = $detail.Substring(0, 600) }
+    Write-AuraUiLog -Message "Theme import failed: $detail"
+    Send-AuraUiStudioState -Status ("$($script:UiCopy.themeInstallFailed)" -f $detail) -Tone error
+    return $false
+  } finally {
+    $dialog.Dispose()
+  }
 }
 
 function Invoke-AuraUiSelectTheme {
@@ -753,7 +1029,7 @@ function Invoke-AuraUiStudioMessage {
     }
     'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
     'import-theme' {
-      Send-AuraUiStudioState -Status "$($script:UiCopy.studioImportPending)" -Tone busy
+      [void](Invoke-AuraUiImportTheme -Owner $script:StudioForm)
       break
     }
   }
@@ -833,7 +1109,9 @@ try {
   elseif ($Theme -or $Image -or $ClearImage) { $initialOptions += @('--enabled', 'true') }
   if ($initialOptions.Count -gt 0) { Set-AuraUiConfig -Options $initialOptions }
   else {
-    $initialPayload = Invoke-AuraUiNode -CommandArguments @($ThemeCli, 'init', '--config', $ConfigPath, '--locale', $script:Locale, '--payload')
+    $initialPayload = Invoke-AuraUiNode -CommandArguments @(
+      $ThemeCli, 'init', '--config', $ConfigPath, '--locale', $script:Locale,
+      '--user-themes', $UserThemesRoot, '--payload')
     $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Set-AuraUiPayloadState -Payload $initialPayload
   }
@@ -890,16 +1168,7 @@ public static class AuraWindow {
   Set-AuraUiFormWithinWorkingArea -Form $script:Form
   $script:Form.add_Shown({ Set-AuraUiFormWithinWorkingArea -Form $script:Form })
 
-  $themesJson = Invoke-AuraUiNode -CommandArguments @($ThemeCli, 'list', '--json', '--locale', $locale)
-  $parsedThemes = $themesJson | ConvertFrom-Json
-  $themeItems = @($parsedThemes)
-  $normalizedThemes = @()
-  for ($index = 0; $index -lt $themeItems.Count; $index++) {
-    $metadata = ConvertTo-AuraUiThemeMetadata -Item $themeItems[$index] -Index $index
-    if ($null -ne $metadata) { $normalizedThemes += $metadata }
-  }
-  if ($normalizedThemes.Count -eq 0) { throw "$($script:UiCopy.noThemes)" }
-  $script:Themes = @($normalizedThemes)
+  [void](Update-AuraUiThemes)
 
   $script:WebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
   $script:WebView.Dock = 'Fill'

@@ -329,6 +329,222 @@
 
   // ── HOST BRIDGE (WO-05 / WO-07 wire the other side in aura-ui.ps1) ──────
   const bridge = window.chrome?.webview ?? null;
+  const bundledThemeIds = new Set(Object.keys(themes));
+  const hostThemeIdPattern = /^[a-z][a-z0-9-]{1,39}$/;
+  const hostThemeColorPattern = /^#[0-9a-f]{6}$/i;
+  const hostThemeKeys = new Set([
+    "name", "label", "description", "labels", "descriptions", "swatches", "preview", "studioPreview", "source",
+  ]);
+  const hostThemeLocales = new Set(["en", "zh-CN", "zh-TW"]);
+  const hostThemePreviewKeys = new Set(["chrome", "background", "surface", "accent", "text"]);
+
+  const plainRecord = (value) => value && typeof value === "object" && !Array.isArray(value);
+  const hostText = (value, maximum) => {
+    if (typeof value !== "string") return null;
+    const text = value.trim();
+    return text && text.length <= maximum ? text : null;
+  };
+  const hostLocalizedText = (value, maximum) => {
+    if (value === undefined) return undefined;
+    if (!plainRecord(value)) return null;
+    const result = Object.create(null);
+    for (const [key, textValue] of Object.entries(value)) {
+      if (!hostThemeLocales.has(key)) return null;
+      const text = hostText(textValue, maximum);
+      if (!text) return null;
+      result[key] = text;
+    }
+    return result;
+  };
+  const normalizeHostTheme = (value) => {
+    if (!plainRecord(value) || Object.keys(value).some((key) => !hostThemeKeys.has(key))) return null;
+    const name = hostText(value.name, 40);
+    const label = hostText(value.label, 120);
+    const description = hostText(value.description, 500);
+    if (!name || !hostThemeIdPattern.test(name) || !label || !description) return null;
+
+    const labels = hostLocalizedText(value.labels, 120);
+    const descriptions = hostLocalizedText(value.descriptions, 500);
+    if (labels === null || descriptions === null) return null;
+
+    let swatches;
+    if (value.swatches !== undefined) {
+      if (!Array.isArray(value.swatches) || value.swatches.length > 6
+          || value.swatches.some((color) => typeof color !== "string" || !hostThemeColorPattern.test(color))) {
+        return null;
+      }
+      swatches = value.swatches.slice();
+    }
+
+    let preview;
+    if (value.preview !== undefined) {
+      if (!plainRecord(value.preview)
+          || Object.keys(value.preview).some((key) => !hostThemePreviewKeys.has(key))) return null;
+      preview = Object.create(null);
+      for (const [key, color] of Object.entries(value.preview)) {
+        if (typeof color !== "string" || !hostThemeColorPattern.test(color)) return null;
+        preview[key] = color;
+      }
+    }
+
+    let studioPreview;
+    if (value.studioPreview !== undefined) {
+      if (value.studioPreview !== null && !studioPreviewUrl(value.studioPreview)) return null;
+      studioPreview = value.studioPreview;
+    }
+
+    let source;
+    if (value.source !== undefined) {
+      if (value.source !== null && value.source !== "builtin" && value.source !== "user") return null;
+      source = value.source;
+    }
+
+    return {
+      name,
+      label,
+      description,
+      ...(labels === undefined ? {} : { labels }),
+      ...(descriptions === undefined ? {} : { descriptions }),
+      ...(swatches === undefined ? {} : { swatches }),
+      ...(preview === undefined ? {} : { preview }),
+      ...(studioPreview === undefined ? {} : { studioPreview }),
+      ...(source === undefined ? {} : { source }),
+    };
+  };
+
+  const themeCardInput = (themeId) => [...grid.querySelectorAll("input[name='theme']")]
+    .find((input) => input.value === themeId) ?? null;
+  const removeHostThemeCard = (themeId) => {
+    const item = cardFrames.get(themeId);
+    if (item) cropResizeObserver?.unobserve(item.frame);
+    cardFrames.delete(themeId);
+    themeCardInput(themeId)?.closest(".theme-card")?.remove();
+  };
+  const createHostThemeCard = (theme) => {
+    const card = document.createElement("div");
+    card.className = "theme-card";
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "theme";
+    input.id = `theme-${theme.name}`;
+    input.value = theme.name;
+    const label = document.createElement("label");
+    label.htmlFor = input.id;
+
+    const imageUrl = studioPreviewUrl(theme.studioPreview);
+    if (imageUrl) {
+      const frame = document.createElement("span");
+      frame.className = "theme-card-preview-frame";
+      frame.dataset.theme = theme.name;
+      frame.setAttribute("aria-hidden", "true");
+      const image = document.createElement("img");
+      image.className = "theme-card-preview";
+      image.src = imageUrl;
+      image.alt = "";
+      image.draggable = false;
+      image.setAttribute("aria-hidden", "true");
+      frame.appendChild(image);
+      label.appendChild(frame);
+      cardFrames.set(theme.name, { frame, image });
+      image.addEventListener("load", () => layoutCardCrop(theme.name));
+      cropResizeObserver?.observe(frame);
+    } else {
+      const preview = theme.preview ?? {};
+      const mini = document.createElement("span");
+      mini.className = "mini";
+      mini.style.background = preview.background ?? "#eeeeee";
+      mini.setAttribute("aria-hidden", "true");
+      const chrome = document.createElement("span");
+      chrome.className = "mini-chrome";
+      chrome.style.background = preview.chrome ?? "#222222";
+      for (let index = 0; index < 2; index += 1) {
+        const mark = document.createElement("i");
+        mark.style.background = preview.text ?? "#ffffff";
+        chrome.appendChild(mark);
+      }
+      const surface = document.createElement("span");
+      surface.className = "mini-surface";
+      surface.style.background = preview.surface ?? "#ffffff";
+      const textMark = document.createElement("span");
+      textMark.className = "mini-text";
+      textMark.style.background = preview.text ?? "#333333";
+      const accentMark = document.createElement("span");
+      accentMark.className = "mini-accent";
+      accentMark.style.background = preview.accent ?? "#888888";
+      surface.append(textMark, accentMark);
+      mini.append(chrome, surface);
+      label.appendChild(mini);
+    }
+
+    const body = document.createElement("span");
+    body.className = "theme-card-body";
+    const title = document.createElement("strong");
+    title.textContent = localized(theme.labels, theme.label);
+    const description = document.createElement("small");
+    description.textContent = localized(theme.descriptions, theme.description);
+    const swatches = document.createElement("span");
+    swatches.className = "swatches";
+    swatches.setAttribute("aria-hidden", "true");
+    for (const color of (theme.swatches ?? []).slice(0, 4)) {
+      const swatch = document.createElement("i");
+      swatch.style.background = color;
+      swatches.appendChild(swatch);
+    }
+    body.append(title, description, swatches);
+    label.appendChild(body);
+    const badge = document.createElement("span");
+    badge.className = "selected-badge";
+    badge.setAttribute("aria-hidden", "true");
+    badge.textContent = t("selected");
+    card.append(input, label, badge);
+    input.addEventListener("change", () => {
+      state.theme = theme.name;
+      state.enabled = true;
+      setStatus(t("statusApplying"), "busy");
+      if (!send({ type: "set-theme", theme: theme.name })) {
+        setStatus(t("statusActive").replace("{0}", localized(theme.labels, theme.label)));
+      }
+      reflect();
+    });
+    grid.appendChild(card);
+    if (imageUrl) layoutCardCrop(theme.name);
+    return card;
+  };
+  const syncHostThemes = (value) => {
+    if (!Array.isArray(value) || value.length > 256) return false;
+    const incoming = [];
+    const incomingIds = new Set();
+    for (const item of value) {
+      const theme = normalizeHostTheme(item);
+      if (!theme || incomingIds.has(theme.name)) return false;
+      incoming.push(theme);
+      incomingIds.add(theme.name);
+    }
+
+    for (const themeId of Object.keys(themes)) {
+      if (!bundledThemeIds.has(themeId) && !incomingIds.has(themeId)) {
+        removeHostThemeCard(themeId);
+        delete themes[themeId];
+      }
+    }
+    for (const incomingTheme of incoming) {
+      const existing = Object.hasOwn(themes, incomingTheme.name) ? themes[incomingTheme.name] : null;
+      if (existing) {
+        const labels = { ...(existing.labels ?? {}), ...(incomingTheme.labels ?? {}) };
+        const descriptions = { ...(existing.descriptions ?? {}), ...(incomingTheme.descriptions ?? {}) };
+        const preview = { ...(existing.preview ?? {}), ...(incomingTheme.preview ?? {}) };
+        const bundledPreview = bundledThemeIds.has(incomingTheme.name) && incomingTheme.studioPreview == null
+          ? existing.studioPreview
+          : incomingTheme.studioPreview;
+        Object.assign(existing, incomingTheme, { labels, descriptions, preview });
+        if (bundledPreview !== undefined) existing.studioPreview = bundledPreview;
+      } else {
+        themes[incomingTheme.name] = incomingTheme;
+        createHostThemeCard(incomingTheme);
+      }
+    }
+    return true;
+  };
   const send = (message) => {
     if (!bridge) { setStatus(t("statusDemo"), "busy"); return false; }
     bridge.postMessage(message);
@@ -339,7 +555,9 @@
       const data = event.data ?? {};
       if (data.type === "state") {
         state.connected = true;
-        if (typeof data.theme === "string") state.theme = data.theme;
+        if (Object.hasOwn(data, "themes")) syncHostThemes(data.themes);
+        if (typeof data.theme === "string" && hostThemeIdPattern.test(data.theme)
+            && Object.hasOwn(themes, data.theme)) state.theme = data.theme;
         if (typeof data.enabled === "boolean") state.enabled = data.enabled;
         if (typeof data.hasImage === "boolean") state.hasImage = data.hasImage;
         state.imagePreviewUrl = backgroundPreviewUrl(data.imagePreviewUrl);
