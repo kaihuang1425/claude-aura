@@ -33,3 +33,26 @@ move to the next queue item. Format:
   `corner-top-right.webp`. After conversion, WO-08 still needs its QA board,
   actual Aura light/dark captures, and explicit approval before replacing the
   locked Checkpoint A goldens.
+
+## 2026-07-19 — WO-09 — Aura whole-window capture is unavailable
+- Attempt 1: refreshed the installed app from the WO-09 worktree, launched the
+  authenticated Korean Prestige WebView2 window through both hidden and visible
+  PowerShell hosts, and polled the native Computer Use bridge → Aura created a
+  real `Claude Aura` top-level window and CDP verified the expected theme and
+  digest on `https://claude.ai/new`, but the bridge deliberately returned no
+  PowerShell-hosted window, so it could not capture the required whole window.
+- Attempt 2: built a disposable in-process native host so the same installed
+  `aura-ui.ps1` window would be owned by a non-terminal executable and therefore
+  targetable by the capture bridge → Windows antimalware blocked that unsigned
+  helper as potentially unwanted before launch. No security control was
+  bypassed or changed.
+- Suspected cause: the available native-window bridge excludes PowerShell-owned
+  WinForms windows, while the only safe ownership workaround is rejected by
+  local endpoint protection. A WebView-only CDP screenshot exists, but the
+  screenshot protocol explicitly forbids substituting it for the entire Aura
+  window.
+- What would unblock it (tool, asset, or user decision): a first-party capture
+  path that can target the PowerShell-hosted `Claude Aura` window, or user-made
+  whole-window light/dark captures plus the required viewport/scaling metadata.
+  WO-09 also still needs explicit mini-checkpoint approval and replacement of
+  both locked Korean Prestige deterministic goldens.
