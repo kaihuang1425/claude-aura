@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { listThemes, PROJECT_ROOT } from "./theme-core.mjs";
 
-const SAFE_ARTWORK_PATH = /^assets\/theme-art\/[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
+const SAFE_ARTWORK_PATH = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
 
 function previewMode(mode) {
   const semantic = { ...mode.semantic };
@@ -19,17 +19,22 @@ function previewMode(mode) {
   };
 }
 
-function previewArtwork(artwork, themeName) {
+function previewArtwork(artwork, themeName, { layered = false } = {}) {
   if (!artwork) return null;
   if (!SAFE_ARTWORK_PATH.test(artwork.path)) {
     throw new Error(`Preview artwork for ${themeName} must be an isolated asset in assets/theme-art`);
   }
-  return {
+  const result = {
     path: artwork.path,
     position: artwork.position,
     size: artwork.size,
     mobile: artwork.mobile,
   };
+  if (layered) {
+    result.opacity = artwork.opacity;
+    result.mask = artwork.mask;
+  }
+  return result;
 }
 
 const themes = await listThemes({ locale: "en" });
@@ -44,6 +49,9 @@ const compact = Object.fromEntries(themes.map((theme) => [theme.name, {
   preview: { ...theme.preview },
   studioPreview: theme.studioPreview,
   artwork: previewArtwork(theme.artwork, theme.name),
+  artworkLayers: theme.artworkLayers
+    ? theme.artworkLayers.map((layer) => previewArtwork(layer, theme.name, { layered: true }))
+    : null,
   radius: theme.radius,
   blur: theme.blur,
   typography: { ...theme.typography },

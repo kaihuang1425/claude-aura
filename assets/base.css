@@ -74,8 +74,6 @@ html.claude-aura body {
   mask-image: radial-gradient(145% 122% at 100% 50%, #000 25%, transparent 80%);
 }
 
-/* Layered artwork (settings.artLayers): inline styles carry image, position,
-   size, and opacity per layer; these attributes select the mask treatment. */
 #claude-aura-backdrop .claude-aura-theme-art[data-art-mask="none"] {
   -webkit-mask-image: none;
   mask-image: none;
@@ -544,7 +542,6 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
     opacity: calc(var(--aura-art-opacity, 0) * 0.66);
   }
 
-  /* Inline-styled layers need explicit weight to shrink on narrow windows. */
   #claude-aura-backdrop .claude-aura-theme-art-layer[data-art-mobile="reduce"] {
     opacity: 0.34 !important;
   }

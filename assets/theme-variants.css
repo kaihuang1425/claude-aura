@@ -93,14 +93,23 @@ html.claude-aura[data-claude-aura-theme="korean-prestige"] :is(svg, [data-icon])
 }
 
 /* Cartoon Studio: ink outlines, friendly controls, tactile but uncluttered. */
-html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-sidebar,
-html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-content,
-html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-main {
-  backdrop-filter: none;
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-main > .dframe-content {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
 }
 
-html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(button, [role="button"], [role="tab"], input, textarea, select) {
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] #claude-aura-backdrop .claude-aura-theme-art-layer {
+  animation: none;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(button, [role="button"], [role="tab"]) {
   border: 2px solid hsl(var(--aura-border-emphasis) / 0.78) !important;
+  border-radius: var(--aura-control-radius) !important;
+}
+
+html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(input, textarea, select) {
+  border-width: 2px !important;
+  border-style: solid !important;
   border-radius: var(--aura-control-radius) !important;
 }
 

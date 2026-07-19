@@ -67,6 +67,10 @@ const REQUIRED_PANELS = [
 // kit is present they make conversion fidelity visible beside the exact
 // delivered file.
 const REFERENCE_MAP = {
+  "cartoon-studio": {
+    "background.webp": { path: "themes/cartoon-studio/provisional/selected/background.png" },
+    "hero.webp": { path: "themes/cartoon-studio/provisional/selected/hero.png" },
+  },
   "japanese-idol": {
     "background.webp": { path: "themes/japanese-idol/atmospheric-background.png" },
     "hero.webp": {

@@ -15,6 +15,28 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-20 — WO-10 — Cartoon Studio artwork
+
+- What changed: replaced the procedural Cartoon Studio SVG with approved,
+  checksum-frozen WebP background and original mascot layers; retained three
+  approved card-doodle masters source-only; added generic layered-art preview
+  data/rendering and source-aware QA/conversion coverage; locked the approved
+  light/dark deterministic renders in `docs/golden/REFERENCE_LOCK.md`.
+- Evidence: `themes/cartoon-studio/qa/qa-board.png`,
+  `dist/verify/wo10-cartoon-studio-mini-checkpoint.png`, and
+  `dist/verify/cartoon-studio-{light,dark}-1440x900.png`; runtime WebPs are
+  50,686 and 80,854 bytes and decode at 1600 x 900 RGB and 835 x 1032 RGBA.
+  `npm run check` passed 19/19 and `npm run verify:cycle` passed 33/33 with all
+  sixteen outputs inspected and zero golden deltas.
+- Parity scores (visual orders only): cartoon-studio:
+  atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
+  green/green/green/green/green/green/green/green.
+- Follow-ups discovered: the PowerShell-hosted Aura whole-window capture path
+  remains unavailable as recorded under WO-09 in `docs/plans/BLOCKED.md`. On
+  2026-07-20 the user authorized WO-10 completion with its live light/dark and
+  1280 x 720 evidence explicitly deferred to HUMAN CHECKPOINT C/WO-16; no
+  fixture image is represented as a live Aura capture.
+
 ## 2026-07-19 — WO-07 — user theme installation
 
 - What changed: added standalone `theme.json` kits, merged user themes from

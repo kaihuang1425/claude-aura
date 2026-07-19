@@ -117,6 +117,24 @@ test("registry exposes exactly Default plus the seven requested themes", async (
     forest: "study-library",
     sakura: "japanese-idol",
   });
+  assert.deepEqual(themes.find((theme) => theme.name === "cartoon-studio")?.artworkLayers, [
+    {
+      path: "assets/theme-art/cartoon-studio/background.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.5,
+      mask: "none",
+    },
+    {
+      path: "assets/theme-art/cartoon-studio/hero.webp",
+      position: "right bottom",
+      size: "min(26vw, 420px) auto",
+      mobile: "reduce",
+      opacity: 0.95,
+      mask: "none",
+    },
+  ]);
 });
 
 test("every theme provides complete semantic roles and a distinct component profile", async () => {
@@ -452,6 +470,23 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     assert.equal(document.documentElement.dataset.claudeAuraTheme, theme.name);
     assert.equal(intervals.size, 1, `${theme.name} left duplicate renderer timers`);
     assert.equal(observers.size, 1, `${theme.name} left duplicate mutation observers`);
+    const backdrop = document.getElementById("claude-aura-backdrop");
+    const layers = backdrop.children.filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer"));
+    const expectedLayers = theme.artworkLayers ?? [];
+    assert.equal(layers.length, expectedLayers.length, `${theme.name} rendered the wrong layered-art count`);
+    if (expectedLayers.length) {
+      assert.equal(backdrop["aria-hidden"], "true");
+      assert.deepEqual(layers.map((layer) => layer.style.getPropertyValue("opacity")),
+        expectedLayers.map((layer) => String(layer.opacity)));
+      assert.deepEqual(layers.map((layer) => layer.style.getPropertyValue("background-position")),
+        expectedLayers.map((layer) => layer.position));
+      assert.deepEqual(layers.map((layer) => layer.style.getPropertyValue("background-size")),
+        expectedLayers.map((layer) => layer.size));
+      assert.deepEqual(layers.map((layer) => layer.dataset.artMask),
+        expectedLayers.map((layer) => layer.mask));
+      assert.deepEqual(layers.map((layer) => layer.dataset.artMobile),
+        expectedLayers.map((layer) => layer.mobile));
+    }
   }
 
   const framedBundle = await buildPayload({
@@ -470,6 +505,12 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   injectFramed(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
   assert.equal(document.documentElement.style.getPropertyValue("--aura-image-position"), "12.5% 87.5%");
   assert.equal(document.documentElement.style.getPropertyValue("--aura-image-scale"), "1.4");
+  assert.equal(
+    document.getElementById("claude-aura-backdrop").children
+      .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer")).length,
+    0,
+    "Switching from layered artwork to a legacy theme left stale layers",
+  );
   assert.equal(intervals.size, 1, "Framed background injection left a duplicate renderer timer");
   assert.equal(observers.size, 1, "Framed background injection left a duplicate mutation observer");
 
@@ -1674,7 +1715,26 @@ test("preview data and QA harness cover every theme and major interaction family
   const script = await fs.readFile(path.join(PROJECT_ROOT, "preview", "app.js"), "utf8");
   const server = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "preview-server.mjs"), "utf8");
   for (const id of THEME_IDS) assert(generated.includes(`\"${id}\"`), `Preview is missing ${id}`);
+  const generatedMatch = generated.match(/window\.CLAUDE_AURA_THEMES\s*=\s*([\s\S]+);\s*$/);
+  assert(generatedMatch, "Preview theme metadata could not be parsed");
+  const previewThemes = JSON.parse(generatedMatch[1]);
+  for (const theme of await listThemes()) {
+    const expectedLayers = theme.artworkLayers?.length
+      ? theme.artworkLayers.map(({ path: artworkPath, position, size, mobile, opacity, mask }) => ({
+        path: artworkPath,
+        position,
+        size,
+        mobile,
+        opacity,
+        mask,
+      }))
+      : null;
+    assert.deepEqual(previewThemes[theme.name].artworkLayers, expectedLayers,
+      `${theme.name} preview metadata lost its layered artwork descriptors`);
+    if (expectedLayers) assert.equal(previewThemes[theme.name].artwork, null);
+  }
   assert.match(html, /aria-label/i);
+  assert.match(html, /id="theme-art-layers"/);
   assert.match(html, /data-screen="home"|id="home-screen"/i);
   assert.match(html, /data-screen="code"|id="code-screen"/i);
   assert.match(html, /Cowork/);
@@ -1691,7 +1751,10 @@ test("preview data and QA harness cover every theme and major interaction family
   assert.match(css, /:focus-visible/);
   assert.match(css, /:active/);
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /prefers-contrast/);
   assert.match(css, /forced-colors/);
+  assert.match(css, /\.theme-art-layer\[data-art-mask="none"\]/);
+  assert.match(css, /\.theme-art-layer\[data-art-mobile="reduce"\]/);
   assert.match(css, /data-preview-capture="true"/);
   assert.match(script, /localStorage/);
   assert.match(script, /new URLSearchParams\(window\.location\.search\)/);
@@ -1700,8 +1763,12 @@ test("preview data and QA harness cover every theme and major interaction family
     assert(script.includes(`readQueryValue("${parameter}"`), `Preview URL state omits validated ${parameter}`);
   }
   assert.match(script, /previewReady/);
+  assert.match(script, /previewError/);
   assert.match(script, /document\.fonts\?\.ready/);
   assert.match(script, /\.decode\(\)/);
+  assert.match(script, /failed to decode/);
+  assert.match(script, /Array\.isArray\(theme\.artworkLayers\)/);
+  assert.match(script, /element\.dataset\.artMask/);
   assert.match(script, /requestAnimationFrame/);
   assert.match(script, /claude-aura-preview-ready/);
   assert.match(script, /__CLAUDE_AURA_PREVIEW__/);

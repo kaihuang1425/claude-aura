@@ -30,6 +30,7 @@ window.CLAUDE_AURA_THEMES = {
     },
     "studioPreview": null,
     "artwork": null,
+    "artworkLayers": null,
     "radius": 18,
     "blur": 20,
     "typography": {
@@ -481,6 +482,7 @@ window.CLAUDE_AURA_THEMES = {
       "size": "min(60vw, 920px) auto",
       "mobile": "reduce"
     },
+    "artworkLayers": null,
     "radius": 4,
     "blur": 10,
     "typography": {
@@ -932,6 +934,7 @@ window.CLAUDE_AURA_THEMES = {
       "size": "min(58vw, 880px) auto",
       "mobile": "reduce"
     },
+    "artworkLayers": null,
     "radius": 12,
     "blur": 24,
     "typography": {
@@ -1377,12 +1380,25 @@ window.CLAUDE_AURA_THEMES = {
       "text": "#302820"
     },
     "studioPreview": "assets/theme-art/cartoon-studio/card-preview.webp",
-    "artwork": {
-      "path": "assets/theme-art/cartoon-studio.svg",
-      "position": "right bottom",
-      "size": "min(54vw, 780px) auto",
-      "mobile": "reduce"
-    },
+    "artwork": null,
+    "artworkLayers": [
+      {
+        "path": "assets/theme-art/cartoon-studio/background.webp",
+        "position": "center",
+        "size": "cover",
+        "mobile": "keep",
+        "opacity": 0.5,
+        "mask": "none"
+      },
+      {
+        "path": "assets/theme-art/cartoon-studio/hero.webp",
+        "position": "right bottom",
+        "size": "min(26vw, 420px) auto",
+        "mobile": "reduce",
+        "opacity": 0.95,
+        "mask": "none"
+      }
+    ],
     "radius": 20,
     "blur": 8,
     "typography": {
@@ -1834,6 +1850,7 @@ window.CLAUDE_AURA_THEMES = {
       "size": "cover",
       "mobile": "reduce"
     },
+    "artworkLayers": null,
     "radius": 16,
     "blur": 22,
     "typography": {
@@ -2285,6 +2302,7 @@ window.CLAUDE_AURA_THEMES = {
       "size": "min(48vw, 700px) auto",
       "mobile": "hide"
     },
+    "artworkLayers": null,
     "radius": 7,
     "blur": 6,
     "typography": {
@@ -2731,6 +2749,40 @@ window.CLAUDE_AURA_THEMES = {
     },
     "studioPreview": "assets/theme-art/japanese-idol/card-preview.webp",
     "artwork": null,
+    "artworkLayers": [
+      {
+        "path": "assets/theme-art/kawaii-idol/background.webp",
+        "position": "center",
+        "size": "cover",
+        "mobile": "keep",
+        "opacity": 0.5,
+        "mask": "none"
+      },
+      {
+        "path": "assets/theme-art/kawaii-idol/hero.webp",
+        "position": "right bottom",
+        "size": "auto min(86%, 760px)",
+        "mobile": "reduce",
+        "opacity": 0.92,
+        "mask": "soft-right"
+      },
+      {
+        "path": "assets/theme-art/kawaii-idol/sakura-top-right.webp",
+        "position": "right top",
+        "size": "min(18vw, 280px) auto",
+        "mobile": "hide",
+        "opacity": 0.9,
+        "mask": "none"
+      },
+      {
+        "path": "assets/theme-art/kawaii-idol/sakura-bottom-right.webp",
+        "position": "left bottom",
+        "size": "min(17vw, 260px) auto",
+        "mobile": "hide",
+        "opacity": 0.75,
+        "mask": "none"
+      }
+    ],
     "radius": 20,
     "blur": 18,
     "typography": {
@@ -3177,6 +3229,32 @@ window.CLAUDE_AURA_THEMES = {
     },
     "studioPreview": "assets/theme-art/korean-idol/card-preview.webp",
     "artwork": null,
+    "artworkLayers": [
+      {
+        "path": "assets/theme-art/korean-idol/background.webp",
+        "position": "center",
+        "size": "cover",
+        "mobile": "keep",
+        "opacity": 0.6,
+        "mask": "none"
+      },
+      {
+        "path": "assets/theme-art/korean-idol/constellation.webp",
+        "position": "right top",
+        "size": "min(44vw, 720px) auto",
+        "mobile": "hide",
+        "opacity": 0.85,
+        "mask": "none"
+      },
+      {
+        "path": "assets/theme-art/korean-idol/hero.webp",
+        "position": "right top",
+        "size": "min(38vw, 620px) auto",
+        "mobile": "reduce",
+        "opacity": 0.96,
+        "mask": "none"
+      }
+    ],
     "radius": 16,
     "blur": 26,
     "typography": {

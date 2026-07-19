@@ -24,7 +24,7 @@ font, image, or other resource is fetched from the network.
 
 - `japanese-film-editorial.svg` — warm paper, ink, film-frame details, and an editorial portrait.
 - `korean-prestige.svg` — midnight architectural glass and blue-silver structure.
-- `cartoon-studio.svg` — cream studio textures and a non-human productivity mascot.
+- `cartoon-studio/` — generated cream paper background and an original transparent non-human productivity mascot, plus the Studio selector preview.
 - `anime-twilight.svg` — a twilight science-fiction environment with constellation lines.
 - `study-library.svg` — books, index cards, a fountain pen, grid paper, and research diagrams.
 - `kawaii-idol/` — layered Japanese Idol background, hero, sakura, marks, and motifs.

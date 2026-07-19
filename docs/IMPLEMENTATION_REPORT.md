@@ -44,6 +44,25 @@ payload under 65 KB, embedded artwork under 1.4 MB (Japanese Idol totals about
 579 KB). The exact compiled payload was rendered in a standalone harness to
 confirm the layers paint correctly through the production injection path.
 
+## Cartoon Studio approved artwork
+
+WO-10 replaces the procedural Cartoon Studio stand-in with two approved inert
+WebP layers: a 1600 x 900 cream paper/doodle background and an original 835 x
+1032 transparent mascot. Three approved tool doodles remain source-only because
+the changing live Claude DOM does not provide stable card-art anchors. The
+generated source kit, hashes, provenance, and 2160 x 4600 QA board live under
+the gitignored `themes/cartoon-studio/`; the two shippable derivatives live
+under `assets/theme-art/cartoon-studio/`. Their exact light/dark payload renders
+are locked in `docs/golden/REFERENCE_LOCK.md` after the user-approved WO-10
+mini-checkpoint.
+
+The required whole-window Aura capture could not target the PowerShell-hosted
+window through the available first-party bridge; the two exhausted attempts are
+recorded under WO-09 in `docs/plans/BLOCKED.md`. On 2026-07-20 the user
+authorized WO-10 completion with its real-Aura light/dark and 1280 x 720 stress
+evidence deferred to HUMAN CHECKPOINT C/WO-16. This exception does not relabel
+fixture or QA images as live evidence.
+
 ## Scope
 
 Claude Aura 0.3 preserves the existing WebView2 companion, renderer injection,
@@ -60,7 +79,7 @@ real Claude interface with screenshots.
 | 1 | `default` | Default | None |
 | 2 | `japanese-film-editorial` | Japanese Film Editorial | `assets/theme-art/japanese-film-editorial.svg` |
 | 3 | `korean-prestige` | Korean Prestige | `assets/theme-art/korean-prestige.svg` |
-| 4 | `cartoon-studio` | Cartoon Studio | `assets/theme-art/cartoon-studio.svg` |
+| 4 | `cartoon-studio` | Cartoon Studio | Two layered `assets/theme-art/cartoon-studio/*.webp` assets (background and original mascot) |
 | 5 | `anime-twilight` | Anime Twilight | `assets/theme-art/anime-twilight.svg` |
 | 6 | `study-library` | Study Library | `assets/theme-art/study-library.svg` |
 | 7 | `japanese-idol` | Japanese Idol | Four layered `assets/theme-art/kawaii-idol/*.webp` assets (background, hero, two sakura clusters) |
@@ -202,8 +221,10 @@ the unreadable source as a uniquely named `.corrupt-…json` diagnostic backup.
 
 ## Artwork and licensing
 
-Five themes use self-contained project SVG renderer art. Japanese Idol uses
-derived, isolated WebP/SVG copies from the supplied kit under
+Four themes use self-contained project SVG renderer art. Cartoon Studio uses
+two project-generated, user-approved WebP layers with frozen source masters
+under `themes/cartoon-studio/`. Japanese Idol uses derived, isolated WebP/SVG
+copies from the supplied kit under
 `themes/japanese-idol/`, and Korean Idol uses three derived WebP layers from the
 kit currently supplied under `themes/korean-prestige/`; both source directories
 remain gitignored. Runtime artwork is separate from the functional interface,
@@ -307,6 +328,7 @@ Results recorded through 2026-07-18:
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
 | Browser interaction, console, responsive sizes, and screenshots | Passed on 2026-07-17 in the offline QA harness (Chromium/WebView2 engine). All eight themes switch through one stable `data-claude-aura-theme` root attribute with distinct accent, display font, radius, and border-width values; no console output, and only same-origin `/preview/` and local `data:`/SVG requests (zero remote or mixed-content requests) across all eight; decorative artwork stays `pointer-events:none` and never wins the hit-test at the composer center; persistence survives reload and query-parameter overrides do not overwrite saved state; visible focus ring, labelled modal dialog with focus trap, keyboard tab/arrow/Escape, and disabled styling all confirmed; no horizontal overflow. Fourteen screenshots recorded under `docs/theme-screenshots/` (see Visual evidence) |
 | Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Actual pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. Evidence is under `dist/verify/checkpoint-b-*-framing*.png` and the explicitly named files in `docs/PROGRESS.md` |
+| WO-10 Cartoon Studio asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, two-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. The user-authorized live-capture deferral remains explicit for Checkpoint C/WO-16. |
 
 Before creating an archive, run the checks and then:
 

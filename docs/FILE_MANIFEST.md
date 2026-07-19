@@ -50,10 +50,18 @@ are listed under Visual evidence below.
 - `assets/theme-variants.css`
 - `assets/theme-art/README.md`
 - `assets/theme-art/anime-twilight.svg`
-- `assets/theme-art/cartoon-studio.svg`
 - `assets/theme-art/japanese-film-editorial.svg`
 - `assets/theme-art/korean-prestige.svg`
 - `assets/theme-art/study-library.svg`
+
+### Cartoon Studio runtime assets
+
+Derived inert artwork layers for the Cartoon Studio theme. The ignored source
+kit lives under `themes/cartoon-studio/`; these WebPs are rebuilt with
+`node scripts/convert-theme-assets.mjs cartoon-studio`.
+
+- `assets/theme-art/cartoon-studio/background.webp`
+- `assets/theme-art/cartoon-studio/hero.webp`
 
 ### Aura Studio selector thumbnails
 

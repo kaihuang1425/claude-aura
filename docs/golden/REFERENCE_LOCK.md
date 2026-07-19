@@ -3,6 +3,26 @@
 This ledger records user-approved visual baselines. Hashes are SHA-256 over the
 unchanged PNG bytes copied from `dist/verify/`; dimensions are native pixels.
 
+## WO-10 Cartoon Studio mini-checkpoint — approved 2026-07-19
+
+These two frames supersede only the Cartoon Studio rows from HUMAN CHECKPOINT
+A. The earlier hashes remain below as historical records; the paths now contain
+the explicitly approved WO-10 replacements. The light render is the canonical
+approved concept for asset specifications, with the dark render locked as its
+mode companion. Claude screenshots remain authoritative for interface behavior
+and structure; the original theme preview is secondary for details not visible
+in these approved renders.
+
+Approved visible decorative strings: none. Approved runtime bounding boxes:
+background `center / cover`; mascot `right bottom / min(26vw, 420px) auto`.
+The three approved card doodle masters remain source-only and have no live
+runtime bounding box.
+
+| Golden | SHA-256 | Dimensions | Approved |
+| --- | --- | --- | --- |
+| `docs/golden/cartoon-studio/cartoon-studio-dark-1440x900.png` | `e43ed598a6fe45f01a25754e87d0d07f6ba84ead6008a0af317325e1f3d086de` | 1440 x 900 | 2026-07-19 |
+| `docs/golden/cartoon-studio/cartoon-studio-light-1440x900.png` | `a8c4efa5b890c11d5559719a304fee62a99541525d545fceec4b6b262315aeb6` | 1440 x 900 | 2026-07-19 |
+
 ## HUMAN CHECKPOINT A — approved 2026-07-19
 
 All sixteen frames from the approved contact sheet are locked below. Korean

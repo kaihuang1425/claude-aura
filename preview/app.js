@@ -20,6 +20,7 @@
     qaState: document.getElementById("qa-state"),
     activeThemeChip: document.getElementById("active-theme-chip"),
     themeArt: document.getElementById("theme-art"),
+    themeArtLayers: document.getElementById("theme-art-layers"),
     tabButtons: [...document.querySelectorAll('[role="tab"][data-view]')],
     views: [...document.querySelectorAll(".workspace-view")],
     viewKicker: document.getElementById("view-kicker"),
@@ -49,13 +50,14 @@
   const supportedModes = new Set(["light", "dark"]);
   const supportedScreens = new Set(["home", "code"]);
   const supportedOverlays = new Set(["none", "menu", "dialog"]);
-  const safeArtworkPath = /^assets\/theme-art\/[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
+  const safeArtworkPath = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
   const appliedVariables = new Set();
   let activeTheme = themes.find((theme) => theme.name === "default")?.name ?? themes[0]?.name ?? "default";
   let activeMode = "light";
   let submitTimer = null;
   let previewGeneration = 0;
   let resizeTimer = null;
+  let activeLayerLoads = [];
 
   function readStored(key) {
     try {
@@ -161,6 +163,12 @@
   }
 
   async function waitForArtwork() {
+    const layerLoads = [...activeLayerLoads];
+    if (layerLoads.length) {
+      const results = await Promise.all(layerLoads.map((entry) => entry.promise));
+      if (results.some((loaded) => !loaded)) throw new Error("A layered artwork asset failed to decode");
+      return;
+    }
     const expectedSource = elements.themeArt.dataset.source;
     if (!expectedSource) return;
     if (!elements.themeArt.complete) {
@@ -224,8 +232,14 @@
   function schedulePreviewReady() {
     const generation = ++previewGeneration;
     root.dataset.previewReady = "false";
+    delete root.dataset.previewError;
     elements.qaState.textContent = "Preparing preview…";
-    void markPreviewReady(generation);
+    void markPreviewReady(generation).catch(() => {
+      if (generation !== previewGeneration) return;
+      root.dataset.previewReady = "false";
+      root.dataset.previewError = "artwork";
+      elements.qaState.textContent = "Preview unavailable · artwork failed to decode";
+    });
   }
 
   function whenPreviewReady() {
@@ -270,6 +284,8 @@
   }
 
   function hideArtwork() {
+    activeLayerLoads = [];
+    elements.themeArtLayers.replaceChildren();
     elements.themeArt.hidden = true;
     elements.themeArt.removeAttribute("src");
     delete elements.themeArt.dataset.source;
@@ -278,7 +294,80 @@
     setVariable("--aura-art-position", "right center");
   }
 
+  function hideLegacyArtwork() {
+    elements.themeArt.hidden = true;
+    elements.themeArt.removeAttribute("src");
+    delete elements.themeArt.dataset.source;
+    elements.themeArt.dataset.fit = "contain";
+    elements.themeArt.dataset.mobile = "reduce";
+    setVariable("--aura-art-position", "right center");
+  }
+
+  function preloadArtworkLayer(element, source) {
+    const image = new Image();
+    const promise = new Promise((resolve) => {
+      let finished = false;
+      let timeout = null;
+      const finish = async (loaded) => {
+        if (finished) return;
+        finished = true;
+        image.removeEventListener("load", onLoad);
+        image.removeEventListener("error", onError);
+        if (timeout !== null) window.clearTimeout(timeout);
+        let decoded = loaded;
+        if (decoded && typeof image.decode === "function") {
+          try {
+            await image.decode();
+          } catch {
+            decoded = false;
+          }
+        }
+        if (element.dataset.source === source) element.hidden = !decoded;
+        resolve(decoded);
+      };
+      const onLoad = () => { void finish(true); };
+      const onError = () => { void finish(false); };
+      image.addEventListener("load", onLoad, { once: true });
+      image.addEventListener("error", onError, { once: true });
+      timeout = window.setTimeout(() => { void finish(image.complete && image.naturalWidth > 0); }, 3000);
+      image.src = source;
+      if (image.complete) queueMicrotask(() => { void finish(image.naturalWidth > 0); });
+    });
+    return { source, image, promise };
+  }
+
+  function applyArtworkLayers(layers) {
+    hideLegacyArtwork();
+    elements.themeArtLayers.replaceChildren();
+    activeLayerLoads = [];
+    for (const layer of layers) {
+      if (!layer || !safeArtworkPath.test(layer.path)) continue;
+      const source = `../${layer.path}`;
+      const element = document.createElement("div");
+      element.className = "theme-art-layer";
+      element.hidden = true;
+      element.dataset.source = source;
+      element.dataset.artMask = layer.mask === "none" ? "none" : "soft-right";
+      element.dataset.artMobile = layer.mobile === "hide" || layer.mobile === "keep" ? layer.mobile : "reduce";
+      element.style.setProperty("background-image", `url(${JSON.stringify(source)})`);
+      element.style.setProperty("background-position", layer.position || "right center");
+      element.style.setProperty("background-size", layer.size || "min(58vw, 860px) auto");
+      if (typeof layer.opacity === "number") {
+        element.style.setProperty("--preview-art-opacity", String(layer.opacity));
+      }
+      elements.themeArtLayers.appendChild(element);
+      activeLayerLoads.push(preloadArtworkLayer(element, source));
+    }
+  }
+
   function applyArtwork(theme) {
+    if (Array.isArray(theme.artworkLayers) && theme.artworkLayers.length) {
+      applyArtworkLayers(theme.artworkLayers);
+      return;
+    }
+
+    activeLayerLoads = [];
+    elements.themeArtLayers.replaceChildren();
     const artwork = theme.artwork;
     if (!artwork || !safeArtworkPath.test(artwork.path)) {
       hideArtwork();
@@ -396,7 +485,9 @@
     }
   });
   elements.themeArt.addEventListener("error", () => {
-    hideArtwork();
+    const source = elements.themeArt.getAttribute("src");
+    if (!source || source !== elements.themeArt.dataset.source || activeLayerLoads.length) return;
+    hideLegacyArtwork();
     schedulePreviewReady();
   });
 
