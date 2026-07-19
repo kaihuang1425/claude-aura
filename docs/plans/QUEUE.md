@@ -4,6 +4,12 @@ Take the first unchecked item. Open its spec in `WORK_ORDERS.md`. Complete it
 end-to-end, verify per its verify block, commit (`WO-NN: subject`), check it
 off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 
+**CURRENT NEXT: WO-13 — Asset polish: japanese-idol parity pass.** Entries marked
+**BLOCKED** are status records, not unchecked work. Do not retry one until its
+stated unblock condition in `BLOCKED.md` changes or the user explicitly
+authorizes a new attempt. After completing the current item, advance this
+pointer to the next unblocked unchecked item in the same commit.
+
 - [x] WO-01 — Soften input/composer borders across all themes (defect D1)
 - [x] WO-02 — Reveal artwork: apply per-theme surface alphas from RECIPES.md (defect D2)
 - [x] WO-05 — Aura Studio window: host `studio/` in a second WebView2 window
@@ -17,20 +23,35 @@ off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 - [x] WO-06 — Remove the main-window toolbar and the WinForms gallery
       (only after Checkpoint B approval)
 - [x] WO-07 — User themes directory + Studio "Install theme from folder"
-- [ ] WO-08 — Asset production: japanese-film-editorial (ASSET_CONTRACT)
-- [ ] WO-09 — Asset production: korean-prestige (ASSET_CONTRACT)
+- **BLOCKED — WO-08** — Asset production: japanese-film-editorial; corner
+      conversion and required live evidence remain unavailable (see
+      `BLOCKED.md`)
+- **BLOCKED — WO-09** — Asset production: korean-prestige; required Aura
+      whole-window capture remains unavailable (see `BLOCKED.md`)
 - [x] WO-10 — Asset production: cartoon-studio (ASSET_CONTRACT)
 - [x] WO-11 — Asset production: anime-twilight (ASSET_CONTRACT)
-- [ ] WO-12 — Asset production: study-library (ASSET_CONTRACT)
+- **BLOCKED — WO-12** — Asset production: study-library; required actual-Aura
+      light/dark evidence remains unavailable and the provisional composition
+      remains unapproved (see `BLOCKED.md`)
 - [ ] WO-13 — Asset polish: japanese-idol parity pass (ASSET_CONTRACT)
 - [x] WO-14 — Asset production: korean-idol (real kit art wired; QA board pending WO-04; board-parity polish at Checkpoint C)
-- [ ] **HUMAN CHECKPOINT C** — per-theme parity contact sheets vs boards;
-      approvals freeze goldens (REFERENCE_LOCK.md)
+- [ ] **HUMAN CHECKPOINT C** — per-theme parity review: QA-board comparison
+      plus actual Aura WebView2 captures of real `claude.ai` in light and dark;
+      fixture approvals freeze goldens (`REFERENCE_LOCK.md`), while live
+      captures are human-review evidence and never automated goldens
 - [ ] WO-15 — THEMING.md rewrite as the 30-minute tutorial; prove gate G6 by
       scaffolding, installing, applying, and deleting a demo theme
 - [ ] WO-16 — Full verification sweep, release rebuild, final report
 
 Notes:
+- User-authorized execution clarification (2026-07-20): `preview/`, QA boards,
+  and the payload fixture are verification surfaces, not product features.
+  Do not extend or polish them unless the active work order explicitly requires
+  a missing verification capability. Run the existing checks after meaningful
+  product or artwork changes only. The user-facing result is Aura Studio plus
+  the Aura WebView2 window on real `claude.ai`; offline evidence never
+  substitutes for required live-Aura review. If live capture stays unavailable,
+  follow the blocking rule instead of creating more offline substitute work.
 - User-authorized priority change (2026-07-18): complete the real Studio
   interface and Checkpoint B before returning to offline preview/tooling work.
 - Checkpoint B revision requested (2026-07-18): use impactful local artwork in

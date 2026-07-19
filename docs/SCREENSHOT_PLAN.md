@@ -3,6 +3,21 @@
 This protocol makes the final visual evidence repeatable. It is a capture plan,
 not a substitute for the required images or live browser observations.
 
+## Evidence roles
+
+The three evidence layers have different jobs:
+
+- `npm run verify:cycle` produces deterministic payload-harness goldens for
+  automated regression detection.
+- `preview/` provides deterministic responsive and interaction coverage against
+  representative interface states.
+- The actual Aura WebView2 window on real `claude.ai` proves the production
+  result users see.
+
+Passing either deterministic surface never substitutes for the live Aura
+review. Conversely, live `claude.ai` captures are not suitable for automated
+pixel diffs because the external product changes independently of Aura.
+
 ## Deterministic preview state
 
 Build and serve the offline QA surface:
@@ -40,7 +55,59 @@ Query parameters override saved preview theme/mode values for that page load but
 do not overwrite browser storage. Interactive theme and mode changes continue to
 persist normally.
 
-## Eight-theme comparison set
+## Actual Aura WebView2 parity review
+
+At every WO-08..WO-14 mini-checkpoint, and again at HUMAN CHECKPOINT C and
+WO-16, launch the real Aura main window with an authenticated `claude.ai`
+document. The offline preview, payload fixture, Claude Desktop, and an ordinary
+browser window are not substitutes.
+
+Prefer a dedicated test account or profile with no private history. Open an
+empty new chat and keep the real sidebar visible so both the themed canvas and
+navigation are exercised. If account data cannot be excluded, keep all live
+captures under the gitignored `dist/verify/live-aura/` tree and do not copy them
+into `docs/`, release archives, issues, or pull requests.
+
+For each capture:
+
+1. Apply the requested theme through Aura and switch real Claude to the
+   requested light or dark mode.
+2. Confirm the WebView document is `claude.ai`, the loading cover is gone, and
+   the document root reports the expected `data-claude-aura-theme` and
+   `data-claude-aura-digest` values.
+3. Wait for every configured artwork layer to decode and for two animation
+   frames to settle. A missing or wrong-theme layer fails the capture.
+4. Capture the entire Aura window, including its real WebView2 bounds; do not
+   substitute a reconstructed page or edit the captured pixels.
+5. Record theme ID, mode, UTC timestamp, commit, payload digest, outer window
+   pixels, WebView CSS viewport, DPR, Windows display scaling, and capture path
+   in a manifest beside the images.
+
+Capture all eight stable theme IDs in both modes at a target WebView client area
+of 1440 × 900, for sixteen primary images. Use registry order and filenames of
+the form `<order>-<theme>-<mode>-aura-window.png`. Record the actual viewport
+when Windows chrome or display scaling prevents the exact target.
+
+Also perform three live stress captures: Cartoon Studio light at 1280 × 720,
+Anime Twilight dark at 1920 × 1080, and Korean Idol dark at DPR 2 when the
+available display supports it. Open one real Claude menu and one real modal or
+dialog across the art-heavy themes and confirm that artwork does not overlap or
+intercept either surface.
+
+Judge only what Aura controls: artwork identity, visibility, crop and focal
+position; material, palette, decorative density, and typography category;
+light/dark legibility; pointer safety; and unobstructed controls. Exact Claude
+layout, wording, feature inventory, and personalized content are out of scope
+because the live site supplies them. After cycling all themes, select Original
+look and confirm that all Aura styling and artwork disappear.
+
+Live captures are human-review evidence, not `REFERENCE_LOCK.md` goldens. Keep
+the deterministic payload images as the byte-stable goldens, and record the
+live review outcome and evidence paths in `docs/IMPLEMENTATION_REPORT.md` and
+`docs/ACCEPTANCE_AUDIT.md`. If sign-in, the live service, or window capture is
+unavailable, leave the checkpoint open; never replace this gate with a fixture.
+
+## Offline eight-theme comparison set
 
 Capture the Home view in light mode at 1440 × 900 and save under
 `docs/theme-screenshots/`:

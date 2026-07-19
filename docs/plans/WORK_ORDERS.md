@@ -68,7 +68,8 @@ tests green.
 ## WO-04 — `theme-cli qa` (QA board)
 
 Goal: one command generates the contract §12 QA board from actual production
-files, plus an in-context payload-harness render.
+files, including every registry `artworkLayers` entry, plus an in-context
+payload-harness render.
 
 Files: `scripts/theme-cli.mjs`, may add `scripts/qa-board.mjs`; reuse the
 headless-Edge + local-loopback pattern from `scripts/convert-theme-assets.mjs`
@@ -78,8 +79,10 @@ Output: `themes/<id>/qa/qa-board.png` + `status.json` (or
 `dist/qa/<id>/` for themes without kits).
 
 Done when: `theme-cli qa japanese-idol` produces a board whose panels are
-generated from the real files under `assets/theme-art/kawaii-idol/`, and a
-test asserts the command exists and runs.
+generated from the real files under `assets/theme-art/kawaii-idol/`; layered
+themes decode and place every `artworkLayers` entry rather than falling back
+to the legacy single `artwork` slot; and a test asserts the command exists and
+runs.
 
 ---
 
@@ -161,13 +164,22 @@ the theme's section in `docs/recipes/RECIPES.md` (slot list + layer numbers).
 Per theme: build/receive the source kit → derive WebP via
 `scripts/convert-theme-assets.mjs` (generalize the kawaii converter in WO-08
 and reuse it) → wire `artworkLayers` → `theme-cli qa` board → verify-cycle
-render. If image generation is unavailable, write the kit's
+render → actual Aura WebView2 light+dark capture on real `claude.ai` →
+mini-checkpoint. The live capture is human-review evidence governed by
+`docs/SCREENSHOT_PLAN.md`; never substitute the offline preview or payload
+harness for it. Compare only Aura-controlled artwork, materials, palette,
+decorative density, typography categories, and placement — the live site owns
+its interface structure, controls, and wording. If image generation is
+unavailable, write the kit's
 `asset-request.md` and mark awaiting-art per contract §8/§18 — do not ship
 procedural art. japanese-idol (WO-13) is a parity pass: assets exist; close
 the gap to its board.
 
 Done when (per theme): recipe layers wired, budgets pass, QA board generated,
-render matches the board's composition, or the theme is cleanly awaiting-art.
+the deterministic render matches the board's composition, and actual Aura
+captures show the intended art decoded, correctly cropped, legible in both
+modes, free of control overlap, and free of cross-theme artwork; or the theme
+is cleanly awaiting-art and receives no parity approval.
 
 ---
 
@@ -186,7 +198,8 @@ doc and the repo is clean afterward.
 
 `npm run check`, `npm run verify:cycle` (all goldens), fresh-state run
 (sandbox-wipe `%LOCALAPPDATA%\ClaudeAura\data`, run `windows/verify.ps1`),
-screenshots per SCREENSHOT_PLAN, `npm run release`, update
+screenshots per SCREENSHOT_PLAN (including the complete live-Aura matrix and
+Checkpoint C approval), `npm run release`, update
 IMPLEMENTATION_REPORT / ACCEPTANCE_AUDIT / FILE_MANIFEST, write the final
 report (architecture, per-theme scorecard with image paths, asset provenance
 user-supplied vs generated, licenses, limitations).

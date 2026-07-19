@@ -18,6 +18,15 @@ surfaces: `preview/` (offline harness) and the payload harness
 Never build a parallel Claude reconstruction, and never ship reconstructed
 interface HTML as product.
 
+LIVE AURA ACCEPTANCE. The QA surfaces are preflight evidence, not substitutes
+for production inspection. A base theme cannot receive parity approval until
+it has been reviewed in the actual Aura WebView2 window on real `claude.ai` in
+light and dark per `docs/SCREENSHOT_PLAN.md`. Because the live site changes
+independently, these captures are human-review evidence and never automated
+goldens. Judge only Aura-controlled artwork, materials, palette, decorative
+density, typography categories, and placement; never require Aura to recreate
+the reference composite's interface structure, controls, or wording.
+
 PATH REMAP.
   references/, concept/_provisional/, qa/  → themes/<id>/{references,provisional,qa}/
   integration/                             → the payload harness + preview/ (do not duplicate)
@@ -29,10 +38,11 @@ PATH REMAP.
                                              `npm run release` only.
 
 APPROVAL REMAP. "Phase 1 approval" = a HUMAN CHECKPOINT in
-`docs/plans/QUEUE.md`. The approved render becomes the golden image; the
-golden-diff step of `verify:cycle` then enforces §19 immutability
-mechanically. §11's internal candidates: cap at three, keep them under
-`provisional/candidates/`, never show them at checkpoints.
+`docs/plans/QUEUE.md`. The approved deterministic render becomes the golden
+image; the golden-diff step of `verify:cycle` then enforces §19 immutability
+mechanically. Actual Aura captures remain separate human-review evidence and
+are not hashed into the golden ledger. §11's internal candidates: cap at three,
+keep them under `provisional/candidates/`, never show them at checkpoints.
 
 QA CONSOLIDATION. The §12 outputs are panels of ONE generated `qa-board.png`
 per asset (plus `status.json`), produced by
@@ -447,7 +457,7 @@ Before an asset is production-ready, generate its `qa-board.png` (via
 - Intended-surface composite
 - White-surface and dark-edge tests
 - Small-scale test
-- In-context live-interface render
+- In-context deterministic payload-harness render
 
 For full-bleed backgrounds, test responsive `cover` crops instead of alpha.
 
@@ -457,6 +467,11 @@ For raster assets, decode the actual production WebP for QA.
 
 Do not create QA from an alternate source file that differs from the delivered
 production asset.
+
+The actual Aura WebView2 review is separate checkpoint evidence because it
+depends on an authenticated external service. Perform it at theme completion
+under `docs/SCREENSHOT_PLAN.md`; never fabricate it as a QA-board panel or
+replace it with the deterministic in-context render.
 
 ──────────────────────────────────────────────────────────────────────────────
 13. VISUAL ACCEPTANCE CRITERIA
@@ -499,6 +514,9 @@ After every approved asset:
 3. Compare it against the approved concept (golden diff).
 4. Check that previously approved assets have not moved or changed.
 5. Record the result in the source kit's `status.json`.
+
+At per-theme completion, capture and review the cumulative composition in the
+actual Aura WebView2 window in both modes before granting parity approval.
 
 Do not wait until the final asset to discover that individually acceptable
 assets do not work together.

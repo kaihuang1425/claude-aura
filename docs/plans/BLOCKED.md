@@ -74,3 +74,25 @@ move to the next queue item. Format:
   each argument without PowerShell re-tokenization. Per the two-attempt rule,
   WO-11 makes no third capture attempt here. The actual Aura 1920 × 1080 dark
   stress capture remains separately blocked by the WO-09 whole-window issue.
+
+## 2026-07-20 — WO-12 — Required Study Library live-Aura review is unavailable
+- Attempt 1: inherited the first WO-09 whole-window attempt: the authenticated
+  source app reached real `claude.ai` and CDP verified the expected theme and
+  digest, but the capture bridge returned no PowerShell-owned Aura window → no
+  compliant whole-window light/dark evidence. This blocked method was not
+  retried for WO-12.
+- Attempt 2: inherited the second WO-09 whole-window attempt: a disposable
+  native host was rejected by endpoint protection before launch → no compliant
+  capture. The helper and the blocked workaround were not recreated or retried.
+- Suspected cause: the available Windows capture surface still excludes the
+  PowerShell-hosted WinForms window. A 2026-07-20 unblock audit used the newly
+  surfaced first-party Computer Use runtime after a normal source-app launch;
+  it likewise returned no targetable `Claude Aura` window, so the launched
+  processes were closed and no alternate fixture evidence was created.
+- What would unblock it (tool, asset, or user decision): a first-party capture
+  path that returns the PowerShell-hosted Aura window, or user-made Study
+  Library whole-window light/dark captures with the metadata required by
+  `docs/SCREENSHOT_PLAN.md`. Before approval, the current preflight also needs
+  product-art correction: its Studio card preview contains only paper texture,
+  and the bottom-left vignette is almost entirely hidden behind the sidebar in
+  both payload modes. The QA board and fixture renders remain preflight only.
