@@ -53,8 +53,9 @@ across both new-chat and conversation contexts under
 The superseding live review confirms two Light layers on new chat, the floral
 background alone in Light conversation, and exactly one matching
 context-specific Dark scene in
-each Dark capture, with legible controls and no cross-theme artwork. These
-captures are ready for HUMAN CHECKPOINT C; they do not constitute its approval.
+each Dark capture, with legible controls and no cross-theme artwork. The user
+approved HUMAN CHECKPOINT C on 2026-07-21; the four production assets and their
+recorded source/runtime hashes are frozen.
 
 The runtime claude.ai skin ships real artwork through a layered artwork system:
 a theme may declare up to four `artworkLayers` (optimized WebP or SVG), each
@@ -82,14 +83,14 @@ generated source kit, hashes, and provenance live under the gitignored
 `assets/theme-art/cartoon-studio/`. `theme-cli qa cartoon-studio` records a
 status-only asset and payload audit. The 2026-07-21 WO-17 actual-Aura matrix
 records both Light and Dark on live `claude.ai`; the separate approximately
-1280 × 720 stress review remains ordered under Checkpoint C/WO-16.
+1280 × 720 stress review remains ordered under WO-16.
 
-The required whole-window Aura capture could not target the PowerShell-hosted
-window through the available first-party bridge; the two exhausted attempts are
-recorded under WO-09 in `docs/plans/BLOCKED.md`. On 2026-07-20 the user
-authorized WO-10 completion with its real-Aura Light/Dark and 1280 x 720 stress
-evidence deferred to HUMAN CHECKPOINT C/WO-16. Fixture and QA images have since
-been deleted and cannot be regenerated as a substitute.
+At WO-10 completion, the available bridge could not target the
+PowerShell-hosted Aura window; the two exhausted attempts remain recorded under
+WO-09 in `docs/plans/BLOCKED.md`. The later WO-17 matrix supplied actual-Aura
+Light/Dark evidence, and the user approved it at HUMAN CHECKPOINT C on
+2026-07-21. Fixture and QA images have been deleted and cannot be regenerated
+as a substitute.
 
 ## Anime Twilight approved artwork
 
@@ -102,11 +103,11 @@ prompt, checksum freeze, and provenance live under the gitignored
 anime-twilight` records a status-only asset and Light/Dark payload audit.
 
 The 2026-07-21 WO-17 actual-Aura matrix records Anime Twilight Light and Dark
-on live `claude.ai`. The dedicated maximized 1920 × 1080 Dark stress case
-remains ordered under HUMAN CHECKPOINT C/WO-16. A separate two-attempt failure
-for the retired supplemental offline capture is preserved as history under
-WO-11 in `docs/plans/BLOCKED.md`; that method is no longer part of the
-verification or acceptance path.
+at 1920 × 1080 on live `claude.ai`; the user approved that evidence at HUMAN
+CHECKPOINT C. A separate two-attempt failure for the retired supplemental
+offline capture is preserved as history under WO-11 in
+`docs/plans/BLOCKED.md`; that method is no longer part of the verification or
+acceptance path.
 
 ## Study Library approved artwork
 
@@ -393,11 +394,11 @@ Results recorded through 2026-07-21:
 | Windows title-bar source check | Passed; best-effort DWM dark-caption and caption/text/border attributes are present with a non-fatal fallback path |
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
 | Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. The offline walkthrough images were retired and deleted on 2026-07-20 and are not acceptance evidence. |
-| WO-10 Cartoon Studio asset cycle | Source/runtime checksum freeze, two-layer decode, status-only asset audit, and Light/Dark payload compilation pass. The user-authorized live-capture deferral remains explicit for Checkpoint C/WO-16. |
-| WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, and Light/Dark payload compilation pass. Actual Aura Light/Dark and 1920 x 1080 Dark evidence remains explicitly deferred to Checkpoint C/WO-16 under WO-09. |
+| WO-10 Cartoon Studio asset cycle | Source/runtime checksum freeze, two-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark review pass. The user approved the visual evidence at HUMAN CHECKPOINT C; the narrower 1280 x 720 stress case remains in WO-16. |
+| WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark 1920 x 1080 review pass. The user approved the visual evidence at HUMAN CHECKPOINT C. |
 | WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
 | WO-17 live Aura UX and identity cycle | Complete actual-Aura Light/Dark matrix for all eight themes on live `claude.ai`; Original-look cleanup; Korean Idol new-chat/conversation contexts; representative hover/selected state; Studio Back-to-Aura activation; one content scroller; and Aura title-bar/tray identity at normal DPI and actual 2560 × 1600 / 200% display scaling. |
-| WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass. After the first Checkpoint C review rejected the Light framing, the top-right 74%/660px revision was recaptured in actual Aura across Light/Dark new-chat/conversation; Dark is unchanged. HUMAN CHECKPOINT C approval remains pending. |
+| WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass. After the first Checkpoint C review rejected the Light framing, the top-right 74%/660px revision was recaptured in actual Aura across Light/Dark new-chat/conversation; Dark is unchanged. The user approved HUMAN CHECKPOINT C on 2026-07-21 and the recorded assets/hashes are frozen. |
 
 Before creating an archive, run the checks and then:
 

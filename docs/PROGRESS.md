@@ -22,6 +22,20 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-21 — HUMAN CHECKPOINT C — Per-theme parity review
+
+- Approval: the user approved the actual-Aura parity review after the Japanese
+  Idol Light composition was revised to match Dark's stronger focal hierarchy.
+- Evidence: the whole-window live `claude.ai` matrix and Korean Idol
+  new-chat/conversation, sidebar, and interaction-state captures are indexed in
+  `dist/verify/live-aura/wo17-self-capture-manifest.json`. The superseding four
+  Japanese Idol revision captures are named
+  `wo13-japanese-idol-*-revision-normal-aura-window.jpg` in the same directory.
+- Parity scores: all eight themes —
+  atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
+  green/green/green/green/green/green/green/green in the approved review.
+- Follow-ups discovered: none. The queue advances to WO-18.
+
 ## 2026-07-21 — WO-13 — Japanese Idol parity pass
 
 - What changed: matched the approved Japanese Idol composition with the recipe
@@ -48,9 +62,11 @@ Format:
   verify:cycle` passed 17/17, and the PowerShell parser passed.
 - Parity scores (visual orders only): japanese-idol:
   atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
-  green/green/green/green/green/green/green/green in the revision self-review.
-- Follow-ups discovered: none. HUMAN CHECKPOINT C remains current and open for
-  user review of the superseding revision captures.
+  green/green/green/green/green/green/green/green in the user-approved revision.
+- Approval: the user approved HUMAN CHECKPOINT C on 2026-07-21 after reviewing
+  the superseding Light revision with the unchanged Dark composition. The
+  approved production artwork and recorded hashes are frozen.
+- Follow-ups discovered: none. The queue advances to WO-18.
 
 ## 2026-07-21 — WO-17 — Live Aura UX, identity, and context adaptation
 

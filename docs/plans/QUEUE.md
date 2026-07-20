@@ -4,7 +4,7 @@ Take the first unchecked item. Open its spec in `WORK_ORDERS.md`. Complete it
 end-to-end, verify per its verify block, commit (`WO-NN: subject`), check it
 off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 
-**CURRENT NEXT: HUMAN CHECKPOINT C — per-theme parity review.** Entries marked
+**CURRENT NEXT: WO-18 — Aura Studio visual theme editor.** Entries marked
 **BLOCKED** are status records, not unchecked work. Do not retry one until its
 stated unblock condition in `BLOCKED.md` changes or the user explicitly
 authorizes a new attempt. After completing the current item, advance this
@@ -34,8 +34,8 @@ pointer to the next unblocked unchecked item in the same commit.
 - [x] WO-17 — Live Aura UX, identity, prompt placement, and context adaptation
 - [x] WO-13 — Asset polish: japanese-idol parity pass (ASSET_CONTRACT)
 - [x] WO-14 — Asset production: korean-idol (real kit art wired; live-Aura
-      parity polish remains for Checkpoint C)
-- [ ] **HUMAN CHECKPOINT C** — per-theme parity review using only whole-window
+      parity polish approved at Checkpoint C)
+- [x] **HUMAN CHECKPOINT C** — per-theme parity review using only whole-window
       actual Aura WebView2 captures of live `claude.ai` in Light and Dark.
       Confirm legible hover/active/selected states, the live sidebar treatment,
       and Korean Idol new-chat/conversation artwork and prompt placement.
