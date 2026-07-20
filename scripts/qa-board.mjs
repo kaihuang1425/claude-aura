@@ -74,6 +74,10 @@ const REFERENCE_MAP = {
     "background.webp": { path: "themes/cartoon-studio/provisional/selected/background.png" },
     "hero.webp": { path: "themes/cartoon-studio/provisional/selected/hero.png" },
   },
+  "study-library": {
+    "background.webp": { path: "themes/study-library/provisional/selected/background.png" },
+    "corner-bottom.webp": { path: "themes/study-library/provisional/selected/corner-bottom.png" },
+  },
   "japanese-idol": {
     "background.webp": { path: "themes/japanese-idol/atmospheric-background.png" },
     "hero.webp": {
@@ -709,7 +713,7 @@ export async function generateQaBoard(themeId, { cwd = process.cwd() } = {}) {
   const theme = (await listThemes({ locale: "en" })).find((candidate) => candidate.name === canonicalId);
   const { assets, layered } = await resolveAssets(entry);
   const bundle = await buildPayload({
-    config: { ...DEFAULT_CONFIG, theme: canonicalId },
+    config: { ...DEFAULT_CONFIG, theme: canonicalId, appearance: "light" },
     locale: "en",
   });
   if (layered) {

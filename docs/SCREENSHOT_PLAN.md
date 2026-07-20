@@ -70,11 +70,13 @@ into `docs/`, release archives, issues, or pull requests.
 
 For each capture:
 
-1. Apply the requested theme through Aura and switch real Claude to the
-   requested light or dark mode.
+1. Apply the requested theme through Aura and choose the requested Light or
+   Dark appearance in Aura Studio. This preference is local to Aura and must
+   not alter Claude account settings.
 2. Confirm the WebView document is `claude.ai`, the loading cover is gone, and
-   the document root reports the expected `data-claude-aura-theme` and
-   `data-claude-aura-digest` values.
+   the document root reports the expected `data-claude-aura-theme`,
+   `data-claude-aura-digest`, `data-claude-aura-appearance`, and
+   `data-claude-aura-effective-mode` values.
 3. Wait for every configured artwork layer to decode and for two animation
    frames to settle. A missing or wrong-theme layer fails the capture.
 4. Capture the entire Aura window, including its real WebView2 bounds; do not

@@ -127,7 +127,10 @@ async function openRenderServer(getPage) {
 }
 
 async function renderTheme(edge, theme, mode) {
-  const bundle = await buildPayload({ config: { ...DEFAULT_CONFIG, theme: theme.name }, locale: "en" });
+  const bundle = await buildPayload({
+    config: { ...DEFAULT_CONFIG, theme: theme.name, appearance: mode },
+    locale: "en",
+  });
   const fixture = await fs.readFile(FIXTURE_PATH, "utf8");
   const darkSetup = mode === "dark"
     ? '<script>document.documentElement.classList.add("dark");document.documentElement.dataset.mode="dark";</script>'

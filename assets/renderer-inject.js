@@ -9,14 +9,31 @@
     : String(settings.imageOpacity);
   const imageScaleValue = String(settings.imageZoom || 1);
   const artCssValue = settings.artDataUrl ? `url(${JSON.stringify(settings.artDataUrl)})` : "none";
+  const appearance = settings.appearance || "system";
+  const media = appearance === "system" ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
+  const mode = () => appearance === "system" ? (media?.matches ? "dark" : "light") : appearance;
   let observeTargets = () => {};
   let styleDirty = true;
   let rootDirty = true;
 
+  const syncMainStart = () => {
+    const main = settings.theme === "study-library" && document.querySelector?.("main");
+    if (!main) return;
+    const value = `${Math.round(main.getBoundingClientRect().left)}px`;
+    if (root.style.getPropertyValue("--aura-main-start") !== value) root.style.setProperty("--aura-main-start", value);
+  };
+
   const previous = window[STATE_KEY];
   previous?.observer?.disconnect();
+  previous?.stopModeListener?.();
   if (previous?.timer) clearInterval(previous.timer);
   if (previous?.scheduled) clearTimeout(previous.scheduled);
+
+  const onModeChange = () => {
+    if (document.documentElement) document.documentElement.dataset.claudeAuraEffectiveMode = mode();
+  };
+  media?.addEventListener?.("change", onModeChange);
+  const stopModeListener = () => media?.removeEventListener?.("change", onModeChange);
 
   const ensure = () => {
     if (!document.documentElement || window.__CLAUDE_AURA_DISABLED__) return;
@@ -25,6 +42,8 @@
       || html.dataset.claudeAuraTheme !== settings.theme
       || html.dataset.claudeAuraVariant !== (settings.variant || settings.theme)
       || html.dataset.claudeAuraArtMobile !== (settings.artMobile || "reduce")
+      || html.dataset.claudeAuraAppearance !== appearance
+      || html.dataset.claudeAuraEffectiveMode !== mode()
       || !html.classList.contains("claude-aura")
       || html.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
       || html.classList.contains("claude-aura-animated-image") !== Boolean(settings.imageAnimated);
@@ -36,6 +55,8 @@
       html.dataset.claudeAuraTheme = settings.theme;
       html.dataset.claudeAuraVariant = settings.variant || settings.theme;
       html.dataset.claudeAuraArtMobile = settings.artMobile || "reduce";
+      html.dataset.claudeAuraAppearance = appearance;
+      html.dataset.claudeAuraEffectiveMode = mode();
       html.dataset.claudeAuraDigest = settings.digest;
       html.style.setProperty("--aura-image", imageCssValue);
       html.style.setProperty("--aura-image-opacity", imageOpacityValue);
@@ -89,9 +110,6 @@
         ? settings.artLayers.filter((layer) => layer && typeof layer.dataUrl === "string").slice(0, 4)
         : [];
       if (artLayers.length) {
-        // Layered artwork replaces the single var-driven art slot. Each layer is
-        // an inert positioned background; styling is inline so one shared style
-        // element serves every theme.
         for (const layer of artLayers) {
           const element = addLayerDiv("claude-aura-theme-art claude-aura-theme-art-layer");
           element.dataset.artMask = layer.mask === "none" ? "none" : "soft-right";
@@ -108,6 +126,7 @@
       addLayerDiv("claude-aura-vignette");
       document.body.prepend(backdrop);
     }
+    syncMainStart();
     observeTargets();
   };
 
@@ -117,6 +136,7 @@
     state?.observer?.disconnect();
     if (state?.timer) clearInterval(state.timer);
     if (state?.scheduled) clearTimeout(state.scheduled);
+    stopModeListener();
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BACKDROP_ID)?.remove();
     const html = document.documentElement;
@@ -128,10 +148,13 @@
     html?.style.removeProperty("--aura-theme-art");
     html?.style.removeProperty("--aura-art-position");
     html?.style.removeProperty("--aura-art-size");
+    html?.style.removeProperty("--aura-main-start");
     if (html?.dataset) {
       delete html.dataset.claudeAuraTheme;
       delete html.dataset.claudeAuraVariant;
       delete html.dataset.claudeAuraArtMobile;
+      delete html.dataset.claudeAuraAppearance;
+      delete html.dataset.claudeAuraEffectiveMode;
       delete html.dataset.claudeAuraDigest;
     }
     delete window[STATE_KEY];
@@ -159,6 +182,8 @@
     || root.dataset.claudeAuraTheme !== settings.theme
     || root.dataset.claudeAuraVariant !== (settings.variant || settings.theme)
     || root.dataset.claudeAuraArtMobile !== (settings.artMobile || "reduce")
+    || root.dataset.claudeAuraAppearance !== appearance
+    || root.dataset.claudeAuraEffectiveMode !== mode()
     || !root.classList.contains("claude-aura")
     || root.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
     || root.classList.contains("claude-aura-animated-image") !== Boolean(settings.imageAnimated)
@@ -204,7 +229,7 @@
     observer.observe(document.documentElement, {
       childList: true,
       attributes: true,
-      attributeFilter: ["class", "style", "data-claude-aura-theme", "data-claude-aura-variant", "data-claude-aura-art-mobile", "data-claude-aura-digest"],
+      attributeFilter: ["class", "style", "data-claude-aura-theme", "data-claude-aura-variant", "data-claude-aura-art-mobile", "data-claude-aura-appearance", "data-claude-aura-effective-mode", "data-claude-aura-digest"],
     });
     if (head) observer.observe(head, { childList: true });
     if (body) observer.observe(body, { childList: true });
@@ -221,6 +246,7 @@
     observer,
     timer,
     scheduled,
+    stopModeListener,
     version: settings.version,
     theme: settings.theme,
     digest: settings.digest,

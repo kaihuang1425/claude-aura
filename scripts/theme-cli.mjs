@@ -210,6 +210,7 @@ Commands:
   validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
       [--user-themes <path>]
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
+      [--appearance system|light|dark]
       [--image-opacity <0..0.55>] [--image-position <css-position>] [--image-zoom <1..2>]
       [--studio-preview-theme <id> --studio-preview-x <0..100>
        --studio-preview-y <0..100> --studio-preview-zoom <1..2>]
@@ -344,6 +345,12 @@ if (command === "help" || command === "--help") {
   if (options.theme) {
     config.theme = options.theme;
     delete config.customTheme;
+  }
+  if (options.appearance !== undefined) {
+    if (!["system", "light", "dark"].includes(options.appearance)) {
+      throw new Error("--appearance must be system, light, or dark");
+    }
+    config.appearance = options.appearance;
   }
   if (options.image) config.image = path.resolve(options.image);
   if (options["clear-image"]) config.image = null;

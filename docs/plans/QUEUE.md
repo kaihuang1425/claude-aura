@@ -4,7 +4,7 @@ Take the first unchecked item. Open its spec in `WORK_ORDERS.md`. Complete it
 end-to-end, verify per its verify block, commit (`WO-NN: subject`), check it
 off here, append a `docs/PROGRESS.md` entry. Stop at every HUMAN CHECKPOINT.
 
-**CURRENT NEXT: WO-13 — Asset polish: japanese-idol parity pass.** Entries marked
+**CURRENT NEXT: WO-17 — Live Aura UX, identity, and context adaptation.** Entries marked
 **BLOCKED** are status records, not unchecked work. Do not retry one until its
 stated unblock condition in `BLOCKED.md` changes or the user explicitly
 authorizes a new attempt. After completing the current item, advance this
@@ -30,15 +30,20 @@ pointer to the next unblocked unchecked item in the same commit.
       whole-window capture remains unavailable (see `BLOCKED.md`)
 - [x] WO-10 — Asset production: cartoon-studio (ASSET_CONTRACT)
 - [x] WO-11 — Asset production: anime-twilight (ASSET_CONTRACT)
-- **BLOCKED — WO-12** — Asset production: study-library; required actual-Aura
-      light/dark evidence remains unavailable and the provisional composition
-      remains unapproved (see `BLOCKED.md`)
+- [x] WO-12 — Asset production: study-library (ASSET_CONTRACT)
+- [ ] WO-17 — Live Aura UX, identity, prompt placement, and context adaptation
 - [ ] WO-13 — Asset polish: japanese-idol parity pass (ASSET_CONTRACT)
 - [x] WO-14 — Asset production: korean-idol (real kit art wired; QA board pending WO-04; board-parity polish at Checkpoint C)
 - [ ] **HUMAN CHECKPOINT C** — per-theme parity review: QA-board comparison
       plus actual Aura WebView2 captures of real `claude.ai` in light and dark;
       fixture approvals freeze goldens (`REFERENCE_LOCK.md`), while live
-      captures are human-review evidence and never automated goldens
+      captures are human-review evidence and never automated goldens. Confirm
+      legible hover/active/selected states, the live sidebar treatment, and
+      Korean Idol new-chat/conversation artwork and prompt placement.
+- [ ] WO-18 — Aura Studio visual theme editor
+- [ ] **HUMAN CHECKPOINT D** — localized, keyboard-accessible editor walkthrough,
+      including duplicate/edit/undo/save/restart/delete and actual-Aura
+      light/dark apply evidence
 - [ ] WO-15 — THEMING.md rewrite as the 30-minute tutorial; prove gate G6 by
       scaffolding, installing, applying, and deleting a demo theme
 - [ ] WO-16 — Full verification sweep, release rebuild, final report
@@ -63,6 +68,9 @@ Notes:
 - The user approved all sixteen Checkpoint A frames on 2026-07-19. Korean Idol
   light was recaptured and approved after its original frame was found to
   precede artwork decode; all sixteen payload renders are now locked goldens.
+- The user approved Study Library in actual Aura light/dark on 2026-07-20. Its
+  production layers and replacement deterministic goldens are frozen; prompt
+  placement customization requested during review is queued under WO-17/WO-18.
 - WO-08..14 each end with their own mini-checkpoint if provisional art was
   generated (user may replace generated art with supplied kits at any time).
 - If a work order blocks twice, log it in BLOCKED.md and continue.

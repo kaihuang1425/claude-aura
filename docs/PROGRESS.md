@@ -15,6 +15,34 @@ Format:
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
 
+## 2026-07-20 — WO-12 — Study Library artwork and Aura appearance modes
+
+- What changed: replaced the procedural Study SVG with approved 1600 x 900
+  paper-fiber and 640 x 527 alpha still-life WebPs; anchored the corner layer to
+  the measured live main canvas; rebuilt the Studio card from both masters;
+  froze the sources/runtime checksums and approved deterministic goldens; and
+  added a persisted, localized, keyboard-operable **System / Light / Dark**
+  Aura Studio selector using WebView2's supported profile preference plus a
+  namespaced renderer fallback. Original look restores the profile to Auto.
+- Evidence: `themes/study-library/qa/qa-board.png`,
+  `dist/verify/study-library-{light,dark}-1440x900.png`, and actual Aura
+  whole-window captures
+  `dist/verify/live-aura/06-study-library-{light,dark}-aura-window.png`.
+  The live images are 1177 x 664 and 1172 x 668 with SHA-256
+  `930a65512092c3d450f1c583b16a369b942f75843ffb4bb3b83de0816aa39d15`
+  and `68b64d2caea345ebe776d57446557775e64f739bcd0dd4dafe3e41f03c510d27`;
+  they are human-review evidence, not goldens. Runtime art totals 58,098 bytes;
+  `npm run check` passed 19/19 and `npm run verify:cycle` passed 33/33 with all
+  sixteen outputs inspected and zero final golden deltas. Maximum non-art
+  payload is 64,055 bytes, below the 65 KB cap.
+- Parity scores (visual orders only): study-library:
+  atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
+  green/green/green/green/green/green/green/green.
+- Follow-ups discovered: the user requested theme-specific new-chat prompt
+  positioning to match Korean Idol's demo composition; bounded live placement,
+  context-aware hero treatment, Studio navigation/icon/state repair, and the
+  later user-editable layout controls are queued under WO-17 and WO-18.
+
 ## 2026-07-20 — WO-11 — Anime Twilight artwork
 
 - What changed: replaced the procedural Anime Twilight SVG with one approved,

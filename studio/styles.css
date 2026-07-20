@@ -148,6 +148,51 @@ h2 { font-size: 23px; }
 .lede { margin: 0 0 20px; color: var(--ink-secondary); max-width: 62ch; }
 .help { margin: 14px 0 0; color: var(--ink-muted); font-size: 12.5px; }
 
+/* ── Appearance mode ─────────────────────────────────────────────── */
+.appearance-mode {
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+}
+
+.appearance-mode legend {
+  margin-bottom: 9px;
+  padding: 0;
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.appearance-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.appearance-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 112px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-secondary);
+  cursor: pointer;
+}
+
+.appearance-option:hover { background: var(--raised); color: var(--ink); }
+.appearance-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+.appearance-option input { margin: 0; accent-color: var(--accent); }
+.appearance-mode:disabled .appearance-option { opacity: 0.58; cursor: wait; }
+.appearance-mode .help { margin: 10px 0 0; }
+
 /* ── Theme grid ───────────────────────────────────────────────────── */
 .theme-grid {
   display: grid;

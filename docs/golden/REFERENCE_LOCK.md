@@ -3,6 +3,27 @@
 This ledger records user-approved visual baselines. Hashes are SHA-256 over the
 unchanged PNG bytes copied from `dist/verify/`; dimensions are native pixels.
 
+## WO-12 Study Library mini-checkpoint — approved 2026-07-20
+
+These frames supersede only the Study Library rows from HUMAN CHECKPOINT A.
+The earlier hashes remain below as historical records; the paths now contain
+the explicitly approved WO-12 replacements. The light render is the canonical
+asset concept and the dark render is its mode companion. The selected PNG
+masters define the paper texture and library still life, while the exact recipe
+defines their runtime treatment. Real Claude remains authoritative for
+interface structure and behavior.
+
+Approved visible decorative strings: none. Approved runtime bounding boxes:
+background `center / cover`, full 1440 x 900 payload backdrop; corner-bottom
+`left bottom / min(20vw, 320px) auto` in the measured main-canvas coordinate
+frame. The actual-Aura light/dark screenshots are separate human-review
+evidence and are intentionally not golden files.
+
+| Golden | SHA-256 | Dimensions | Approved |
+| --- | --- | --- | --- |
+| `docs/golden/study-library/study-library-dark-1440x900.png` | `8cdb18def9360724e66b1130a36c04eea2c83c2f29ac63f5549d9944229d7f4e` | 1440 x 900 | 2026-07-20 |
+| `docs/golden/study-library/study-library-light-1440x900.png` | `55dc828f8e3e8950cb72c437326211acdfe10552faa81c70cbc700df84e16bd5` | 1440 x 900 | 2026-07-20 |
+
 ## WO-11 Anime Twilight mini-checkpoint — approved 2026-07-20
 
 These two frames supersede only the Anime Twilight rows from HUMAN CHECKPOINT

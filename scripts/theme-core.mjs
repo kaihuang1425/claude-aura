@@ -13,6 +13,7 @@ export const SUPPORTED_LOCALES = Object.freeze(["en", "zh-CN", "zh-TW"]);
 export const DEFAULT_CONFIG = Object.freeze({
   enabled: true,
   theme: "default",
+  appearance: "system",
   image: null,
   imageOpacity: null,
   imagePosition: "center",
@@ -1045,6 +1046,9 @@ export async function compileTheme({
   const config = configOverride ? { ...DEFAULT_CONFIG, ...configOverride } : await readConfig(resolvedConfigPath);
   if (typeof config.enabled !== "boolean") throw new Error("enabled must be true or false");
   if (typeof config.reduceMotion !== "boolean") throw new Error("reduceMotion must be true or false");
+  if (!["system", "light", "dark"].includes(config.appearance)) {
+    throw new Error("appearance must be system, light, or dark");
+  }
   if (typeof config.imagePosition !== "string" || !config.imagePosition.trim() ||
       config.imagePosition.length > 80 || /[;{}]/.test(config.imagePosition)) {
     throw new Error("imagePosition contains an unsupported value");
@@ -1069,11 +1073,12 @@ export async function compileTheme({
   const imageZoom = finiteNumber(config.imageZoom, "imageZoom", 1, 2);
   const studioPreviewCrops = validateStudioPreviewCrops(config.studioPreviewCrops ?? {});
   const variableCss = [
-    renderMode(":root, [data-mode=\"light\"]", theme.light),
-    renderMode(":root.darkTheme, :root.dark, .darkTheme, .dark, [data-mode=\"dark\"]", theme.dark),
+    renderMode(":root, :root:not([data-claude-aura-effective-mode=\"dark\"]):is(.lightTheme,.light,[data-mode=\"light\"]), :root:not([data-claude-aura-effective-mode=\"dark\"]) :is(.lightTheme,.light,[data-mode=\"light\"]), :root[data-claude-aura-appearance][data-claude-aura-effective-mode=\"light\"]", theme.light),
+    renderMode(":root:not([data-claude-aura-effective-mode=\"light\"]):is(.darkTheme,.dark,[data-mode=\"dark\"]), :root:not([data-claude-aura-effective-mode=\"light\"]) :is(.darkTheme,.dark,[data-mode=\"dark\"]), :root[data-claude-aura-appearance][data-claude-aura-effective-mode=\"dark\"]", theme.dark),
     renderThemePrimitives(theme),
   ].join("\n\n");
-  const css = `${variableCss}\n\n${baseCss}\n\n${variantCss}${theme.customCss ? `\n${theme.customCss}\n` : ""}`;
+  const css = `${variableCss}\n\n${baseCss}\n\n${variantCss}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
+    .replace(/^[ \t]+/gm, "");
   const settingsBase = {
     version: AURA_VERSION,
     theme: theme.name,
@@ -1082,6 +1087,7 @@ export async function compileTheme({
     requestedTheme,
     fallbackFrom,
     customThemeUnavailable,
+    appearance: config.appearance,
     imageDataUrl: image?.dataUrl ?? null,
     imageAnimated: image?.animated ?? false,
     imageUnavailable: Boolean(config.image && !image),
@@ -1113,6 +1119,7 @@ export async function compileTheme({
   const effectiveConfig = {
     ...config,
     theme: theme.name,
+    appearance: config.appearance,
     imagePosition: config.imagePosition.trim(),
     imageZoom,
     studioPreviewCrops,
@@ -1137,7 +1144,8 @@ export async function buildPayloadFromCompiled(compiled) {
   if (!compiled || typeof compiled.css !== "string" || !isPlainObject(compiled.settings)) {
     throw new Error("A compiled theme is required to build a renderer payload");
   }
-  const template = await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8");
+  const template = (await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8"))
+    .replace(/^[ \t]+/gm, "");
   const payload = template
     .replace("__AURA_CSS_JSON__", JSON.stringify(compiled.css))
     .replace("__AURA_SETTINGS_JSON__", JSON.stringify(compiled.settings));

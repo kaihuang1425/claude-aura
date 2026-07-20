@@ -336,6 +336,8 @@ async function removeFromSession(session) {
       delete html.dataset.claudeAuraTheme;
       delete html.dataset.claudeAuraVariant;
       delete html.dataset.claudeAuraArtMobile;
+      delete html.dataset.claudeAuraAppearance;
+      delete html.dataset.claudeAuraEffectiveMode;
       delete html.dataset.claudeAuraDigest;
     }
     delete window.__CLAUDE_AURA_STATE__;
@@ -356,6 +358,8 @@ async function verifyRemoved(session) {
       !html?.dataset?.claudeAuraTheme &&
       !html?.dataset?.claudeAuraVariant &&
       !html?.dataset?.claudeAuraArtMobile &&
+      !html?.dataset?.claudeAuraAppearance &&
+      !html?.dataset?.claudeAuraEffectiveMode &&
       !html?.dataset?.claudeAuraDigest &&
       !window.__CLAUDE_AURA_STATE__;
   })()`);

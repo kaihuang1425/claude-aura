@@ -43,6 +43,16 @@ const THEMES = {
     copies: [],
     required: true,
   },
+  "study-library": {
+    sourceDir: path.join(PROJECT_ROOT, "themes", "study-library"),
+    outputDir: path.join(PROJECT_ROOT, "assets", "theme-art", "study-library"),
+    jobs: [
+      { src: "provisional/selected/background.png", out: "background.webp", width: 1600, cropLeft: 0, quality: 0.78 },
+      { src: "provisional/selected/corner-bottom.png", out: "corner-bottom.webp", width: 640, cropLeft: 0, quality: 0.82 },
+    ],
+    copies: [],
+    required: true,
+  },
   "japanese-idol": {
     sourceDir: path.join(PROJECT_ROOT, "themes", "japanese-idol"),
     outputDir: path.join(PROJECT_ROOT, "assets", "theme-art", "kawaii-idol"),
@@ -98,9 +108,11 @@ const CARD_PREVIEWS = {
     cropPixels: { x: 1150, y: 55, width: 500, height: 281 },
   },
   "study-library": {
-    sourceDir: path.join(PROJECT_ROOT, "assets", "theme-art"),
-    src: "study-library.svg",
-    cropPixels: { x: 0, y: 112, width: 1200, height: 675 },
+    sourceDir: path.join(PROJECT_ROOT, "themes", "study-library"),
+    src: "provisional/selected/background.png",
+    overlays: [
+      { src: "provisional/selected/corner-bottom.png", width: 360, x: 52, bottom: 0 },
+    ],
   },
   "japanese-idol": {
     sourceDir: path.join(PROJECT_ROOT, "theme_demo_previews"),
@@ -142,8 +154,12 @@ async function findEdge() {
 
 async function convertTheme(themeId, config) {
   const missing = [];
-  for (const entry of [...config.jobs, ...config.copies]) {
-    try { await fs.access(path.join(config.sourceDir, entry.src)); } catch { missing.push(entry.src); }
+  const sourceNames = [
+    ...config.jobs.flatMap((job) => [job.src, ...(job.overlays ?? []).map((overlay) => overlay.src)]),
+    ...config.copies.map((copy) => copy.src),
+  ];
+  for (const sourceName of sourceNames) {
+    try { await fs.access(path.join(config.sourceDir, sourceName)); } catch { missing.push(sourceName); }
   }
   if (missing.length) {
     if (config.required) {
@@ -163,10 +179,15 @@ async function convertTheme(themeId, config) {
 
   const page = `<!doctype html><meta charset="utf-8"><script>
   const jobs = ${JSON.stringify(config.jobs)};
+  const loadImage = (src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(src));
+    img.src = "/src/" + encodeURIComponent(src);
+  });
   (async () => {
     for (const job of jobs) {
-      const img = new Image();
-      await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error(job.src)); img.src = "/src/" + encodeURIComponent(job.src); });
+      const img = await loadImage(job.src);
       let sx = job.cropPixels ? job.cropPixels.x : Math.round(img.naturalWidth * (job.cropLeft || 0));
       let sy = job.cropPixels ? job.cropPixels.y : 0;
       let sw = job.cropPixels ? job.cropPixels.width : img.naturalWidth - sx;
@@ -195,6 +216,16 @@ async function convertTheme(themeId, config) {
       const ctx = canvas.getContext("2d");
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+      for (const overlay of job.overlays ?? []) {
+        const overlayImage = await loadImage(overlay.src);
+        const overlayWidth = overlay.width;
+        const overlayHeight = Math.round(overlayImage.naturalHeight * overlayWidth / overlayImage.naturalWidth);
+        const overlayX = overlay.x ?? 0;
+        const overlayY = overlay.y ?? h - overlayHeight - (overlay.bottom ?? 0);
+        ctx.globalAlpha = overlay.opacity ?? 1;
+        ctx.drawImage(overlayImage, overlayX, overlayY, overlayWidth, overlayHeight);
+        ctx.globalAlpha = 1;
+      }
       const blob = await new Promise((res) => canvas.toBlob(res, "image/webp", job.quality));
       await fetch("/out/" + encodeURIComponent(job.out), { method: "POST", body: blob });
     }
@@ -204,6 +235,10 @@ async function convertTheme(themeId, config) {
 
   let finish;
   const finished = new Promise((resolve) => { finish = resolve; });
+  const allowedSources = new Set(config.jobs.flatMap((job) => [
+    job.src,
+    ...(job.overlays ?? []).map((overlay) => overlay.src),
+  ]));
   const server = http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url, "http://127.0.0.1");
@@ -211,8 +246,9 @@ async function convertTheme(themeId, config) {
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(page);
       } else if (request.method === "GET" && url.pathname.startsWith("/src/")) {
         const name = decodeURIComponent(url.pathname.slice(5));
-        if (!config.jobs.some((job) => job.src === name)) { response.writeHead(403).end(); return; }
-        const isSvg = name.toLowerCase().endsWith(".svg");
+        if (!allowedSources.has(name)) { response.writeHead(403).end(); return; }
+        const lowerName = name.toLowerCase();
+        const isSvg = lowerName.endsWith(".svg");
         let sourceBytes = await fs.readFile(path.join(config.sourceDir, name));
         if (isSvg) {
           const sourceText = sourceBytes.toString("utf8");
@@ -221,7 +257,12 @@ async function convertTheme(themeId, config) {
             sourceBytes = Buffer.from(sourceText.replace(/<svg\b/, `<svg width="${viewBox[1]}" height="${viewBox[2]}"`), "utf8");
           }
         }
-        response.writeHead(200, { "Content-Type": isSvg ? "image/svg+xml" : "image/png" }).end(sourceBytes);
+        const contentType = isSvg ? "image/svg+xml"
+          : lowerName.endsWith(".webp") ? "image/webp"
+          : lowerName.endsWith(".avif") ? "image/avif"
+          : lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") ? "image/jpeg"
+          : "image/png";
+        response.writeHead(200, { "Content-Type": contentType }).end(sourceBytes);
       } else if (request.method === "POST" && url.pathname.startsWith("/out/")) {
         const name = decodeURIComponent(url.pathname.slice(5));
         if (!config.jobs.some((job) => job.out === name)) { response.writeHead(403).end(); return; }
@@ -279,6 +320,7 @@ for (const [themeId, source] of Object.entries(cardSelection)) {
       width: 640,
       height: 360,
       cropPixels: source.cropPixels,
+      overlays: source.overlays,
       quality: 0.82,
     }],
     copies: [],

@@ -204,6 +204,7 @@ function Set-AuraUiConfig {
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
   $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
   Set-AuraUiPayloadState -Payload $payload
+  if ($script:WebReady -or $script:StudioReady) { Set-AuraUiPreferredColorScheme }
   Update-AuraUiTrayAppearance
   Send-AuraUiStudioState
 }
@@ -295,6 +296,35 @@ function Fail-AuraUiStartup {
 function Get-AuraUiEnabled {
   if ($null -eq $script:Config -or $null -eq $script:Config.PSObject.Properties['enabled']) { return $true }
   return [bool]$script:Config.enabled
+}
+
+function Get-AuraUiAppearance {
+  if ($null -ne $script:Config -and $null -ne $script:Config.PSObject.Properties['appearance']) {
+    $appearance = "$($script:Config.appearance)"
+    if ($appearance -cin @('system', 'light', 'dark')) { return $appearance }
+  }
+  return 'system'
+}
+
+function Set-AuraUiPreferredColorScheme {
+  param(
+    [ValidateSet('system', 'light', 'dark')][string]$Appearance = (Get-AuraUiAppearance),
+    [bool]$Enabled = (Get-AuraUiEnabled)
+  )
+  $scheme = if (-not $Enabled) {
+    [Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme]::Auto
+  } else {
+    switch -CaseSensitive ($Appearance) {
+      'light' { [Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme]::Light; break }
+      'dark' { [Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme]::Dark; break }
+      default { [Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme]::Auto; break }
+    }
+  }
+  foreach ($webView in @($script:WebView, $script:StudioWebView)) {
+    if ($null -ne $webView -and -not $webView.IsDisposed -and $null -ne $webView.CoreWebView2) {
+      $webView.CoreWebView2.Profile.PreferredColorScheme = $scheme
+    }
+  }
 }
 
 function Update-AuraUiTrayAppearance {
@@ -559,6 +589,7 @@ function Send-AuraUiStudioState {
     $state = [ordered]@{
       type = 'state'
       theme = "$themeName"
+      appearance = (Get-AuraUiAppearance)
       enabled = $enabled
       hasImage = ($null -ne $imageValue -and "$imageValue".Trim().Length -gt 0)
       imagePreviewUrl = $imagePreviewUrl
@@ -954,6 +985,7 @@ function Invoke-AuraUiSetCardPreviewCrop {
 function Invoke-AuraUiSetEnabled {
   param([Parameter(Mandatory = $true)][bool]$Enabled)
   Set-AuraUiConfig -Options @('--enabled', $Enabled.ToString().ToLowerInvariant())
+  Set-AuraUiPreferredColorScheme -Enabled $Enabled
   if ($Enabled) {
     Apply-AuraUiTheme
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
@@ -964,6 +996,15 @@ function Invoke-AuraUiSetEnabled {
     }
     Send-AuraUiStudioState -Status "$($script:UiCopy.originalActive)"
   }
+}
+
+function Invoke-AuraUiSetAppearance {
+  param([Parameter(Mandatory = $true)][string]$Appearance)
+  if ($Appearance -cnotin @('system', 'light', 'dark')) { throw 'Studio appearance must be system, light, or dark.' }
+  Set-AuraUiConfig -Options @('--appearance', $Appearance)
+  Set-AuraUiPreferredColorScheme -Appearance $Appearance
+  if (Get-AuraUiEnabled) { Apply-AuraUiTheme }
+  Send-AuraUiStudioState
 }
 
 function Get-AuraUiStudioMessage {
@@ -984,6 +1025,7 @@ function Get-AuraUiStudioMessage {
   $type = [string]$message.type
   $expectedProperties = @(switch -CaseSensitive ($type) {
     'set-theme' { 'type'; 'theme'; break }
+    'set-appearance' { 'type'; 'appearance'; break }
     'set-enabled' { 'type'; 'enabled'; break }
     'set-image-framing' { 'type'; 'x'; 'y'; 'zoom'; break }
     'set-card-preview-crop' { 'type'; 'theme'; 'x'; 'y'; 'zoom'; break }
@@ -1009,6 +1051,11 @@ function Invoke-AuraUiStudioMessage {
     'set-theme' {
       if ($message.theme -isnot [string]) { throw 'Studio theme must be a string.' }
       Invoke-AuraUiSelectTheme -Theme ([string]$message.theme)
+      break
+    }
+    'set-appearance' {
+      if ($message.appearance -isnot [string]) { throw 'Studio appearance must be a string.' }
+      Invoke-AuraUiSetAppearance -Appearance ([string]$message.appearance)
       break
     }
     'set-image' { [void](Invoke-AuraUiChooseBackground -Owner $script:StudioForm); break }
@@ -1054,6 +1101,7 @@ $script:Locale = 'en'
 $script:StudioMessageTypes = @(
   'get-state',
   'set-theme',
+  'set-appearance',
   'set-image',
   'clear-image',
   'set-image-framing',
@@ -1324,6 +1372,7 @@ public static class AuraWindow {
           $studioCore.Settings.AreBrowserAcceleratorKeysEnabled = $true
           $studioCore.Settings.IsZoomControlEnabled = $true
           $studioCore.Settings.IsWebMessageEnabled = $true
+          Set-AuraUiPreferredColorScheme
           $studioCore.SetVirtualHostNameToFolderMapping(
             'aura.studio',
             $StudioRoot,
@@ -1401,6 +1450,7 @@ public static class AuraWindow {
         $core.Settings.AreDefaultContextMenusEnabled = $true
         $core.Settings.AreBrowserAcceleratorKeysEnabled = $true
         $core.Settings.IsZoomControlEnabled = $true
+        Set-AuraUiPreferredColorScheme
 
         $core.add_NavigationStarting({
           $script:PageReady = $false

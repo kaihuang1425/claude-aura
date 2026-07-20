@@ -181,15 +181,164 @@ captures show the intended art decoded, correctly cropped, legible in both
 modes, free of control overlap, and free of cross-theme artwork; or the theme
 is cleanly awaiting-art and receives no parity approval.
 
+### WO-12 acceptance amendment — Aura appearance preference
+
+User-authorized 2026-07-20 after the live Study review exposed that current
+Claude offers no light/dark control and WebView2 System mode remained light
+even while Windows apps were dark. WO-12 may add the minimum product plumbing
+needed to exercise its required live light/dark gate: a persisted,
+keyboard-operable **System / Light / Dark** selector in Aura Studio. Apply the
+selection through `CoreWebView2Profile.PreferredColorScheme` before navigation
+and immediately on change, with a namespaced Aura effective-mode fallback for
+theme tokens. Never alter Claude-owned classes, attributes, storage, or account
+preferences.
+
+Permitted amendment files: `config.example.json`, `scripts/theme-core.mjs`,
+`scripts/theme-cli.mjs`, `assets/renderer-inject.js`, `assets/base.css`,
+`scripts/injector.mjs` if cleanup requires it, `scripts/verify-cycle.mjs` and
+`scripts/qa-board.mjs` only to pass their explicit render mode, `studio/index.html`,
+`studio/app.js`, `studio/styles.css`, `windows/aura-ui.ps1` (additive restricted
+change: appearance mapping, startup application, strict `set-appearance`
+bridge action/state only), `tests/run-tests.mjs`, and directly affected
+documentation. Preserve the NavigationCompleted reveal invariant and all
+payload/artwork budgets. The broader Studio navigation, Windows identity,
+cross-theme interaction polish, live sidebar repair, and context-aware artwork
+work remain separate queued work.
+
+---
+
+## WO-17 — Live Aura UX, identity, prompt placement, and context adaptation
+
+Correct the defects visible in the supplied actual-Aura screenshots while
+preserving the Claude-only main WebView. Add discoverable Windows navigation to
+Studio, an Aura-owned icon, restrained interaction states, reliable live-sidebar
+styling, and context-aware artwork and prompt placement.
+
+Permitted files: `assets/base.css`, `assets/theme-variants.css`,
+`assets/renderer-inject.js`, new canonical `assets/brand/aura-mark.svg` and
+derived `assets/brand/claude-aura.ico`, `themes/registry.json`,
+`scripts/theme-core.mjs`, new deterministic `scripts/build-aura-icon.mjs`,
+`scripts/build-preview.mjs` and generated theme mirrors only for schema
+propagation, `studio/index.html`, `studio/styles.css`, `studio/app.js`,
+`windows/aura-ui.ps1`, `windows/install.ps1`, `windows/uninstall.ps1`,
+`windows/ui-copy.json`, `scripts/build-release.mjs`, `tests/run-tests.mjs`, and
+directly affected manifest, screenshot-plan, reference-lock, acceptance, and
+progress documents. Do not develop the offline preview, QA boards, or fixture
+interface as product surfaces.
+
+Restricted-file authorization for `windows/aura-ui.ps1`: add `-OpenStudio`,
+per-user single-instance Studio signaling, one strict `open-aura` bridge action,
+and Aura icon loading/disposal for both forms and the notification-area icon.
+Do not change the `NavigationCompleted` reveal invariant or inject controls into
+Claude.
+
+Requirements:
+
+1. Generate the Aura identity icon deterministically from the canonical SVG,
+   with ICO frames at 16, 20, 24, 32, 40, 48, 64, 128, and 256 px. Do not borrow
+   the Claude executable icon.
+2. Install separate normal Aura and `Claude Aura Studio` Desktop/Start-menu
+   shortcuts. `-OpenStudio` foregrounds the existing Studio or starts Aura and
+   opens Studio; uninstall removes only the owned shortcuts.
+3. Add an accessible Studio action that returns to the Aura window while
+   retaining the separate official Desktop-app action.
+4. Replace blanket icon boxes, colored borders, label-tinting hover states, and
+   lift transforms with theme-appropriate text, low-alpha surfaces, restrained
+   shadow, and the existing visible `:focus-visible` ring. Native labels remain
+   live text; do not replace them with images.
+5. Discover the current live sidebar from semantic DOM signals, mark exactly one
+   element with `data-claude-aura-sidebar`, and remove that marker on cleanup.
+   Do not depend on localized sidebar wording.
+6. Maintain `data-claude-aura-context="new-chat|conversation|other"` across SPA
+   navigation. Cleanup removes every Aura context/layout marker.
+7. Extend validated registry metadata with bounded new-chat layout presets for
+   the real prompt block: width plus horizontal/vertical offsets inside the
+   measured live main canvas. Apply them only when the semantic new-chat prompt
+   root is discovered, clamp them to the viewport, preserve keyboard/focus
+   behavior, and never reposition the conversation composer. Korean Idol must
+   match the approved demo composition without covering its hero.
+8. Extend artwork-layer metadata with bounded role/context overrides. Korean
+   Idol uses separately approved new-chat and conversation hero placement;
+   hiding or reducing its conversation hero is acceptable when needed to keep
+   content, attachments, title, and composer unobstructed.
+9. Fix only the current Studio overflow defect needed for navigation: one
+   intentional content scrolling region at the supported minimum size, with no
+   blank nested document scroller.
+
+Done when: PowerShell parses; `npm run check` and `npm run verify:cycle` pass;
+all generated frames are inspected; payload-minus-art remains below 65 KB;
+Original look removes all styles, markers, artwork, context, prompt placement,
+and forced appearance; release output contains the SVG/ICO; shortcut, title-bar,
+and notification-area icons are inspected at normal/high DPI; and actual Aura
+evidence covers all eight themes in light/dark with representative
+hover/selected states plus Korean Idol new-chat and conversation layouts. If
+whole-window capture remains unavailable, stop for user-provided live captures;
+never substitute fixture output.
+
+---
+
+## WO-18 — Aura Studio visual theme editor
+
+Make no-code custom theme creation possible from Studio without simulating
+Claude. Built-in themes are immutable and expose **Duplicate to customize**.
+The editor controls a validated local theme and applies the last valid draft to
+the actual Aura WebView on live `claude.ai`.
+
+Permitted files: `studio/index.html`, `studio/styles.css`, `studio/app.js`, new
+`studio/editor.css` and `studio/editor.js`, `windows/aura-ui.ps1`,
+`windows/ui-copy.json`, `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`,
+`scripts/convert-theme-assets.mjs`, renderer/shared CSS only for the validated
+editor schema, generated theme mirrors only for schema propagation,
+`docs/THEME_KIT_SPEC.md`, `docs/SCREENSHOT_PLAN.md`, `docs/FILE_MANIFEST.md`,
+`README.md`, tests, and acceptance/progress documents.
+
+Scope: light/dark canvas, sidebar, surface, text, accent, and border tokens;
+approved local/system font stacks; radius, blur, and soft shadow; up to four
+background/hero/corner/inert-decoration layers; per-layer anchor, position,
+scale, opacity, mask, mobile behavior, visibility, and new-chat/conversation
+presets; host-owned local artwork import and WebP conversion; prompt-block
+new-chat positioning; undo/redo/reset/save/cancel/delete/restart persistence;
+contrast and budget feedback; a clearly labelled asset/safe-zone guide (not a
+reconstructed Claude preview); and a local slot-specific prompt builder with no
+network model call.
+
+Exact new host actions: `create-theme-copy`, `begin-theme-edit`,
+`set-theme-token`, `set-theme-layer`, `pick-theme-layer-image`,
+`remove-theme-layer`, `move-theme-layer`, `undo-theme-edit`, `redo-theme-edit`,
+`save-theme-edit`, `discard-theme-edit`, and `delete-user-theme`. The page never
+supplies a filesystem path; the host owns file dialogs and strictly allowlists
+IDs, modes, tokens, enums, counts, and numeric ranges.
+
+Preserve schema-v1 user themes. Drafts stay under app-owned data. Save through
+staging, full validation, and atomic replacement with rollback; invalid edits
+leave the last valid payload active. Deleting an active user theme applies
+Default first and never deletes a built-in. Imported rasters remain below 400
+KB each and total artwork below 1.4 MB. `customCss` remains unavailable.
+“Widgets” mean pointer-inert decoration, never interactive UI inside Claude.
+
+Use independent native en, zh-CN, and zh-TW copy. Every drag has a keyboard
+alternative, with logical tab order, visible focus, labelled controls, live
+validation, reduced-motion, and forced-colors handling.
+
+Done when: PowerShell parses; tests cover duplication, v1 compatibility,
+validation, prompt/context placement, undo/redo, atomic rollback, deletion
+safety, path rejection, and bridge allowlists; `npm run check` and
+`npm run verify:cycle` pass and images are inspected; a temporary theme is
+duplicated, edited, imported, saved, applied, restart-tested, and deleted; and
+actual Aura demonstrates it in new-chat/conversation and light/dark. No asset
+guide or offline render may be described as live evidence.
+
 ---
 
 ## WO-15 — Tutorial + gate G6 proof
 
-Rewrite `docs/THEMING.md` as the 30-minute tutorial (Tier 1 voice, zero
-assumed repo knowledge). Then prove it: following ONLY the tutorial, scaffold
-`demo-proof`, give it one background PNG, validate, qa, install via Studio,
-apply, restart-persist, then delete it fully. Record the transcript in
-PROGRESS.md. Done when: the walkthrough succeeds without consulting any other
+Rewrite `docs/THEMING.md` as the 30-minute tutorial (Tier 1 voice, zero assumed
+repo knowledge). The Studio visual editor is the primary no-code route, while
+the existing scaffold/validate/QA/install commands remain documented and must
+still prove gate G6. Following ONLY the tutorial, create `demo-proof`, give it
+one background PNG, validate, install/apply, restart-persist, then delete it
+fully. Record the transcript in PROGRESS.md. Done when both the Studio-first
+walkthrough and the existing command path succeed without consulting any other
 doc and the repo is clean afterward.
 
 ---

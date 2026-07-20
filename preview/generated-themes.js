@@ -2300,13 +2300,25 @@ window.CLAUDE_AURA_THEMES = {
       "text": "#292B26"
     },
     "studioPreview": "assets/theme-art/study-library/card-preview.webp",
-    "artwork": {
-      "path": "assets/theme-art/study-library.svg",
-      "position": "right bottom",
-      "size": "min(48vw, 700px) auto",
-      "mobile": "hide"
-    },
-    "artworkLayers": null,
+    "artwork": null,
+    "artworkLayers": [
+      {
+        "path": "assets/theme-art/study-library/background.webp",
+        "position": "center",
+        "size": "cover",
+        "mobile": "keep",
+        "opacity": 0.4,
+        "mask": "none"
+      },
+      {
+        "path": "assets/theme-art/study-library/corner-bottom.webp",
+        "position": "left bottom",
+        "size": "min(20vw, 320px) auto",
+        "mobile": "hide",
+        "opacity": 0.6,
+        "mask": "none"
+      }
+    ],
     "radius": 7,
     "blur": 6,
     "typography": {

@@ -12,10 +12,10 @@ separate from the real Claude interface and fail safely when unavailable.
 
 The seven `*/card-preview.webp` files are 640 × 360 selector-only derivatives.
 Six are art-led, text-free crops of the project-supplied theme demo references;
-Study Library is rasterized from its current isolated SVG so the card represents
-the implemented theme honestly. The opaque reference composites remain
-gitignored and unshipped. Selector previews are never injected into Claude as
-backgrounds or treated as reconstructed product UI.
+Study Library composes its retained paper and still-life masters so the card
+represents the two production layers honestly. The opaque reference composites
+and PNG source kits remain gitignored and unshipped. Selector previews are never
+injected into Claude as backgrounds or treated as reconstructed product UI.
 
 Project assets are distributed under the repository's MIT License. No runtime
 font, image, or other resource is fetched from the network.
@@ -26,7 +26,7 @@ font, image, or other resource is fetched from the network.
 - `korean-prestige.svg` — midnight architectural glass and blue-silver structure.
 - `cartoon-studio/` — generated cream paper background and an original transparent non-human productivity mascot, plus the Studio selector preview.
 - `anime-twilight/` — generated painterly twilight cityscape background plus the Studio selector preview.
-- `study-library.svg` — books, index cards, a fountain pen, grid paper, and research diagrams.
+- `study-library/` — generated ivory paper background and a transparent books, index-cards, fountain-pen, and shelf still life, plus the Studio selector preview.
 - `kawaii-idol/` — layered Japanese Idol background, hero, sakura, marks, and motifs.
 - `korean-idol/` — layered Korean Idol atmosphere, constellation, and hero.
 

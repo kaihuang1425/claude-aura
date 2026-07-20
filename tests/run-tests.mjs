@@ -145,6 +145,24 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mask: "none",
     },
   ]);
+  assert.deepEqual(themes.find((theme) => theme.name === "study-library")?.artworkLayers, [
+    {
+      path: "assets/theme-art/study-library/background.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.4,
+      mask: "none",
+    },
+    {
+      path: "assets/theme-art/study-library/corner-bottom.webp",
+      position: "left bottom",
+      size: "min(20vw, 320px) auto",
+      mobile: "hide",
+      opacity: 0.6,
+      mask: "none",
+    },
+  ]);
 });
 
 test("every theme provides complete semantic roles and a distinct component profile", async () => {
@@ -195,9 +213,15 @@ test("every theme provides complete semantic roles and a distinct component prof
     const selector = `html.claude-aura[data-claude-aura-theme="${id}"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {`;
     assert(variants.includes(selector), `${id} lacks a complete interactive-role icon treatment`);
   }
-  const animeArtworkSelector = 'html.claude-aura[data-claude-aura-theme="anime-twilight"] #claude-aura-backdrop .claude-aura-theme-art-layer';
-  assert(variants.includes(`${animeArtworkSelector} {\n  animation: none;\n}`),
-    "Anime Twilight must preserve its exact recipe layer opacity");
+  const exactArtworkSelector = 'html.claude-aura:is([data-claude-aura-theme="cartoon-studio"], [data-claude-aura-theme="anime-twilight"], [data-claude-aura-theme="study-library"]) #claude-aura-backdrop .claude-aura-theme-art-layer';
+  assert(variants.includes(`${exactArtworkSelector} {\n  animation: none;\n}`),
+    "Recipe-defined layered themes must preserve their exact per-layer opacity");
+  const studyCornerSelector = 'html.claude-aura[data-claude-aura-theme="study-library"] #claude-aura-backdrop .claude-aura-theme-art-layer + .claude-aura-theme-art-layer';
+  assert(variants.includes(`${studyCornerSelector} {\n  left: var(--aura-main-start, 0px);\n}`),
+    "Study Library corner must anchor to the content edge instead of beneath the sidebar");
+  const converter = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"), "utf8");
+  assert(!converter.includes('src: "study-library.svg"'),
+    "Study Library selector media must not derive from its retired procedural stand-in");
 });
 
 test("all theme text, focus colours, and accents clear contrast guardrails", async () => {
@@ -259,6 +283,7 @@ test("theme metadata localizes independently for English, Simplified Chinese, an
 
 test("Default is the persistent baseline and invalid saved IDs fall back safely", async () => {
   assert.equal(DEFAULT_CONFIG.theme, "default");
+  assert.equal(DEFAULT_CONFIG.appearance, "system");
   const baseline = await compileTheme({
     configPath: path.join(PROJECT_ROOT, "config.example.json"),
     config: { ...DEFAULT_CONFIG, theme: "midnight" },
@@ -283,11 +308,17 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   const defaultBundle = await buildPayload({ configPath: path.join(PROJECT_ROOT, "config.example.json") });
   assert.equal(defaultBundle.settings.version, AURA_VERSION);
   assert.equal(defaultBundle.settings.theme, "default");
+  assert.equal(defaultBundle.settings.appearance, "system");
   assert.equal(defaultBundle.settings.artDataUrl, null);
   assert.equal(defaultBundle.settings.artUnavailable, false);
   assert.match(defaultBundle.css, /--aura-background-primary/);
   assert.match(defaultBundle.css, /data-claude-aura-theme="cartoon-studio"/);
+  assert.match(defaultBundle.css, /data-claude-aura-effective-mode="light"/);
+  assert.match(defaultBundle.css, /data-claude-aura-effective-mode="dark"/);
   assert.match(defaultBundle.payload, /dataset\.claudeAuraTheme/);
+  assert.match(defaultBundle.payload, /dataset\.claudeAuraEffectiveMode/);
+  assert(!/dataset\.(?:mode|theme)\s*=/.test(rendererSource),
+    "Aura appearance must not mutate Claude-owned mode or theme attributes");
   assert.match(defaultBundle.payload, /claude-aura-theme-art/);
   assert(!defaultBundle.payload.includes("__AURA_CSS_JSON__"));
   assert(!defaultBundle.payload.includes("__AURA_SETTINGS_JSON__"));
@@ -431,6 +462,10 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   };
   document.documentElement.appendChild(document.head);
   document.documentElement.appendChild(document.body);
+  const main = new FakeElement("main");
+  main.getBoundingClientRect = () => ({ left: 250 });
+  document.body.appendChild(main);
+  document.querySelector = (selector) => selector === "main" ? main : null;
   document.getElementById = (id) => {
     const find = (element) => element.id === id
       ? element
@@ -468,7 +503,14 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     }
   }
 
-  const window = {};
+  let mediaDark = false;
+  const mediaListeners = new Set();
+  const mediaQuery = {
+    get matches() { return mediaDark; },
+    addEventListener(type, listener) { if (type === "change") mediaListeners.add(listener); },
+    removeEventListener(type, listener) { if (type === "change") mediaListeners.delete(listener); },
+  };
+  const window = { matchMedia: () => mediaQuery };
   for (const theme of await listThemes()) {
     const bundle = await buildPayload({ config: { ...DEFAULT_CONFIG, theme: theme.name } });
     const inject = new Function(
@@ -484,6 +526,9 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     inject(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
     assert.equal(window.__CLAUDE_AURA_STATE__.theme, theme.name);
     assert.equal(document.documentElement.dataset.claudeAuraTheme, theme.name);
+    assert.equal(document.documentElement.dataset.claudeAuraAppearance, "system");
+    assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "light");
+    assert.equal(mediaListeners.size, 1, `${theme.name} left duplicate appearance listeners`);
     assert.equal(intervals.size, 1, `${theme.name} left duplicate renderer timers`);
     assert.equal(observers.size, 1, `${theme.name} left duplicate mutation observers`);
     const backdrop = document.getElementById("claude-aura-backdrop");
@@ -503,7 +548,28 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       assert.deepEqual(layers.map((layer) => layer.dataset.artMobile),
         expectedLayers.map((layer) => layer.mobile));
     }
+    if (theme.name === "study-library") {
+      assert.equal(document.documentElement.style.getPropertyValue("--aura-main-start"), "250px");
+    }
   }
+
+  mediaDark = true;
+  for (const listener of mediaListeners) listener({ matches: true });
+  assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "dark",
+    "System appearance did not react to the prefers-color-scheme change");
+  mediaDark = false;
+
+  const forcedDarkBundle = await buildPayload({
+    config: { ...DEFAULT_CONFIG, theme: "study-library", appearance: "dark" },
+  });
+  const injectForcedDark = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    forcedDarkBundle.payload,
+  );
+  injectForcedDark(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  assert.equal(document.documentElement.dataset.claudeAuraAppearance, "dark");
+  assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "dark");
+  assert.equal(mediaListeners.size, 0, "Forced appearance retained the System media listener");
 
   const framedBundle = await buildPayload({
     config: { ...DEFAULT_CONFIG, theme: "default", imagePosition: "12.5% 87.5%", imageZoom: 1.4 },
@@ -541,6 +607,9 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(document.getElementById("claude-aura-style"), null);
   assert.equal(document.getElementById("claude-aura-backdrop"), null);
   assert.equal(document.documentElement.style.getPropertyValue("--aura-image-scale"), "");
+  assert.equal(document.documentElement.dataset.claudeAuraAppearance, undefined);
+  assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, undefined);
+  assert.equal(mediaListeners.size, 0);
   assert.equal(window.__CLAUDE_AURA_STATE__, undefined);
 });
 
@@ -903,6 +972,13 @@ test("config writes are atomic, aliases migrate, and theme choice persists", asy
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "default");
     run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath, "--theme", "study-library"]);
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "study-library");
+    run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath, "--appearance", "dark"]);
+    assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).appearance, "dark");
+    const appearanceBytes = await fs.readFile(configPath, "utf8");
+    assert.throws(() => run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
+      "--appearance", "Dark"]), /appearance must be system, light, or dark/);
+    assert.equal(await fs.readFile(configPath, "utf8"), appearanceBytes,
+      "A rejected appearance changed the persisted configuration");
     run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
       "--image-position", "23.5% 76.25%", "--image-zoom", "1.35",
       "--studio-preview-theme", "japanese-idol", "--studio-preview-x", "18.5",
@@ -1204,12 +1280,23 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Studio background previews must come from the isolated app-data folder");
   assert.match(ui, /\.Navigate\(\s*['"]https:\/\/aura\.studio\/index\.html['"]\s*\)/,
     "Studio must navigate to its exact offline virtual-host URL");
+  const studioCoreIndex = ui.indexOf("$studioCore = $script:StudioWebView.CoreWebView2");
+  const studioAppearanceIndex = ui.indexOf("Set-AuraUiPreferredColorScheme", studioCoreIndex);
+  const studioNavigateIndex = ui.indexOf("$studioCore.Navigate('https://aura.studio/index.html')", studioCoreIndex);
+  assert(studioCoreIndex >= 0 && studioAppearanceIndex > studioCoreIndex && studioAppearanceIndex < studioNavigateIndex,
+    "Studio must apply the WebView2 color preference before its first navigation");
+  const mainCoreIndex = ui.indexOf("$core = $script:WebView.CoreWebView2");
+  const mainAppearanceIndex = ui.indexOf("Set-AuraUiPreferredColorScheme", mainCoreIndex);
+  const mainNavigateIndex = ui.indexOf("$core.Navigate('https://claude.ai/')", mainCoreIndex);
+  assert(mainCoreIndex >= 0 && mainAppearanceIndex > mainCoreIndex && mainAppearanceIndex < mainNavigateIndex,
+    "Aura must apply the WebView2 color preference before claude.ai navigation");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
   assert.match(ui, /PostWebMessageAsJson\s*\(/);
 
   const expectedStudioMessageTypes = [
     "get-state",
     "set-theme",
+    "set-appearance",
     "set-image",
     "clear-image",
     "set-image-framing",
@@ -1223,7 +1310,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   const studioMessageTypes = [...studioMessageTypesMatch[1].matchAll(/['"]([^'"]+)['"]/g)]
     .map((match) => match[1]);
   assert.deepEqual(studioMessageTypes, expectedStudioMessageTypes,
-    "Studio must expose only the user-approved WO-05 host actions");
+    "Studio must expose only the user-approved host actions");
   assert.match(ui,
     /(?:\$script:StudioMessageTypes\s+-cnotcontains\s+\$message\.type|\$message\.type\s+-cnotin\s+\$script:StudioMessageTypes)/i,
     "Studio message actions must be checked case-sensitively against the allowlist");
@@ -1235,6 +1322,37 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Studio theme IDs must use the canonical case-sensitive kebab-case check");
   assert.match(ui, /\$message\.enabled\s+-isnot\s+\[bool\]/i,
     "Studio enabled-state messages must carry a real Boolean");
+  assert.match(ui, /\$message\.appearance\s+-isnot\s+\[string\]/i,
+    "Studio appearance messages must carry a string");
+  assert.match(ui, /\$Appearance\s+-cnotin\s+@\(\s*['"]system['"]\s*,\s*['"]light['"]\s*,\s*['"]dark['"]\s*\)/,
+    "Studio appearance values must be checked case-sensitively against the exact enum");
+  assert.match(ui, /CoreWebView2PreferredColorScheme\]::Auto/);
+  assert.match(ui, /CoreWebView2PreferredColorScheme\]::Light/);
+  assert.match(ui, /CoreWebView2PreferredColorScheme\]::Dark/);
+  assert.match(ui,
+    /function Set-AuraUiPreferredColorScheme[\s\S]*?\[bool\]\$Enabled\s*=\s*\(Get-AuraUiEnabled\)[\s\S]*?if \(-not \$Enabled\)[\s\S]*?CoreWebView2PreferredColorScheme\]::Auto/,
+    "Original look must restore WebView2 to the system color scheme");
+  assert.match(ui, /Profile\.PreferredColorScheme\s*=\s*\$scheme/,
+    "The host must apply appearance through the supported WebView2 profile API");
+  assert.match(ui,
+    /function Invoke-AuraUiSetEnabled[\s\S]*?Set-AuraUiConfig[^\n]*\n\s*Set-AuraUiPreferredColorScheme\s+-Enabled\s+\$Enabled[\s\S]*?if \(\$Enabled\)/,
+    "Original look must reset the profile preference before renderer cleanup");
+  assert.match(ui,
+    /function Set-AuraUiConfig[\s\S]*?Set-AuraUiPayloadState[^\n]*\n\s*if \(\$script:WebReady -or \$script:StudioReady\) \{ Set-AuraUiPreferredColorScheme \}/,
+    "Every live config mutation that can enable a theme must refresh the WebView2 preference");
+  assert.match(ui, /appearance\s*=\s*\(Get-AuraUiAppearance\)/,
+    "Studio state must report the persisted appearance");
+  assert.match(studioHtml, /<fieldset[^>]+id="appearance-mode"[^>]+aria-describedby="appearance-help"/,
+    "Studio appearance must use a labelled native fieldset");
+  assert.equal((studioHtml.match(/type="radio" name="appearance"/g) ?? []).length, 3,
+    "Studio must expose exactly System, Light, and Dark radio choices");
+  assert.match(studioApp, /type:\s*"set-appearance",\s*appearance:\s*input\.value/,
+    "Studio must send the selected appearance through the strict bridge");
+  for (const copy of ["Appearance mode", "外观模式", "外觀模式", "跟随系统", "跟隨系統"]) {
+    assert(studioApp.includes(copy), `Studio appearance copy is missing ${copy}`);
+  }
+  assert.match(studioCss, /\.appearance-option:has\(input:checked\)/,
+    "The selected appearance must have a visible state");
   assert.match(ui, /ConvertTo-AuraUiStudioNumber[\s\S]*?\[double\]::IsNaN[\s\S]*?\[double\]::IsInfinity/,
     "Studio crop values must reject non-finite numbers");
   assert.match(ui, /\[Globalization\.CultureInfo\]::InvariantCulture/,
@@ -1251,7 +1369,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The live image layer must use the same exact frame and zoom model as Studio");
   assert.match(studioApp, /send\(\{\s*type:\s*"set-image"\s*\}\)/,
     "The Studio page must let the host choose image paths");
-  for (const action of ["set-theme", "set-image", "clear-image", "set-enabled", "open-desktop"]) {
+  for (const action of ["set-theme", "set-appearance", "set-image", "clear-image", "set-enabled", "open-desktop"]) {
     assert(new RegExp(`type:\\s*"${action}"`).test(studioApp),
       `Studio must retain the ${action} capability removed from the main toolbar`);
   }

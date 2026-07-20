@@ -15,6 +15,9 @@ html.claude-aura[data-mode="light"] {
   color-scheme: light;
 }
 
+html.claude-aura[data-claude-aura-effective-mode="dark"] { color-scheme: dark; }
+html.claude-aura[data-claude-aura-effective-mode="light"] { color-scheme: light; }
+
 html.claude-aura body {
   background: transparent !important;
   color: hsl(var(--aura-text-primary)) !important;
@@ -69,7 +72,6 @@ html.claude-aura body {
   opacity: var(--aura-art-opacity, 0);
   transform: translateZ(0);
   animation: aura-art-enter 420ms ease-out both;
-  /* Right-anchored, edge-dissolved so artwork integrates, not a pasted block. */
   -webkit-mask-image: radial-gradient(145% 122% at 100% 50%, #000 25%, transparent 80%);
   mask-image: radial-gradient(145% 122% at 100% 50%, #000 25%, transparent 80%);
 }
@@ -303,9 +305,6 @@ html.claude-aura .text-black {
 }
 
 html.claude-aura {
-  /* Inputs and the composer wear quiet borders; themes retune the alpha via
-     theme-variants.css. Focus visibility comes from :focus-visible, never
-     from loud resting borders. */
   --aura-input-border-alpha: 0.15;
 }
 

@@ -11,8 +11,6 @@ move to the next queue item. Format:
 - What would unblock it (tool, asset, or user decision):
 ```
 
-(no blocked items yet)
-
 ## 2026-07-19 — WO-08 — Japanese Film corner conversion never completes
 - Attempt 1: added the supplied Japanese Film background/hero copy jobs and
   wide-corner SVG WebP job, then ran
@@ -96,3 +94,10 @@ move to the next queue item. Format:
   product-art correction: its Studio card preview contains only paper texture,
   and the bottom-left vignette is almost entirely hidden behind the sidebar in
   both payload modes. The QA board and fixture renders remain preflight only.
+- Resolution (2026-07-20): rebuilt the Studio card from both selected masters;
+  anchored the corner layer to the measured live main-canvas edge; added the
+  persisted Aura **System / Light / Dark** control when the live site exposed no
+  usable mode selector; and received user-supplied whole-window light/dark Aura
+  captures on real `claude.ai`. The user approved the resulting Study Library
+  composition, so WO-12 is complete. The capture mechanism itself remains
+  unavailable for other themes and stays recorded under WO-09.

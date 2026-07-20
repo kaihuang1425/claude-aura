@@ -2,7 +2,7 @@
 
 ## 0.3.x follow-up fixes
 
-Three changes landed after the initial eight-theme system:
+Four changes landed after the initial eight-theme system:
 
 1. **First-sign-in blank screen (fixed).** The WebView loading cover only hid when
    the async theme-injection script confirmed `"installed":true`. The first
@@ -19,6 +19,12 @@ Three changes landed after the initial eight-theme system:
    applies a right-anchored radial mask that dissolves the artwork's other edges, so
    it reads as an integrated corner presence; the japanese-idol and korean-idol art
    sizes and opacities were retuned to match.
+4. **Aura appearance preference.** Aura Studio now persists an independent
+   System/Light/Dark selection. The Windows host applies the supported WebView2
+   profile preference before navigation and after live changes, while the
+   renderer maintains only namespaced selected/effective-mode attributes for
+   token fallback. It never mutates Claude mode classes, attributes, storage, or
+   account settings, and Original look restores the profile to Auto.
 
 ## Kawaii idol preview showcase
 
@@ -80,6 +86,24 @@ WO-16. A separate two-attempt failure for the supplemental deterministic stress
 capture is recorded under WO-11 in `docs/plans/BLOCKED.md`; no fixture image is
 represented as live evidence.
 
+## Study Library approved artwork
+
+WO-12 replaces the procedural Study Library SVG with two approved inert WebP
+layers: a 1600 x 900 ivory paper-fiber background and a 640 x 527 transparent
+desk/library still life. The renderer measures the live main-canvas edge so the
+`left bottom` vignette anchor is not hidden beneath Claude's sidebar. The Studio
+selector card is deterministically composed from both selected masters. Source
+masters, prompts, provenance, checksums, and the 2160 x 4600 QA board remain in
+the gitignored `themes/study-library/`; the shippable derivatives live under
+`assets/theme-art/study-library/`.
+
+The replacement light/dark deterministic renders are locked in
+`docs/golden/REFERENCE_LOCK.md`. Separate user-supplied whole-window captures at
+`dist/verify/live-aura/06-study-library-{light,dark}-aura-window.png` show the
+actual Aura WebView2 on live `claude.ai`, decoded art, clear controls, and
+legible light/dark materials. The user approved that mini-checkpoint on
+2026-07-20; these live captures are review evidence, not automated goldens.
+
 ## Scope
 
 Claude Aura 0.3 preserves the existing WebView2 companion, renderer injection,
@@ -98,7 +122,7 @@ real Claude interface with screenshots.
 | 3 | `korean-prestige` | Korean Prestige | `assets/theme-art/korean-prestige.svg` |
 | 4 | `cartoon-studio` | Cartoon Studio | Two layered `assets/theme-art/cartoon-studio/*.webp` assets (background and original mascot) |
 | 5 | `anime-twilight` | Anime Twilight | One layered `assets/theme-art/anime-twilight/background.webp` cityscape |
-| 6 | `study-library` | Study Library | `assets/theme-art/study-library.svg` |
+| 6 | `study-library` | Study Library | Two layered `assets/theme-art/study-library/*.webp` assets (paper background and bottom-left still life) |
 | 7 | `japanese-idol` | Japanese Idol | Four layered `assets/theme-art/kawaii-idol/*.webp` assets (background, hero, two sakura clusters) |
 | 8 | `korean-idol` | Korean Idol | Three layered `assets/theme-art/korean-idol/*.webp` assets (background, constellation, hero) |
 
@@ -238,11 +262,13 @@ the unreadable source as a uniquely named `.corrupt-…json` diagnostic backup.
 
 ## Artwork and licensing
 
-Three themes use self-contained project SVG renderer art. Cartoon Studio uses
+Two themes use self-contained project SVG renderer art. Cartoon Studio uses
 two project-generated, user-approved WebP layers with frozen source masters
 under `themes/cartoon-studio/`, and Anime Twilight uses one project-generated,
 user-approved WebP background with its frozen source master under
-`themes/anime-twilight/`. Japanese Idol uses derived, isolated WebP/SVG copies
+`themes/anime-twilight/`. Study Library uses two project-generated,
+user-approved WebP layers with frozen source masters under
+`themes/study-library/`. Japanese Idol uses derived, isolated WebP/SVG copies
 from the supplied kit under
 `themes/japanese-idol/`, and Korean Idol uses three derived WebP layers from the
 kit currently supplied under `themes/korean-prestige/`; both source directories
@@ -251,10 +277,10 @@ contains no embedded controls or UI text, and is non-focusable, hidden from
 assistive technology, and pointer-inert. Default uses no renderer artwork.
 
 Studio selector media is a distinct asset class: six cards use small art-only
-crops from the supplied visual references and Study Library uses a rasterized
-crop of its implemented SVG. The photorealistic reference pixels occur only in
-these decorative selector thumbnails, next to live labels; they are never
-injected into Claude as renderer art.
+crops from the supplied visual references and Study Library uses a
+deterministic composition of its two approved source masters. Reference pixels
+occur only in these decorative selector thumbnails, next to live labels; full
+interface composites are never injected into Claude as renderer art.
 
 The raw `theme_demo_previews` composites remain art-direction sources only. The
 runtime compiler and offline preview builder never read or embed them, and the
@@ -334,9 +360,9 @@ Results recorded through 2026-07-20:
 
 | Check | Result |
 | --- | --- |
-| `npm test` | Passed, 16/16 |
-| `npm run check` | Passed; JavaScript, Windows PowerShell, and shell parsing plus the 16-test suite |
-| `npm run verify:cycle` | Passed, 17/17; all sixteen 1440 x 900 light/dark theme renders under `dist/verify/` were opened and inspected for readability, clipping, artwork layering, and blank output |
+| `npm test` | Passed, 19/19 |
+| `npm run check` | Passed; JavaScript and platform parsing plus the 19-test suite |
+| `npm run verify:cycle` | Passed, 33/33; all sixteen 1440 x 900 light/dark theme renders under `dist/verify/` were opened and inspected for readability, clipping, artwork layering, and blank output |
 | Lint | Not configured in the repository; there is no linter dependency or lint script, so this gate is explicitly not applicable rather than represented by `npm run check` |
 | Typecheck | Not applicable; the project contains JavaScript, PowerShell, and shell sources with no TypeScript sources, `tsconfig.json`, or typecheck script |
 | `npm run preview:build` | Passed; regenerated metadata for all eight themes |
@@ -349,6 +375,7 @@ Results recorded through 2026-07-20:
 | Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Actual pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. Evidence is under `dist/verify/checkpoint-b-*-framing*.png` and the explicitly named files in `docs/PROGRESS.md` |
 | WO-10 Cartoon Studio asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, two-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. The user-authorized live-capture deferral remains explicit for Checkpoint C/WO-16. |
 | WO-11 Anime Twilight asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, one-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. Actual Aura light/dark and 1920 x 1080 dark evidence remains explicitly deferred to Checkpoint C/WO-16 under WO-09. |
+| WO-12 Study Library asset and appearance cycle | Passed on 2026-07-20: two-layer decode, main-canvas anchor, QA board, source/runtime checksum freeze, localized persisted System/Light/Dark control, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with approved replacement goldens at zero delta. User-supplied whole-window light/dark Aura captures on real `claude.ai` were inspected and approved. |
 
 Before creating an archive, run the checks and then:
 
@@ -408,6 +435,18 @@ revision was exercised separately at the exact product viewport with a WebView
 bridge simulator, including pointer drag, host acknowledgement, reload
 persistence, both Chinese locales, and fresh-run console inspection.
 
+WO-12 adds the first per-theme approved whole-window production pair. Both
+files remain under the gitignored live-evidence tree because the authenticated
+sidebar contains user account data:
+
+| Live Aura file | Mode | Outer pixels | SHA-256 | Review |
+| --- | --- | ---: | --- | --- |
+| `dist/verify/live-aura/06-study-library-light-aura-window.png` | light | 1177 x 664 | `930a65512092c3d450f1c583b16a369b942f75843ffb4bb3b83de0816aa39d15` | Approved 2026-07-20 |
+| `dist/verify/live-aura/06-study-library-dark-aura-window.png` | dark | 1172 x 668 | `68b64d2caea345ebe776d57446557775e64f739bcd0dd4dafe3e41f03c510d27` | Approved 2026-07-20 |
+
+These are real Aura WebView2 captures of live `claude.ai`. They are not fixture
+renders and are not listed as deterministic goldens.
+
 ## Supplied references and Studio selector derivatives
 
 All seven supplied source files are opaque full-interface composites rather than
@@ -425,9 +464,9 @@ preview generation, and release collection:
 No full composite, interface control, or baked interface text is distributed.
 For the Checkpoint B Studio picker, six small 640 × 360 art-led crops are
 derived from these references and stored under `assets/theme-art/<id>/`; the
-Study Library card is derived from its implemented SVG instead. These local
-thumbnails are decorative selector media with live adjacent labels. They are
-never injected into Claude or used as runtime backgrounds.
+Study Library card is composed from its two approved source masters instead.
+These local thumbnails are decorative selector media with live adjacent labels.
+They are never injected into Claude or used as runtime backgrounds.
 
 ## Remaining limitations
 

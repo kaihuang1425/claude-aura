@@ -95,8 +95,12 @@ html.claude-aura[data-claude-aura-theme="cartoon-studio"] .dframe-main > .dframe
   backdrop-filter: none !important;
 }
 
-html.claude-aura[data-claude-aura-theme="cartoon-studio"] #claude-aura-backdrop .claude-aura-theme-art-layer {
+html.claude-aura:is([data-claude-aura-theme="cartoon-studio"], [data-claude-aura-theme="anime-twilight"], [data-claude-aura-theme="study-library"]) #claude-aura-backdrop .claude-aura-theme-art-layer {
   animation: none;
+}
+
+html.claude-aura[data-claude-aura-theme="study-library"] #claude-aura-backdrop .claude-aura-theme-art-layer + .claude-aura-theme-art-layer {
+  left: var(--aura-main-start, 0px);
 }
 
 html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(button, [role="button"], [role="tab"]) {
@@ -138,10 +142,6 @@ html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is([role="separator"]
 }
 
 /* Anime Twilight: cinematic glass, cyan edge light, restrained data lines. */
-html.claude-aura[data-claude-aura-theme="anime-twilight"] #claude-aura-backdrop .claude-aura-theme-art-layer {
-  animation: none;
-}
-
 html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-content,
 html.claude-aura[data-claude-aura-theme="anime-twilight"] .dframe-main {
   background-image:

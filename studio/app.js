@@ -15,6 +15,11 @@
       themesLede: "Selection applies to the Claude window immediately and is saved on this device.",
       themesLegend: "Available themes",
       themesHelp: "Use arrow keys to move between themes. Press Space or Enter to apply.",
+      appearanceMode: "Appearance mode",
+      appearanceSystem: "System",
+      appearanceLight: "Light",
+      appearanceDark: "Dark",
+      appearanceHelp: "System follows Windows. Light and Dark apply only to Claude Aura.",
       quickActions: "Quick actions",
       adjustPreview: "Adjust card preview",
       adjustPreviewFor: "Adjust the card preview for {0}",
@@ -48,6 +53,7 @@
       selected: "Selected",
       statusReady: "Ready.",
       statusApplying: "Applying theme…",
+      statusAppearanceBusy: "Changing appearance…",
       statusActive: "{0} is active.",
       statusOriginal: "Original look is active.",
       statusDemo: "Preview mode: no Claude window connected.",
@@ -68,6 +74,11 @@
       themesLede: "选择主题后会立即应用到 Claude 窗口，并保存在本机。",
       themesLegend: "可用主题",
       themesHelp: "使用方向键在主题间移动，按空格键或回车键应用。",
+      appearanceMode: "外观模式",
+      appearanceSystem: "跟随系统",
+      appearanceLight: "浅色",
+      appearanceDark: "深色",
+      appearanceHelp: "“跟随系统”会使用 Windows 的外观设置；选择“浅色”或“深色”后，仅更改 Claude Aura。",
       quickActions: "快捷操作",
       adjustPreview: "调整卡片预览",
       adjustPreviewFor: "调整“{0}”的卡片预览",
@@ -101,6 +112,7 @@
       selected: "已选",
       statusReady: "就绪。",
       statusApplying: "正在应用主题…",
+      statusAppearanceBusy: "正在切换外观…",
       statusActive: "当前使用{0}。",
       statusOriginal: "当前使用原始外观。",
       statusDemo: "预览模式：未连接 Claude 窗口。",
@@ -121,6 +133,11 @@
       themesLede: "選取主題後會立即套用到 Claude 視窗，並儲存在這台裝置上。",
       themesLegend: "可用的主題",
       themesHelp: "用方向鍵在主題間移動，按空白鍵或 Enter 套用。",
+      appearanceMode: "外觀模式",
+      appearanceSystem: "跟隨系統",
+      appearanceLight: "淺色",
+      appearanceDark: "深色",
+      appearanceHelp: "「跟隨系統」會使用 Windows 的外觀設定；選擇「淺色」或「深色」只會改變 Claude Aura。",
       quickActions: "快速操作",
       adjustPreview: "調整卡片預覽",
       adjustPreviewFor: "調整「{0}」的卡片預覽",
@@ -154,6 +171,7 @@
       selected: "已選取",
       statusReady: "就緒。",
       statusApplying: "正在套用主題…",
+      statusAppearanceBusy: "正在切換外觀…",
       statusActive: "目前使用{0}。",
       statusOriginal: "目前使用原始外觀。",
       statusDemo: "預覽模式：尚未連接 Claude 視窗。",
@@ -182,6 +200,8 @@
   const grid = document.getElementById("theme-grid");
   const statusBar = document.querySelector(".statusbar");
   const statusOut = document.getElementById("status");
+  const appearanceMode = document.getElementById("appearance-mode");
+  const appearanceInputs = [...appearanceMode.querySelectorAll("input[name='appearance']")];
   const toggleEnabled = document.getElementById("toggle-enabled");
   const adjustThemePreview = document.getElementById("adjust-theme-preview");
   const adjustBackground = document.getElementById("adjust-background");
@@ -209,6 +229,7 @@
   const DEFAULT_CROP = Object.freeze({ x: 50, y: 50, zoom: 1 });
   const state = {
     theme: "default",
+    appearance: "system",
     enabled: true,
     connected: false,
     hasImage: false,
@@ -223,6 +244,7 @@
   let cropDrag = null;
   let cropReturnFocus = null;
   let pendingCropSave = null;
+  let appearancePending = false;
 
   const setStatus = (text, tone = "ok") => {
     statusOut.textContent = text;
@@ -309,6 +331,11 @@
     : null;
 
   const reflect = () => {
+    for (const input of appearanceInputs) {
+      input.checked = input.value === state.appearance;
+    }
+    appearanceMode.disabled = appearancePending;
+    appearanceMode.setAttribute("aria-busy", String(appearancePending));
     for (const input of grid.querySelectorAll("input[name='theme']")) {
       input.checked = input.value === state.theme;
     }
@@ -330,6 +357,7 @@
   // ── HOST BRIDGE (WO-05 / WO-07 wire the other side in aura-ui.ps1) ──────
   const bridge = window.chrome?.webview ?? null;
   const bundledThemeIds = new Set(Object.keys(themes));
+  const appearanceModes = new Set(["system", "light", "dark"]);
   const hostThemeIdPattern = /^[a-z][a-z0-9-]{1,39}$/;
   const hostThemeColorPattern = /^#[0-9a-f]{6}$/i;
   const hostThemeKeys = new Set([
@@ -555,7 +583,13 @@
       const data = event.data ?? {};
       if (data.type === "state") {
         state.connected = true;
+        let appearanceAcknowledged = false;
         if (Object.hasOwn(data, "themes")) syncHostThemes(data.themes);
+        if (typeof data.appearance === "string" && appearanceModes.has(data.appearance)) {
+          state.appearance = data.appearance;
+          appearanceAcknowledged = appearancePending;
+          appearancePending = false;
+        }
         if (typeof data.theme === "string" && hostThemeIdPattern.test(data.theme)
             && Object.hasOwn(themes, data.theme)) state.theme = data.theme;
         if (typeof data.enabled === "boolean") state.enabled = data.enabled;
@@ -574,6 +608,7 @@
         }
         state.studioPreviewCrops = incomingCrops;
         if (typeof data.status === "string") setStatus(data.status, data.tone ?? "ok");
+        else if (appearanceAcknowledged) setStatus(t("statusReady"));
         if (cropContext?.kind === "background") {
           cropStage.style.setProperty("--crop-aspect-ratio", String(state.backgroundAspectRatio));
           syncCropEditor();
@@ -600,6 +635,22 @@
     setStatus(t("statusDemo"), "busy");
   }
   // ── END HOST BRIDGE ─────────────────────────────────────────────────────
+
+  for (const input of appearanceInputs) {
+    input.addEventListener("change", () => {
+      if (!input.checked || appearancePending || !appearanceModes.has(input.value)) return;
+      const previousAppearance = state.appearance;
+      state.appearance = input.value;
+      appearancePending = true;
+      setStatus(t("statusAppearanceBusy"), "busy");
+      reflect();
+      if (!send({ type: "set-appearance", appearance: input.value })) {
+        state.appearance = previousAppearance;
+        appearancePending = false;
+        reflect();
+      }
+    });
+  }
 
   for (const theme of Object.values(themes)) {
     const preview = theme.preview ?? {};

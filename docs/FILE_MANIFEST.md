@@ -51,7 +51,6 @@ are listed under Visual evidence below.
 - `assets/theme-art/README.md`
 - `assets/theme-art/japanese-film-editorial.svg`
 - `assets/theme-art/korean-prestige.svg`
-- `assets/theme-art/study-library.svg`
 
 ### Cartoon Studio runtime assets
 
@@ -69,6 +68,15 @@ lives under `themes/anime-twilight/`; this WebP is rebuilt with
 `node scripts/convert-theme-assets.mjs anime-twilight`.
 
 - `assets/theme-art/anime-twilight/background.webp`
+
+### Study Library runtime assets
+
+Derived inert artwork for the Study Library theme. The ignored PNG source kit
+lives under `themes/study-library/`; these WebPs are rebuilt with
+`node scripts/convert-theme-assets.mjs study-library`.
+
+- `assets/theme-art/study-library/background.webp`
+- `assets/theme-art/study-library/corner-bottom.webp`
 
 ### Aura Studio selector thumbnails
 
