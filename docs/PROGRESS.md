@@ -28,24 +28,29 @@ Format:
   Light/Dark surface alphas, retained the light floral background and
   new-chat-only portrait, retired the two sakura corner derivatives, and added
   mutually exclusive full-bleed Dark new-chat and conversation scenes. The
-  production audit now records decoded dimensions, alpha/full-bleed
+  first Checkpoint C review found Dark's composition stronger, so the Light
+  portrait was reframed from bottom-right at 86%/760px to top-right at
+  74%/660px. This aligns its face with Dark's high/right focal height while
+  keeping the live greeting and composer clear; Dark and Light conversation
+  behavior remain unchanged. The production audit now records decoded
+  dimensions, alpha/full-bleed
   expectations, per-raster limits, and embedded-art/chrome payload budgets;
   tests lock the exact four-layer registry contract.
 - Evidence: actual Aura whole-window captures on signed-in live `claude.ai`:
-  `dist/verify/live-aura/wo13-japanese-idol-light-new-chat-normal-aura-window.jpg`,
-  `dist/verify/live-aura/wo13-japanese-idol-light-conversation-normal-aura-window.jpg`,
-  `dist/verify/live-aura/wo13-japanese-idol-dark-new-chat-normal-aura-window.jpg`,
+  `dist/verify/live-aura/wo13-japanese-idol-light-new-chat-revision-normal-aura-window.jpg`,
+  `dist/verify/live-aura/wo13-japanese-idol-light-conversation-revision-normal-aura-window.jpg`,
+  `dist/verify/live-aura/wo13-japanese-idol-dark-new-chat-revision-normal-aura-window.jpg`,
   and
-  `dist/verify/live-aura/wo13-japanese-idol-dark-conversation-normal-aura-window.jpg`.
+  `dist/verify/live-aura/wo13-japanese-idol-dark-conversation-revision-normal-aura-window.jpg`.
   Runtime artwork totals 489,780 bytes. The status audit passes for all eight
-  themes; Japanese Idol embeds 653,140 artwork bytes with 64,539/64,538-byte
+  themes; Japanese Idol embeds 653,140 artwork bytes with 64,536/64,535-byte
   Light/Dark chrome payloads. `npm run check` passed 20/20, `npm run
   verify:cycle` passed 17/17, and the PowerShell parser passed.
 - Parity scores (visual orders only): japanese-idol:
   atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
-  green/green/green/green/green/green/green/green in the completed live review.
-- Follow-ups discovered: none. HUMAN CHECKPOINT C is now current and remains
-  open for user approval.
+  green/green/green/green/green/green/green/green in the revision self-review.
+- Follow-ups discovered: none. HUMAN CHECKPOINT C remains current and open for
+  user review of the superseding revision captures.
 
 ## 2026-07-21 — WO-17 — Live Aura UX, identity, and context adaptation
 

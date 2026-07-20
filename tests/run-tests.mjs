@@ -223,8 +223,8 @@ test("registry exposes exactly Default plus the seven requested themes", async (
     },
     {
       path: "assets/theme-art/kawaii-idol/hero.webp",
-      position: "right bottom",
-      size: "auto min(86%, 760px)",
+      position: "right top",
+      size: "auto min(74%, 660px)",
       mobile: "reduce",
       opacity: 0.92,
       mask: "soft-right",
