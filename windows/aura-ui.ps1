@@ -3,7 +3,8 @@ param(
   [ValidateSet('Open', 'Restore')][string]$Mode = 'Open',
   [string]$Theme,
   [string]$Image,
-  [switch]$ClearImage
+  [switch]$ClearImage,
+  [switch]$OpenStudio
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +19,7 @@ $LogPath = Join-Path $DataRoot 'aura-ui.log'
 $UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
 $StudioRoot = Join-Path $Root 'studio'
 $ThemeArtRoot = Join-Path $Root 'assets\theme-art'
+$AuraIconPath = Join-Path $Root 'assets\brand\claude-aura.ico'
 $StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
 $StudioBackgroundMaxBytes = 16 * 1024 * 1024
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -122,6 +124,23 @@ function Set-AuraUiFormWithinWorkingArea {
   $Form.Location = [Drawing.Point]::new(
     $workingArea.Left + [Math]::Max($Margin, [Math]::Floor(($workingArea.Width - $width) / 2)),
     $workingArea.Top + [Math]::Max($Margin, [Math]::Floor(($workingArea.Height - $height) / 2)))
+}
+
+function New-AuraUiIcon {
+  param([ValidateSet(16, 20, 24, 32, 40, 48, 64, 128)][int]$Size = 32)
+  if (-not (Test-Path -LiteralPath $AuraIconPath -PathType Leaf)) {
+    throw "The Claude Aura icon is missing: $AuraIconPath"
+  }
+  $stream = $null
+  $source = $null
+  try {
+    $stream = [IO.File]::Open($AuraIconPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Icon]::new($stream, $Size, $Size)
+    return [Drawing.Icon]$source.Clone()
+  } finally {
+    if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
 }
 
 function Get-AuraUiThemeByName {
@@ -622,6 +641,16 @@ function Show-AuraUiStudio {
   $script:StudioForm.BringToFront()
 }
 
+function Show-AuraUiMain {
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if (-not $script:Form.Visible) { $script:Form.Show() }
+  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
+    $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+  }
+  $script:Form.Activate()
+  $script:Form.BringToFront()
+}
+
 function Invoke-AuraUiOpenDesktopApp {
   $claude = Get-AuraClaudeInstall
   Start-Process -FilePath $claude.Executable | Out-Null
@@ -1074,6 +1103,7 @@ function Invoke-AuraUiStudioMessage {
       Invoke-AuraUiSetEnabled -Enabled $message.enabled
       break
     }
+    'open-aura' { Show-AuraUiMain; break }
     'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
     'import-theme' {
       [void](Invoke-AuraUiImportTheme -Owner $script:StudioForm)
@@ -1107,6 +1137,7 @@ $script:StudioMessageTypes = @(
   'set-image-framing',
   'set-card-preview-crop',
   'set-enabled',
+  'open-aura',
   'open-desktop',
   'import-theme'
 )
@@ -1125,6 +1156,10 @@ $script:TrayOpenStudioItem = $null
 $script:TrayAppearanceItem = $null
 $script:TrayOpenDesktopItem = $null
 $script:TrayExitItem = $null
+$script:MainIcon = $null
+$script:StudioIcon = $null
+$script:NotificationIcon = $null
+$script:StudioOpenSignal = $null
 $script:Closing = $false
 $mutex = $null
 $ownsMutex = $false
@@ -1166,6 +1201,9 @@ try {
 
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
+  $script:MainIcon = New-AuraUiIcon -Size 64
+  $script:StudioIcon = New-AuraUiIcon -Size 64
+  $script:NotificationIcon = New-AuraUiIcon -Size 32
   $coreDll = Join-Path $VendorRoot 'Microsoft.Web.WebView2.Core.dll'
   $formsDll = Join-Path $VendorRoot 'Microsoft.Web.WebView2.WinForms.dll'
   $architecture = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
@@ -1191,17 +1229,28 @@ public static class AuraWindow {
 '@
   }
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $studioSignalCreatedNew = $false
+  $script:StudioOpenSignal = [System.Threading.EventWaitHandle]::new(
+    $false,
+    [System.Threading.EventResetMode]::AutoReset,
+    "Local\ClaudeAura.$sid.OpenStudio",
+    [ref]$studioSignalCreatedNew)
   $createdNew = $false
   $mutex = [System.Threading.Mutex]::new($true, "Local\ClaudeAura.$sid.Ui", [ref]$createdNew)
   $ownsMutex = $createdNew
   if (-not $createdNew) {
-    $handle = [AuraWindow]::FindWindow($null, 'Claude Aura')
-    if ($handle -ne [IntPtr]::Zero) {
-      [void][AuraWindow]::ShowWindow($handle, 9)
-      [void][AuraWindow]::SetForegroundWindow($handle)
+    if ($OpenStudio) {
+      [void]$script:StudioOpenSignal.Set()
+    } else {
+      $handle = [AuraWindow]::FindWindow($null, 'Claude Aura')
+      if ($handle -ne [IntPtr]::Zero) {
+        [void][AuraWindow]::ShowWindow($handle, 9)
+        [void][AuraWindow]::SetForegroundWindow($handle)
+      }
     }
     return
   }
+  if ($OpenStudio) { [void]$script:StudioOpenSignal.Set() }
 
   [System.Windows.Forms.Application]::EnableVisualStyles()
   [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
@@ -1212,6 +1261,7 @@ public static class AuraWindow {
   $script:Form.ClientSize = [Drawing.Size]::new(1180, 640)
   $script:Form.MinimumSize = [Drawing.Size]::new(920, 620)
   $script:Form.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
+  $script:Form.Icon = $script:MainIcon
   $script:Form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
   Set-AuraUiFormWithinWorkingArea -Form $script:Form
   $script:Form.add_Shown({ Set-AuraUiFormWithinWorkingArea -Form $script:Form })
@@ -1233,6 +1283,7 @@ public static class AuraWindow {
   $script:StudioForm.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
   $script:StudioForm.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
   $script:StudioForm.BackColor = [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
+  $script:StudioForm.Icon = $script:StudioIcon
   $script:StudioForm.ShowInTaskbar = $true
   $script:StudioWebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
   $script:StudioWebView.Dock = 'Fill'
@@ -1284,7 +1335,7 @@ public static class AuraWindow {
   $script:TrayExitItem.add_Click({ $script:Form.Close() })
   $script:TrayIcon = [System.Windows.Forms.NotifyIcon]::new()
   $script:TrayIcon.Text = 'Claude Aura'
-  $script:TrayIcon.Icon = [Drawing.SystemIcons]::Application
+  $script:TrayIcon.Icon = $script:NotificationIcon
   $script:TrayIcon.ContextMenuStrip = $script:TrayMenu
   $script:TrayIcon.add_DoubleClick({ Show-AuraUiStudio })
   $script:TrayIcon.Visible = $true
@@ -1347,6 +1398,9 @@ public static class AuraWindow {
   $timer.add_Tick({
     if ($script:Closing) { return }
     try {
+      if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
+        Show-AuraUiStudio
+      }
       if ($null -ne $script:EnvironmentTask -and $script:EnvironmentTask.IsCompleted) {
         $task = $script:EnvironmentTask
         $script:EnvironmentTask = $null
@@ -1561,6 +1615,7 @@ public static class AuraWindow {
     if ($script:TrayIcon) {
       $script:TrayIcon.Visible = $false
       $script:TrayIcon.Dispose()
+      $script:TrayIcon = $null
     }
     if ($script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Close() }
     if ($script:StudioWebView -and -not $script:StudioWebView.IsDisposed) { $script:StudioWebView.Dispose() }
@@ -1584,6 +1639,25 @@ public static class AuraWindow {
   } catch {}
   exit 1
 } finally {
+  if ($null -ne $script:TrayIcon) {
+    try {
+      $script:TrayIcon.Visible = $false
+      $script:TrayIcon.Dispose()
+    } catch {}
+    $script:TrayIcon = $null
+  }
+  if ($null -ne $script:StudioOpenSignal) {
+    try { $script:StudioOpenSignal.Dispose() } catch {}
+    $script:StudioOpenSignal = $null
+  }
+  foreach ($ownedIcon in @($script:MainIcon, $script:StudioIcon, $script:NotificationIcon)) {
+    if ($null -ne $ownedIcon) {
+      try { $ownedIcon.Dispose() } catch {}
+    }
+  }
+  $script:MainIcon = $null
+  $script:StudioIcon = $null
+  $script:NotificationIcon = $null
   if ($ownsMutex -and $null -ne $mutex) {
     try { $mutex.ReleaseMutex() } catch {}
   }

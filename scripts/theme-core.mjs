@@ -560,6 +560,23 @@ function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
     }
     studioPreview = entry.studioPreview;
   }
+  const validateNewChatLayout = (value, layoutLabel) => {
+    if (value === null || value === undefined) return null;
+    if (!isPlainObject(value)) throw new Error(`${layoutLabel} must be an object or null`);
+    const keys = Object.keys(value).sort();
+    if (keys.join(",") !== "offsetXRatio,offsetYRatio,widthRatio") {
+      throw new Error(`${layoutLabel} must contain only widthRatio, offsetXRatio, and offsetYRatio`);
+    }
+    for (const key of keys) {
+      if (typeof value[key] !== "number") throw new Error(`${layoutLabel}.${key} must be a number`);
+    }
+    return {
+      widthRatio: finiteNumber(value.widthRatio, `${layoutLabel}.widthRatio`, 0.4, 0.96),
+      offsetXRatio: finiteNumber(value.offsetXRatio, `${layoutLabel}.offsetXRatio`, -0.35, 0.35),
+      offsetYRatio: finiteNumber(value.offsetYRatio, `${layoutLabel}.offsetYRatio`, -0.3, 0.3),
+    };
+  };
+  const newChatLayout = validateNewChatLayout(entry.newChatLayout, `${label}.newChatLayout`);
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
   const validateArtworkLayer = (layer, layerLabel, { allowKeep = true } = {}) => {
     if (!isPlainObject(layer)) throw new Error(`${layerLabel} must be an object`);
@@ -578,6 +595,52 @@ function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
     if (source === "user" && layer.mask !== undefined && !["none", "soft-right"].includes(layer.mask)) {
       throw new Error(`${layerLabel}.mask has an unsupported value`);
     }
+    const role = layer.role ?? "decoration";
+    if (!["background", "decoration", "hero"].includes(role)) {
+      throw new Error(`${layerLabel}.role has an unsupported value`);
+    }
+    const appearance = layer.appearance ?? null;
+    if (appearance !== null && !["light", "dark"].includes(appearance)) {
+      throw new Error(`${layerLabel}.appearance must be light or dark`);
+    }
+    let contextOverrides = null;
+    if (layer.contextOverrides !== null && layer.contextOverrides !== undefined) {
+      if (!isPlainObject(layer.contextOverrides)) throw new Error(`${layerLabel}.contextOverrides must be an object`);
+      contextOverrides = {};
+      for (const [context, override] of Object.entries(layer.contextOverrides)) {
+        if (!["new-chat", "conversation", "other"].includes(context)) {
+          throw new Error(`${layerLabel}.contextOverrides has an unsupported context: ${context}`);
+        }
+        if (!isPlainObject(override)) throw new Error(`${layerLabel}.contextOverrides.${context} must be an object`);
+        const allowedKeys = new Set(["position", "size", "opacity", "hidden"]);
+        if (Object.keys(override).some((key) => !allowedKeys.has(key))) {
+          throw new Error(`${layerLabel}.contextOverrides.${context} has an unsupported property`);
+        }
+        if (Object.keys(override).length === 0) {
+          throw new Error(`${layerLabel}.contextOverrides.${context} must not be empty`);
+        }
+        const normalized = {};
+        if (override.position !== undefined) {
+          normalized.position = safeCssValue(override.position, `${layerLabel}.contextOverrides.${context}.position`, 80);
+        }
+        if (override.size !== undefined) {
+          normalized.size = safeCssValue(override.size, `${layerLabel}.contextOverrides.${context}.size`, 120);
+        }
+        if (override.opacity !== undefined) {
+          if (typeof override.opacity !== "number") {
+            throw new Error(`${layerLabel}.contextOverrides.${context}.opacity must be a number`);
+          }
+          normalized.opacity = finiteNumber(override.opacity, `${layerLabel}.contextOverrides.${context}.opacity`, 0, 1);
+        }
+        if (override.hidden !== undefined) {
+          if (typeof override.hidden !== "boolean") {
+            throw new Error(`${layerLabel}.contextOverrides.${context}.hidden must be true or false`);
+          }
+          normalized.hidden = override.hidden;
+        }
+        contextOverrides[context] = normalized;
+      }
+    }
     return {
       path: artworkPath,
       position: safeCssValue(layer.position ?? "right center", `${layerLabel}.position`, 80),
@@ -585,6 +648,9 @@ function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
       mobile: ["hide", "keep"].includes(layer.mobile) ? layer.mobile : "reduce",
       opacity: layer.opacity === undefined ? null : finiteNumber(layer.opacity, `${layerLabel}.opacity`, 0, 1),
       mask: layer.mask === "none" ? "none" : "soft-right",
+      role,
+      appearance,
+      contextOverrides,
     };
   };
   let artwork = null;
@@ -596,6 +662,9 @@ function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
     artworkLayers = entry.artworkLayers.map((layer, index) => validateArtworkLayer(layer, `${label}.artworkLayers[${index}]`));
   } else if (entry.artwork !== null && entry.artwork !== undefined) {
     if (!isPlainObject(entry.artwork)) throw new Error(`${label}.artwork must be an object or null`);
+    if (entry.artwork.appearance !== undefined) {
+      throw new Error(`${label}.artwork.appearance is only supported in artworkLayers`);
+    }
     if (source === "user" && (entry.artwork.opacity !== undefined || entry.artwork.mask !== undefined)) {
       throw new Error(`${label}.artwork.opacity and mask are only supported in artworkLayers`);
     }
@@ -610,6 +679,7 @@ function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
     swatches: [...swatches],
     preview: Object.fromEntries(Object.entries(preview).map(([key, value]) => [key, value.toUpperCase()])),
     studioPreview,
+    newChatLayout,
     artwork,
     artworkLayers,
   };
@@ -704,6 +774,7 @@ export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
     swatches: [...entry.swatches],
     preview: { ...entry.preview },
     studioPreview: entry.studioPreview,
+    newChatLayout: entry.newChatLayout ? { ...entry.newChatLayout } : null,
     artwork: entry.artwork ? { ...entry.artwork } : null,
     artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
   };
@@ -809,6 +880,7 @@ async function readRegisteredTheme(entry, locale) {
     swatches: [...entry.swatches],
     preview: { ...entry.preview },
     studioPreview: entry.studioPreview,
+    newChatLayout: entry.newChatLayout ? { ...entry.newChatLayout } : null,
     artwork: entry.artwork ? { ...entry.artwork } : null,
     artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
     filePath,
@@ -884,6 +956,7 @@ async function resolveTheme(config, configPath, locale, { userThemesDir = null, 
             swatches: [],
             preview: null,
             studioPreview: null,
+            newChatLayout: null,
             artwork: null,
             artworkLayers: null,
             source: "custom",
@@ -1107,8 +1180,12 @@ export async function compileTheme({
         mobile: layer.mobile,
         opacity: layer.opacity,
         mask: layer.mask,
+        role: layer.role,
+        ...(layer.appearance ? { appearance: layer.appearance } : {}),
+        contextOverrides: layer.contextOverrides,
       }))
       : null,
+    newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,
     reduceMotion: config.reduceMotion,
   };
   const digest = crypto.createHash("sha256")
@@ -1145,10 +1222,110 @@ export async function buildPayloadFromCompiled(compiled) {
     throw new Error("A compiled theme is required to build a renderer payload");
   }
   const template = (await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8"))
-    .replace(/^[ \t]+/gm, "");
+    .replace(/^[ \t]+/gm, "")
+    .replace(/\r?\n/g, "");
+  const runtimeSettings = { ...compiled.settings };
+  for (const diagnosticKey of [
+    "requestedTheme",
+    "fallbackFrom",
+    "customThemeUnavailable",
+    "imageUnavailable",
+    "artUnavailable",
+  ]) delete runtimeSettings[diagnosticKey];
+  if (Array.isArray(runtimeSettings.artLayers)) {
+    const contextKeys = { "new-chat": "n", conversation: "c", other: "o" };
+    runtimeSettings.artLayers = runtimeSettings.artLayers.map((layer) => {
+      const compact = { d: layer.dataUrl, p: layer.position, s: layer.size };
+      if (layer.mobile !== "reduce") compact.m = layer.mobile[0];
+      if (layer.opacity !== null) compact.o = layer.opacity;
+      if (layer.mask === "none") compact.k = "n";
+      if (layer.role !== "decoration") compact.r = layer.role[0];
+      if (layer.appearance) compact.a = layer.appearance[0];
+      if (layer.contextOverrides) {
+        compact.c = {};
+        for (const [context, override] of Object.entries(layer.contextOverrides)) {
+          const value = {};
+          if (override.position !== undefined) value.p = override.position;
+          if (override.size !== undefined) value.s = override.size;
+          if (override.opacity !== undefined) value.o = override.opacity;
+          if (override.hidden !== undefined) value.h = override.hidden;
+          compact.c[contextKeys[context]] = value;
+        }
+      }
+      return compact;
+    });
+  }
+  if (runtimeSettings.newChatLayout) {
+    const layout = runtimeSettings.newChatLayout;
+    runtimeSettings.n = [layout.widthRatio, layout.offsetXRatio, layout.offsetYRatio];
+    delete runtimeSettings.newChatLayout;
+  }
+  let compactCss = "";
+  let quote = null;
+  let escaped = false;
+  let pendingSpace = false;
+  const punctuation = "{};,>";
+  const spaceSuppressingPrevious = "{}:;,>";
+  const blockKinds = [];
+  let blockBoundary = 0;
+  for (let index = 0; index < compiled.css.length; index += 1) {
+    const character = compiled.css[index];
+    if (quote) {
+      compactCss += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "/" && compiled.css[index + 1] === "*") {
+      const commentEnd = compiled.css.indexOf("*/", index + 2);
+      index = commentEnd < 0 ? compiled.css.length : commentEnd + 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      if (pendingSpace && compactCss && !spaceSuppressingPrevious.includes(compactCss.at(-1))) compactCss += " ";
+      pendingSpace = false;
+      quote = character;
+      compactCss += character;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      pendingSpace = true;
+      continue;
+    }
+    if (character === ":") {
+      if (blockKinds.at(-1) === "declarations") {
+        if (compactCss.endsWith(" ")) compactCss = compactCss.slice(0, -1);
+      } else if (pendingSpace && compactCss && !spaceSuppressingPrevious.includes(compactCss.at(-1))) {
+        compactCss += " ";
+      }
+      compactCss += character;
+      pendingSpace = false;
+      continue;
+    }
+    if (punctuation.includes(character)) {
+      if (compactCss.endsWith(" ")) compactCss = compactCss.slice(0, -1);
+      if (character === "}" && compactCss.endsWith(";")) compactCss = compactCss.slice(0, -1);
+      if (character === "{") {
+        const header = compactCss.slice(blockBoundary).trim();
+        blockKinds.push(/^@(media|supports|container|layer|document|scope|(?:-webkit-)?keyframes)\b/i.test(header)
+          ? "container"
+          : "declarations");
+      }
+      compactCss += character;
+      if (character === "}") blockKinds.pop();
+      if (character === "{" || character === "}") blockBoundary = compactCss.length;
+      pendingSpace = false;
+      continue;
+    }
+    if (pendingSpace && compactCss && !spaceSuppressingPrevious.includes(compactCss.at(-1))) compactCss += " ";
+    pendingSpace = false;
+    compactCss += character;
+  }
+  compactCss = compactCss.trim();
   const payload = template
-    .replace("__AURA_CSS_JSON__", JSON.stringify(compiled.css))
-    .replace("__AURA_SETTINGS_JSON__", JSON.stringify(compiled.settings));
+    .replace("__AURA_CSS_JSON__", JSON.stringify(compactCss))
+    .replace("__AURA_SETTINGS_JSON__", JSON.stringify(runtimeSettings));
   if (payload.includes("__AURA_CSS_JSON__") || payload.includes("__AURA_SETTINGS_JSON__")) {
     throw new Error("Renderer payload placeholders were not fully replaced");
   }

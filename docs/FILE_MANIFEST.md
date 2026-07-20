@@ -3,9 +3,9 @@
 The `work/full-theme-system` branch has no tracked baseline commit, so Git cannot
 reliably classify paths as created versus modified. The list below is the
 exhaustive current deliverable surface, excluding generated release output,
-local agent metadata, the unsafe reference composites, and the obsolete ignored
-`docs/preview.png`. The comparison screenshots were captured on 2026-07-17 and
-are listed under Visual evidence below.
+local agent metadata, and the unsafe reference composites. The retired
+reconstructed offline-preview files, preview-only artwork, and comparison
+screenshots are not deliverables.
 
 ## Agent operations
 
@@ -13,7 +13,6 @@ are listed under Visual evidence below.
 - `docs/PROGRESS.md`
 - `docs/THEME_KIT_SPEC.md`
 - `docs/contracts/ASSET_CONTRACT.md`
-- `docs/golden/README.md`
 - `docs/plans/BLOCKED.md`
 - `docs/plans/QUEUE.md`
 - `docs/plans/WORK_ORDERS.md`
@@ -46,11 +45,33 @@ are listed under Visual evidence below.
 ## Renderer and artwork
 
 - `assets/base.css`
+- `assets/brand/aura-mark.svg`
+- `assets/brand/claude-aura.ico`
 - `assets/renderer-inject.js`
 - `assets/theme-variants.css`
 - `assets/theme-art/README.md`
-- `assets/theme-art/japanese-film-editorial.svg`
-- `assets/theme-art/korean-prestige.svg`
+
+### Japanese Film Editorial runtime assets
+
+Appearance-specific paper/ink backgrounds and portraits, derived
+from the ignored source kit under `themes/japanese-film-editorial/`. The dark
+background is independently authored rather than a tinted light layer.
+
+- `assets/theme-art/japanese-film-editorial/light-background.webp`
+- `assets/theme-art/japanese-film-editorial/dark-background.webp`
+- `assets/theme-art/japanese-film-editorial/light-hero.webp`
+- `assets/theme-art/japanese-film-editorial/dark-hero.webp`
+
+### Korean Prestige runtime assets
+
+Appearance-specific architectural backgrounds and clean-alpha portraits. The
+approved dark background is retained from `themes/korean-prestige/`; the light
+scene and matched portrait twins are independently authored derivatives.
+
+- `assets/theme-art/korean-prestige/light-background.webp`
+- `assets/theme-art/korean-prestige/light-hero.webp`
+- `assets/theme-art/korean-prestige/dark-background.webp`
+- `assets/theme-art/korean-prestige/dark-hero.webp`
 
 ### Cartoon Studio runtime assets
 
@@ -59,6 +80,7 @@ kit lives under `themes/cartoon-studio/`; these WebPs are rebuilt with
 `node scripts/convert-theme-assets.mjs cartoon-studio`.
 
 - `assets/theme-art/cartoon-studio/background.webp`
+- `assets/theme-art/cartoon-studio/dark-background.webp`
 - `assets/theme-art/cartoon-studio/hero.webp`
 
 ### Anime Twilight runtime assets
@@ -77,6 +99,7 @@ lives under `themes/study-library/`; these WebPs are rebuilt with
 
 - `assets/theme-art/study-library/background.webp`
 - `assets/theme-art/study-library/corner-bottom.webp`
+- `assets/theme-art/study-library/dark-background.webp`
 
 ### Aura Studio selector thumbnails
 
@@ -91,32 +114,31 @@ The raw reference composites remain gitignored and are not distributed.
 - `assets/theme-art/korean-prestige/card-preview.webp`
 - `assets/theme-art/study-library/card-preview.webp`
 
-### Kawaii idol runtime assets
+### Korean Idol runtime assets
 
-Derived, isolated decorative assets for the japanese-idol (kawaii idol) theme —
-the runtime layered artwork (WebP) and the preview showcase (SVG motifs). The
-originals live in the gitignored source kit `themes/japanese-idol/`; the WebP
-copies are regenerated with `node scripts/convert-theme-assets.mjs`.
+Derived light and context-specific dark artwork from the gitignored source kit
+`themes/korean-idol/`. The dark new-chat and conversation scenes are mutually
+exclusive at runtime.
 
-- `assets/theme-art/korean-idol/background.webp`
-- `assets/theme-art/korean-idol/constellation.webp`
+- `assets/theme-art/korean-idol/dark-conversation.webp`
+- `assets/theme-art/korean-idol/dark-new-chat.webp`
 - `assets/theme-art/korean-idol/hero.webp`
-- `assets/theme-art/kawaii-idol/logo-horizontal.svg`
-- `assets/theme-art/kawaii-idol/mark.svg`
-- `assets/theme-art/kawaii-idol/sparkle-cluster.svg`
-- `assets/theme-art/kawaii-idol/sparkle-soft.svg`
-- `assets/theme-art/kawaii-idol/sparkle-8.svg`
-- `assets/theme-art/kawaii-idol/star-outline.svg`
-- `assets/theme-art/kawaii-idol/note-heart.svg`
-- `assets/theme-art/kawaii-idol/signature-hinata.svg`
-- `assets/theme-art/kawaii-idol/keep-shining-sticker.svg`
-- `assets/theme-art/kawaii-idol/card-brainstorm.svg`
-- `assets/theme-art/kawaii-idol/card-continue.svg`
-- `assets/theme-art/kawaii-idol/card-analyze.svg`
+- `assets/theme-art/korean-idol/light-scene.webp`
+
+### Japanese Idol runtime assets
+
+Derived, isolated decorative assets for the Japanese Idol theme. The originals
+live in the gitignored source kit `themes/japanese-idol/`; the WebP copies are
+regenerated with `node scripts/convert-theme-assets.mjs`. Light appearance uses
+the background and portrait layers. Dark appearance uses mutually exclusive,
+full-bleed new-chat and conversation scenes with purpose-built night lighting.
+Superseded sakura/mark derivatives and the eleven SVGs that existed only for
+the retired reconstructed preview are not deliverables.
+
 - `assets/theme-art/kawaii-idol/background.webp`
+- `assets/theme-art/kawaii-idol/dark-conversation.webp`
+- `assets/theme-art/kawaii-idol/dark-new-chat.webp`
 - `assets/theme-art/kawaii-idol/hero.webp`
-- `assets/theme-art/kawaii-idol/sakura-bottom-right.webp`
-- `assets/theme-art/kawaii-idol/sakura-top-right.webp`
 
 ## Themes
 
@@ -136,26 +158,18 @@ copies are regenerated with `node scripts/convert-theme-assets.mjs`.
 
 ## Compiler, commands, and verification
 
-- `scripts/build-preview.mjs`
+- `scripts/asset-audit.mjs`
+- `scripts/build-aura-icon.mjs`
+- `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
 - `scripts/convert-theme-assets.mjs`
 - `scripts/injector.mjs`
-- `scripts/preview-server.mjs`
-- `scripts/qa-board.mjs`
 - `scripts/state-cli.mjs`
 - `scripts/theme-cli.mjs`
 - `scripts/theme-core.mjs`
 - `scripts/verify-cycle.mjs`
 - `scripts/webview-cli.mjs`
-- `tests/fixtures/claude-dom.html`
 - `tests/run-tests.mjs`
-
-## Offline QA
-
-- `preview/app.js`
-- `preview/generated-themes.js`
-- `preview/index.html`
-- `preview/styles.css`
 
 ## Windows application
 
@@ -200,42 +214,3 @@ copies are regenerated with `node scripts/convert-theme-assets.mjs`.
 - `vendor/webview2/runtimes/arm64/WebView2Loader.dll`
 - `vendor/webview2/runtimes/x64/WebView2Loader.dll`
 - `vendor/webview2/runtimes/x86/WebView2Loader.dll`
-
-## Visual evidence
-
-### User-approved payload goldens
-
-- `docs/golden/REFERENCE_LOCK.md`
-- `docs/golden/anime-twilight/anime-twilight-dark-1440x900.png`
-- `docs/golden/anime-twilight/anime-twilight-light-1440x900.png`
-- `docs/golden/cartoon-studio/cartoon-studio-dark-1440x900.png`
-- `docs/golden/cartoon-studio/cartoon-studio-light-1440x900.png`
-- `docs/golden/default/default-dark-1440x900.png`
-- `docs/golden/default/default-light-1440x900.png`
-- `docs/golden/japanese-film-editorial/japanese-film-editorial-dark-1440x900.png`
-- `docs/golden/japanese-film-editorial/japanese-film-editorial-light-1440x900.png`
-- `docs/golden/japanese-idol/japanese-idol-dark-1440x900.png`
-- `docs/golden/japanese-idol/japanese-idol-light-1440x900.png`
-- `docs/golden/korean-idol/korean-idol-dark-1440x900.png`
-- `docs/golden/korean-idol/korean-idol-light-1440x900.png`
-- `docs/golden/korean-prestige/korean-prestige-dark-1440x900.png`
-- `docs/golden/korean-prestige/korean-prestige-light-1440x900.png`
-- `docs/golden/study-library/study-library-dark-1440x900.png`
-- `docs/golden/study-library/study-library-light-1440x900.png`
-
-### Comparison and responsive captures
-
-- `docs/theme-screenshots/01-default-home-light-1440x900.png`
-- `docs/theme-screenshots/02-japanese-film-editorial-home-light-1440x900.png`
-- `docs/theme-screenshots/03-korean-prestige-home-light-1440x900.png`
-- `docs/theme-screenshots/04-cartoon-studio-home-light-1440x900.png`
-- `docs/theme-screenshots/05-anime-twilight-home-light-1440x900.png`
-- `docs/theme-screenshots/06-study-library-home-light-1440x900.png`
-- `docs/theme-screenshots/07-japanese-idol-home-light-1440x900.png`
-- `docs/theme-screenshots/08-korean-idol-home-light-1440x900.png`
-- `docs/theme-screenshots/responsive-1280x720-cartoon-studio.png`
-- `docs/theme-screenshots/responsive-1905x1026-study-library-code.png`
-- `docs/theme-screenshots/responsive-1920x1080-anime-twilight-dark.png`
-- `docs/theme-screenshots/responsive-3810x2052-korean-idol-dark.png`
-- `docs/theme-screenshots/overlay-menu-korean-prestige-home-light.png`
-- `docs/theme-screenshots/overlay-dialog-japanese-idol-home-light.png`

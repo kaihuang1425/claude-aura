@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { buildAuraIcon } from "../scripts/build-aura-icon.mjs";
 import {
   AURA_VERSION,
   buildPayload,
+  buildPayloadFromCompiled,
   compileTheme,
   DEFAULT_CONFIG,
   listThemes,
@@ -125,6 +128,20 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mobile: "keep",
       opacity: 0.5,
       mask: "none",
+      role: "background",
+      appearance: "light",
+      contextOverrides: null,
+    },
+    {
+      path: "assets/theme-art/cartoon-studio/dark-background.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.5,
+      mask: "none",
+      role: "background",
+      appearance: "dark",
+      contextOverrides: null,
     },
     {
       path: "assets/theme-art/cartoon-studio/hero.webp",
@@ -133,6 +150,12 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mobile: "reduce",
       opacity: 0.95,
       mask: "none",
+      role: "hero",
+      appearance: null,
+      contextOverrides: {
+        conversation: { hidden: true },
+        other: { hidden: true },
+      },
     },
   ]);
   assert.deepEqual(themes.find((theme) => theme.name === "anime-twilight")?.artworkLayers, [
@@ -143,6 +166,9 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mobile: "keep",
       opacity: 0.62,
       mask: "none",
+      role: "background",
+      appearance: null,
+      contextOverrides: null,
     },
   ]);
   assert.deepEqual(themes.find((theme) => theme.name === "study-library")?.artworkLayers, [
@@ -153,6 +179,20 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mobile: "keep",
       opacity: 0.4,
       mask: "none",
+      role: "background",
+      appearance: "light",
+      contextOverrides: null,
+    },
+    {
+      path: "assets/theme-art/study-library/dark-background.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.4,
+      mask: "none",
+      role: "background",
+      appearance: "dark",
+      contextOverrides: null,
     },
     {
       path: "assets/theme-art/study-library/corner-bottom.webp",
@@ -161,6 +201,64 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       mobile: "hide",
       opacity: 0.6,
       mask: "none",
+      role: "decoration",
+      appearance: null,
+      contextOverrides: null,
+    },
+  ]);
+  const koreanIdol = themes.find((theme) => theme.name === "korean-idol");
+  assert.deepEqual(koreanIdol.newChatLayout, {
+    widthRatio: 0.76,
+    offsetXRatio: -0.07,
+    offsetYRatio: 0,
+  });
+  assert.deepEqual(koreanIdol.artworkLayers, [
+    {
+      path: "assets/theme-art/korean-idol/light-scene.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 1,
+      mask: "none",
+      role: "background",
+      appearance: "light",
+      contextOverrides: null,
+    },
+    {
+      path: "assets/theme-art/korean-idol/hero.webp",
+      position: "right top",
+      size: "min(38vw, 620px) auto",
+      mobile: "reduce",
+      opacity: 0.96,
+      mask: "soft-right",
+      role: "hero",
+      appearance: "light",
+      contextOverrides: {
+        conversation: { hidden: true },
+        other: { hidden: true },
+      },
+    },
+    {
+      path: "assets/theme-art/korean-idol/dark-new-chat.webp",
+      position: "right top",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.78,
+      mask: "none",
+      role: "background",
+      appearance: "dark",
+      contextOverrides: { conversation: { hidden: true }, other: { hidden: true } },
+    },
+    {
+      path: "assets/theme-art/korean-idol/dark-conversation.webp",
+      position: "right top",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.78,
+      mask: "none",
+      role: "background",
+      appearance: "dark",
+      contextOverrides: { "new-chat": { hidden: true }, other: { hidden: true } },
     },
   ]);
 });
@@ -191,8 +289,8 @@ test("every theme provides complete semantic roles and a distinct component prof
   assert.equal(new Set(profiles).size, THEME_IDS.length, "Every theme must have a distinct typography/shape/effects profile");
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
   const variants = await fs.readFile(path.join(PROJECT_ROOT, "assets", "theme-variants.css"), "utf8");
-  assert.match(baseCss, /border-radius:\s*var\(--aura-icon-radius\)/);
-  const interactiveSelector = 'html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
+  const interactiveSelector = 'html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
+  const broadLinkSelector = 'html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
   assert(baseCss.includes(`${interactiveSelector} {`), "Shared interactive typography rule is missing");
   const controlSelector = 'html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
   const controlStart = baseCss.indexOf(`${controlSelector},`);
@@ -200,8 +298,8 @@ test("every theme provides complete semantic roles and a distinct component prof
   const controlBody = baseCss.slice(controlStart, baseCss.indexOf("}", controlStart));
   assert.match(controlBody, /border-radius:\s*var\(--aura-control-radius\)/);
   for (const state of [":not([disabled]):not([aria-disabled=\"true\"]):hover", ":not([disabled]):not([aria-disabled=\"true\"]):active", ":is([disabled], [aria-disabled=\"true\"])"]) {
-    assert(baseCss.includes(`${controlSelector}${state},`), `Shared semantic controls lack ${state} styling`);
-    assert(!baseCss.includes(`${interactiveSelector}${state}`), `Bare prose links must not receive ${state} control styling`);
+    assert(baseCss.includes(`${controlSelector}${state}`), `Shared semantic controls lack ${state} styling`);
+    assert(!baseCss.includes(`${broadLinkSelector}${state}`), `Bare prose links must not receive ${state} control styling`);
   }
   assert.match(baseCss, /:is\(hr, \[role="separator"\]\)/);
   for (const status of ["info", "success", "warning", "loading"]) assert(baseCss.includes(`[data-status="${status}"]`), `${status} status styling is missing`);
@@ -209,16 +307,48 @@ test("every theme provides complete semantic roles and a distinct component prof
   assert.match(baseCss, /\[data-settings-panel\]/);
   assert.match(baseCss, /\[data-testid\*="workspace"\]/);
   assert.match(baseCss, /\[data-testid\*="quick-action"\]/);
-  for (const id of THEME_IDS.slice(1)) {
-    const selector = `html.claude-aura[data-claude-aura-theme="${id}"] :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {`;
-    assert(variants.includes(selector), `${id} lacks a complete interactive-role icon treatment`);
+  assert(!/:is\([^{}]*(?:button|\[role="button"\])[^{}]*\)\s+:is\(svg, \[data-icon\]\)\s*\{[^}]*\b(?:background|box-shadow|border-radius|transform)\s*:/s.test(`${baseCss}\n${variants}`),
+    "Aura must not draw boxes, shadows, or transforms around Claude's nested icons");
+  assert(baseCss.includes("[data-claude-aura-sidebar]"), "Live sidebar styling must use the semantic Aura marker");
+  assert(!baseCss.includes(".dframe-sidebar"), "Live sidebar styling must not depend on Claude's unstable class name");
+  assert(!variants.includes(".dframe-sidebar"), "Theme variants must use the semantic sidebar marker");
+  const hoverStart = baseCss.indexOf(`${controlSelector}:not([disabled]):not([aria-disabled="true"]):hover`);
+  const hoverBody = baseCss.slice(hoverStart, baseCss.indexOf("}", hoverStart));
+  assert(hoverStart >= 0 && /background:\s*hsl\(var\(--aura-hover-surface\)/.test(hoverBody));
+  assert.match(hoverBody, /color:\s*hsl\(var\(--aura-text-primary\)\)/);
+  assert(!/border-color:[^;]*--aura-accent-primary/.test(hoverBody));
+  assert.match(hoverBody, /transform:\s*none/);
+  const selectedStart = baseCss.indexOf('html.claude-aura :is(button, a[href], [role="button"]');
+  assert(selectedStart >= 0, "Selected states must be scoped to interactive elements");
+  assert(!/html\.claude-aura\s+:is\(\[aria-current/.test(baseCss), "Bare state wrappers must not receive selected styling");
+  const focusStart = baseCss.indexOf("html.claude-aura :focus-visible");
+  assert(focusStart > selectedStart,
+    "Visible focus styling must follow hover/selected/active styling");
+  const focusBody = baseCss.slice(focusStart, baseCss.indexOf("}", focusStart));
+  assert.match(focusBody, /outline:\s*1px solid hsl\(var\(--aura-focus-ring\) \/ 0\.72\)/,
+    "Focus styling must use the softened one-pixel ring");
+  assert.match(focusBody, /box-shadow:\s*0 0 0 4px hsl\(var\(--aura-focus-ring\) \/ 0\.14\)/,
+    "Focus styling must retain a low-alpha halo");
+  for (const id of THEME_IDS) {
+    assert(variants.includes(`data-claude-aura-theme="${id}"] { --aura-state-shadow:`),
+      `${id} lacks its restrained state shadow`);
   }
   const exactArtworkSelector = 'html.claude-aura:is([data-claude-aura-theme="cartoon-studio"], [data-claude-aura-theme="anime-twilight"], [data-claude-aura-theme="study-library"]) #claude-aura-backdrop .claude-aura-theme-art-layer';
   assert(variants.includes(`${exactArtworkSelector} {\n  animation: none;\n}`),
     "Recipe-defined layered themes must preserve their exact per-layer opacity");
-  const studyCornerSelector = 'html.claude-aura[data-claude-aura-theme="study-library"] #claude-aura-backdrop .claude-aura-theme-art-layer + .claude-aura-theme-art-layer';
+  const studyCornerSelector = 'html.claude-aura[data-claude-aura-theme="study-library"] #claude-aura-backdrop [data-art-role="decoration"]';
   assert(variants.includes(`${studyCornerSelector} {\n  left: var(--aura-main-start, 0px);\n}`),
     "Study Library corner must anchor to the content edge instead of beneath the sidebar");
+  assert(!variants.includes('.claude-aura-theme-art-layer + .claude-aura-theme-art-layer'),
+    "Study Library must not offset an appearance-specific full-bleed background as if it were the corner vignette");
+  assert(!variants.includes('[data-claude-aura-effective-mode="dark"] #claude-aura-backdrop [data-art-role="hero"]'),
+    "Korean Idol dark mode must use dedicated scenes instead of dimming the light portrait");
+  const koreanSidebarSelector = 'html.claude-aura[data-claude-aura-theme="korean-idol"] [data-claude-aura-sidebar]';
+  const koreanSidebarStart = variants.indexOf(`${koreanSidebarSelector} {`);
+  assert(koreanSidebarStart >= 0, "Korean Idol must expose its full-window art beneath one sidebar overlay");
+  const koreanSidebarBody = variants.slice(koreanSidebarStart, variants.indexOf("}", koreanSidebarStart));
+  assert.match(koreanSidebarBody, /--cds-page-bg:\s*transparent\s*!important/);
+  assert.match(koreanSidebarBody, /background-color:\s*hsl\(var\(--aura-sidebar-background\) \/ var\(--aura-sidebar-alpha\)\)\s*!important/);
   const converter = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"), "utf8");
   assert(!converter.includes('src: "study-library.svg"'),
     "Study Library selector media must not derive from its retired procedural stand-in");
@@ -236,6 +366,9 @@ test("all theme text, focus colours, and accents clear contrast guardrails", asy
         ["accent", "--aura-accent-primary", "--aura-background-primary", 3],
         ["on-accent", "--aura-text-on-accent", "--aura-accent-primary", 4.5],
         ["sidebar", "--aura-sidebar-text-primary", "--aura-sidebar-background", 7],
+        ["hover", "--aura-text-primary", "--aura-hover-surface", 4.5],
+        ["selected", "--aura-text-primary", "--aura-selected-surface", 4.5],
+        ["sidebar-selected", "--aura-sidebar-text-primary", "--aura-sidebar-selected", 4.5],
         ["focus", "--aura-focus-ring", "--aura-background-primary", 3],
         ["focus-panel", "--aura-focus-ring", "--aura-panel-background", 3],
         ["focus-card", "--aura-focus-ring", "--aura-card-background", 3],
@@ -317,9 +450,26 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   assert.match(defaultBundle.css, /data-claude-aura-effective-mode="dark"/);
   assert.match(defaultBundle.payload, /dataset\.claudeAuraTheme/);
   assert.match(defaultBundle.payload, /dataset\.claudeAuraEffectiveMode/);
+  assert.match(defaultBundle.payload, /dataset\.claudeAuraContext/);
+  assert.match(defaultBundle.payload, /data-claude-aura-prompt/);
+  assert.match(defaultBundle.payload, /data-claude-aura-sidebar/);
+  assert.match(defaultBundle.payload, /textarea:not\(\[readonly\]\)/);
+  assert(!/placeholder|location\.pathname|New chat|Write a message/.test(rendererSource),
+    "Context discovery must not depend on localized wording, placeholders, or URL routes");
   assert(!/dataset\.(?:mode|theme)\s*=/.test(rendererSource),
     "Aura appearance must not mutate Claude-owned mode or theme attributes");
   assert.match(defaultBundle.payload, /claude-aura-theme-art/);
+  const quotedCss = 'a::before { content: "a; b /* c */ > d"; margin: calc(100% - 2px); }';
+  const quotedPayload = await buildPayloadFromCompiled({ css: quotedCss, settings: { digest: "quoted-css" } });
+  assert(quotedPayload.payload.includes(JSON.stringify('a::before{content:"a; b /* c */ > d";margin:calc(100% - 2px)}')),
+    "Payload CSS compaction must preserve quoted values and calculation whitespace");
+  const descendantPseudoCss = 'html .sidebar :is(a, button) { color: red; }';
+  const descendantPseudoPayload = await buildPayloadFromCompiled({
+    css: descendantPseudoCss,
+    settings: { digest: "descendant-pseudo-css" },
+  });
+  assert(descendantPseudoPayload.payload.includes(JSON.stringify('html .sidebar :is(a,button){color:red}')),
+    "Payload CSS compaction must preserve descendant whitespace before pseudo selectors");
   assert(!defaultBundle.payload.includes("__AURA_CSS_JSON__"));
   assert(!defaultBundle.payload.includes("__AURA_SETTINGS_JSON__"));
   new Function(defaultBundle.payload);
@@ -334,6 +484,19 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   assert.equal(themed.artwork, null);
   assert.equal(themed.artworkLayers[0].path.endsWith(path.join("anime-twilight", "background.webp")), true);
   assert.equal(themed.settings.artUnavailable, false);
+
+  const koreanIdolBundle = await compileTheme({
+    config: { ...DEFAULT_CONFIG, theme: "korean-idol" },
+  });
+  assert.deepEqual(koreanIdolBundle.settings.newChatLayout, {
+    widthRatio: 0.76,
+    offsetXRatio: -0.07,
+    offsetYRatio: 0,
+  });
+  assert.equal(koreanIdolBundle.settings.artLayers.find((layer) => layer.role === "hero")
+    .contextOverrides.conversation.hidden, true);
+  assert.deepEqual(koreanIdolBundle.settings.artLayers.map((layer) => layer.appearance),
+    ["light", "light", "dark", "dark"]);
 
   for (const locale of ["en", "zh-CN", "zh-TW"]) {
     for (const theme of await listThemes({ locale })) {
@@ -421,14 +584,20 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       this.classList = new FakeClassList();
       this.children = [];
       this.parentNode = null;
+      this.parentElement = null;
       this.textContent = "";
       this.innerHTML = "";
+    }
+
+    get isConnected() {
+      return this.tagName === "HTML" || Boolean(this.parentNode?.isConnected);
     }
 
     appendChild(child) {
       child.remove();
       this.children.push(child);
       child.parentNode = this;
+      child.parentElement = this;
       return child;
     }
 
@@ -436,6 +605,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       child.remove();
       this.children.unshift(child);
       child.parentNode = this;
+      child.parentElement = this;
       return child;
     }
 
@@ -443,6 +613,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       if (!this.parentNode) return;
       this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
       this.parentNode = null;
+      this.parentElement = null;
     }
 
     contains(candidate) {
@@ -451,6 +622,18 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
 
     setAttribute(name, value) {
       this[name] = String(value);
+    }
+
+    removeAttribute(name) {
+      delete this[name];
+    }
+
+    querySelector() {
+      return null;
+    }
+
+    querySelectorAll() {
+      return [];
     }
   }
 
@@ -462,10 +645,24 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   };
   document.documentElement.appendChild(document.head);
   document.documentElement.appendChild(document.body);
+  const sidebar = new FakeElement("nav");
+  sidebar.getBoundingClientRect = () => ({ left: 0, top: 0, right: 48, bottom: 900, width: 48, height: 900 });
+  document.body.appendChild(sidebar);
   const main = new FakeElement("main");
-  main.getBoundingClientRect = () => ({ left: 250 });
+  let mainRect = { left: 250, top: 0, right: 1440, bottom: 900, width: 1190, height: 900 };
+  main.getBoundingClientRect = () => ({ ...mainRect });
   document.body.appendChild(main);
   document.querySelector = (selector) => selector === "main" ? main : null;
+  const walk = (element) => [element, ...element.children.flatMap(walk)];
+  document.querySelectorAll = (selector) => {
+    if (selector === 'main,[role="main"]') return [main];
+    if (selector.includes(".dframe-sidebar") || selector.includes("aside")) return [sidebar];
+    const markers = [...selector.matchAll(/\[([^\]=]+)(?:=[^\]]+)?\]/g)].map((match) => match[1]);
+    if (markers.some((name) => name.startsWith("data-claude-aura-"))) {
+      return walk(document.documentElement).filter((element) => markers.some((name) => Object.hasOwn(element, name)));
+    }
+    return [];
+  };
   document.getElementById = (id) => {
     const find = (element) => element.id === id
       ? element
@@ -510,9 +707,32 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     addEventListener(type, listener) { if (type === "change") mediaListeners.add(listener); },
     removeEventListener(type, listener) { if (type === "change") mediaListeners.delete(listener); },
   };
-  const window = { matchMedia: () => mediaQuery };
+  const windowListeners = new Map();
+  const navigationListeners = new Set();
+  const window = {
+    innerWidth: 1440,
+    innerHeight: 900,
+    matchMedia: () => mediaQuery,
+    getComputedStyle: (element) => ({
+      display: element.style.getPropertyValue("display") || "block",
+      visibility: "visible",
+      translate: "none",
+    }),
+    addEventListener: (type, listener) => {
+      const listeners = windowListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      windowListeners.set(type, listeners);
+    },
+    removeEventListener: (type, listener) => windowListeners.get(type)?.delete(listener),
+    navigation: {
+      addEventListener: (type, listener) => { if (type === "currententrychange") navigationListeners.add(listener); },
+      removeEventListener: (type, listener) => { if (type === "currententrychange") navigationListeners.delete(listener); },
+    },
+  };
+  let koreanPayload = null;
   for (const theme of await listThemes()) {
     const bundle = await buildPayload({ config: { ...DEFAULT_CONFIG, theme: theme.name } });
+    if (theme.name === "korean-idol") koreanPayload = bundle.payload;
     const inject = new Function(
       "window",
       "document",
@@ -528,6 +748,9 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     assert.equal(document.documentElement.dataset.claudeAuraTheme, theme.name);
     assert.equal(document.documentElement.dataset.claudeAuraAppearance, "system");
     assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "light");
+    assert.equal(document.documentElement.dataset.claudeAuraContext, "other");
+    assert.equal(sidebar["data-claude-aura-sidebar"], "true",
+      `${theme.name} did not mark the valid collapsed navigation rail`);
     assert.equal(mediaListeners.size, 1, `${theme.name} left duplicate appearance listeners`);
     assert.equal(intervals.size, 1, `${theme.name} left duplicate renderer timers`);
     assert.equal(observers.size, 1, `${theme.name} left duplicate mutation observers`);
@@ -538,6 +761,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     if (expectedLayers.length) {
       assert.equal(backdrop["aria-hidden"], "true");
       assert.deepEqual(layers.map((layer) => layer.style.getPropertyValue("opacity")),
+        expectedLayers.map((layer) => String(layer.opacity)));
+      assert.deepEqual(layers.map((layer) => layer.style.getPropertyValue("--aura-layer-opacity")),
         expectedLayers.map((layer) => String(layer.opacity)));
       assert.deepEqual(layers.map((layer) => layer.style.getPropertyValue("background-position")),
         expectedLayers.map((layer) => layer.position));
@@ -553,10 +778,192 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     }
   }
 
+  const reinjectKorean = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    koreanPayload,
+  );
+  reinjectKorean(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  assert.equal(document.getElementById("claude-aura-backdrop").children
+    .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer")).length, 4,
+  "Same-digest reinjection must recreate and rebind every artwork layer");
+  assert.equal(mediaListeners.size, 1, "Same-digest reinjection left duplicate appearance listeners");
+
+  const composer = new FakeElement("section");
+  const editor = new FakeElement("textarea");
+  const firstControl = new FakeElement("button");
+  const secondControl = new FakeElement("button");
+  composer.appendChild(editor);
+  composer.appendChild(firstControl);
+  composer.appendChild(secondControl);
+  const promptRoot = new FakeElement("div");
+  promptRoot.appendChild(composer);
+  main.appendChild(promptRoot);
+  let composerEditors = [editor];
+  let hasConversationMessage = false;
+  let composerBaseTop = 300;
+  editor.getBoundingClientRect = () => ({ left: 430, top: composerBaseTop + 12, right: 930, bottom: composerBaseTop + 52, width: 500, height: 40 });
+  composer.getBoundingClientRect = () => ({ left: 430, top: composerBaseTop, right: 1030, bottom: composerBaseTop + 100, width: 600, height: 100 });
+  promptRoot.getBoundingClientRect = () => {
+    const width = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-width")) || 600;
+    const x = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-x")) || 0;
+    const y = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-y")) || 0;
+    const left = mainRect.left + (mainRect.width / 2) - (width / 2) + x;
+    return { left, top: composerBaseTop + y, right: left + width, bottom: composerBaseTop + y + 120, width, height: 120 };
+  };
+  composer.querySelectorAll = (selector) => selector === 'button,[role="button"],select'
+    ? [firstControl, secondControl]
+    : [];
+  promptRoot.querySelectorAll = (selector) => selector === 'button,[role="button"],select'
+    ? [firstControl, secondControl]
+    : [];
+  main.querySelectorAll = (selector) => selector.includes("textarea:not([readonly])") ? composerEditors : [];
+  main.querySelector = () => hasConversationMessage ? new FakeElement("article") : null;
+
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(document.documentElement.dataset.claudeAuraContext, "new-chat");
+  assert.equal(promptRoot["data-claude-aura-prompt"], "new-chat");
+  assert.equal(composer["data-claude-aura-prompt"], undefined,
+    "Prompt placement must move the complete composer shell, not its inner field row");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "904.4px");
+  const placed = promptRoot.getBoundingClientRect();
+  assert(placed.left >= 266 && placed.right <= 1424, "Korean Idol prompt escaped the measured main canvas");
+  assert.equal(composer.style.getPropertyValue("position"), "");
+  assert.equal(composer.style.getPropertyValue("transform"), "");
+  const activeBackdrop = document.getElementById("claude-aura-backdrop");
+  const koreanLayers = activeBackdrop.children
+    .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer"));
+  const heroLayer = activeBackdrop.children.find((child) => child.dataset.artRole === "hero");
+  assert(heroLayer, "Korean Idol hero role was not propagated to the renderer");
+  assert.equal(heroLayer.dataset.artContext, "new-chat");
+  assert.equal(heroLayer.style.getPropertyValue("opacity"), "0.96");
+  assert.equal(heroLayer.style.getPropertyValue("--aura-layer-opacity"), "0.96");
+  assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["", "", "none", "none"],
+    "Korean Idol light new-chat must show only its two light layers");
   mediaDark = true;
   for (const listener of mediaListeners) listener({ matches: true });
-  assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "dark",
-    "System appearance did not react to the prefers-color-scheme change");
+  assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["none", "none", "", "none"],
+    "Korean Idol dark new-chat must show exactly the upward-shifted scene");
+  window.innerWidth = 1915;
+  window.innerHeight = 1006;
+  mainRect = { left: 288, top: 0, right: 1915, bottom: 1006, width: 1627, height: 1006 };
+  window.__CLAUDE_AURA_STATE__.ensure();
+  const widePlaced = promptRoot.getBoundingClientRect();
+  assert(widePlaced.left >= 304 && widePlaced.right <= 1899,
+    "Korean Idol prompt escaped the measured main canvas at fullscreen width");
+  assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["none", "none", "", "none"],
+    "Fullscreen resize introduced a duplicate Korean Idol dark scene");
+  assert.equal(koreanLayers[2].style.getPropertyValue("background-position"), "right top");
+  assert.equal(koreanLayers[2].style.getPropertyValue("background-size"), "cover");
+  window.innerWidth = 1440;
+  window.innerHeight = 900;
+  mainRect = { left: 250, top: 0, right: 1440, bottom: 900, width: 1190, height: 900 };
+  mediaDark = false;
+  for (const listener of mediaListeners) listener({ matches: false });
+  window.__CLAUDE_AURA_STATE__.ensure();
+
+  hasConversationMessage = true;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(document.documentElement.dataset.claudeAuraContext, "conversation");
+  assert.equal(promptRoot["data-claude-aura-prompt"], undefined);
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "");
+  assert.equal(heroLayer.dataset.artContext, "conversation");
+  assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["", "none", "none", "none"],
+    "Korean Idol light conversation must retain only its atmosphere and hide the portrait");
+  mediaDark = true;
+  for (const listener of mediaListeners) listener({ matches: true });
+  assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["none", "none", "none", ""],
+    "Korean Idol dark conversation must show exactly the preserved lower scene");
+  mediaDark = false;
+  for (const listener of mediaListeners) listener({ matches: false });
+
+  hasConversationMessage = false;
+  const secondComposer = new FakeElement("section");
+  const secondEditor = new FakeElement("textarea");
+  secondComposer.appendChild(secondEditor);
+  secondComposer.appendChild(new FakeElement("button"));
+  secondComposer.appendChild(new FakeElement("button"));
+  secondComposer.getBoundingClientRect = () => ({ left: 430, top: 460, right: 1030, bottom: 580, width: 600, height: 120 });
+  secondEditor.getBoundingClientRect = () => ({ left: 450, top: 472, right: 950, bottom: 512, width: 500, height: 40 });
+  secondComposer.querySelectorAll = (selector) => selector === 'button,[role="button"],select' ? secondComposer.children.slice(1) : [];
+  main.appendChild(secondComposer);
+  composerEditors = [editor, secondEditor];
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(document.documentElement.dataset.claudeAuraContext, "other");
+  assert.equal(promptRoot["data-claude-aura-prompt"], undefined);
+  assert.equal(heroLayer.style.getPropertyValue("display"), "none",
+    "An ambiguous page must hide Korean Idol's hero rather than cover unknown content");
+  mediaDark = true;
+  for (const listener of mediaListeners) listener({ matches: true });
+  assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["none", "none", "none", "none"],
+    "An ambiguous dark page must fail closed instead of stacking both scenes");
+  mediaDark = false;
+  for (const listener of mediaListeners) listener({ matches: false });
+
+  secondComposer.remove();
+  composerEditors = [editor];
+  composerBaseTop = 740;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(document.documentElement.dataset.claudeAuraContext, "other",
+    "A bottom-anchored message-free composer must fail closed instead of moving");
+  promptRoot.remove();
+  composerEditors = [];
+  main.querySelectorAll = () => [];
+  main.querySelector = () => null;
+
+  assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "light",
+    "System appearance did not return to light after the artwork-gating checks");
+
+  const gatedCompiled = await compileTheme({
+    config: { ...DEFAULT_CONFIG, theme: "anime-twilight" },
+  });
+  const gatedLayer = {
+    dataUrl: "data:image/webp;base64,UklGRg==",
+    position: "center",
+    size: "cover",
+    mobile: "keep",
+    opacity: 0.5,
+    mask: "none",
+    role: "decoration",
+    contextOverrides: null,
+  };
+  const gatedSettings = {
+    ...gatedCompiled.settings,
+    digest: "appearance-gate-system",
+    artLayers: [
+      { ...gatedLayer, appearance: "light" },
+      { ...gatedLayer, appearance: "dark" },
+      { ...gatedLayer, appearance: "dark", contextOverrides: { other: { hidden: true } } },
+    ],
+  };
+  const gatedBundle = await buildPayloadFromCompiled({ ...gatedCompiled, settings: gatedSettings });
+  const injectGated = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    gatedBundle.payload,
+  );
+  injectGated(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  let gatedLayers = document.getElementById("claude-aura-backdrop").children
+    .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer"));
+  assert.deepEqual(gatedLayers.map((layer) => layer.style.getPropertyValue("display")), ["", "none", "none"],
+    "Light mode did not gate appearance-specific layers or preserve context hiding");
+  mediaDark = true;
+  for (const listener of mediaListeners) listener({ matches: true });
+  assert.deepEqual(gatedLayers.map((layer) => layer.style.getPropertyValue("display")), ["none", "", "none"],
+    "System appearance changes did not switch gated layers immediately");
+
+  const forcedGatedBundle = await buildPayloadFromCompiled({
+    ...gatedCompiled,
+    settings: { ...gatedSettings, appearance: "dark", digest: "appearance-gate-forced-dark" },
+  });
+  const injectForcedGated = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    forcedGatedBundle.payload,
+  );
+  injectForcedGated(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  gatedLayers = document.getElementById("claude-aura-backdrop").children
+    .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer"));
+  assert.deepEqual(gatedLayers.map((layer) => layer.style.getPropertyValue("display")), ["none", "", "none"],
+    "Forced Dark did not apply the same artwork appearance gate");
+  assert.equal(mediaListeners.size, 0, "Forced artwork appearance retained the System media listener");
   mediaDark = false;
 
   const forcedDarkBundle = await buildPayload({
@@ -609,7 +1016,10 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(document.documentElement.style.getPropertyValue("--aura-image-scale"), "");
   assert.equal(document.documentElement.dataset.claudeAuraAppearance, undefined);
   assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, undefined);
+  assert.equal(document.documentElement.dataset.claudeAuraContext, undefined);
   assert.equal(mediaListeners.size, 0);
+  assert.equal([...windowListeners.values()].reduce((total, listeners) => total + listeners.size, 0), 0);
+  assert.equal(navigationListeners.size, 0);
   assert.equal(window.__CLAUDE_AURA_STATE__, undefined);
 });
 
@@ -632,6 +1042,12 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
     const bytes = await fs.readFile(artworkPath);
     assert(bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP",
       `${themeName} raster artwork must be WebP`);
+    return bytes;
+  };
+  const assertWebpAlpha = (themeName, artworkPath, bytes) => {
+    const vp8xOffset = bytes.indexOf(Buffer.from("VP8X"));
+    assert(vp8xOffset >= 0 && (bytes[vp8xOffset + 8] & 0x10) !== 0,
+      `${themeName} ${path.basename(artworkPath)} must retain real alpha instead of a baked matte`);
   };
   for (const theme of themes.filter((item) => item.artwork)) {
     await validateSvgArtwork(theme.name, path.join(PROJECT_ROOT, theme.artwork.path));
@@ -640,7 +1056,10 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
     for (const layer of theme.artworkLayers) {
       const artworkPath = path.join(PROJECT_ROOT, layer.path);
       if (layer.path.endsWith(".svg")) await validateSvgArtwork(theme.name, artworkPath);
-      else await validateRasterArtwork(theme.name, artworkPath);
+      else {
+        const bytes = await validateRasterArtwork(theme.name, artworkPath);
+        if (["hero", "decoration"].includes(layer.role)) assertWebpAlpha(theme.name, artworkPath, bytes);
+      }
     }
   }
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
@@ -652,12 +1071,63 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
   await assert.rejects(resolveArtwork({ artwork: { path: "themes/default.json" } }), /inside/);
   assert.match(baseCss, /prefers-reduced-motion: reduce/);
   const verifier = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "verify-cycle.mjs"), "utf8");
-  assert.match(verifier, /class="aura-verify-preload"/);
-  assert.match(verifier, /decoding="sync" loading="eager" fetchpriority="high"/);
-  assert.match(verifier, /aura-verify-settle\.png/);
-  assert.match(verifier, /run-all-compositor-stages-before-draw/);
-  assert.match(verifier, /--screenshot=/);
-  assert.match(verifier, /waitForStableFile/);
+  assert.match(verifier, /const MODES = \["light", "dark"\]/);
+  assert.match(verifier, /for \(const mode of MODES\)/);
+  assert.match(verifier, /new Function\(bundle\.payload\)/);
+  assert.match(verifier, /actual Aura on live claude\.ai/);
+  for (const forbidden of ["claude-dom", "--screenshot", "docs/golden", "dist/verify", "aura-verify-preload"]){
+    assert(!verifier.includes(forbidden), `verify:cycle retains forbidden image-fixture hook: ${forbidden}`);
+  }
+  await assert.rejects(fs.access(path.join(PROJECT_ROOT, "docs", "golden")),
+    (error) => error?.code === "ENOENT", "Fixture golden directory still exists");
+  await assert.rejects(fs.access(path.join(PROJECT_ROOT, "tests", "fixtures", "claude-dom.html")),
+    (error) => error?.code === "ENOENT", "Claude DOM image fixture still exists");
+  for (const retiredPath of [
+    "preview",
+    "docs/theme-screenshots",
+    "scripts/qa-board.mjs",
+  ]) {
+    await assert.rejects(fs.access(path.join(PROJECT_ROOT, ...retiredPath.split("/"))),
+      (error) => error?.code === "ENOENT", `Retired fixture surface still exists: ${retiredPath}`);
+  }
+
+  const artifactFiles = [];
+  const scanArtifacts = async (directory, relativeDirectory = "") => {
+    let entries;
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) await scanArtifacts(absolutePath, relativePath);
+      else if (entry.isFile()) artifactFiles.push(relativePath.replaceAll("\\", "/"));
+    }
+  };
+  await scanArtifacts(path.join(PROJECT_ROOT, "dist", "verify"), "dist/verify");
+  await scanArtifacts(path.join(PROJECT_ROOT, "themes"), "themes");
+  const retiredFixturePatterns = [
+    /^dist\/verify\/[^/]+-(?:light|dark)-1440x900\.(?:html|png)$/,
+    /\/qa\/qa-board\.png$/,
+    /\/provisional\/candidates\/.*candidate-[123]-(?:light|dark)-1440x900\.png$/,
+    /\/qa\/selected-(?:light|dark)-1440x900\.png$/,
+    /\/references\/checkpoint-a-(?:light|dark)-1440x900\.png$/,
+  ];
+  assert.deepEqual(artifactFiles.filter((file) => retiredFixturePatterns.some((pattern) => pattern.test(file))), [],
+    "A retired fixture image or render harness artifact was recreated");
+
+  const [queuePlan, workOrders, blockedPlan] = await Promise.all([
+    fs.readFile(path.join(PROJECT_ROOT, "docs", "plans", "QUEUE.md"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "docs", "plans", "WORK_ORDERS.md"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "docs", "plans", "BLOCKED.md"), "utf8"),
+  ]);
+  assert.match(queuePlan, /remove and never\s+regenerate the reconstructed offline preview, fake\/fixture UI images/i);
+  assert.match(workOrders, /Permanent evidence policy[\s\S]*Do not regenerate it\./);
+  assert(!blockedPlan.includes("later queued capture sweep may use the existing Node spawn-based screenshot launcher"),
+    "A blocked item still schedules a retired offline screenshot retry");
 });
 
 test("theme-cli scaffolds a complete starter kit and validates it", async () => {
@@ -693,6 +1163,36 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
     assert.equal(kitDocument.theme.name, themeId);
     assert.equal(kitDocument.theme.variant, themeId);
     assert.equal((await readThemeKit(path.dirname(kitPath))).id, themeId);
+
+    const invalidMetadata = [
+      ["layout-range", { newChatLayout: { widthRatio: 0.99, offsetXRatio: 0, offsetYRatio: 0 } }, /widthRatio must be between/],
+      ["layout-shape", { newChatLayout: { widthRatio: 0.76, offsetXRatio: 0, offsetYRatio: 0, path: "C:\\private.png" } }, /must contain only/],
+      ["layer-role", { artworkLayers: [{ path: "background.png", role: "widget" }] }, /role has an unsupported value/],
+      ["layer-appearance", { artworkLayers: [{ path: "background.png", appearance: "system" }] }, /appearance must be light or dark/],
+      ["legacy-appearance", { artwork: { path: "hero.svg", appearance: "dark" } }, /appearance is only supported in artworkLayers/],
+      ["layer-context", { artworkLayers: [{ path: "background.png", contextOverrides: { newchat: { opacity: 0.5 } } }] }, /unsupported context/],
+      ["layer-resource", { artworkLayers: [{ path: "background.png", contextOverrides: { conversation: { position: "url(https://example.com/x)" } } }] }, /may not load remote resources/],
+      ["layer-hidden", { artworkLayers: [{ path: "background.png", contextOverrides: { conversation: { hidden: "yes" } } }] }, /hidden must be true or false/],
+    ];
+    for (const [folder, metadata, pattern] of invalidMetadata) {
+      const invalidDirectory = path.join(temporary, folder);
+      await fs.mkdir(invalidDirectory);
+      await fs.writeFile(path.join(invalidDirectory, "theme.json"), `${JSON.stringify({ ...kitDocument, ...metadata }, null, 2)}\n`, "utf8");
+      await assert.rejects(readThemeKit(invalidDirectory), pattern);
+    }
+
+    const appearanceDirectory = path.join(temporary, "layer-appearance-valid");
+    await fs.mkdir(appearanceDirectory);
+    await fs.copyFile(
+      path.join(PROJECT_ROOT, "assets", "theme-art", "anime-twilight", "background.webp"),
+      path.join(appearanceDirectory, "background.webp"),
+    );
+    await fs.writeFile(path.join(appearanceDirectory, "theme.json"), `${JSON.stringify({
+      ...kitDocument,
+      artworkLayers: [{ path: "background.webp", appearance: "dark" }],
+    }, null, 2)}\n`, "utf8");
+    const appearanceKit = await readThemeKit(appearanceDirectory);
+    assert.equal(appearanceKit.metadata.artworkLayers[0].appearance, "dark");
 
     const slotSpecs = [
       ["background.png", "≥1600 px wide"],
@@ -888,72 +1388,57 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
   }
 });
 
-test("theme-cli qa renders every registered layer through the payload harness", async () => {
+test("theme-cli qa audits every registered layer without generating images", async () => {
   const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
   const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
   try {
     assert.match(run(process.execPath, [cliPath, "help"], { cwd: temporary }), /^\s*qa <id>\s*$/m);
     assert.throws(() => run(process.execPath, [cliPath, "qa", "not-installed"], { cwd: temporary }),
       /Unknown theme|Theme not found/);
-    if (process.platform !== "win32") return;
-
     const summary = JSON.parse(run(process.execPath, [cliPath, "qa", "japanese-idol"], {
       cwd: temporary,
-      timeout: 180_000,
+      timeout: 60_000,
     }));
     assert.equal(summary.themeId, "japanese-idol");
     assert.equal(summary.outputDir, "dist/qa/japanese-idol");
-    assert.equal(summary.boardPath, "dist/qa/japanese-idol/qa-board.png");
+    assert.equal(summary.boardPath, null);
     assert.equal(summary.statusPath, "dist/qa/japanese-idol/status.json");
 
     const outputDirectory = path.join(temporary, "dist", "qa", "japanese-idol");
-    const board = await fs.readFile(path.join(outputDirectory, "qa-board.png"));
     const status = JSON.parse(await fs.readFile(path.join(outputDirectory, "status.json"), "utf8"));
-    assert.equal(board.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "QA board is not a PNG");
-    assert(board.length > 10_000, "QA board is unexpectedly small");
-    assert(status.board.width > 1_000 && status.board.height > 1_000, "QA board dimensions are not useful for review");
+    assert.deepEqual(await fs.readdir(outputDirectory), ["status.json"], "QA emitted an image or other fixture artifact");
+    assert.equal(status.schemaVersion, 2);
+    assert.equal(status.state, "asset-audit-pass");
+    assert.equal(status.visualReview.requiredSurface, "actual Aura WebView2 on live claude.ai");
+    assert.equal(status.visualReview.fixtureImages, "forbidden");
 
     const expectedPaths = [
       "assets/theme-art/kawaii-idol/background.webp",
       "assets/theme-art/kawaii-idol/hero.webp",
-      "assets/theme-art/kawaii-idol/sakura-top-right.webp",
-      "assets/theme-art/kawaii-idol/sakura-bottom-right.webp",
+      "assets/theme-art/kawaii-idol/dark-new-chat.webp",
+      "assets/theme-art/kawaii-idol/dark-conversation.webp",
     ];
     assert.equal(status.theme.id, "japanese-idol");
     assert.deepEqual(status.assets.map((asset) => asset.path), expectedPaths,
-      "QA status did not preserve every registry artwork layer in order");
+      "Asset audit did not preserve every registry artwork layer in order");
     for (const asset of status.assets) {
-      assert.equal(asset.decode, "pass", `${asset.path} did not decode in the QA browser`);
-      assert(asset.dimensions.width > 0 && asset.dimensions.height > 0,
-        `${asset.path} is missing decoded dimensions`);
+      assert(asset.bytes > 0, `${asset.path} is empty`);
+      assert.match(asset.sha256, /^[a-f0-9]{64}$/, `${asset.path} is missing its content digest`);
     }
-    assert.equal(status.payload.layerCount, expectedPaths.length,
-      "The in-context payload did not place every artwork layer");
-    assert.equal(status.payload.usesLegacyArtwork, false,
-      "The layered theme fell back to the legacy artwork slot");
-    assert.equal(status.payload.renderedDigest, status.payload.digest,
-      "The payload harness did not render the compiled theme digest");
-    assert.equal(status.assets[1].reference.crop.x, 0.28,
-      "The hero reference panel does not record the converter's source crop");
-
-    const panelIds = new Set(status.assets.flatMap((asset) => asset.panels));
-    for (const panel of [
-      "reference-crop",
-      "production-render",
-      "side-by-side",
-      "overlay-comparison",
-      "intended-surface",
-      "white-surface",
-      "dark-edge",
-      "small-scale",
-    ]) {
-      assert(panelIds.has(panel), `QA board is missing the ${panel} evidence panel`);
+    assert.deepEqual(status.payloads.map((payload) => payload.mode), ["light", "dark"]);
+    for (const payload of status.payloads) {
+      assert.equal(payload.theme, "japanese-idol");
+      assert.equal(payload.layerCount, expectedPaths.length,
+        `${payload.mode} payload omitted registered artwork layers`);
+      assert.equal(payload.usesLegacyArtwork, false,
+        `${payload.mode} payload fell back to the legacy artwork slot`);
+      assert.equal(payload.syntax, "pass");
+      assert(payload.bytes > 0);
     }
-    assert(panelIds.has("transparent-checker") || panelIds.has("responsive-cover"),
-      "QA board is missing transparency or responsive-cover evidence");
-    assert(status.panels.required.includes("in-context-payload") &&
-      status.panels.observed.includes("in-context-payload"),
-      "QA board is missing the in-context payload-harness panel");
+    const auditSource = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "asset-audit.mjs"), "utf8");
+    for (const forbidden of ["claude-dom", "--screenshot", "qa-board", "in-context-payload"]){
+      assert(!auditSource.includes(forbidden), `Asset audit retains forbidden fixture hook: ${forbidden}`);
+    }
   } finally {
     await fs.rm(temporary, { recursive: true, force: true });
   }
@@ -1181,13 +1666,12 @@ test("legacy macOS CDP validation rejects unsafe endpoints", async () => {
 test("JavaScript and platform scripts parse", async () => {
   const jsFiles = [
     "assets/renderer-inject.js",
-    "preview/app.js",
     "studio/app.js",
-    "scripts/build-preview.mjs",
+    "scripts/build-aura-icon.mjs",
+    "scripts/build-studio-themes.mjs",
     "scripts/build-release.mjs",
     "scripts/injector.mjs",
-    "scripts/preview-server.mjs",
-    "scripts/qa-board.mjs",
+    "scripts/asset-audit.mjs",
     "scripts/state-cli.mjs",
     "scripts/theme-cli.mjs",
     "scripts/theme-core.mjs",
@@ -1213,15 +1697,83 @@ test("JavaScript and platform scripts parse", async () => {
   }
 });
 
+test("Aura identity icon is deterministic and contains every required Windows frame", async () => {
+  const expectedSizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+  const sourcePath = path.join(PROJECT_ROOT, "assets", "brand", "aura-mark.svg");
+  const committedPath = path.join(PROJECT_ROOT, "assets", "brand", "claude-aura.ico");
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "claude-aura-icon-"));
+  try {
+    const firstPath = path.join(temporaryRoot, "first.ico");
+    const secondPath = path.join(temporaryRoot, "second.ico");
+    const first = await buildAuraIcon({ sourcePath, outputPath: firstPath });
+    const second = await buildAuraIcon({ sourcePath, outputPath: secondPath });
+    assert.deepEqual(first.sizes, expectedSizes);
+    assert.deepEqual(second.sizes, expectedSizes);
+    assert.equal(first.sha256, second.sha256, "Repeated icon builds must have the same digest");
+
+    const [firstBytes, secondBytes, committedBytes] = await Promise.all([
+      fs.readFile(firstPath),
+      fs.readFile(secondPath),
+      fs.readFile(committedPath),
+    ]);
+    assert.deepEqual(firstBytes, secondBytes, "Repeated icon builds must be byte-for-byte identical");
+    assert.deepEqual(committedBytes, firstBytes, "The committed ICO must be derived from the canonical SVG");
+    assert.equal(first.bytes, firstBytes.length);
+    assert.equal(firstBytes.readUInt16LE(0), 0, "ICO reserved field must be zero");
+    assert.equal(firstBytes.readUInt16LE(2), 1, "ICO must identify itself as an icon");
+    assert.equal(firstBytes.readUInt16LE(4), expectedSizes.length, "ICO frame count is incomplete");
+
+    let expectedOffset = 6 + expectedSizes.length * 16;
+    const actualSizes = [];
+    for (let index = 0; index < expectedSizes.length; index += 1) {
+      const entry = 6 + index * 16;
+      const size = firstBytes[entry] || 256;
+      const height = firstBytes[entry + 1] || 256;
+      const byteLength = firstBytes.readUInt32LE(entry + 8);
+      const imageOffset = firstBytes.readUInt32LE(entry + 12);
+      actualSizes.push(size);
+      assert.equal(height, size, `ICO frame ${size}px must be square`);
+      assert.equal(firstBytes[entry + 2], 0, `ICO frame ${size}px must not use a palette`);
+      assert.equal(firstBytes[entry + 3], 0, `ICO frame ${size}px reserved byte must be zero`);
+      assert.equal(firstBytes.readUInt16LE(entry + 4), 1, `ICO frame ${size}px must have one plane`);
+      assert.equal(firstBytes.readUInt16LE(entry + 6), 32, `ICO frame ${size}px must be 32-bit`);
+      assert(byteLength > 0, `ICO frame ${size}px is empty`);
+      assert.equal(imageOffset, expectedOffset, `ICO frame ${size}px has an unexpected offset`);
+      assert(imageOffset + byteLength <= firstBytes.length, `ICO frame ${size}px exceeds the file boundary`);
+      if (size === 256) {
+        assert.deepEqual([...firstBytes.subarray(imageOffset, imageOffset + 8)], [137, 80, 78, 71, 13, 10, 26, 10],
+          "The 256px ICO frame must use its lossless PNG representation");
+      } else {
+        assert.equal(firstBytes.readUInt32LE(imageOffset), 40, `ICO frame ${size}px needs a BITMAPINFOHEADER`);
+        assert.equal(firstBytes.readInt32LE(imageOffset + 4), size, `ICO frame ${size}px DIB width is incorrect`);
+        assert.equal(firstBytes.readInt32LE(imageOffset + 8), size * 2, `ICO frame ${size}px DIB height must include its mask`);
+        assert.equal(firstBytes.readUInt16LE(imageOffset + 12), 1, `ICO frame ${size}px DIB must have one plane`);
+        assert.equal(firstBytes.readUInt16LE(imageOffset + 14), 32, `ICO frame ${size}px DIB must be 32-bit`);
+      }
+      expectedOffset += byteLength;
+    }
+    assert.deepEqual(actualSizes, expectedSizes);
+    assert.equal(expectedOffset, firstBytes.length, "ICO contains unindexed trailing data");
+  } finally {
+    await fs.rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test("Windows uses a content-only WebView2 window with Aura Studio and tray controls", async () => {
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
   const install = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
+  const uninstall = await fs.readFile(path.join(PROJECT_ROOT, "windows", "uninstall.ps1"), "utf8");
   const studioApp = await fs.readFile(path.join(PROJECT_ROOT, "studio", "app.js"), "utf8");
   const studioCss = await fs.readFile(path.join(PROJECT_ROOT, "studio", "styles.css"), "utf8");
   const studioHtml = await fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8");
   const studioGenerated = await fs.readFile(path.join(PROJECT_ROOT, "studio", "generated-themes.js"), "utf8");
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
+  assert.match(start, /\$auraArguments\s*=\s*@\{\s*Mode\s*=\s*['"]Open['"]\s*\}/,
+    "The launch wrapper must use named hashtable splatting for Aura host parameters");
+  assert.match(start, /aura-ui\.ps1['"]\)\s+@auraArguments/,
+    "The launch wrapper must not pass parameter-name strings positionally");
+  assert(!start.includes("@arguments"), "The launch wrapper must not array-splat named parameters");
   const assetConverter = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"), "utf8");
   const uiCopy = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "ui-copy.json"), "utf8"));
   for (const [name, source] of [["start", start], ["UI", ui], ["installer", install]]) {
@@ -1292,6 +1844,29 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Aura must apply the WebView2 color preference before claude.ai navigation");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
   assert.match(ui, /PostWebMessageAsJson\s*\(/);
+  assert.match(ui, /\[switch\]\$OpenStudio/,
+    "The Aura host must expose the Studio-only launch switch");
+  assert.match(ui,
+    /\$script:StudioOpenSignal\s*=\s*\[System\.Threading\.EventWaitHandle\]::new\([\s\S]{0,180}?\[System\.Threading\.EventResetMode\]::AutoReset[\s\S]{0,180}?"Local\\ClaudeAura\.\$sid\.OpenStudio"/,
+    "Studio launch signaling must be a per-user AutoReset event");
+  const existingInstanceIndex = ui.indexOf("if (-not $createdNew)");
+  const existingStudioBranchIndex = ui.indexOf("if ($OpenStudio)", existingInstanceIndex);
+  const existingSignalIndex = ui.indexOf("[void]$script:StudioOpenSignal.Set()", existingStudioBranchIndex);
+  const existingReturnIndex = ui.indexOf("return", existingSignalIndex);
+  assert(existingInstanceIndex >= 0 && existingStudioBranchIndex > existingInstanceIndex
+      && existingSignalIndex > existingStudioBranchIndex && existingReturnIndex > existingSignalIndex,
+    "-OpenStudio must signal the already-running Aura instance before the second process returns");
+  assert.match(ui,
+    /if \(\$OpenStudio\) \{ \[void\]\$script:StudioOpenSignal\.Set\(\) \}/,
+    "A first Aura instance launched with -OpenStudio must queue Studio opening");
+  assert.match(ui,
+    /\$script:StudioOpenSignal\.WaitOne\(0\)[\s\S]{0,100}?Show-AuraUiStudio/,
+    "The UI loop must consume the Studio-open signal without blocking");
+  assert.match(ui,
+    /function Show-AuraUiStudio[\s\S]{0,500}?\.Activate\(\)[\s\S]{0,120}?\.BringToFront\(\)/,
+    "A signaled Studio window must be restored and foregrounded");
+  assert.match(ui, /\$script:StudioOpenSignal\.Dispose\(\)/,
+    "The named Studio signal must be disposed during shutdown");
 
   const expectedStudioMessageTypes = [
     "get-state",
@@ -1302,6 +1877,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "set-image-framing",
     "set-card-preview-crop",
     "set-enabled",
+    "open-aura",
     "open-desktop",
     "import-theme",
   ];
@@ -1311,6 +1887,17 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     .map((match) => match[1]);
   assert.deepEqual(studioMessageTypes, expectedStudioMessageTypes,
     "Studio must expose only the user-approved host actions");
+  const expectedPropertiesMatch = ui.match(/\$expectedProperties\s*=\s*@\(switch -CaseSensitive \(\$type\) \{([\s\S]*?)\}\)/);
+  assert(expectedPropertiesMatch, "Studio exact message-shape switch is missing");
+  assert.match(expectedPropertiesMatch[1], /default\s*\{\s*['"]type['"];\s*break\s*\}/,
+    "Type-only Studio actions must reject every extra property");
+  assert(!expectedPropertiesMatch[1].includes("'open-aura'"),
+    "open-aura must use the exact type-only message shape");
+  assert.match(ui, /'open-aura'\s*\{\s*Show-AuraUiMain;\s*break\s*\}/,
+    "The open-aura host action must only foreground the Aura window");
+  assert.match(ui,
+    /function Show-AuraUiMain[\s\S]{0,420}?\.Activate\(\)[\s\S]{0,120}?\.BringToFront\(\)/,
+    "The open-aura action must restore and foreground the main Aura window");
   assert.match(ui,
     /(?:\$script:StudioMessageTypes\s+-cnotcontains\s+\$message\.type|\$message\.type\s+-cnotin\s+\$script:StudioMessageTypes)/i,
     "Studio message actions must be checked case-sensitively against the allowlist");
@@ -1369,7 +1956,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The live image layer must use the same exact frame and zoom model as Studio");
   assert.match(studioApp, /send\(\{\s*type:\s*"set-image"\s*\}\)/,
     "The Studio page must let the host choose image paths");
-  for (const action of ["set-theme", "set-appearance", "set-image", "clear-image", "set-enabled", "open-desktop"]) {
+  for (const action of ["set-theme", "set-appearance", "set-image", "clear-image", "set-enabled", "open-aura", "open-desktop"]) {
     assert(new RegExp(`type:\\s*"${action}"`).test(studioApp),
       `Studio must retain the ${action} capability removed from the main toolbar`);
   }
@@ -1379,6 +1966,37 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Studio page must persist per-theme card framing");
   assert.match(studioApp, /send\(\{\s*type:\s*"import-theme"\s*\}\)/,
     "The Studio page must let the host choose import paths");
+  assert.match(studioHtml,
+    /<button\s+type="button"\s+id="open-aura"\s+class="ghost-button"\s+data-i18n="auraWindow">Back to Claude Aura<\/button>/,
+    "Studio must expose an accessible, localized route back to its Aura window");
+  assert.match(studioApp,
+    /document\.getElementById\("open-aura"\)\.addEventListener\("click",\s*\(\)\s*=>\s*send\(\{\s*type:\s*"open-aura"\s*\}\)\)/,
+    "Studio must send a type-only open-aura bridge message");
+  for (const copy of ["Back to Claude Aura", "返回 Claude Aura", "回到 Claude Aura"]) {
+    assert(studioApp.includes(`auraWindow: "${copy}"`), `Studio back-navigation copy is missing ${copy}`);
+  }
+  const documentFrameRule = studioCss.match(/html,\s*\nbody\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(documentFrameRule, /width:\s*100%/);
+  assert.match(documentFrameRule, /height:\s*100%/);
+  assert.match(documentFrameRule, /overflow:\s*hidden/,
+    "The Studio document must not create a blank outer scrollbar");
+  const studioShellRule = studioCss.match(/\.studio\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(studioShellRule, /min-width:\s*0/);
+  assert.match(studioShellRule, /min-height:\s*0/);
+  assert.match(studioShellRule, /overflow:\s*hidden/,
+    "The Studio shell must contain scrolling inside its intended region");
+  const studioContentRule = studioCss.match(/\.content\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(studioContentRule, /min-width:\s*0/);
+  assert.match(studioContentRule, /min-height:\s*0/);
+  assert.match(studioContentRule, /overflow:\s*auto/,
+    "Studio content must remain usable at its supported minimum size");
+  const studioRailRule = studioCss.match(/\.rail\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert(!/overflow(?:-x|-y)?:\s*(?:auto|scroll)/.test(studioRailRule),
+    "The Studio rail must not become a competing page scroller");
+  assert.match(studioCss, /\.rail-foot\s*\{[^}]*display:\s*grid[^}]*gap:\s*8px[^}]*\}/,
+    "The Aura and official Desktop actions must remain separately usable in the rail");
+  assert.match(ui, /\$script:StudioForm\.MinimumSize\s*=\s*\[Drawing\.Size\]::new\(760,\s*560\)/,
+    "Studio must retain its tested minimum window size");
   assert.match(studioApp, /syncHostThemes\(data\.themes\)/,
     "Studio must refresh its theme cards from validated host metadata after import");
   assert.match(studioApp, /source !== "builtin"[\s\S]{0,80}?source !== "user"/,
@@ -1415,13 +2033,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Touch gesture suppression must be scoped to the crop stage");
   assert.match(assetConverter, /const cardSelection = cardsOnly\s*\?[\s\S]{0,280}:\s*\{\};/,
     "Ordinary runtime-asset conversion must not depend on gitignored Studio reference images");
-  const selectorWithoutFlag = spawnSync(process.execPath, [
+  const unknownRuntimeTheme = spawnSync(process.execPath, [
     path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"),
-    "japanese-film-editorial",
+    "not-installed",
   ], { cwd: PROJECT_ROOT, encoding: "utf8" });
-  assert.notEqual(selectorWithoutFlag.status, 0,
-    "Selector-only theme IDs must not become silent no-ops in runtime-asset mode");
-  assert.match(`${selectorWithoutFlag.stdout}\n${selectorWithoutFlag.stderr}`, /use --card-previews/);
+  assert.notEqual(unknownRuntimeTheme.status, 0,
+    "Unknown runtime theme IDs must not become silent no-ops");
+  assert.match(`${unknownRuntimeTheme.stdout}\n${unknownRuntimeTheme.stderr}`, /Unknown theme/);
 
   const cardBodyRule = studioCss.match(/\.theme-card-body\s*\{([^}]*)\}/)?.[1] ?? "";
   assert.match(cardBodyRule, /display:\s*block/,
@@ -1505,6 +2123,58 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Double-clicking the tray icon must open Studio");
   assert.match(ui, /\$script:TrayIcon\.Dispose\(\)/,
     "The tray icon must be disposed when Claude Aura closes");
+  assert.match(ui, /\$AuraIconPath\s*=\s*Join-Path\s+\$Root\s+['"]assets\\brand\\claude-aura\.ico['"]/,
+    "Aura forms and notification area must load the owned application icon");
+  const iconFactoryStart = ui.indexOf("function New-AuraUiIcon");
+  const iconFactoryEnd = ui.indexOf("\nfunction ", iconFactoryStart + 1);
+  const iconFactory = ui.slice(iconFactoryStart, iconFactoryEnd);
+  assert.match(iconFactory, /\[IO\.File\]::Open\(\$AuraIconPath/);
+  assert.match(iconFactory, /\[Drawing\.Icon\]::new\(\$stream,\s*\$Size,\s*\$Size\)/);
+  assert.match(iconFactory, /return \[Drawing\.Icon\]\$source\.Clone\(\)/,
+    "Each consumer must own its cloned icon instance");
+  assert.match(iconFactory, /\$source\.Dispose\(\)[\s\S]*?\$stream\.Dispose\(\)/,
+    "Temporary icon resources must be disposed");
+  assert(!/Get-AuraClaudeInstall|ExtractAssociatedIcon|\.Executable/.test(iconFactory),
+    "Aura must not borrow the official Claude executable icon");
+  assert.match(ui, /\$script:MainIcon\s*=\s*New-AuraUiIcon -Size 64/);
+  assert.match(ui, /\$script:StudioIcon\s*=\s*New-AuraUiIcon -Size 64/);
+  assert.match(ui, /\$script:NotificationIcon\s*=\s*New-AuraUiIcon -Size 32/);
+  assert.match(ui, /\$script:Form\.Icon\s*=\s*\$script:MainIcon/);
+  assert.match(ui, /\$script:StudioForm\.Icon\s*=\s*\$script:StudioIcon/);
+  assert.match(ui, /\$script:TrayIcon\.Icon\s*=\s*\$script:NotificationIcon/);
+  assert.match(ui,
+    /foreach \(\$ownedIcon in @\(\$script:MainIcon, \$script:StudioIcon, \$script:NotificationIcon\)\)[\s\S]{0,220}?\$ownedIcon\.Dispose\(\)/,
+    "Every owned form and notification icon must be disposed");
+  assert(!/ExtractAssociatedIcon/.test(ui), "Aura must never extract an icon from the official Claude app");
+
+  const shortcutDefinitionsMatch = install.match(/\$shortcutDefinitions\s*=\s*@\(([\s\S]*?)\n\s*\)\s*\n\s*foreach \(\$folder/);
+  assert(shortcutDefinitionsMatch, "Installer shortcut definitions are missing");
+  const shortcutNames = [...shortcutDefinitionsMatch[1].matchAll(/Name\s*=\s*['"]([^'"]+\.lnk)['"]/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(shortcutNames, ["Claude Aura.lnk", "Claude Aura Studio.lnk"],
+    "Installer must create separate normal Aura and Studio shortcuts");
+  assert.match(shortcutDefinitionsMatch[1],
+    /Name\s*=\s*['"]Claude Aura Studio\.lnk['"][\s\S]{0,160}?Arguments\s*=\s*"\$baseArguments -OpenStudio"/,
+    "The Studio shortcut must use the dedicated -OpenStudio route");
+  assert.match(install, /foreach \(\$folder in @\(\$desktop, \$menuRoot\)\)/,
+    "Normal Aura and Studio shortcuts must be installed on Desktop and Start menu");
+  assert.match(install, /\$shortcut\.IconLocation\s*=\s*"\$iconPath,0"/,
+    "Aura-owned shortcuts must use the Aura icon");
+  assert(!/ExtractAssociatedIcon|IconLocation\s*=\s*[^\r\n]*(?:Claude\.exe|\$claude)/i.test(install),
+    "Installer shortcuts must not borrow the official Claude executable icon");
+  const uninstallShortcutBlock = uninstall.match(/foreach \(\$shortcut in @\(([\s\S]*?)\)\) \{/);
+  assert(uninstallShortcutBlock, "Uninstaller shortcut allowlist is missing");
+  const uninstalledShortcutNames = [...uninstallShortcutBlock[1].matchAll(/['"]([^'"]+\.lnk)['"]/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(uninstalledShortcutNames, [
+    "Claude Aura.lnk",
+    "Claude Aura Studio.lnk",
+    "Claude Aura.lnk",
+    "Claude Aura Studio.lnk",
+    "Uninstall Claude Aura.lnk",
+  ], "Uninstaller must remove exactly the owned Aura shortcuts");
+  assert.match(uninstall, /Remove-Item -LiteralPath \$shortcut -Force/,
+    "Uninstaller shortcut removal must stay literal and scoped");
   for (const copyKey of ["openStudio", "originalLook", "applyTheme", "openDesktopApp", "exitApp"]) {
     assert(ui.includes(`UiCopy.${copyKey}`), `Tray action ${copyKey} must use localized UI copy`);
   }
@@ -1841,76 +2511,62 @@ test("Windows window clamp fits a synthetic 1280x720 working area", async () => 
   }
 });
 
-test("preview data and QA harness cover every theme and major interaction family", async () => {
-  run(process.execPath, ["scripts/build-preview.mjs"]);
-  const generated = await fs.readFile(path.join(PROJECT_ROOT, "preview", "generated-themes.js"), "utf8");
-  const html = await fs.readFile(path.join(PROJECT_ROOT, "preview", "index.html"), "utf8");
-  const css = await fs.readFile(path.join(PROJECT_ROOT, "preview", "styles.css"), "utf8");
-  const script = await fs.readFile(path.join(PROJECT_ROOT, "preview", "app.js"), "utf8");
-  const server = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "preview-server.mjs"), "utf8");
-  for (const id of THEME_IDS) assert(generated.includes(`\"${id}\"`), `Preview is missing ${id}`);
+test("Studio-generated metadata preserves every theme descriptor", async () => {
+  run(process.execPath, ["scripts/build-studio-themes.mjs"]);
+  const generated = await fs.readFile(path.join(PROJECT_ROOT, "studio", "generated-themes.js"), "utf8");
+  for (const id of THEME_IDS) assert(generated.includes(`\"${id}\"`), `Studio metadata is missing ${id}`);
   const generatedMatch = generated.match(/window\.CLAUDE_AURA_THEMES\s*=\s*([\s\S]+);\s*$/);
-  assert(generatedMatch, "Preview theme metadata could not be parsed");
-  const previewThemes = JSON.parse(generatedMatch[1]);
+  assert(generatedMatch, "Studio theme metadata could not be parsed");
+  const studioThemes = JSON.parse(generatedMatch[1]);
   for (const theme of await listThemes()) {
+    const expectedArtwork = theme.artwork
+      ? (({ path: artworkPath, position, size, mobile }) => ({ path: artworkPath, position, size, mobile }))(theme.artwork)
+      : null;
     const expectedLayers = theme.artworkLayers?.length
-      ? theme.artworkLayers.map(({ path: artworkPath, position, size, mobile, opacity, mask }) => ({
+      ? theme.artworkLayers.map(({ path: artworkPath, position, size, mobile, opacity, mask, role, appearance, contextOverrides }) => ({
         path: artworkPath,
         position,
         size,
         mobile,
         opacity,
         mask,
+        role,
+        appearance,
+        contextOverrides,
       }))
       : null;
-    assert.deepEqual(previewThemes[theme.name].artworkLayers, expectedLayers,
-      `${theme.name} preview metadata lost its layered artwork descriptors`);
-    if (expectedLayers) assert.equal(previewThemes[theme.name].artwork, null);
+    const expectedMode = (mode) => ({
+      semantic: { ...mode.semantic },
+      compat: Object.fromEntries(Object.entries(mode.tokens).filter(([name]) => !name.startsWith("--aura-"))),
+      tokens: { ...mode.tokens },
+      wallpaper: { ...mode.wallpaper },
+    });
+    assert.deepEqual(studioThemes[theme.name], {
+      name: theme.name,
+      variant: theme.variant,
+      label: theme.label,
+      description: theme.description,
+      labels: { ...theme.labels },
+      descriptions: { ...theme.descriptions },
+      swatches: [...theme.swatches],
+      preview: { ...theme.preview },
+      studioPreview: theme.studioPreview,
+      newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,
+      artwork: expectedArtwork,
+      artworkLayers: expectedLayers,
+      radius: theme.radius,
+      blur: theme.blur,
+      typography: { ...theme.typography },
+      shape: { ...theme.shape },
+      effects: { ...theme.effects },
+      light: expectedMode(theme.light),
+      dark: expectedMode(theme.dark),
+    }, `${theme.name} Studio metadata differs from the validated registry theme`);
   }
-  assert.match(html, /aria-label/i);
-  assert.match(html, /id="theme-art-layers"/);
-  assert.match(html, /data-screen="home"|id="home-screen"/i);
-  assert.match(html, /data-screen="code"|id="code-screen"/i);
-  assert.match(html, /Cowork/);
-  assert.match(html, /microphone|voice/i);
-  assert.match(html, /data-empty-state/);
-  assert.match(html, /role="tooltip"/);
-  assert.match(html, /data-status="success"/);
-  assert.match(html, /data-status="warning"/);
-  assert.match(html, /data-status="loading"/);
-  assert.match(html, /id="qa-state"/);
-  assert.match(html, /data-preview-ready="false"/);
-  assert.match(html, /data-preview-screen="home"/);
-  assert.match(html, /data-preview-overlay="none"/);
-  assert.match(css, /:focus-visible/);
-  assert.match(css, /:active/);
-  assert.match(css, /prefers-reduced-motion/);
-  assert.match(css, /prefers-contrast/);
-  assert.match(css, /forced-colors/);
-  assert.match(css, /\.theme-art-layer\[data-art-mask="none"\]/);
-  assert.match(css, /\.theme-art-layer\[data-art-mobile="reduce"\]/);
-  assert.match(css, /data-preview-capture="true"/);
-  assert.match(script, /localStorage/);
-  assert.match(script, /new URLSearchParams\(window\.location\.search\)/);
-  assert(script.includes('query.get("capture")'), "Preview URL state omits capture mode");
-  for (const parameter of ["theme", "mode", "screen", "overlay"]) {
-    assert(script.includes(`readQueryValue("${parameter}"`), `Preview URL state omits validated ${parameter}`);
-  }
-  assert.match(script, /previewReady/);
-  assert.match(script, /previewError/);
-  assert.match(script, /document\.fonts\?\.ready/);
-  assert.match(script, /\.decode\(\)/);
-  assert.match(script, /failed to decode/);
-  assert.match(script, /Array\.isArray\(theme\.artworkLayers\)/);
-  assert.match(script, /element\.dataset\.artMask/);
-  assert.match(script, /requestAnimationFrame/);
-  assert.match(script, /claude-aura-preview-ready/);
-  assert.match(script, /__CLAUDE_AURA_PREVIEW__/);
-  assert.match(script, /whenReady/);
-  assert.match(script, /claudeAuraTheme/);
-  assert.match(server, /requestedPath\.endsWith\("\/"\)/);
-  assert.match(server, /publicRoots\.some/);
-  assert.match(server, /isIP\(host\)/);
+  const packageJson = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "package.json"), "utf8"));
+  assert.equal(packageJson.scripts["studio:build"], "node scripts/build-studio-themes.mjs");
+  assert.equal(packageJson.scripts["preview:build"], undefined);
+  assert.equal(packageJson.scripts["preview:serve"], undefined);
 });
 
 test("release and installers exclude unsafe composite references and binary patching", async () => {
@@ -1920,13 +2576,74 @@ test("release and installers exclude unsafe composite references and binary patc
   const releaseBuilder = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "build-release.mjs"), "utf8");
   assert.match(releaseBuilder, /RELEASE_ROOT_FILES/);
   assert.match(releaseBuilder, /RELEASE_DIRECTORIES/);
+  assert.match(releaseBuilder, /RETIRED_RELEASE_FILES/);
+  assert.match(releaseBuilder, /RETIRED_RELEASE_DIRECTORIES/);
+  assert.match(releaseBuilder, /REQUIRED_RELEASE_FILES/);
   assert.match(releaseBuilder, /\["studio",\s*new Set\(\["\.css",\s*"\.html",\s*"\.js"\]\)\]/,
     "The release allowlist must include Aura Studio");
   assert.match(releaseBuilder, /\.corrupt-/);
-  for (const extension of [".avif", ".png", ".svg", ".webp"]) {
+  for (const extension of [".avif", ".ico", ".png", ".svg", ".webp"]) {
     assert(releaseBuilder.includes(`"${extension}"`), `Release allowlist omits supported artwork type ${extension}`);
   }
-  assert.match(releaseBuilder, /docs\/preview\.png/);
+  assert.match(releaseBuilder, /import \{ buildAuraIcon \} from "\.\/build-aura-icon\.mjs";/,
+    "Release builds must use the deterministic Aura icon builder");
+  const releaseIconBuildIndex = releaseBuilder.indexOf("await buildAuraIcon()");
+  const releaseCollectIndex = releaseBuilder.indexOf("await collect(PROJECT_ROOT)");
+  assert(releaseIconBuildIndex >= 0 && releaseCollectIndex > releaseIconBuildIndex,
+    "Release builds must refresh the derived ICO before collecting files");
+  const windowsInstall = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
+  const macInstall = await fs.readFile(path.join(PROJECT_ROOT, "macos", "install.sh"), "utf8");
+  const windowsCopyList = windowsInstall.match(/foreach \(\$directory in @\(([^)]*)\)/)?.[1] ?? "";
+  const macCopyList = macInstall.match(/for directory in ([^;]+); do/)?.[1] ?? "";
+  assert(!/['"](?:preview|themes)['"]/.test(windowsCopyList),
+    "Windows install copy list retained an offline or source-kit directory");
+  assert(!/\b(?:preview|themes)\b/.test(macCopyList),
+    "macOS install copy list retained an offline or source-kit directory");
+  for (const themeName of ["registry.json", "japanese-idol.json", "korean-idol.json", "sakura.json"]) {
+    assert(windowsInstall.includes(`'${themeName}'`) && macInstall.includes(themeName),
+      `Installers do not explicitly copy top-level descriptor ${themeName}`);
+  }
+  assert(windowsInstall.includes("Get-ChildItem -LiteralPath $installedThemes -Force"),
+    "Windows installer does not prune stale theme-kit directories");
+  assert(macInstall.includes('for theme_entry in "$INSTALL_ROOT"/themes/*'),
+    "macOS installer does not prune stale theme-kit directories");
+  for (const obsoleteName of [
+    "build-preview.mjs",
+    "preview-server.mjs",
+    "card-analyze.svg",
+    "theme-screenshots",
+  ]) {
+    assert(windowsInstall.includes(obsoleteName) && macInstall.includes(obsoleteName),
+      `Installers do not remove stale ${obsoleteName}`);
+  }
+  for (const [windowsPath, macPath] of [
+    ["scripts\\qa-board.mjs", "scripts/qa-board.mjs"],
+    ["docs\\golden", "docs/golden"],
+    ["tests\\fixtures", "tests/fixtures"],
+    ["dist\\qa", "dist/qa"],
+  ]) {
+    assert(windowsInstall.includes(windowsPath) && macInstall.includes(macPath),
+      `Installers do not remove stale fixture surface ${macPath}`);
+  }
+  for (const preservedName of ["live-aura", "live-content-audit", "wo17-icon", "-live-content"]) {
+    assert(windowsInstall.includes(preservedName) && macInstall.includes(preservedName),
+      `Installer fixture cleanup does not preserve live evidence marker ${preservedName}`);
+  }
+  for (const obsoleteName of ["background.webp", "constellation.webp"]) {
+    assert(windowsInstall.includes(`assets\\theme-art\\korean-idol\\${obsoleteName}`)
+      && macInstall.includes(`assets/theme-art/korean-idol/${obsoleteName}`),
+    `Installers do not remove stale Korean Idol ${obsoleteName}`);
+  }
+  assert(windowsInstall.includes("Test-Path -LiteralPath (Join-Path $SourceRoot '.git')")
+    && windowsInstall.includes("validate --theme $themeId"),
+  "Windows release installs must use shipped-content validation instead of repository-only tests");
+  assert(macInstall.includes('[ -e "$ROOT/.git" ]')
+    && macInstall.includes('validate --theme "$theme_id"'),
+  "macOS release installs must use shipped-content validation instead of repository-only tests");
+  assert(windowsInstall.includes("StartsWith($installRootFull + '\\',"),
+    "Windows stale-surface cleanup must remain below the verified install root");
+  assert.match(macInstall, /"\$INSTALL_ROOT"\/\*\)/,
+    "macOS stale-surface cleanup must remain below the verified install root");
   const privateName = `private-release-state-${process.pid}-${Date.now()}.json`;
   const privatePath = path.join(PROJECT_ROOT, privateName);
   try {
@@ -1934,9 +2651,28 @@ test("release and installers exclude unsafe composite references and binary patc
     const release = JSON.parse(run(process.execPath, ["scripts/build-release.mjs"]));
     const names = zipEntryNames(await fs.readFile(release.outputPath));
     assert(names.includes("claude-aura/package.json"), "Release allowlist omitted package.json");
+    for (const identityFile of [
+      "assets/brand/aura-mark.svg",
+      "assets/brand/claude-aura.ico",
+      "scripts/build-aura-icon.mjs",
+    ]) {
+      assert(names.includes(`claude-aura/${identityFile}`), `Release omitted Aura identity file ${identityFile}`);
+    }
+    assert(names.includes("claude-aura/scripts/asset-audit.mjs"),
+      "Release omitted the non-image asset audit");
     for (const studioFile of ["app.js", "generated-themes.js", "index.html", "styles.css"]) {
       assert(names.includes(`claude-aura/studio/${studioFile}`), `Release omitted Studio ${studioFile}`);
     }
+    assert(!names.some((name) => name.startsWith("claude-aura/preview/")),
+      "Release included the removed offline preview surface");
+    assert(!names.some((name) => /^claude-aura\/docs\/.*\.(?:avif|jpe?g|png|webp)$/i.test(name)),
+      "Release included obsolete documentation screenshots");
+    assert(!names.includes("claude-aura/scripts/qa-board.mjs"),
+      "Release included the retired fixture-board generator");
+    assert(!names.some((name) => name.startsWith("claude-aura/docs/golden/")
+      || name.startsWith("claude-aura/docs/theme-screenshots/")
+      || name.startsWith("claude-aura/tests/fixtures/")),
+    "Release included a retired fixture or screenshot surface");
     for (const themeId of THEME_IDS.filter((id) => id !== "default")) {
       assert(names.includes(`claude-aura/assets/theme-art/${themeId}/card-preview.webp`),
         `Release omitted ${themeId} Studio selector preview`);
@@ -1944,7 +2680,7 @@ test("release and installers exclude unsafe composite references and binary patc
     assert(!names.includes(`claude-aura/${privateName}`), "Release included an unlisted local file");
     assert(!names.some((name) => name.startsWith("claude-aura/.agents/") || name.startsWith("claude-aura/.codex/")),
       "Release included local agent metadata");
-    assert(!names.some((name) => name.includes("theme_demo_previews") || name === "claude-aura/docs/preview.png"),
+    assert(!names.some((name) => name.includes("theme_demo_previews")),
       "Release included an unsafe reference composite");
     assert(!names.some((name) => /^claude-aura\/themes\/[^/]+\//.test(name)),
       "Release included files from a per-theme source kit directory");

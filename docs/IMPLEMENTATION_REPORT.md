@@ -2,7 +2,7 @@
 
 ## 0.3.x follow-up fixes
 
-Four changes landed after the initial eight-theme system:
+Five changes landed after the initial eight-theme system:
 
 1. **First-sign-in blank screen (fixed).** The WebView loading cover only hid when
    the async theme-injection script confirmed `"installed":true`. The first
@@ -25,84 +25,97 @@ Four changes landed after the initial eight-theme system:
    renderer maintains only namespaced selected/effective-mode attributes for
    token fallback. It never mutates Claude mode classes, attributes, storage, or
    account settings, and Original look restores the profile to Auto.
+5. **Appearance-authored production artwork.** Themes no longer rely on a
+   blanket darkening pass for pale artwork. Japanese Film Editorial, Cartoon
+   Studio, Study Library, Japanese Idol, Korean Idol, and Korean Prestige select
+   dedicated dark production layers where needed. Anime Twilight intentionally
+   reuses its intrinsically dark cityscape, and Default remains artwork-free.
 
-## Kawaii idol preview showcase
+## Japanese Idol runtime artwork
 
-The `themes/japanese-idol/` production asset kit (supplied, gitignored source of
-truth) is integrated into the japanese-idol theme's offline preview as a deeply
-art-directed skin: derived, isolated runtime assets under
-`assets/theme-art/kawaii-idol/` (kawaii logo, hero portrait, sakura clusters,
-sparkles, signature, "keep shining" sticker, and per-card illustrations) are
-composed as inert, pointer-safe, independently positioned decorative layers over
-the live HTML/CSS components. The treatment is scoped to
-`[data-claude-aura-theme="japanese-idol"]`, is token-driven so it reads correctly
-in light and dark modes, and leaves the other seven themes unchanged.
+The `themes/japanese-idol/` production asset kit is the supplied, gitignored
+source of truth. Its shippable derivatives under
+`assets/theme-art/kawaii-idol/` are the light background and portrait plus
+independently authored dark new-chat and conversation scenes. The two dark
+scenes use consistent night lighting but different subject framing: higher and
+farther right for new chat, lower and smaller for conversation. The renderer
+selects only the appearance/context-matched layers as inert, pointer-safe
+decoration scoped to `[data-claude-aura-theme="japanese-idol"]`. In light
+appearance the isolated portrait is new-chat-only; conversation pages keep the
+floral atmosphere without placing a faint face behind Claude content.
 
-The runtime claude.ai skin now ships the same real artwork through a layered
-artwork system: a theme may declare up to four `artworkLayers` (optimized WebP or
-SVG), each embedded as a data URL only when that theme is active and rendered as
-inert, pointer-safe backdrop divs with per-layer position, size, opacity,
-mobile behavior, and an optional right-anchored edge-fade mask. Japanese Idol
-uses four layers — the sakura watercolor background, the hero portrait, and the
-  two sakura corner clusters — derived from the supplied kit via
-  `scripts/convert-theme-assets.mjs`. Budgets are enforced by tests: chrome
-payload under 65 KB, embedded artwork under 1.4 MB (Japanese Idol totals about
-579 KB). The exact compiled payload was rendered in a standalone harness to
-confirm the layers paint correctly through the production injection path.
+The runtime claude.ai skin ships real artwork through a layered artwork system:
+a theme may declare up to four `artworkLayers` (optimized WebP or SVG), each
+embedded as a data URL only when that theme is active and rendered as an inert,
+pointer-safe backdrop with per-layer position, size, opacity, mobile behavior,
+appearance, semantic context, and an optional edge-fade mask. Japanese Idol
+uses four registered files but displays at most its two light layers or one
+context-specific dark scene. Budgets are enforced by tests: chrome payload
+under 65 KB and embedded artwork under 1.4 MB. `npm run verify:cycle` compiles
+and syntax-checks the exact payload for all eight themes in Light and Dark
+without rendering or writing images. Visual approval requires the real Aura
+WebView2 window on live `claude.ai`.
 
 ## Cartoon Studio approved artwork
 
-WO-10 replaces the procedural Cartoon Studio stand-in with two approved inert
-WebP layers: a 1600 x 900 cream paper/doodle background and an original 835 x
-1032 transparent mascot. Three approved tool doodles remain source-only because
+WO-10 replaced the procedural Cartoon Studio stand-in with an approved 1600 x
+900 cream paper/doodle background and an original 835 x 1032 transparent
+mascot. WO-17 adds an independently authored 1600 x 900 deep teal-charcoal
+background selected only in Dark appearance; the mascot is safely reused in
+both modes on new chat and hidden on conversation pages. Three approved tool
+doodles remain source-only because
 the changing live Claude DOM does not provide stable card-art anchors. The
-generated source kit, hashes, provenance, and 2160 x 4600 QA board live under
-the gitignored `themes/cartoon-studio/`; the two shippable derivatives live
-under `assets/theme-art/cartoon-studio/`. Their exact light/dark payload renders
-are locked in `docs/golden/REFERENCE_LOCK.md` after the user-approved WO-10
-mini-checkpoint.
+generated source kit, hashes, and provenance live under the gitignored
+`themes/cartoon-studio/`; the three shippable derivatives live under
+`assets/theme-art/cartoon-studio/`. `theme-cli qa cartoon-studio` records a
+status-only asset and payload audit. The 2026-07-21 WO-17 actual-Aura matrix
+records both Light and Dark on live `claude.ai`; the separate approximately
+1280 × 720 stress review remains ordered under Checkpoint C/WO-16.
 
 The required whole-window Aura capture could not target the PowerShell-hosted
 window through the available first-party bridge; the two exhausted attempts are
 recorded under WO-09 in `docs/plans/BLOCKED.md`. On 2026-07-20 the user
-authorized WO-10 completion with its real-Aura light/dark and 1280 x 720 stress
-evidence deferred to HUMAN CHECKPOINT C/WO-16. This exception does not relabel
-fixture or QA images as live evidence.
+authorized WO-10 completion with its real-Aura Light/Dark and 1280 x 720 stress
+evidence deferred to HUMAN CHECKPOINT C/WO-16. Fixture and QA images have since
+been deleted and cannot be regenerated as a substitute.
 
 ## Anime Twilight approved artwork
 
 WO-11 replaces the procedural Anime Twilight stand-in with one approved inert
 1600 x 900 WebP background: a painterly indigo/violet cityscape with pale-cyan
 atmosphere and restrained warm window light. The generated source kit, exact
-prompt, checksum freeze, provenance, and 2160 x 3060 QA board live under the
-gitignored `themes/anime-twilight/`; the shippable derivative lives at
-`assets/theme-art/anime-twilight/background.webp`. Its exact light/dark payload
-renders are locked in `docs/golden/REFERENCE_LOCK.md` after the user-approved
-WO-11 mini-checkpoint.
+prompt, checksum freeze, and provenance live under the gitignored
+`themes/anime-twilight/`; the shippable derivative lives at
+`assets/theme-art/anime-twilight/background.webp`. `theme-cli qa
+anime-twilight` records a status-only asset and Light/Dark payload audit.
 
-The actual Aura light/dark and 1920 x 1080 dark stress captures remain blocked
-by the WO-09 whole-window limitation and are deferred to HUMAN CHECKPOINT C and
-WO-16. A separate two-attempt failure for the supplemental deterministic stress
-capture is recorded under WO-11 in `docs/plans/BLOCKED.md`; no fixture image is
-represented as live evidence.
+The 2026-07-21 WO-17 actual-Aura matrix records Anime Twilight Light and Dark
+on live `claude.ai`. The dedicated maximized 1920 × 1080 Dark stress case
+remains ordered under HUMAN CHECKPOINT C/WO-16. A separate two-attempt failure
+for the retired supplemental offline capture is preserved as history under
+WO-11 in `docs/plans/BLOCKED.md`; that method is no longer part of the
+verification or acceptance path.
 
 ## Study Library approved artwork
 
-WO-12 replaces the procedural Study Library SVG with two approved inert WebP
-layers: a 1600 x 900 ivory paper-fiber background and a 640 x 527 transparent
-desk/library still life. The renderer measures the live main-canvas edge so the
-`left bottom` vignette anchor is not hidden beneath Claude's sidebar. The Studio
-selector card is deterministically composed from both selected masters. Source
-masters, prompts, provenance, checksums, and the 2160 x 4600 QA board remain in
-the gitignored `themes/study-library/`; the shippable derivatives live under
-`assets/theme-art/study-library/`.
+WO-12 replaced the procedural Study Library SVG with a 1600 x 900 ivory
+paper-fiber background and a 640 x 527 transparent desk/library still life.
+WO-17 adds an independently authored 1600 x 900 deep forest-charcoal archival
+paper background selected only in Dark appearance; the still life is safely
+reused. The renderer measures the live main-canvas edge so only the `left
+bottom` vignette—not either full-bleed background—is offset around Claude's
+sidebar. The Studio selector card is deterministically composed from the light
+masters. Source masters, prompts, provenance, and checksums remain in the
+gitignored `themes/study-library/`; the shippable derivatives live under
+`assets/theme-art/study-library/`. `theme-cli qa study-library` records a
+status-only asset and Light/Dark payload audit.
 
-The replacement light/dark deterministic renders are locked in
-`docs/golden/REFERENCE_LOCK.md`. Separate user-supplied whole-window captures at
+WO-17's 2026-07-21 live matrix records the dedicated Dark artwork in the actual
+Aura window. Separate earlier user-supplied whole-window captures at
 `dist/verify/live-aura/06-study-library-{light,dark}-aura-window.png` show the
 actual Aura WebView2 on live `claude.ai`, decoded art, clear controls, and
-legible light/dark materials. The user approved that mini-checkpoint on
-2026-07-20; these live captures are review evidence, not automated goldens.
+legible Light/Dark materials. The user approved that mini-checkpoint on
+2026-07-20; these live captures are the visual review evidence.
 
 ## Scope
 
@@ -118,16 +131,16 @@ real Claude interface with screenshots.
 | Order | Stable ID | Display name | Artwork |
 | ---: | --- | --- | --- |
 | 1 | `default` | Default | None |
-| 2 | `japanese-film-editorial` | Japanese Film Editorial | `assets/theme-art/japanese-film-editorial.svg` |
-| 3 | `korean-prestige` | Korean Prestige | `assets/theme-art/korean-prestige.svg` |
-| 4 | `cartoon-studio` | Cartoon Studio | Two layered `assets/theme-art/cartoon-studio/*.webp` assets (background and original mascot) |
+| 2 | `japanese-film-editorial` | Japanese Film Editorial | Appearance-specific light/dark backgrounds and matched portraits under `assets/theme-art/japanese-film-editorial/` |
+| 3 | `korean-prestige` | Korean Prestige | Pearl-day/midnight architectural backgrounds plus matched clean-alpha portraits |
+| 4 | `cartoon-studio` | Cartoon Studio | Appearance-specific light/dark backgrounds plus shared original mascot |
 | 5 | `anime-twilight` | Anime Twilight | One layered `assets/theme-art/anime-twilight/background.webp` cityscape |
-| 6 | `study-library` | Study Library | Two layered `assets/theme-art/study-library/*.webp` assets (paper background and bottom-left still life) |
-| 7 | `japanese-idol` | Japanese Idol | Four layered `assets/theme-art/kawaii-idol/*.webp` assets (background, hero, two sakura clusters) |
-| 8 | `korean-idol` | Korean Idol | Three layered `assets/theme-art/korean-idol/*.webp` assets (background, constellation, hero) |
+| 6 | `study-library` | Study Library | Appearance-specific light/dark paper backgrounds plus shared bottom-left still life |
+| 7 | `japanese-idol` | Japanese Idol | Light background/portrait plus mutually exclusive dark new-chat/conversation scenes |
+| 8 | `korean-idol` | Korean Idol | Four `assets/theme-art/korean-idol/*.webp` assets: light scene, hero, dark new-chat scene, and dark conversation scene |
 
 The order is defined once in `themes/registry.json` and reused by command-line,
-Windows picker, validation, and preview consumers.
+Aura Studio, and validation consumers.
 
 ## Data and rendering flow
 
@@ -161,11 +174,10 @@ surface by responsibility.
 | Registry and themes | `themes/registry.json`, the eight canonical theme JSON files, and compatibility files `themes/midnight.json`, `themes/ember.json`, `themes/forest.json`, and `themes/sakura.json` | Canonical IDs, localized metadata, semantic light/dark roles, typography, shape, effects, wallpaper recipes, and legacy migration |
 | Shared renderer styling | `assets/base.css`, `assets/theme-variants.css`, `assets/renderer-inject.js` | Semantic production coverage, centralized component variants, root attributes, artwork layers, cleanup, and accessibility preferences |
 | Runtime artwork and Studio selectors | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers plus seven small local, user-framable theme-card thumbnails and provenance |
-| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/build-preview.mjs`, `scripts/preview-server.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, preview generation/server, and release collection |
+| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork auditing, Studio metadata generation, and release collection |
 | Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | DPI-aware localized native gallery plus Aura Studio, live application, adjustable card/background framing, accessibility, best-effort DWM title-bar palette, allowlisted install, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
-| Offline QA | `preview/index.html`, `preview/styles.css`, `preview/app.js`, `preview/generated-themes.js` | Eight-theme Home/Code harness with representative controls and states |
-| Verification | `tests/run-tests.mjs`, `package.json`, `config.example.json` | Sixteen end-to-end/static checks, build commands, and Default baseline |
+| Verification | `tests/run-tests.mjs`, `scripts/verify-cycle.mjs`, `scripts/asset-audit.mjs`, `package.json`, `config.example.json` | Twenty end-to-end/static checks, payload-only Light/Dark compilation for all eight themes, status-only artwork audits, build commands, and Default baseline |
 | Documentation and policy | `README.md`, `CONTRIBUTING.md`, `docs/THEMING.md`, `docs/TROUBLESHOOTING.md`, `docs/FILE_MANIFEST.md`, `docs/SCREENSHOT_PLAN.md`, `docs/ACCEPTANCE_AUDIT.md`, this report, `SECURITY.md`, `NOTICE.md`, `THIRD_PARTY_NOTICES.md`, `.gitignore` | Use, maintenance, troubleshooting, exhaustive file inventory, repeatable capture, acceptance evidence, licensing, exclusions, and deliverables |
 
 The earlier legacy theme JSON files remain for compatibility but are not exposed
@@ -196,14 +208,8 @@ holographic geometry without duplicating application markup.
 
 ## Picker and localization
 
-The Windows toolbar opens one modeless **Customize themes** gallery. Each native
-radio option includes a display name, short description, color swatches,
-miniature interface preview, and visible selected state. The gallery supports
-keyboard focus, Tab navigation, scrolling, Escape-to-close, high contrast, and
-DPI-scaled layout.
-
-Aura Studio provides the replacement path approved at HUMAN CHECKPOINT B on
-2026-07-19.
+Aura Studio is the supported customization path approved at HUMAN CHECKPOINT B
+on 2026-07-19.
 Its eight cards use live localized labels and art-led 3:2 previews with one
 selection/focus treatment. The selected theme exposes an **Adjust card preview**
 action, while a chosen custom background exposes **Adjust framing**. Both open
@@ -216,8 +222,8 @@ On supported Windows versions, Aura also makes best-effort Desktop Window
 Manager calls for the dark-caption preference and the caption, caption-text,
 and border colors of the main and gallery windows. Unsupported attributes,
 system policy, and platform-controlled chrome are allowed to win; API exceptions
-are logged, and unsuccessful requests do not prevent the toolbar, gallery,
-WebView, or theme selection from working.
+are logged, and unsuccessful requests do not prevent Studio, the WebView, or
+theme selection from working.
 
 Theme metadata and Windows picker chrome, status, error, and accessibility copy
 support `en`, `zh-CN`, and `zh-TW`. Windows passes the current UI culture to the
@@ -229,14 +235,6 @@ maps `zh-CN`, `zh-SG`, and
 `zh-Hans` tags to `zh-CN`; it maps `zh-TW`, `zh-HK`, `zh-MO`, and `zh-Hant`
 tags to `zh-TW`. Other tags fall back to English. Theme CSS and artwork contain
 no localized functional copy.
-
-The offline preview builds its gallery from the same `listThemes()` data. It is
-an illustrative QA harness with Home and Code views and representative control,
-status, menu, dialog, and composer states. Its browser-local selection is
-separate from the installed application's configuration. A strict capture URL
-contract selects theme, mode, screen, and overlay without mutating saved preview
-state; capture mode freezes transient pixels and exposes a visible state plate
-plus a ready marker only after artwork decode, font readiness, and layout frames.
 
 ## Persistence and compatibility
 
@@ -262,17 +260,21 @@ the unreadable source as a uniquely named `.corrupt-…json` diagnostic backup.
 
 ## Artwork and licensing
 
-Two themes use self-contained project SVG renderer art. Cartoon Studio uses
-two project-generated, user-approved WebP layers with frozen source masters
-under `themes/cartoon-studio/`, and Anime Twilight uses one project-generated,
-user-approved WebP background with its frozen source master under
-`themes/anime-twilight/`. Study Library uses two project-generated,
-user-approved WebP layers with frozen source masters under
-`themes/study-library/`. Japanese Idol uses derived, isolated WebP/SVG copies
-from the supplied kit under
-`themes/japanese-idol/`, and Korean Idol uses three derived WebP layers from the
-kit currently supplied under `themes/korean-prestige/`; both source directories
-remain gitignored. Runtime artwork is separate from the functional interface,
+Korean Prestige uses appearance-specific architectural WebP backgrounds and
+matched clean-alpha portrait twins. Japanese Film Editorial uses appearance-
+specific WebP backgrounds and matched transparent portraits. Their hero WebPs
+carry real alpha and are new-chat-only; a regression assertion rejects baked
+checkerboard or matte exports. Cartoon Studio
+uses appearance-specific project-generated backgrounds plus one shared mascot
+with frozen source masters under `themes/cartoon-studio/`, and Anime Twilight
+uses one project-generated, user-approved WebP background with its frozen source
+master under `themes/anime-twilight/`. Study Library uses appearance-specific
+paper backgrounds plus one shared still life with frozen source masters under
+`themes/study-library/`. Japanese Idol uses four derived WebP copies from the supplied kit under
+`themes/japanese-idol/`, and Korean Idol uses four derived WebP layers from the
+kit supplied under `themes/korean-idol/`: `light-scene`, `hero`,
+`dark-new-chat`, and `dark-conversation`. Both source directories remain
+gitignored. Runtime artwork is separate from the functional interface,
 contains no embedded controls or UI text, and is non-focusable, hidden from
 assistive technology, and pointer-inert. Default uses no renderer artwork.
 
@@ -283,10 +285,10 @@ occur only in these decorative selector thumbnails, next to live labels; full
 interface composites are never injected into Claude as renderer art.
 
 The raw `theme_demo_previews` composites remain art-direction sources only. The
-runtime compiler and offline preview builder never read or embed them, and the
-release builder skips the directory entirely. `convert-theme-assets.mjs` may
-derive small text-free Studio selector crops into `assets/theme-art/<id>/`; only
-those compressed derivatives are served by the local `aura.assets` virtual host.
+runtime compiler never reads or embeds them, and the release builder skips the
+directory entirely. `convert-theme-assets.mjs` may derive small text-free
+Studio selector crops into `assets/theme-art/<id>/`; only those compressed
+derivatives are served by the local `aura.assets` virtual host.
 
 User-selected background images remain local decorative inputs and are
 validated for supported extension, matching content signature, and size before
@@ -298,7 +300,7 @@ compiled into the renderer's exact cover geometry. For editing, the host copies
 the selected bytes into a marker-owned, content-addressed cache exposed only as
 the isolated `aura.background` virtual host; neither the source path nor an
 arbitrary page-supplied path crosses the bridge. Replacing an image with different
-bytes at the same size and timestamp produces a new preview URL, and junction
+bytes at the same size and timestamp produces a new Studio image URL, and junction
 aliases cannot turn cache cleanup into source deletion. The open source stream is
 also checked again against the 16 MB limit before hashing or copying, so replacing
 a selected file with an oversized one cannot bypass the original image guard.
@@ -311,13 +313,17 @@ user explicitly saves a supported framing value.
 Only the selected theme's optional artwork is read and embedded in a renderer
 payload. SVG artwork stays below the 100 KB ceiling and raster layers below
 400 KB each; the chrome portion of every payload stays under 65 KB and total
-embedded artwork under 1.4 MB (Japanese Idol's four layers total about 579 KB
-encoded). Warm local eight-theme compilation on 2026-07-16 had a
+embedded artwork under 1.4 MB (Japanese Idol is currently the largest at about
+653 KB encoded across its four registered layers). Warm local eight-theme compilation on 2026-07-16 had a
 median near 1–2 ms. A full native save, atomic configuration write, and payload-return
 audit measured about 52 ms median and below 60 ms maximum across the eight
 themes. The automated suite enforces a strict 65,000-byte budget for all 24
-locale/theme combinations without a user image and asserts exactly zero artwork
-data URLs for Default or one for the selected decorated theme.
+locale/theme combinations without a user image and asserts zero artwork data
+URLs for Default or the validated registered-layer count for a decorated theme.
+The 2026-07-21 explicit 48-case locale/theme/Light-Dark audit measured a
+64,700-byte maximum payload-minus-art value (`zh-CN`, Korean Idol, Light) and a
+653,140-byte maximum embedded-art value (Japanese Idol), below the 65,000-byte
+and 1,400,000-byte limits.
 
 Decorative layers are fixed and pointer-inert, so they do not participate in
 document layout. Responsive rules reduce or remove them at narrower widths;
@@ -345,37 +351,40 @@ The repository provides these repeatable checks:
 
 ```powershell
 npm run themes
-npm run preview:build
+npm run studio:build
 npm test
 npm run check
+npm run verify:cycle
 ```
 
 The automated suite covers the eight-theme registry, semantic completeness,
 contrast guardrails, locale metadata, fallback and persistence behavior,
 payload/root-attribute behavior, isolated artwork policy, script parsing,
 Windows picker metadata, Studio bridge/framing validation and cache regressions,
-preview coverage, and release exclusions.
+payload compilation in both appearance modes, the prohibition on fixture-image
+generation, and release exclusions. `theme-cli qa <id>` writes only a JSON
+asset/payload status record; it does not create a UI board or screenshot.
 
-Results recorded through 2026-07-20:
+Results recorded through 2026-07-21:
 
 | Check | Result |
 | --- | --- |
-| `npm test` | Passed, 19/19 |
-| `npm run check` | Passed; JavaScript and platform parsing plus the 19-test suite |
-| `npm run verify:cycle` | Passed, 33/33; all sixteen 1440 x 900 light/dark theme renders under `dist/verify/` were opened and inspected for readability, clipping, artwork layering, and blank output |
+| `npm test` | Passed, 20/20 |
+| `npm run check` | Passed; JavaScript and platform parsing plus the 20-test suite |
+| `npm run verify:cycle` | Payload-only verifier: runs the test suite, then compiles and syntax-checks all eight themes in Light and Dark (17 gates); it launches no browser and writes no images |
+| PowerShell parser | Passed on `windows/aura-ui.ps1`: 11,986 tokens, zero errors |
+| Explicit payload budgets | Passed 48 locale/theme/appearance cases; maximum payload-minus-art 64,700 bytes and maximum embedded art 653,140 bytes |
 | Lint | Not configured in the repository; there is no linter dependency or lint script, so this gate is explicitly not applicable rather than represented by `npm run check` |
 | Typecheck | Not applicable; the project contains JavaScript, PowerShell, and shell sources with no TypeScript sources, `tsconfig.json`, or typecheck script |
-| `npm run preview:build` | Passed; regenerated metadata for all eight themes |
-| `npm run release` | Passed; produced the versioned ZIP and matching SHA-256 sidecar from the explicit distribution allowlist |
-| Preview server smoke test | `/preview/` 200, approved SVG 200, non-public repository file 403 |
-| Release archive rebuild | Passed on 2026-07-17 after screenshots were captured; the versioned ZIP and matching SHA-256 sidecar were regenerated from the explicit distribution allowlist, with no local configuration, composite-reference, or nested-release entries |
+| `npm run release` | Passed on the completed source; archive inspection found `assets/brand/aura-mark.svg` and `assets/brand/claude-aura.ico` |
+| Release archive rebuild | Passed on 2026-07-17; the versioned ZIP and matching SHA-256 sidecar were regenerated from the explicit distribution allowlist, with no local configuration, composite-reference, or nested-release entries |
 | Windows title-bar source check | Passed; best-effort DWM dark-caption and caption/text/border attributes are present with a non-fatal fallback path |
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
-| Browser interaction, console, responsive sizes, and screenshots | Passed on 2026-07-17 in the offline QA harness (Chromium/WebView2 engine). All eight themes switch through one stable `data-claude-aura-theme` root attribute with distinct accent, display font, radius, and border-width values; no console output, and only same-origin `/preview/` and local `data:`/SVG requests (zero remote or mixed-content requests) across all eight; decorative artwork stays `pointer-events:none` and never wins the hit-test at the composer center; persistence survives reload and query-parameter overrides do not overwrite saved state; visible focus ring, labelled modal dialog with focus trap, keyboard tab/arrow/Escape, and disabled styling all confirmed; no horizontal overflow. Fourteen screenshots recorded under `docs/theme-screenshots/` (see Visual evidence) |
-| Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Actual pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. Evidence is under `dist/verify/checkpoint-b-*-framing*.png` and the explicitly named files in `docs/PROGRESS.md` |
-| WO-10 Cartoon Studio asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, two-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. The user-authorized live-capture deferral remains explicit for Checkpoint C/WO-16. |
-| WO-11 Anime Twilight asset cycle | Passed on 2026-07-20: source/runtime checksum freeze, one-layer decode and QA board, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with the approved light/dark goldens at zero delta. Actual Aura light/dark and 1920 x 1080 dark evidence remains explicitly deferred to Checkpoint C/WO-16 under WO-09. |
-| WO-12 Study Library asset and appearance cycle | Passed on 2026-07-20: two-layer decode, main-canvas anchor, QA board, source/runtime checksum freeze, localized persisted System/Light/Dark control, `npm run check` 19/19, and `npm run verify:cycle` 33/33 with approved replacement goldens at zero delta. User-supplied whole-window light/dark Aura captures on real `claude.ai` were inspected and approved. |
+| Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. The offline walkthrough images were retired and deleted on 2026-07-20 and are not acceptance evidence. |
+| WO-10 Cartoon Studio asset cycle | Source/runtime checksum freeze, two-layer decode, status-only asset audit, and Light/Dark payload compilation pass. The user-authorized live-capture deferral remains explicit for Checkpoint C/WO-16. |
+| WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, and Light/Dark payload compilation pass. Actual Aura Light/Dark and 1920 x 1080 Dark evidence remains explicitly deferred to Checkpoint C/WO-16 under WO-09. |
+| WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
+| WO-17 live Aura UX and identity cycle | Complete actual-Aura Light/Dark matrix for all eight themes on live `claude.ai`; Original-look cleanup; Korean Idol new-chat/conversation contexts; representative hover/selected state; Studio Back-to-Aura activation; one content scroller; and Aura title-bar/tray identity at normal DPI and actual 2560 × 1600 / 200% display scaling. |
 
 Before creating an archive, run the checks and then:
 
@@ -392,48 +401,42 @@ copying an installation.
 
 ## Visual evidence
 
-The required captures were produced on 2026-07-17 from the deterministic
-`capture=1` preview contract in `docs/SCREENSHOT_PLAN.md`, using the headless
-Chromium engine that backs WebView2, and stored under `docs/theme-screenshots/`.
-Each capture waited for the `[data-preview-ready="true"]` marker (artwork decode,
-font readiness, and two settled frames) before rendering. Every file was verified
-to the exact pixel dimensions listed.
+Actual whole-window Aura captures on live `claude.ai` are the sole UI visual
+evidence. On 2026-07-20 all fixture renders, offline UI boards, comparison
+screenshots, and golden images were retired and deleted. `npm run verify:cycle`
+is now payload-only and cannot create images; `theme-cli qa <id>` is a
+status-only asset audit.
 
-Eight-theme comparison — Home, light, 1440 × 900:
+An interactive 2026-07-18 run exercised all eight selections against the
+signed-in production `claude.ai` WebView2 window and persisted theme, enabled,
+and background state. The revised Aura Studio gallery was inspected in a real
+WebView2 host in zh-TW and zh-CN, including immediate selection updates and
+keyboard focus traversal. Its framing behavior is also covered by executable
+bridge, persistence, and input-validation checks; retired simulator images are
+not evidence.
 
-| File | Theme | Observed |
+WO-17 adds a native 16-image whole-window matrix for every stable theme in
+Light and Dark, plus the live context and identity checks below. The raw files
+remain gitignored because the authenticated sidebar contains user account data;
+the local `dist/verify/live-aura/wo17-self-capture-manifest.json` records every
+matrix filename, timestamp, byte count, and SHA-256 digest.
+
+| WO-17 live Aura evidence | SHA-256 | Result |
 | --- | --- | --- |
-| `01-default-home-light-1440x900.png` | Default | Indigo baseline, no artwork, balanced controls |
-| `02-japanese-film-editorial-home-light-1440x900.png` | Japanese Film Editorial | Serif display, vermilion accents, charcoal sidebar, editorial rules, ruled paper texture |
-| `03-korean-prestige-home-light-1440x900.png` | Korean Prestige | Midnight navy, silver borders, architectural glass panels, geometric icon containers |
-| `04-cartoon-studio-home-light-1440x900.png` | Cartoon Studio | Inked 2 px outlines, rounded pill controls, teal/coral on cream, dashed composer |
-| `05-anime-twilight-home-light-1440x900.png` | Anime Twilight | Historical pre-WO-11 twilight-glass frame; the approved painterly cityscape is locked under `docs/golden/anime-twilight/` |
-| `06-study-library-home-light-1440x900.png` | Study Library | Ruled-paper background, forest-green/oxblood, index-tab sidebar, no character artwork |
-| `07-japanese-idol-home-light-1440x900.png` | Japanese Idol | Warm cream/blush, rounded pill controls, ribbon dividers, pearlescent cards |
-| `08-korean-idol-home-light-1440x900.png` | Korean Idol | Periwinkle/lavender, holographic grid, music-player controls, sharper type |
+| `08-korean-idol-dark-conversation-normal-aura-window.jpg` | `5f2c809e0b7a3e9237c2851466a288f03f092054cb4081de544b612ecc179fdd` | Dark conversation art/context; composer untouched |
+| `08-korean-idol-light-conversation-wide-aura-window.jpg` | `23cbad22018324746bcd7a81c83df2d335c5542efbf92f2b252b00c575309293` | Light conversation art/context; composer untouched |
+| `wo17-live-hover-selected-light-conversation-aura-window.jpg` | `e88209085500bd77215681a1eac001b6c55973e90ba719b437448f37f41bddbb` | Live low-alpha hover with selected conversation still visible and no transform |
+| `wo17-aura-titlebar-high-dpi-200pct-live-new-chat-window.jpg` | `cc13896dab1d0a72aea8e56695f84468df7146204386b60af234e9a52a5e04df` | Complete Aura window on live `claude.ai` at 200% scaling |
+| `wo17-notification-area-overflow-high-dpi-200pct.jpg` | `99bf6f3facac294ab97dbd00f020407422eea01f0d50f9d09d780fe4da864ea1` | Supplemental 200% notification-area icon inspection |
 
-Responsive, high-DPI, and interaction evidence:
-
-| File | State | Output size |
-| --- | --- | --- |
-| `responsive-1280x720-cartoon-studio.png` | Cartoon Studio, Home, light | 1280 × 720 |
-| `responsive-1905x1026-study-library-code.png` | Study Library, Code view, light | 1905 × 1026 |
-| `responsive-1920x1080-anime-twilight-dark.png` | Anime Twilight, Home, dark | 1920 × 1080 |
-| `responsive-3810x2052-korean-idol-dark.png` | Korean Idol, Home, dark at device-pixel-ratio 2 | 3810 × 2052 (true high-DPI, crisp) |
-| `overlay-menu-korean-prestige-home-light.png` | Korean Prestige with the "More" menu open | 1440 × 900 |
-| `overlay-dialog-japanese-idol-home-light.png` | Japanese Idol with the modal "Theme details" dialog and scrim | 1440 × 900 |
-
-The offline preview shares the registry metadata, semantic design tokens, and
-renderer CSS with the runtime path. It is an illustrative QA harness, not a copy
-of the production Claude interface; automated and source-only checks are not
-treated as a substitute for it. An interactive 2026-07-18 run exercised all
-eight selections against the signed-in production `claude.ai` WebView2 window
-and persisted theme, enabled, and background state. The revised Aura Studio
-gallery was also inspected in a real WebView2 host in zh-TW and zh-CN, including
-immediate selection updates and keyboard focus traversal. Its later framing
-revision was exercised separately at the exact product viewport with a WebView
-bridge simulator, including pointer drag, host acknowledgement, reload
-persistence, both Chinese locales, and fresh-run console inspection.
+The live DOM probe reported the expected theme/appearance/context, exactly one
+Aura sidebar marker, no new-chat prompt marker on conversation pages, and all
+four Korean Idol layers scoped to `conversation`. Studio's actual
+`#open-aura` action foregrounded the existing Aura window while the separate
+Claude Desktop action remained distinct. Original look visibly removed Aura
+artwork, sidebar material, prompt styling, and forced appearance. After the
+high-DPI review, the Korean Prestige/Dark user config and original single
+primary 1920 × 1080 display topology were restored.
 
 WO-12 adds the first per-theme approved whole-window production pair. Both
 files remain under the gitignored live-evidence tree because the authenticated
@@ -444,14 +447,14 @@ sidebar contains user account data:
 | `dist/verify/live-aura/06-study-library-light-aura-window.png` | light | 1177 x 664 | `930a65512092c3d450f1c583b16a369b942f75843ffb4bb3b83de0816aa39d15` | Approved 2026-07-20 |
 | `dist/verify/live-aura/06-study-library-dark-aura-window.png` | dark | 1172 x 668 | `68b64d2caea345ebe776d57446557775e64f739bcd0dd4dafe3e41f03c510d27` | Approved 2026-07-20 |
 
-These are real Aura WebView2 captures of live `claude.ai`. They are not fixture
-renders and are not listed as deterministic goldens.
+These are real Aura WebView2 captures of live `claude.ai`; their recorded hashes
+identify the reviewed files without establishing an automated image baseline.
 
 ## Supplied references and Studio selector derivatives
 
 All seven supplied source files are opaque full-interface composites rather than
 isolated renderer artwork. The originals are ignored by Git, installers,
-preview generation, and release collection:
+runtime compilation, and release collection:
 
 - `theme_demo_previews/c1cad58a-97a8-4dd1-8270-14a52658fa4f.png`
 - `theme_demo_previews/Claude app interface with K-pop theme.png`

@@ -51,12 +51,57 @@
         "text": "#272824"
       },
       "studioPreview": "assets/theme-art/japanese-film-editorial/card-preview.webp",
-      "artwork": {
-        "path": "assets/theme-art/japanese-film-editorial.svg",
-        "position": "right center",
-        "size": "min(60vw, 920px) auto",
-        "mobile": "reduce"
-      }
+      "artwork": null,
+      "artworkLayers": [
+        {
+          "path": "assets/theme-art/japanese-film-editorial/light-background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.45,
+          "mask": "none",
+          "role": "background",
+          "appearance": "light"
+        },
+        {
+          "path": "assets/theme-art/japanese-film-editorial/dark-background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.45,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark"
+        },
+        {
+          "path": "assets/theme-art/japanese-film-editorial/light-hero.webp",
+          "position": "right center",
+          "size": "auto min(80%, 700px)",
+          "mobile": "reduce",
+          "opacity": 0.85,
+          "mask": "soft-right",
+          "role": "hero",
+          "appearance": "light",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
+        },
+        {
+          "path": "assets/theme-art/japanese-film-editorial/dark-hero.webp",
+          "position": "right center",
+          "size": "auto min(80%, 700px)",
+          "mobile": "reduce",
+          "opacity": 0.85,
+          "mask": "soft-right",
+          "role": "hero",
+          "appearance": "dark",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
+        }
+      ]
     },
     {
       "id": "korean-prestige",
@@ -79,12 +124,57 @@
         "text": "#EDF3FA"
       },
       "studioPreview": "assets/theme-art/korean-prestige/card-preview.webp",
-      "artwork": {
-        "path": "assets/theme-art/korean-prestige.svg",
-        "position": "right center",
-        "size": "min(58vw, 880px) auto",
-        "mobile": "reduce"
-      }
+      "artwork": null,
+      "artworkLayers": [
+        {
+          "path": "assets/theme-art/korean-prestige/light-background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.55,
+          "mask": "none",
+          "role": "background",
+          "appearance": "light"
+        },
+        {
+          "path": "assets/theme-art/korean-prestige/light-hero.webp",
+          "position": "right bottom",
+          "size": "auto min(84%, 740px)",
+          "mobile": "reduce",
+          "opacity": 0.88,
+          "mask": "soft-right",
+          "role": "hero",
+          "appearance": "light",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
+        },
+        {
+          "path": "assets/theme-art/korean-prestige/dark-background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.55,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark"
+        },
+        {
+          "path": "assets/theme-art/korean-prestige/dark-hero.webp",
+          "position": "right bottom",
+          "size": "auto min(84%, 740px)",
+          "mobile": "reduce",
+          "opacity": 0.88,
+          "mask": "soft-right",
+          "role": "hero",
+          "appearance": "dark",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
+        }
+      ]
     },
     {
       "id": "cartoon-studio",
@@ -115,7 +205,19 @@
           "size": "cover",
           "mobile": "keep",
           "opacity": 0.5,
-          "mask": "none"
+          "mask": "none",
+          "role": "background",
+          "appearance": "light"
+        },
+        {
+          "path": "assets/theme-art/cartoon-studio/dark-background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.5,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark"
         },
         {
           "path": "assets/theme-art/cartoon-studio/hero.webp",
@@ -123,7 +225,12 @@
           "size": "min(26vw, 420px) auto",
           "mobile": "reduce",
           "opacity": 0.95,
-          "mask": "none"
+          "mask": "none",
+          "role": "hero",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
         }
       ]
     },
@@ -156,7 +263,8 @@
           "size": "cover",
           "mobile": "keep",
           "opacity": 0.62,
-          "mask": "none"
+          "mask": "none",
+          "role": "background"
         }
       ]
     },
@@ -189,7 +297,19 @@
           "size": "cover",
           "mobile": "keep",
           "opacity": 0.4,
-          "mask": "none"
+          "mask": "none",
+          "role": "background",
+          "appearance": "light"
+        },
+        {
+          "path": "assets/theme-art/study-library/dark-background.webp",
+          "position": "center",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.4,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark"
         },
         {
           "path": "assets/theme-art/study-library/corner-bottom.webp",
@@ -197,7 +317,8 @@
           "size": "min(20vw, 320px) auto",
           "mobile": "hide",
           "opacity": 0.6,
-          "mask": "none"
+          "mask": "none",
+          "role": "decoration"
         }
       ]
     },
@@ -230,7 +351,9 @@
           "size": "cover",
           "mobile": "keep",
           "opacity": 0.5,
-          "mask": "none"
+          "mask": "none",
+          "role": "background",
+          "appearance": "light"
         },
         {
           "path": "assets/theme-art/kawaii-idol/hero.webp",
@@ -238,23 +361,41 @@
           "size": "auto min(86%, 760px)",
           "mobile": "reduce",
           "opacity": 0.92,
-          "mask": "soft-right"
+          "mask": "soft-right",
+          "role": "hero",
+          "appearance": "light",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
         },
         {
-          "path": "assets/theme-art/kawaii-idol/sakura-top-right.webp",
+          "path": "assets/theme-art/kawaii-idol/dark-new-chat.webp",
           "position": "right top",
-          "size": "min(18vw, 280px) auto",
-          "mobile": "hide",
-          "opacity": 0.9,
-          "mask": "none"
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.82,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": { "hidden": true }
+          }
         },
         {
-          "path": "assets/theme-art/kawaii-idol/sakura-bottom-right.webp",
-          "position": "left bottom",
-          "size": "min(17vw, 260px) auto",
-          "mobile": "hide",
-          "opacity": 0.75,
-          "mask": "none"
+          "path": "assets/theme-art/kawaii-idol/dark-conversation.webp",
+          "position": "right top",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.82,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark",
+          "contextOverrides": {
+            "new-chat": { "hidden": true },
+            "other": { "hidden": true }
+          }
         }
       ]
     },
@@ -279,23 +420,22 @@
         "text": "#292244"
       },
       "studioPreview": "assets/theme-art/korean-idol/card-preview.webp",
+      "newChatLayout": {
+        "widthRatio": 0.76,
+        "offsetXRatio": -0.07,
+        "offsetYRatio": 0
+      },
       "artwork": null,
       "artworkLayers": [
         {
-          "path": "assets/theme-art/korean-idol/background.webp",
+          "path": "assets/theme-art/korean-idol/light-scene.webp",
           "position": "center",
           "size": "cover",
           "mobile": "keep",
-          "opacity": 0.6,
-          "mask": "none"
-        },
-        {
-          "path": "assets/theme-art/korean-idol/constellation.webp",
-          "position": "right top",
-          "size": "min(44vw, 720px) auto",
-          "mobile": "hide",
-          "opacity": 0.85,
-          "mask": "none"
+          "opacity": 1,
+          "mask": "none",
+          "role": "background",
+          "appearance": "light"
         },
         {
           "path": "assets/theme-art/korean-idol/hero.webp",
@@ -303,7 +443,51 @@
           "size": "min(38vw, 620px) auto",
           "mobile": "reduce",
           "opacity": 0.96,
-          "mask": "none"
+          "mask": "soft-right",
+          "role": "hero",
+          "appearance": "light",
+          "contextOverrides": {
+            "conversation": { "hidden": true },
+            "other": {
+              "hidden": true
+            }
+          }
+        },
+        {
+          "path": "assets/theme-art/korean-idol/dark-new-chat.webp",
+          "position": "right top",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.78,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark",
+          "contextOverrides": {
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
+          }
+        },
+        {
+          "path": "assets/theme-art/korean-idol/dark-conversation.webp",
+          "position": "right top",
+          "size": "cover",
+          "mobile": "keep",
+          "opacity": 0.78,
+          "mask": "none",
+          "role": "background",
+          "appearance": "dark",
+          "contextOverrides": {
+            "new-chat": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
+          }
         }
       ]
     }

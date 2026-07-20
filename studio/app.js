@@ -9,6 +9,7 @@
       navThemes: "Themes",
       navBackground: "Background",
       navCreate: "Create a theme",
+      auraWindow: "Back to Claude Aura",
       desktopApp: "Desktop app",
       themesKicker: "Appearance",
       themesTitle: "Choose a look",
@@ -68,6 +69,7 @@
       navThemes: "主题",
       navBackground: "背景",
       navCreate: "创建主题",
+      auraWindow: "返回 Claude Aura",
       desktopApp: "桌面版",
       themesKicker: "外观",
       themesTitle: "选择外观",
@@ -127,6 +129,7 @@
       navThemes: "主題",
       navBackground: "背景",
       navCreate: "建立主題",
+      auraWindow: "回到 Claude Aura",
       desktopApp: "桌面版",
       themesKicker: "外觀",
       themesTitle: "選擇外觀",
@@ -714,6 +717,7 @@
   });
   document.getElementById("pick-image").addEventListener("click", () => send({ type: "set-image" }));
   clearImage.addEventListener("click", () => send({ type: "clear-image" }));
+  document.getElementById("open-aura").addEventListener("click", () => send({ type: "open-aura" }));
   document.getElementById("open-desktop").addEventListener("click", () => send({ type: "open-desktop" }));
   document.getElementById("import-theme").addEventListener("click", () => send({ type: "import-theme" }));
   document.getElementById("open-guide").addEventListener("click", () => send({ type: "open-guide" }));

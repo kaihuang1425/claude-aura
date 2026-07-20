@@ -6,7 +6,16 @@ theme_demo_previews/
 # under themes/; only the derived copies in assets/theme-art ship.
 themes/*/
 themes/customize_new_theme_prompt.md
-docs/preview.png
+# Retired offline/fixture image surfaces. Production artwork belongs only in
+# assets/theme-art/ and actual Aura evidence stays in the designated live paths.
+docs/golden/
+docs/theme-screenshots/
+tests/fixtures/**/*.avif
+tests/fixtures/**/*.gif
+tests/fixtures/**/*.jpeg
+tests/fixtures/**/*.jpg
+tests/fixtures/**/*.png
+tests/fixtures/**/*.webp
 *.zip
 *.sha256
 *.log

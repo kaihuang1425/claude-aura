@@ -46,7 +46,9 @@ $programs = [Environment]::GetFolderPath('Programs')
 $menuRoot = Join-Path $programs 'Claude Aura'
 foreach ($shortcut in @(
   (Join-Path $desktop 'Claude Aura.lnk'),
+  (Join-Path $desktop 'Claude Aura Studio.lnk'),
   (Join-Path $menuRoot 'Claude Aura.lnk'),
+  (Join-Path $menuRoot 'Claude Aura Studio.lnk'),
   (Join-Path $menuRoot 'Uninstall Claude Aura.lnk')
 )) {
   if ((Test-Path -LiteralPath $shortcut) -and $PSCmdlet.ShouldProcess($shortcut, 'Remove Claude Aura shortcut')) {

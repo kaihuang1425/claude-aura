@@ -1,40 +1,89 @@
 # Progress log
 
 Append one dated entry per completed work order. Keep entries short and
-factual; link evidence (screenshot paths, test output) rather than describing
-it.
+factual; link test output and, for visual claims, only actual whole-window Aura
+captures of live `claude.ai`.
+
+> **Evidence policy update (2026-07-20):** All fixture renders, offline UI
+> boards, contact sheets, comparison screenshots, and golden images referenced
+> in older entries were retired and deleted. Those paths remain below only as
+> historical context and must not be regenerated or used as acceptance evidence.
+> `npm run verify:cycle` is now payload-only, and `theme-cli qa <id>` writes only
+> a status JSON asset audit.
 
 Format:
 
 ```
 ## <date> — WO-NN — <subject>
 - What changed: <files / behavior>
-- Evidence: dist/verify/<...>.png, test summary
+- Evidence: actual-Aura whole-window capture path when available; test summary
 - Parity scores (visual orders only): <theme>: atmosphere/artwork/typography/
   controls/composer/sidebar/states/readability → red|yellow|green each
 - Follow-ups discovered: <queued as new WO / noted / none>
 ```
+
+## 2026-07-21 — WO-17 — Live Aura UX, identity, and context adaptation
+
+- What changed: added the canonical Aura SVG and deterministic nine-frame ICO;
+  installed separate Aura/Studio Desktop and Start-menu shortcuts; wired
+  single-instance Studio launch and a strict **Back to Claude Aura** action;
+  applied Aura identity to both forms and the notification area; replaced loud
+  lift/tint interaction styling with restrained surfaces and shadows; marked
+  one semantic live sidebar; maintained SPA context markers; added bounded,
+  clamped new-chat prompt presets and context-aware artwork overrides; and
+  repaired Studio to one intentional content scroller. Original look removes
+  all Aura markers, styles, art, layout, context, and forced appearance. The
+  retired offline preview, fixture images, QA boards, comparison images, and
+  image goldens were removed and cannot be regenerated as evidence.
+- Evidence: local gitignored
+  `dist/verify/live-aura/wo17-self-capture-manifest.json` records a 16-image
+  whole-window matrix of the actual Aura WebView2 on signed-in live
+  `claude.ai` (all eight themes × Light/Dark), Original-look cleanup, Studio
+  selected/navigation/scroll behavior, notification-area identity, Korean Idol
+  new-chat and Light/Dark conversation contexts, representative live
+  hover/selected state, and actual **Back to Claude Aura** activation. The
+  conversation hashes are
+  `5f2c809e0b7a3e9237c2851466a288f03f092054cb4081de544b612ecc179fdd`
+  and `23cbad22018324746bcd7a81c83df2d335c5542efbf92f2b252b00c575309293`;
+  hover is
+  `e88209085500bd77215681a1eac001b6c55973e90ba719b437448f37f41bddbb`.
+  An actual 2560 × 1600 display at 200% supplied the complete high-DPI Aura
+  title-bar capture
+  `cc13896dab1d0a72aea8e56695f84468df7146204386b60af234e9a52a5e04df`
+  and supplemental notification-area capture
+  `99bf6f3facac294ab97dbd00f020407422eea01f0d50f9d09d780fe4da864ea1`.
+  The original Korean Prestige/Dark config and single-primary 1920 × 1080
+  topology were restored.
+- Verification: PowerShell parser passed (11,986 tokens, zero errors);
+  `npm run check` passed 20/20; `npm run verify:cycle` passed 17/17. The explicit
+  48-case payload audit measured a 64,700-byte maximum payload-minus-art and
+  653,140-byte maximum embedded art. `npm run release` passed on the completed
+  source; archive inspection confirmed both `assets/brand/aura-mark.svg` and
+  `assets/brand/claude-aura.ico`.
+- Parity scores (visual orders only): all eight stable themes:
+  atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
+  green/green/green/green/green/green/green/green for the WO-17 live matrix.
+- Follow-ups discovered: none within WO-17. The queue pointer advances to
+  WO-13, which was not begun.
 
 ## 2026-07-20 — WO-12 — Study Library artwork and Aura appearance modes
 
 - What changed: replaced the procedural Study SVG with approved 1600 x 900
   paper-fiber and 640 x 527 alpha still-life WebPs; anchored the corner layer to
   the measured live main canvas; rebuilt the Studio card from both masters;
-  froze the sources/runtime checksums and approved deterministic goldens; and
+  froze the sources/runtime checksums and added a status-only asset audit; and
   added a persisted, localized, keyboard-operable **System / Light / Dark**
   Aura Studio selector using WebView2's supported profile preference plus a
   namespaced renderer fallback. Original look restores the profile to Auto.
-- Evidence: `themes/study-library/qa/qa-board.png`,
-  `dist/verify/study-library-{light,dark}-1440x900.png`, and actual Aura
-  whole-window captures
+- Evidence: actual Aura whole-window captures
   `dist/verify/live-aura/06-study-library-{light,dark}-aura-window.png`.
   The live images are 1177 x 664 and 1172 x 668 with SHA-256
   `930a65512092c3d450f1c583b16a369b942f75843ffb4bb3b83de0816aa39d15`
   and `68b64d2caea345ebe776d57446557775e64f739bcd0dd4dafe3e41f03c510d27`;
-  they are human-review evidence, not goldens. Runtime art totals 58,098 bytes;
-  `npm run check` passed 19/19 and `npm run verify:cycle` passed 33/33 with all
-  sixteen outputs inspected and zero final golden deltas. Maximum non-art
-  payload is 64,055 bytes, below the 65 KB cap.
+  they are the visual review evidence. Runtime art totals 58,098 bytes;
+  `npm run check` passed 19/19 at completion. The current payload-only cycle
+  compiles both appearance modes, and maximum non-art payload is 64,055 bytes,
+  below the 65 KB cap.
 - Parity scores (visual orders only): study-library:
   atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
   green/green/green/green/green/green/green/green.
@@ -47,44 +96,39 @@ Format:
 
 - What changed: replaced the procedural Anime Twilight SVG with one approved,
   checksum-frozen painterly cityscape WebP; added exact `center / cover / keep /
-  0.62 / none` layered-art metadata, conversion and QA-source support, preview
-  metadata, regression assertions, and approved light/dark golden locks.
-- Evidence: `themes/anime-twilight/qa/qa-board.png` and
-  `dist/verify/anime-twilight-{light,dark}-1440x900.png`; the 60,964-byte runtime
-  WebP decoded at 1600 x 900. `npm run check` passed 19/19 and `npm run
-  verify:cycle` passed 33/33 with the final light/dark images inspected and all
-  sixteen golden deltas at zero.
+  0.62 / none` layered-art metadata, conversion and source-audit support,
+  preview metadata, and regression assertions.
+- Evidence: the 60,964-byte runtime WebP decodes at 1600 x 900;
+  `npm run check` passed 19/19 at completion, and the status-only asset audit
+  plus current payload-only cycle cover both appearance modes. Actual Aura
+  visual evidence remains pending.
 - Parity scores (visual orders only): anime-twilight:
   atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
   green/green/green/green/green/green/green/green.
-- Follow-ups discovered: the user approved the artwork and deterministic
-  light/dark compositions with the unavailable live evidence disclosed. Actual
+- Follow-ups discovered: the user approved the artwork with the unavailable
+  live evidence disclosed. Actual
   Aura light/dark and 1920 x 1080 dark captures remain deferred to HUMAN
   CHECKPOINT C/WO-16 under WO-09; the separate two-attempt supplemental capture
-  failure is recorded under WO-11 in `docs/plans/BLOCKED.md`, and no fixture is
-  represented as live evidence.
+  failure is recorded historically under WO-11 in `docs/plans/BLOCKED.md`.
 
 ## 2026-07-20 — WO-10 — Cartoon Studio artwork
 
 - What changed: replaced the procedural Cartoon Studio SVG with approved,
   checksum-frozen WebP background and original mascot layers; retained three
   approved card-doodle masters source-only; added generic layered-art preview
-  data/rendering and source-aware QA/conversion coverage; locked the approved
-  light/dark deterministic renders in `docs/golden/REFERENCE_LOCK.md`.
-- Evidence: `themes/cartoon-studio/qa/qa-board.png`,
-  `dist/verify/wo10-cartoon-studio-mini-checkpoint.png`, and
-  `dist/verify/cartoon-studio-{light,dark}-1440x900.png`; runtime WebPs are
+  data/rendering and source-aware audit/conversion coverage.
+- Evidence: runtime WebPs are
   50,686 and 80,854 bytes and decode at 1600 x 900 RGB and 835 x 1032 RGBA.
-  `npm run check` passed 19/19 and `npm run verify:cycle` passed 33/33 with all
-  sixteen outputs inspected and zero golden deltas.
+  `npm run check` passed 19/19 at completion; the status-only asset audit and
+  current payload-only cycle cover both appearance modes. Actual Aura visual
+  evidence remains pending.
 - Parity scores (visual orders only): cartoon-studio:
   atmosphere/artwork/typography/controls/composer/sidebar/states/readability —
   green/green/green/green/green/green/green/green.
 - Follow-ups discovered: the PowerShell-hosted Aura whole-window capture path
   remains unavailable as recorded under WO-09 in `docs/plans/BLOCKED.md`. On
   2026-07-20 the user authorized WO-10 completion with its live light/dark and
-  1280 x 720 evidence explicitly deferred to HUMAN CHECKPOINT C/WO-16; no
-  fixture image is represented as a live Aura capture.
+  1280 x 720 evidence explicitly deferred to HUMAN CHECKPOINT C/WO-16.
 
 ## 2026-07-19 — WO-07 — user theme installation
 
@@ -99,8 +143,8 @@ Format:
 - Evidence: `npm run check` 19/19, including a `constructor`-ID lifecycle,
   invalid-kit validator messages, collision warnings, restart/uninstall, exact
   PowerShell copy/delete, junction-root rejection, and full-config rollback.
-  `npm run verify:cycle` 33/33; all sixteen light/dark renders and the contact
-  sheet opened and inspected with zero golden diffs.
+  The image-producing cycle recorded at completion was retired on 2026-07-20;
+  the current cycle performs payload-only Light/Dark compilation.
 - Follow-ups discovered: named-slot discovery/conversion and full asset-quality
   validation remain part of the queued end-user tutorial/proof work in WO-15.
 
@@ -111,10 +155,9 @@ Format:
   `windows/aura-ui.ps1`. The main form now contains only the Claude WebView2
   content panel and its loading/error cover; theme, background, Original look,
   and Desktop actions remain available through Studio and the tray.
-- Evidence: PowerShell parse pass; `npm run check` 18/18; `npm run
-  verify:cycle` 33/33 with all golden diffs at zero. The refreshed sixteen-frame
-  `dist/verify/checkpoint-a-contact-sheet-corrected.png` plus representative
-  default-light and anime-twilight-dark renders were opened and inspected.
+- Evidence: PowerShell parse pass and `npm run check` 18/18 at completion. The
+  then-current fixture/contact-sheet cycle was retired and deleted on
+  2026-07-20; current verification is payload-only.
 - Follow-ups discovered: none.
 
 ## 2026-07-19 — WO-04 — theme-cli QA board
@@ -127,17 +170,17 @@ Format:
   payload layer/digest evidence are written beside the board in `status.json`;
   regeneration preserves review notes but invalidates approval when production
   hashes change.
-- Evidence: `themes/japanese-idol/qa/qa-board.png` (2160 × 7680, opened and
-  inspected) and `themes/japanese-idol/qa/status.json`; all four files under
-  `assets/theme-art/kawaii-idol/` decoded with their native dimensions and the
-  payload harness rendered exactly four layers with no legacy slot.
-  `npm run check` 18/18; `npm run verify:cycle` 33/33, with the refreshed
-  sixteen-frame contact sheet opened and all golden diffs at zero.
+- Evidence: `npm run check` 18/18 at original completion. The current
+  status-only audit verifies registered asset bytes, hashes, and both payload
+  modes without creating a visual artifact.
 - Parity scores (visual orders only): japanese-idol:
   atmosphere/artwork/typography/controls/composer/sidebar/states/readability →
   green/green/green/green/green/green/green/green.
 - Follow-ups discovered: asset-producing WO-08..WO-13 must add their
   source-master mapping when wiring new registry layers; no new work order.
+- Retirement (2026-07-20): the image-producing QA-board implementation and its
+  generated boards were deleted. `theme-cli qa <id>` now performs only a
+  status-JSON asset/hash and Light/Dark payload audit.
 
 ## 2026-07-19 — WO-03 — theme-cli scaffold
 
@@ -197,6 +240,8 @@ Format:
   freezing, and unsupported CSS-position notices.
   `npm run check` 16/16; PowerShell parse pass; `npm run verify:cycle` 17/17
   with all 16 light/dark renders opened and inspected.
+- Retirement (2026-07-20): every offline Studio image named in this historical
+  entry was deleted and is not current acceptance evidence.
 - Follow-ups discovered: theme-folder installation remains WO-07; the Studio
   guide action stays outside WO-05's exact nine-action host allowlist. The user
   approved HUMAN CHECKPOINT B on 2026-07-19.
@@ -237,12 +282,9 @@ Format:
   visible in japanese-idol light, grid + figure visible in korean-idol dark,
   body text readable in the fixture's check block in all renders.
 - Checkpoint A approval (2026-07-19): the user approved all sixteen light/dark
-  payload frames. Exact PNGs are locked under `docs/golden/` and hashed in
-  `docs/golden/REFERENCE_LOCK.md`. The capture harness now preloads artwork,
-  holds a short real-time loopback paint barrier, and flushes compositor stages
-  so layered WebP decode is deterministic. Korean Idol light reproduced with
-  SHA-256 `10225abb81e27c7c778c2df9394508af6c7847ec2c964025e0b200898e90f029`;
-  `npm run check` 16/16 and `npm run verify:cycle` 33/33.
+  payload frames in the now-retired fixture harness. Those frames, hashes,
+  harness, and golden locks were deleted on 2026-07-20 and no longer satisfy an
+  acceptance gate. `npm run verify:cycle` is now payload-only.
 - Follow-ups discovered: korean-idol/korean-prestige/others still render
   stand-in SVG figures — replaced by WO-08..14 kit production.
 
@@ -264,4 +306,5 @@ Format:
   ships in the runtime; sign-in cover fix and UTF-8 fixes committed.
 - Known defects queued: D1 harsh input borders, D2 washed-out artwork.
 - Studio shell prebuilt under studio/ (design frozen); verification harness
-  `npm run verify:cycle` and DOM fixture added.
+  `npm run verify:cycle` and DOM fixture added. The fixture and image-producing
+  harness were retired on 2026-07-20; the command is now payload-only.

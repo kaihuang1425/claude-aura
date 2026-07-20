@@ -69,11 +69,11 @@ html.claude-aura body {
   background-position: var(--aura-art-position, right center);
   background-repeat: no-repeat;
   background-size: var(--aura-art-size, min(58vw, 860px) auto);
-  opacity: var(--aura-art-opacity, 0);
+  opacity: var(--aura-layer-opacity, var(--aura-art-opacity, 0));
   transform: translateZ(0);
   animation: aura-art-enter 420ms ease-out both;
-  -webkit-mask-image: radial-gradient(145% 122% at 100% 50%, #000 25%, transparent 80%);
-  mask-image: radial-gradient(145% 122% at 100% 50%, #000 25%, transparent 80%);
+  -webkit-mask-image: radial-gradient(142% 104% at 100% 30%, #000 30%, transparent 82%);
+  mask-image: radial-gradient(142% 104% at 100% 30%, #000 30%, transparent 82%);
 }
 
 #claude-aura-backdrop .claude-aura-theme-art[data-art-mask="none"] {
@@ -138,28 +138,29 @@ html.claude-aura [data-mode="light"] {
   --cds-clay: hsl(var(--aura-accent-primary)) !important;
 }
 
-html.claude-aura .dframe-sidebar {
+html.claude-aura [data-claude-aura-sidebar] {
   color: hsl(var(--aura-sidebar-text-primary)) !important;
   background-color: hsl(var(--aura-sidebar-background) / var(--aura-sidebar-alpha)) !important;
   border-color: hsl(var(--aura-border-subtle) / 0.2) !important;
   backdrop-filter: blur(var(--aura-blur)) saturate(1.06);
 }
 
-html.claude-aura .dframe-sidebar :is(a, button, [role="button"], [role="link"], [role="menuitem"]) {
+html.claude-aura [data-claude-aura-sidebar] :is(a[href], button, [role="button"], [role="link"], [role="menuitem"]) {
   color: hsl(var(--aura-sidebar-text-primary)) !important;
 }
 
-html.claude-aura .dframe-sidebar :is(p, small, time, [data-secondary], [data-muted]) {
+html.claude-aura [data-claude-aura-sidebar] :is(p, small, time, [data-secondary], [data-muted]) {
   color: hsl(var(--aura-sidebar-text-muted)) !important;
 }
 
-html.claude-aura .dframe-sidebar :is([aria-current="page"], [aria-selected="true"], [data-state="active"]) {
+html.claude-aura [data-claude-aura-sidebar] :is(a[href], button, [role="button"], [role="link"], [role="menuitem"]):is([aria-current]:not([aria-current="false"]), [aria-selected="true"], [data-state="active"]) {
   background: hsl(var(--aura-sidebar-selected) / 0.88) !important;
   color: hsl(var(--aura-sidebar-text-primary)) !important;
-  box-shadow: inset 3px 0 0 hsl(var(--aura-sidebar-indicator));
+  border-color: hsl(var(--aura-border-subtle) / var(--aura-state-border-alpha)) !important;
+  box-shadow: var(--aura-state-shadow);
 }
 
-html.claude-aura [data-darker] .dframe-sidebar {
+html.claude-aura [data-darker] [data-claude-aura-sidebar] {
   background-color: hsl(var(--aura-sidebar-background) / 0.96) !important;
 }
 
@@ -223,12 +224,6 @@ html.claude-aura :is([data-empty-state], .empty-state, [data-testid*="empty-stat
 
 html.claude-aura :is([role="menuitem"], [role="option"], [role="tab"]) {
   border-radius: var(--aura-control-radius);
-}
-
-html.claude-aura :is([role="menuitem"], [role="option"], [role="tab"]):is([aria-selected="true"], [data-state="active"], [aria-checked="true"]) {
-  color: hsl(var(--aura-text-primary)) !important;
-  background: hsl(var(--aura-selected-surface) / 0.92) !important;
-  box-shadow: inset 0 -2px 0 hsl(var(--aura-accent-primary));
 }
 
 html.claude-aura :is([role="menuitem"], [role="option"])[data-destructive],
@@ -306,6 +301,11 @@ html.claude-aura .text-black {
 
 html.claude-aura {
   --aura-input-border-alpha: 0.15;
+  --aura-state-hover-alpha: 0.42;
+  --aura-state-active-alpha: 0.58;
+  --aura-state-selected-alpha: 0.68;
+  --aura-state-border-alpha: 0.12;
+  --aura-state-shadow: 0 3px 12px hsl(var(--aura-text-primary) / 0.05);
 }
 
 html.claude-aura :is(.input-box, [data-testid="composer"], [data-testid="chat-input"]) {
@@ -315,6 +315,12 @@ html.claude-aura :is(.input-box, [data-testid="composer"], [data-testid="chat-in
   border-radius: var(--aura-composer-radius) !important;
   box-shadow: var(--aura-shadow-elevated), 0 0 0 1px hsl(var(--aura-accent-primary) / 0.05) !important;
   backdrop-filter: blur(var(--aura-blur)) saturate(1.06);
+}
+
+html.claude-aura [data-claude-aura-prompt="new-chat"] {
+  inline-size: var(--aura-prompt-width) !important;
+  max-inline-size: calc(100vw - 32px) !important;
+  translate: var(--aura-prompt-x) var(--aura-prompt-y) !important;
 }
 
 html.claude-aura input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
@@ -341,58 +347,57 @@ html.claude-aura ::placeholder {
   opacity: 0.92;
 }
 
-html.claude-aura :focus-visible {
-  outline: 2px solid hsl(var(--aura-focus-ring)) !important;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px hsl(var(--aura-focus-ring) / 0.18) !important;
-}
-
-html.claude-aura .dframe-sidebar :focus-visible {
-  outline-color: hsl(var(--aura-sidebar-indicator)) !important;
-  box-shadow: 0 0 0 4px hsl(var(--aura-focus-ring) / 0.34) !important;
-}
-
-html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) {
+html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]) {
   font-family: var(--aura-font-ui);
   transition:
     color var(--aura-transition-duration) ease,
     background-color var(--aura-transition-duration) ease,
     border-color var(--aura-transition-duration) ease,
-    box-shadow var(--aura-transition-duration) ease,
-    transform var(--aura-transition-duration) ease;
+    box-shadow var(--aura-transition-duration) ease;
 }
 
 html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]),
-html.claude-aura .dframe-sidebar a {
+html.claude-aura [data-claude-aura-sidebar] a[href] {
   border-radius: var(--aura-control-radius);
 }
 
-html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"]) :is(svg, [data-icon]) {
-  border-radius: var(--aura-icon-radius);
-  background-color: hsl(var(--aura-accent-primary) / 0.07);
-  box-shadow: inset 0 0 0 var(--aura-border-width) hsl(var(--aura-border-emphasis) / 0.14);
-  transition:
-    background-color var(--aura-transition-duration) ease,
-    box-shadow var(--aura-transition-duration) ease,
-    filter var(--aura-transition-duration) ease,
-    transform var(--aura-transition-duration) ease;
+html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):not([disabled]):not([aria-disabled="true"]):hover {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-hover-surface) / var(--aura-state-hover-alpha)) !important;
+  border-color: hsl(var(--aura-border-subtle) / var(--aura-state-border-alpha)) !important;
+  box-shadow: var(--aura-state-shadow);
+  transform: none !important;
 }
 
-html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):not([disabled]):not([aria-disabled="true"]):hover,
-html.claude-aura .dframe-sidebar a:not([aria-disabled="true"]):hover {
-  border-color: hsl(var(--aura-accent-primary) / 0.36) !important;
-  box-shadow: 0 0 0 1px hsl(var(--aura-accent-primary) / 0.12), var(--aura-shadow-soft);
-  transform: translateY(calc(var(--aura-hover-lift) * -1));
+html.claude-aura [data-claude-aura-sidebar] :is(a[href], button, [role="button"], [role="link"], [role="menuitem"]):not([disabled]):not([aria-disabled="true"]):hover {
+  color: hsl(var(--aura-sidebar-text-primary)) !important;
+  background: hsl(var(--aura-sidebar-selected) / var(--aura-state-hover-alpha)) !important;
+}
+
+html.claude-aura :is(button, a[href], [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):is([aria-current]:not([aria-current="false"]), [aria-selected="true"], [aria-pressed="true"], [aria-checked="true"], [data-state="active"]) {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-selected-surface) / var(--aura-state-selected-alpha)) !important;
+  border-color: hsl(var(--aura-border-subtle) / var(--aura-state-border-alpha)) !important;
+  box-shadow: var(--aura-state-shadow);
+  transform: none !important;
 }
 
 html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):not([disabled]):not([aria-disabled="true"]):active,
-html.claude-aura .dframe-sidebar a:not([aria-disabled="true"]):active {
-  background-color: hsl(var(--aura-selected-surface) / 0.88) !important;
-  transform: translateY(0) scale(0.985);
+html.claude-aura [data-claude-aura-sidebar] a[href]:not([aria-disabled="true"]):active {
+  color: hsl(var(--aura-text-primary)) !important;
+  background: hsl(var(--aura-selected-surface) / var(--aura-state-active-alpha)) !important;
+  border-color: hsl(var(--aura-border-subtle) / var(--aura-state-border-alpha)) !important;
+  box-shadow: inset 0 1px 2px hsl(var(--aura-text-primary) / 0.08);
+  transform: none !important;
+}
+
+html.claude-aura [data-claude-aura-sidebar] :is(a[href], button, [role="button"], [role="link"], [role="menuitem"]):not([disabled]):not([aria-disabled="true"]):active {
+  color: hsl(var(--aura-sidebar-text-primary)) !important;
+  background: hsl(var(--aura-sidebar-selected) / var(--aura-state-active-alpha)) !important;
 }
 
 html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):is([disabled], [aria-disabled="true"]),
-html.claude-aura .dframe-sidebar a[aria-disabled="true"] {
+html.claude-aura [data-claude-aura-sidebar] a[href][aria-disabled="true"] {
   color: hsl(var(--aura-text-disabled)) !important;
   background: hsl(var(--aura-disabled-surface) / 0.66) !important;
   box-shadow: none !important;
@@ -400,10 +405,15 @@ html.claude-aura .dframe-sidebar a[aria-disabled="true"] {
   opacity: 0.72;
 }
 
-html.claude-aura :is([aria-current="page"], [aria-selected="true"], [aria-pressed="true"], [data-state="active"]) {
-  color: hsl(var(--aura-text-primary));
-  background-color: hsl(var(--aura-selected-surface) / 0.9);
-  border-color: hsl(var(--aura-accent-primary) / 0.42) !important;
+html.claude-aura :focus-visible {
+  outline: 1px solid hsl(var(--aura-focus-ring) / 0.72) !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px hsl(var(--aura-focus-ring) / 0.14) !important;
+}
+
+html.claude-aura [data-claude-aura-sidebar] :focus-visible {
+  outline-color: hsl(var(--aura-sidebar-indicator)) !important;
+  box-shadow: 0 0 0 4px hsl(var(--aura-focus-ring) / 0.34) !important;
 }
 
 html.claude-aura :is([type="checkbox"], [type="radio"]):checked {
@@ -523,7 +533,7 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
 
 @keyframes aura-art-enter {
   from { opacity: 0; transform: translateX(14px); }
-  to { opacity: var(--aura-art-opacity, 0); transform: translateX(0); }
+  to { opacity: var(--aura-layer-opacity, var(--aura-art-opacity, 0)); transform: translateX(0); }
 }
 
 @keyframes aura-mark-enter {
@@ -538,7 +548,7 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
 @media (max-width: 1100px) {
   #claude-aura-backdrop .claude-aura-theme-art {
     background-size: min(64vw, 720px) auto;
-    opacity: calc(var(--aura-art-opacity, 0) * 0.66);
+    opacity: calc(var(--aura-layer-opacity, var(--aura-art-opacity, 0)) * 0.66);
   }
 
   #claude-aura-backdrop .claude-aura-theme-art-layer[data-art-mobile="reduce"] {
@@ -550,7 +560,7 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
   #claude-aura-backdrop .claude-aura-theme-art {
     background-position: right top;
     background-size: min(78vw, 580px) auto;
-    opacity: calc(var(--aura-art-opacity, 0) * 0.38);
+    opacity: calc(var(--aura-layer-opacity, var(--aura-art-opacity, 0)) * 0.38);
   }
 
   html.claude-aura[data-claude-aura-art-mobile="hide"] #claude-aura-backdrop .claude-aura-theme-art {
@@ -578,6 +588,11 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
     --aura-sidebar-alpha: 1 !important;
     --aura-art-opacity: 0 !important;
     --aura-image-opacity: 0 !important;
+    --aura-state-hover-alpha: 1;
+    --aura-state-active-alpha: 1;
+    --aura-state-selected-alpha: 1;
+    --aura-state-border-alpha: 0.72;
+    --aura-state-shadow: none;
   }
 
   #claude-aura-backdrop .claude-aura-theme-art-layer {
@@ -593,8 +608,18 @@ html.claude-aura ::-webkit-scrollbar-thumb:hover {
 @media (forced-colors: active) {
   #claude-aura-backdrop { display: none !important; }
   html.claude-aura :focus-visible { outline: 2px solid Highlight !important; box-shadow: none !important; }
-  html.claude-aura :is(button, input, textarea, select, [role="button"], [role="tab"], [role="menuitem"]) {
+  html.claude-aura :is(button, input, textarea, select, a[href], [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]) {
     forced-color-adjust: auto;
+  }
+  html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):is(:hover, :active) {
+    color: ButtonText !important;
+    background: ButtonFace !important;
+    box-shadow: none !important;
+  }
+  html.claude-aura :is(button, a[href], [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"]):is([aria-current]:not([aria-current="false"]), [aria-selected="true"], [aria-pressed="true"], [aria-checked="true"], [data-state="active"]) {
+    color: HighlightText !important;
+    background: Highlight !important;
+    box-shadow: none !important;
   }
 }
 

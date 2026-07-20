@@ -12,25 +12,184 @@
   const appearance = settings.appearance || "system";
   const media = appearance === "system" ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
   const mode = () => appearance === "system" ? (media?.matches ? "dark" : "light") : appearance;
+  const SIDEBAR_MARKER = "data-claude-aura-sidebar";
+  const MAIN_MARKER = "data-claude-aura-main-canvas";
+  const PROMPT_MARKER = "data-claude-aura-prompt";
+  const MESSAGE_SELECTOR = [
+    '[data-testid="user-message"]',
+    '[data-testid="assistant-message"]',
+    '[data-user-message-bubble]',
+    '[data-assistant-message]',
+    '[data-message-author-role="user"]',
+    '[data-message-author-role="assistant"]',
+    '.font-claude-response-body',
+  ].join(",");
+  const EDITOR_SELECTOR = [
+    'textarea:not([readonly])',
+    '.ProseMirror[contenteditable="true"]',
+    '[role="textbox"][contenteditable="true"]',
+  ].join(",");
+  const CONTROL_SELECTOR = 'button,[role="button"],select';
   let observeTargets = () => {};
   let styleDirty = true;
   let rootDirty = true;
+  let currentContext = "other";
+  let artBindings = [];
 
-  const syncMainStart = () => {
-    const main = settings.theme === "study-library" && document.querySelector?.("main");
-    if (!main) return;
-    const value = `${Math.round(main.getBoundingClientRect().left)}px`;
-    if (root.style.getPropertyValue("--aura-main-start") !== value) root.style.setProperty("--aura-main-start", value);
+  const visibleRect = (element) => {
+    if (!element?.isConnected) return null;
+    const rect = element.getBoundingClientRect?.();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    const computed = window.getComputedStyle?.(element) ?? { display: "", visibility: "", translate: "none" };
+    return computed.display === "none" || computed.visibility === "hidden" ? null : rect;
+  };
+
+  const clearMarkedElements = () => {
+    for (const element of document.querySelectorAll?.(`[${SIDEBAR_MARKER}],[${MAIN_MARKER}],[${PROMPT_MARKER}]`) ?? []) {
+      element.removeAttribute(SIDEBAR_MARKER);
+      element.removeAttribute(MAIN_MARKER);
+      element.removeAttribute(PROMPT_MARKER);
+      element.style.removeProperty("--aura-prompt-width");
+      element.style.removeProperty("--aura-prompt-x");
+      element.style.removeProperty("--aura-prompt-y");
+    }
+  };
+
+  const discoverSidebar = () => {
+    const candidates = [...(document.querySelectorAll?.(
+      '.dframe-sidebar,aside,[role="navigation"],nav,[data-testid*="sidebar" i]',
+    ) ?? [])].map((element) => ({ element, rect: visibleRect(element) }))
+      .filter(({ rect }) => rect
+        && rect.left <= Math.max(32, window.innerWidth * 0.04)
+        && rect.right > 0
+        && rect.width >= 40 && rect.width <= Math.min(440, window.innerWidth * 0.46)
+        && rect.height >= window.innerHeight * 0.5)
+      .sort((left, right) => (right.rect.width * right.rect.height) - (left.rect.width * left.rect.height));
+    return candidates[0]?.element ?? null;
+  };
+
+  const discoverComposer = () => {
+    const roots = new Map();
+    const canvases = [...(document.querySelectorAll?.('main,[role="main"]') ?? [])]
+      .filter((element) => visibleRect(element));
+    for (const canvas of canvases) {
+      for (const editor of canvas.querySelectorAll(EDITOR_SELECTOR)) {
+        let candidate = editor;
+        let prompt = null;
+        let promptRect = null;
+        for (let depth = 0; candidate && candidate !== canvas && depth < 12; depth += 1, candidate = candidate.parentElement) {
+          const rect = visibleRect(candidate);
+          if (!rect || rect.width < 280 || rect.height < 72 || rect.height > 300) continue;
+          if (candidate.querySelectorAll(CONTROL_SELECTOR).length < 2) continue;
+          prompt = candidate;
+          promptRect = rect;
+        }
+        if (prompt) roots.set(prompt, { prompt, main: canvas, rect: promptRect });
+      }
+    }
+    if (roots.size !== 1) return { context: "other", main: canvases.length === 1 ? canvases[0] : null, prompt: null };
+    const found = [...roots.values()][0];
+    const mainRect = visibleRect(found.main);
+    const promptRect = visibleRect(found.prompt);
+    if (!mainRect || !promptRect) return { context: "other", main: found.main, prompt: null };
+    if (found.main.querySelector(MESSAGE_SELECTOR)) return { ...found, context: "conversation" };
+    const bottomGap = mainRect.bottom - promptRect.bottom;
+    const threshold = Math.max(56, mainRect.height * 0.08);
+    return { ...found, context: bottomGap >= threshold ? "new-chat" : "other" };
+  };
+
+  const clearPromptLayout = () => {
+    for (const prompt of document.querySelectorAll?.(`[${PROMPT_MARKER}]`) ?? []) {
+      prompt.removeAttribute(PROMPT_MARKER);
+      prompt.style.removeProperty("--aura-prompt-width");
+      prompt.style.removeProperty("--aura-prompt-x");
+      prompt.style.removeProperty("--aura-prompt-y");
+    }
+  };
+
+  const applyPromptLayout = (prompt, main) => {
+    clearPromptLayout();
+    const layout = settings.n;
+    if (!layout || !prompt || !main) return;
+    const mainRect = visibleRect(main);
+    if (!mainRect) return;
+    const bounds = {
+      left: Math.max(0, mainRect.left),
+      top: Math.max(0, mainRect.top),
+      right: Math.min(window.innerWidth, mainRect.right),
+      bottom: Math.min(window.innerHeight, mainRect.bottom),
+    };
+    bounds.width = bounds.right - bounds.left;
+    bounds.height = bounds.bottom - bounds.top;
+    if (bounds.width < 480 || bounds.height < 400) return;
+    const authoredTranslate = window.getComputedStyle?.(prompt)?.translate ?? "none";
+    if (authoredTranslate && !["none", "0px", "0px 0px"].includes(authoredTranslate)) return;
+    const inset = 16;
+    const width = Math.min(bounds.width - (inset * 2), Math.max(280, bounds.width * layout[0]));
+    prompt.setAttribute(PROMPT_MARKER, "new-chat");
+    prompt.style.setProperty("--aura-prompt-width", `${Math.round(width * 100) / 100}px`);
+    prompt.style.setProperty("--aura-prompt-x", "0px");
+    prompt.style.setProperty("--aura-prompt-y", "0px");
+    const rect = visibleRect(prompt);
+    if (!rect) return clearPromptLayout();
+    const desiredCenter = bounds.left + (bounds.width / 2) + (bounds.width * layout[1]);
+    const desiredLeft = Math.min(bounds.right - inset - rect.width, Math.max(bounds.left + inset, desiredCenter - (rect.width / 2)));
+    const desiredTop = Math.min(bounds.bottom - inset - rect.height, Math.max(bounds.top + inset, rect.top + (bounds.height * layout[2])));
+    prompt.style.setProperty("--aura-prompt-x", `${Math.round((desiredLeft - rect.left) * 100) / 100}px`);
+    prompt.style.setProperty("--aura-prompt-y", `${Math.round((desiredTop - rect.top) * 100) / 100}px`);
+  };
+
+  const applyArtworkContext = (context) => {
+    for (const { element, layer } of artBindings) {
+      if (!element.isConnected) continue;
+      const contextKey = context === "new-chat" ? "n" : context === "conversation" ? "c" : "o";
+      const override = layer.c?.[contextKey] ?? null;
+      const hidden = override?.h === true || layer.a && layer.a !== mode()[0];
+      element.dataset.artContext = context;
+      element.style.setProperty("background-position", override?.p ?? layer.p ?? "right center");
+      element.style.setProperty("background-size", override?.s ?? layer.s ?? "min(58vw, 860px) auto");
+      const opacity = override?.o ?? layer.o;
+      if (typeof opacity === "number") {
+        element.style.setProperty("--aura-layer-opacity", String(opacity));
+        element.style.setProperty("opacity", String(opacity));
+      } else {
+        element.style.removeProperty("--aura-layer-opacity");
+        element.style.removeProperty("opacity");
+      }
+      if (hidden) element.style.setProperty("display", "none");
+      else element.style.removeProperty("display");
+    }
+  };
+
+  const syncSemanticLayout = () => {
+    const found = discoverComposer();
+    currentContext = found.context;
+    root.dataset.claudeAuraContext = currentContext;
+    for (const marked of document.querySelectorAll?.(`[${SIDEBAR_MARKER}]`) ?? []) marked.removeAttribute(SIDEBAR_MARKER);
+    discoverSidebar()?.setAttribute(SIDEBAR_MARKER, "true");
+    for (const marked of document.querySelectorAll?.(`[${MAIN_MARKER}]`) ?? []) marked.removeAttribute(MAIN_MARKER);
+    found.main?.setAttribute(MAIN_MARKER, "true");
+    if (found.main) {
+      const value = `${Math.round(found.main.getBoundingClientRect().left)}px`;
+      if (root.style.getPropertyValue("--aura-main-start") !== value) root.style.setProperty("--aura-main-start", value);
+    } else root.style.removeProperty("--aura-main-start");
+    if (currentContext === "new-chat") applyPromptLayout(found.prompt, found.main);
+    else clearPromptLayout();
+    applyArtworkContext(currentContext);
   };
 
   const previous = window[STATE_KEY];
   previous?.observer?.disconnect();
   previous?.stopModeListener?.();
+  previous?.stopContextListeners?.();
+  previous?.clearMarkedElements?.();
   if (previous?.timer) clearInterval(previous.timer);
   if (previous?.scheduled) clearTimeout(previous.scheduled);
+  document.getElementById(BACKDROP_ID)?.remove();
 
   const onModeChange = () => {
     if (document.documentElement) document.documentElement.dataset.claudeAuraEffectiveMode = mode();
+    applyArtworkContext(currentContext);
   };
   media?.addEventListener?.("change", onModeChange);
   const stopModeListener = () => media?.removeEventListener?.("change", onModeChange);
@@ -44,6 +203,7 @@
       || html.dataset.claudeAuraArtMobile !== (settings.artMobile || "reduce")
       || html.dataset.claudeAuraAppearance !== appearance
       || html.dataset.claudeAuraEffectiveMode !== mode()
+      || html.dataset.claudeAuraContext !== currentContext
       || !html.classList.contains("claude-aura")
       || html.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
       || html.classList.contains("claude-aura-animated-image") !== Boolean(settings.imageAnimated);
@@ -57,6 +217,7 @@
       html.dataset.claudeAuraArtMobile = settings.artMobile || "reduce";
       html.dataset.claudeAuraAppearance = appearance;
       html.dataset.claudeAuraEffectiveMode = mode();
+      html.dataset.claudeAuraContext = currentContext;
       html.dataset.claudeAuraDigest = settings.digest;
       html.style.setProperty("--aura-image", imageCssValue);
       html.style.setProperty("--aura-image-opacity", imageOpacityValue);
@@ -107,26 +268,33 @@
       addLayerDiv("claude-aura-gradient");
       addLayerDiv("claude-aura-image");
       const artLayers = Array.isArray(settings.artLayers)
-        ? settings.artLayers.filter((layer) => layer && typeof layer.dataUrl === "string").slice(0, 4)
+        ? settings.artLayers.filter((layer) => layer && typeof layer.d === "string").slice(0, 4)
         : [];
       if (artLayers.length) {
+        artBindings = [];
         for (const layer of artLayers) {
           const element = addLayerDiv("claude-aura-theme-art claude-aura-theme-art-layer");
-          element.dataset.artMask = layer.mask === "none" ? "none" : "soft-right";
-          element.dataset.artMobile = layer.mobile === "hide" || layer.mobile === "keep" ? layer.mobile : "reduce";
-          element.style.setProperty("background-image", `url(${JSON.stringify(layer.dataUrl)})`);
-          element.style.setProperty("background-position", layer.position || "right center");
-          element.style.setProperty("background-size", layer.size || "min(58vw, 860px) auto");
-          if (typeof layer.opacity === "number") element.style.setProperty("opacity", String(layer.opacity));
+          element.dataset.artMask = layer.k === "n" ? "none" : "soft-right";
+          element.dataset.artMobile = layer.m === "h" ? "hide" : layer.m === "k" ? "keep" : "reduce";
+          element.dataset.artRole = layer.r === "b" ? "background" : layer.r === "h" ? "hero" : "decoration";
+          element.style.setProperty("background-image", `url(${JSON.stringify(layer.d)})`);
+          element.style.setProperty("background-position", layer.p || "right center");
+          element.style.setProperty("background-size", layer.s || "min(58vw, 860px) auto");
+          if (typeof layer.o === "number") {
+            element.style.setProperty("--aura-layer-opacity", String(layer.o));
+            element.style.setProperty("opacity", String(layer.o));
+          }
+          artBindings.push({ element, layer });
         }
       } else {
+        artBindings = [];
         addLayerDiv("claude-aura-theme-art");
       }
       addLayerDiv("claude-aura-grain");
       addLayerDiv("claude-aura-vignette");
       document.body.prepend(backdrop);
     }
-    syncMainStart();
+    syncSemanticLayout();
     observeTargets();
   };
 
@@ -137,6 +305,8 @@
     if (state?.timer) clearInterval(state.timer);
     if (state?.scheduled) clearTimeout(state.scheduled);
     stopModeListener();
+    stopContextListeners();
+    clearMarkedElements();
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BACKDROP_ID)?.remove();
     const html = document.documentElement;
@@ -155,6 +325,7 @@
       delete html.dataset.claudeAuraArtMobile;
       delete html.dataset.claudeAuraAppearance;
       delete html.dataset.claudeAuraEffectiveMode;
+      delete html.dataset.claudeAuraContext;
       delete html.dataset.claudeAuraDigest;
     }
     delete window[STATE_KEY];
@@ -174,6 +345,15 @@
     const state = window[STATE_KEY];
     if (state) state.scheduled = scheduled;
   };
+  const onContextSignal = () => scheduleEnsure();
+  window.addEventListener("popstate", onContextSignal);
+  window.addEventListener("resize", onContextSignal, { passive: true });
+  window.navigation?.addEventListener?.("currententrychange", onContextSignal);
+  const stopContextListeners = () => {
+    window.removeEventListener("popstate", onContextSignal);
+    window.removeEventListener("resize", onContextSignal);
+    window.navigation?.removeEventListener?.("currententrychange", onContextSignal);
+  };
   let observedHead = null;
   let observedBody = null;
   let observedStyle = null;
@@ -184,6 +364,7 @@
     || root.dataset.claudeAuraArtMobile !== (settings.artMobile || "reduce")
     || root.dataset.claudeAuraAppearance !== appearance
     || root.dataset.claudeAuraEffectiveMode !== mode()
+    || root.dataset.claudeAuraContext !== currentContext
     || !root.classList.contains("claude-aura")
     || root.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
     || root.classList.contains("claude-aura-animated-image") !== Boolean(settings.imageAnimated)
@@ -210,7 +391,10 @@
         styleDirty = true;
         return true;
       }
-      if (record.target === document.body) return backdrop !== observedBackdrop;
+      if (record.target === document.body || document.body?.contains?.(record.target)) {
+        if (backdrop !== observedBackdrop) return true;
+        if (record.type === "childList") return true;
+      }
       if (style && (record.target === style || style.contains(record.target)) && style.textContent !== cssText) {
         styleDirty = true;
         return true;
@@ -229,17 +413,17 @@
     observer.observe(document.documentElement, {
       childList: true,
       attributes: true,
-      attributeFilter: ["class", "style", "data-claude-aura-theme", "data-claude-aura-variant", "data-claude-aura-art-mobile", "data-claude-aura-appearance", "data-claude-aura-effective-mode", "data-claude-aura-digest"],
+      attributeFilter: ["class", "style", "data-claude-aura-theme", "data-claude-aura-variant", "data-claude-aura-art-mobile", "data-claude-aura-appearance", "data-claude-aura-effective-mode", "data-claude-aura-context", "data-claude-aura-digest"],
     });
     if (head) observer.observe(head, { childList: true });
-    if (body) observer.observe(body, { childList: true });
+    if (body) observer.observe(body, { childList: true, subtree: true });
     if (style) observer.observe(style, { childList: true, characterData: true, subtree: true });
     observedHead = head;
     observedBody = body;
     observedStyle = style;
     observedBackdrop = backdrop;
   };
-  const timer = setInterval(ensure, 4000);
+  const timer = setInterval(ensure, 1500);
   window[STATE_KEY] = {
     cleanup,
     ensure,
@@ -247,6 +431,8 @@
     timer,
     scheduled,
     stopModeListener,
+    stopContextListeners,
+    clearMarkedElements,
     version: settings.version,
     theme: settings.theme,
     digest: settings.digest,

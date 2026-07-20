@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import zlib from "node:zlib";
 import { AURA_VERSION, PROJECT_ROOT } from "./theme-core.mjs";
+import { buildAuraIcon } from "./build-aura-icon.mjs";
 
 const RELEASE_ROOT_FILES = new Set([
   "CONTRIBUTING.md",
@@ -19,10 +20,9 @@ const RELEASE_ROOT_FILES = new Set([
   "package.json",
 ]);
 const RELEASE_DIRECTORIES = new Map([
-  ["assets", new Set([".avif", ".css", ".js", ".md", ".png", ".svg", ".webp"])],
+  ["assets", new Set([".avif", ".css", ".ico", ".js", ".md", ".png", ".svg", ".webp"])],
   ["docs", new Set([".md"])],
   ["macos", new Set([".command", ".sh"])],
-  ["preview", new Set([".css", ".html", ".js"])],
   ["scripts", new Set([".mjs"])],
   ["studio", new Set([".css", ".html", ".js"])],
   ["tests", new Set([".mjs"])],
@@ -30,7 +30,18 @@ const RELEASE_DIRECTORIES = new Map([
   ["vendor", new Set([".dll", ".txt"])],
   ["windows", new Set([".json", ".ps1"])],
 ]);
-const SCREENSHOT_EXTENSIONS = new Set([".avif", ".jpeg", ".jpg", ".png", ".webp"]);
+const RETIRED_RELEASE_FILES = new Set([
+  "scripts/qa-board.mjs",
+  "tests/fixtures/claude-dom.html",
+]);
+const RETIRED_RELEASE_DIRECTORIES = new Set([
+  "docs/golden",
+  "docs/theme-screenshots",
+  "tests/fixtures",
+]);
+const REQUIRED_RELEASE_FILES = new Set([
+  "scripts/asset-audit.mjs",
+]);
 const LOCAL_STATE_NAMES = new Set(["config.json", "config.local.json", "state.json"]);
 const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
   let value = index;
@@ -58,9 +69,16 @@ function isLocalOrTemporary(segments) {
     || /(?:^|\.)local(?:\.|$)/i.test(name);
 }
 
+function isRetiredReleasePath(relativePath) {
+  const normalized = relativePath.replaceAll("\\", "/");
+  if (RETIRED_RELEASE_FILES.has(normalized)) return true;
+  return [...RETIRED_RELEASE_DIRECTORIES].some((directory) => normalized === directory || normalized.startsWith(`${directory}/`));
+}
+
 function shouldEnterDirectory(relativePath) {
   const segments = pathSegments(relativePath);
-  if (segments.length === 0 || isLocalOrTemporary(segments) || !RELEASE_DIRECTORIES.has(segments[0])) return false;
+  if (segments.length === 0 || isLocalOrTemporary(segments) || isRetiredReleasePath(relativePath)
+    || !RELEASE_DIRECTORIES.has(segments[0])) return false;
   // Directories under themes/ are supplied source kits (masters, specs, QA).
   // They are never distributed; only top-level theme JSON files ship.
   if (segments[0] === "themes" && segments.length > 1) return false;
@@ -70,12 +88,11 @@ function shouldEnterDirectory(relativePath) {
 function shouldIncludeFile(relativePath) {
   const normalized = relativePath.replaceAll("\\", "/");
   const segments = pathSegments(normalized);
-  if (segments.length === 0 || isLocalOrTemporary(segments) || normalized === "docs/preview.png") return false;
+  if (segments.length === 0 || isLocalOrTemporary(segments) || isRetiredReleasePath(normalized)) return false;
   if (segments.length === 1) return RELEASE_ROOT_FILES.has(segments[0]);
 
   const root = segments[0];
   const extension = path.extname(segments.at(-1)).toLowerCase();
-  if (root === "docs" && segments[1] === "theme-screenshots" && SCREENSHOT_EXTENSIONS.has(extension)) return true;
   return RELEASE_DIRECTORIES.get(root)?.has(extension) ?? false;
 }
 
@@ -152,9 +169,14 @@ function makeZip(entries) {
   return Buffer.concat([...localParts, centralBytes, end]);
 }
 
+await buildAuraIcon();
 const outputDirectory = path.join(PROJECT_ROOT, "release");
 await fs.mkdir(outputDirectory, { recursive: true });
 const files = (await collect(PROJECT_ROOT)).sort((a, b) => a.archivePath.localeCompare(b.archivePath));
+const releaseRelativePaths = new Set(files.map(({ archivePath }) => archivePath.replace(/^claude-aura\//, "")));
+for (const requiredPath of REQUIRED_RELEASE_FILES) {
+  if (!releaseRelativePaths.has(requiredPath)) throw new Error(`Required release file is missing: ${requiredPath}`);
+}
 const entries = await Promise.all(files.map(async (file) => ({ ...file, bytes: await fs.readFile(file.source) })));
 const zip = makeZip(entries);
 const name = `claude-aura-v${AURA_VERSION}.zip`;

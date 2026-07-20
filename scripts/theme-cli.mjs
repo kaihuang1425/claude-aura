@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateQaBoard } from "./qa-board.mjs";
+import { generateAssetAudit } from "./asset-audit.mjs";
 import {
   buildPayloadFromCompiled,
   compileTheme,
@@ -236,12 +236,12 @@ if (command === "help" || command === "--help") {
   if (positionals.length !== 1 || Object.keys(options).length) {
     throw new Error("Usage: theme-cli qa <id>");
   }
-  const result = await generateQaBoard(positionals[0], { cwd: process.cwd() });
+  const result = await generateAssetAudit(positionals[0], { cwd: process.cwd() });
   const relativePath = (filePath) => path.relative(process.cwd(), filePath).replaceAll(path.sep, "/");
   console.log(JSON.stringify({
     ...result,
     outputDir: relativePath(result.outputDir),
-    boardPath: relativePath(result.boardPath),
+    boardPath: null,
     statusPath: relativePath(result.statusPath),
   }, null, 2));
 } else if (command === "list") {
