@@ -59,10 +59,17 @@ const THEMES = {
     jobs: [
       { src: "atmospheric-background.png", out: "background.webp", width: 1600, cropLeft: 0, quality: 0.78 },
       { src: "claude-kawaii-hero.png", out: "hero.webp", width: 1080, cropLeft: 0.28, quality: 0.8 },
-      { src: "claude-top-right-sakura-cluster-preview.png", out: "sakura-top-right.webp", width: 582, cropLeft: 0, quality: 0.85 },
-      { src: "bottom-right-sakura-cluster.png", out: "sakura-bottom-right.webp", width: 641, cropLeft: 0, quality: 0.85 },
+      {
+        src: "provisional/selected/dark-new-chat.png",
+        out: "dark-new-chat.webp", width: 1600, height: 900, quality: 0.82,
+      },
+      {
+        src: "provisional/selected/dark-conversation.png",
+        out: "dark-conversation.webp", width: 1600, height: 900, quality: 0.82,
+      },
     ],
     copies: [],
+    required: true,
   },
   "korean-idol": {
     sourceDir: path.join(PROJECT_ROOT, "themes", "korean-prestige"),

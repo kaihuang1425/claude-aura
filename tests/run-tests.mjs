@@ -206,6 +206,55 @@ test("registry exposes exactly Default plus the seven requested themes", async (
       contextOverrides: null,
     },
   ]);
+  const japaneseIdol = themes.find((theme) => theme.name === "japanese-idol");
+  assert.equal(japaneseIdol.light.wallpaper.surfaceAlpha, 0.72);
+  assert.equal(japaneseIdol.dark.wallpaper.surfaceAlpha, 0.76);
+  assert.deepEqual(japaneseIdol.artworkLayers, [
+    {
+      path: "assets/theme-art/kawaii-idol/background.webp",
+      position: "center",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.5,
+      mask: "none",
+      role: "background",
+      appearance: "light",
+      contextOverrides: null,
+    },
+    {
+      path: "assets/theme-art/kawaii-idol/hero.webp",
+      position: "right bottom",
+      size: "auto min(86%, 760px)",
+      mobile: "reduce",
+      opacity: 0.92,
+      mask: "soft-right",
+      role: "hero",
+      appearance: "light",
+      contextOverrides: { conversation: { hidden: true }, other: { hidden: true } },
+    },
+    {
+      path: "assets/theme-art/kawaii-idol/dark-new-chat.webp",
+      position: "right top",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.82,
+      mask: "none",
+      role: "background",
+      appearance: "dark",
+      contextOverrides: { conversation: { hidden: true }, other: { hidden: true } },
+    },
+    {
+      path: "assets/theme-art/kawaii-idol/dark-conversation.webp",
+      position: "right top",
+      size: "cover",
+      mobile: "keep",
+      opacity: 0.82,
+      mask: "none",
+      role: "background",
+      appearance: "dark",
+      contextOverrides: { "new-chat": { hidden: true }, other: { hidden: true } },
+    },
+  ]);
   const koreanIdol = themes.find((theme) => theme.name === "korean-idol");
   assert.deepEqual(koreanIdol.newChatLayout, {
     widthRatio: 0.76,
@@ -1424,7 +1473,15 @@ test("theme-cli qa audits every registered layer without generating images", asy
     for (const asset of status.assets) {
       assert(asset.bytes > 0, `${asset.path} is empty`);
       assert.match(asset.sha256, /^[a-f0-9]{64}$/, `${asset.path} is missing its content digest`);
+      assert(asset.image.width > 0 && asset.image.height > 0, `${asset.path} is missing native dimensions`);
+      assert.equal(typeof asset.image.fullBleedExpected, "boolean");
+      assert.equal(typeof asset.image.alphaExpected, "boolean");
+      assert.equal(asset.budget.pass, true, `${asset.path} exceeds its layer budget`);
     }
+    assert.equal(status.budgets.pass, true);
+    assert.equal(status.budgets.limits.chromePayloadBytesExclusive, 65_000);
+    assert.equal(status.budgets.limits.embeddedArtworkBytesExclusive, 1_400_000);
+    assert.equal(status.budgets.limits.rasterLayerBytesExclusive, 400_000);
     assert.deepEqual(status.payloads.map((payload) => payload.mode), ["light", "dark"]);
     for (const payload of status.payloads) {
       assert.equal(payload.theme, "japanese-idol");
@@ -1434,6 +1491,9 @@ test("theme-cli qa audits every registered layer without generating images", asy
         `${payload.mode} payload fell back to the legacy artwork slot`);
       assert.equal(payload.syntax, "pass");
       assert(payload.bytes > 0);
+      assert(payload.embeddedArtworkBytes > 0);
+      assert(payload.chromeBytes > 0 && payload.chromeBytes < 65_000);
+      assert.equal(payload.budgetPass, true);
     }
     const auditSource = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "asset-audit.mjs"), "utf8");
     for (const forbidden of ["claude-dom", "--screenshot", "qa-board", "in-context-payload"]){

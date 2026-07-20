@@ -44,6 +44,14 @@ decoration scoped to `[data-claude-aura-theme="japanese-idol"]`. In light
 appearance the isolated portrait is new-chat-only; conversation pages keep the
 floral atmosphere without placing a faint face behind Claude content.
 
+WO-13's 2026-07-21 actual-Aura evidence records Japanese Idol in Light and Dark
+across both new-chat and conversation contexts under
+`dist/verify/live-aura/wo13-japanese-idol-*-normal-aura-window.jpg`. The live
+review confirms two Light layers on new chat, the floral background alone in
+Light conversation, and exactly one matching context-specific Dark scene in
+each Dark capture, with legible controls and no cross-theme artwork. These
+captures are ready for HUMAN CHECKPOINT C; they do not constitute its approval.
+
 The runtime claude.ai skin ships real artwork through a layered artwork system:
 a theme may declare up to four `artworkLayers` (optimized WebP or SVG), each
 embedded as a data URL only when that theme is active and rendered as an inert,
@@ -385,6 +393,7 @@ Results recorded through 2026-07-21:
 | WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, and Light/Dark payload compilation pass. Actual Aura Light/Dark and 1920 x 1080 Dark evidence remains explicitly deferred to Checkpoint C/WO-16 under WO-09. |
 | WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
 | WO-17 live Aura UX and identity cycle | Complete actual-Aura Light/Dark matrix for all eight themes on live `claude.ai`; Original-look cleanup; Korean Idol new-chat/conversation contexts; representative hover/selected state; Studio Back-to-Aura activation; one content scroller; and Aura title-bar/tray identity at normal DPI and actual 2560 × 1600 / 200% display scaling. |
+| WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass; actual Aura Light/Dark new-chat/conversation captures recorded. HUMAN CHECKPOINT C approval remains pending. |
 
 Before creating an archive, run the checks and then:
 
