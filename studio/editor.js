@@ -2178,93 +2178,33 @@
       announce(tr("stageRealShown"));
     });
 
-    // State matrix: light/dark × new-chat/conversation at a glance.
+    // State matrix: light/dark × new-chat/conversation at a glance. The four
+    // cells and their layer images are built once and reconciled on every
+    // render so a redraw never re-decodes artwork or rebinds click handlers.
     const matrixHost = document.getElementById("stage-matrix");
-    const renderStageMatrix = () => {
-      if (!matrixHost) return;
-      if (!state) {
-        matrixHost.replaceChildren();
-        return;
-      }
-      const [logicalWidth, logicalHeight] = STAGE_SIZES[stageViewport];
-      const hostWidth = matrixHost.clientWidth;
-      const cellWidth = hostWidth > 40 ? Math.max(60, (hostWidth - 30) / 4) : 132;
-      const cellScale = cellWidth / logicalWidth;
+    const matrixCells = [];
+
+    const buildMatrixCells = () => {
       matrixHost.replaceChildren();
+      matrixCells.length = 0;
       for (const mode of ["light", "dark"]) {
         for (const context of ["new-chat", "conversation"]) {
-          const tokens = state.tokens[mode];
           const cell = document.createElement("button");
           cell.type = "button";
           cell.className = "stage-matrix-cell";
-          cell.dataset.active = String(mode === selectedMode && context === stageContext);
-          const modeLabel = tr(mode === "light" ? "lightMode" : "darkMode");
-          const contextLabel = tr(context === "new-chat" ? "stageNewChat" : "stageConversation");
-          cell.setAttribute("aria-label", `${modeLabel} · ${contextLabel}`);
           const frame = document.createElement("span");
           frame.className = "stage-matrix-frame";
-          frame.style.width = `${cellWidth}px`;
-          frame.style.height = `${Math.round(logicalHeight * cellScale)}px`;
-          const miniCanvas = document.createElement("span");
-          miniCanvas.className = "stage-matrix-canvas";
-          miniCanvas.style.width = `${logicalWidth}px`;
-          miniCanvas.style.height = `${logicalHeight}px`;
-          miniCanvas.style.transform = `scale(${cellScale})`;
-          miniCanvas.style.background = tokens.canvas;
+          const canvas = document.createElement("span");
+          canvas.className = "stage-matrix-canvas";
           const art = document.createElement("span");
           art.className = "stage-art";
-          art.style.left = state.shared.backgroundScope === "content" ? `${STAGE_SIDEBAR_WIDTH}px` : "0";
-          for (const layer of state.layers) {
-            if (layer.visible === false || !layer.previewUrl) continue;
-            if (layer.appearance !== "all" && layer.appearance !== mode) continue;
-            if (layer.context !== "all" && layer.context !== context) continue;
-            if (layer.viewport !== "all" && layer.viewport !== stageViewport) continue;
-            const holder = document.createElement("span");
-            holder.className = "stage-layer";
-            holder.dataset.mask = layer.mask;
-            holder.style.opacity = String(layer.opacity);
-            const image = document.createElement("img");
-            image.src = layer.previewUrl;
-            image.alt = "";
-            image.setAttribute("draggable", "false");
-            const frameValues = layer.frames[stageViewport];
-            const anchor = ANCHOR_POINTS[frameValues.anchor] ?? ANCHOR_POINTS.center;
-            image.style.left = `calc(${anchor[0]}% + ${frameValues.positionX}%)`;
-            image.style.top = `calc(${anchor[1]}% + ${frameValues.positionY}%)`;
-            image.style.transform = `translate(${-frameValues.focalX}%, ${-frameValues.focalY}%) scale(${frameValues.scale})`;
-            image.style.transformOrigin = `${frameValues.focalX}% ${frameValues.focalY}%`;
-            holder.appendChild(image);
-            art.appendChild(holder);
-          }
           const sidebar = document.createElement("span");
           sidebar.className = "stage-matrix-sidebar";
-          sidebar.style.width = `${STAGE_SIDEBAR_WIDTH}px`;
-          sidebar.style.background = state.shared.backgroundScope === "full-window"
-            ? `color-mix(in srgb, ${tokens.sidebar} ${Math.round(tokens.sidebarAlpha * 100)}%, transparent)`
-            : tokens.sidebar;
           const block = document.createElement("span");
           block.className = "stage-matrix-block";
-          block.style.background = `color-mix(in srgb, ${tokens.surface} ${Math.round(tokens.surfaceAlpha * 100)}%, transparent)`;
-          block.style.border = `1px solid ${tokens.border}`;
-          block.style.borderRadius = `${state.shared.radius}px`;
-          if (context === "new-chat") {
-            const rect = promptRect(logicalWidth, logicalHeight,
-              state.shared.prompt.width, state.shared.prompt.x, state.shared.prompt.y);
-            block.style.left = `${rect.left}px`;
-            block.style.top = `${rect.top}px`;
-            block.style.width = `${rect.width}px`;
-            block.style.height = `${rect.height}px`;
-          } else {
-            const mainWidth = logicalWidth - STAGE_SIDEBAR_WIDTH;
-            block.style.left = `${STAGE_SIDEBAR_WIDTH + (mainWidth * 0.14)}px`;
-            block.style.top = `${logicalHeight - 134}px`;
-            block.style.width = `${mainWidth * 0.72}px`;
-            block.style.height = "110px";
-          }
-          miniCanvas.append(art, sidebar, block);
-          frame.appendChild(miniCanvas);
+          canvas.append(art, sidebar, block);
+          frame.appendChild(canvas);
           const caption = document.createElement("small");
-          caption.textContent = `${modeLabel} · ${contextLabel}`;
           cell.append(frame, caption);
           cell.addEventListener("click", () => {
             if (selectedMode !== mode) {
@@ -2278,6 +2218,111 @@
             renderStage();
           });
           matrixHost.appendChild(cell);
+          matrixCells.push({ mode, context, cell, frame, canvas, art, sidebar, block, caption, layers: new Map() });
+        }
+      }
+    };
+
+    const reconcileMatrixLayers = (entry) => {
+      const seen = new Set();
+      let previous = null;
+      for (const layer of state.layers) {
+        if (layer.visible === false || !layer.previewUrl) continue;
+        if (layer.appearance !== "all" && layer.appearance !== entry.mode) continue;
+        if (layer.context !== "all" && layer.context !== entry.context) continue;
+        if (layer.viewport !== "all" && layer.viewport !== stageViewport) continue;
+        seen.add(layer.index);
+        let node = entry.layers.get(layer.index);
+        if (node && node.previewUrl !== layer.previewUrl) {
+          node.holder.remove();
+          entry.layers.delete(layer.index);
+          node = null;
+        }
+        if (!node) {
+          const holder = document.createElement("span");
+          holder.className = "stage-layer";
+          const image = document.createElement("img");
+          image.src = layer.previewUrl;
+          image.alt = "";
+          image.setAttribute("draggable", "false");
+          holder.appendChild(image);
+          node = { holder, image, previewUrl: layer.previewUrl };
+          entry.layers.set(layer.index, node);
+        }
+        node.holder.dataset.mask = layer.mask;
+        node.holder.style.opacity = String(layer.opacity);
+        const frameValues = layer.frames[stageViewport];
+        const anchor = ANCHOR_POINTS[frameValues.anchor] ?? ANCHOR_POINTS.center;
+        node.image.style.left = `calc(${anchor[0]}% + ${frameValues.positionX}%)`;
+        node.image.style.top = `calc(${anchor[1]}% + ${frameValues.positionY}%)`;
+        node.image.style.transform = `translate(${-frameValues.focalX}%, ${-frameValues.focalY}%) scale(${frameValues.scale})`;
+        node.image.style.transformOrigin = `${frameValues.focalX}% ${frameValues.focalY}%`;
+        if (previous) previous.after(node.holder);
+        else entry.art.prepend(node.holder);
+        previous = node.holder;
+      }
+      for (const [index, node] of [...entry.layers]) {
+        if (!seen.has(index)) {
+          node.holder.remove();
+          entry.layers.delete(index);
+        }
+      }
+    };
+
+    const renderStageMatrix = () => {
+      if (!matrixHost) return;
+      if (!state) {
+        if (matrixCells.length) {
+          matrixHost.replaceChildren();
+          matrixCells.length = 0;
+        }
+        return;
+      }
+      if (!matrixCells.length) buildMatrixCells();
+      const [logicalWidth, logicalHeight] = STAGE_SIZES[stageViewport];
+      const hostWidth = matrixHost.clientWidth;
+      const cellWidth = hostWidth > 40 ? Math.max(60, (hostWidth - 30) / 4) : 132;
+      const cellScale = cellWidth / logicalWidth;
+      const frameHeight = `${Math.round(logicalHeight * cellScale)}px`;
+      const scope = state.shared.backgroundScope;
+      const artLeft = scope === "content" ? `${STAGE_SIDEBAR_WIDTH}px` : "0";
+      const mainWidth = logicalWidth - STAGE_SIDEBAR_WIDTH;
+      for (const entry of matrixCells) {
+        const { mode, context, cell } = entry;
+        const tokens = state.tokens[mode];
+        cell.dataset.active = String(mode === selectedMode && context === stageContext);
+        const modeLabel = tr(mode === "light" ? "lightMode" : "darkMode");
+        const contextLabel = tr(context === "new-chat" ? "stageNewChat" : "stageConversation");
+        cell.setAttribute("aria-label", `${modeLabel} · ${contextLabel}`);
+        entry.caption.textContent = `${modeLabel} · ${contextLabel}`;
+        entry.frame.style.width = `${cellWidth}px`;
+        entry.frame.style.height = frameHeight;
+        entry.canvas.style.width = `${logicalWidth}px`;
+        entry.canvas.style.height = `${logicalHeight}px`;
+        entry.canvas.style.transform = `scale(${cellScale})`;
+        entry.canvas.style.background = tokens.canvas;
+        entry.art.style.left = artLeft;
+        reconcileMatrixLayers(entry);
+        entry.sidebar.style.width = `${STAGE_SIDEBAR_WIDTH}px`;
+        entry.sidebar.style.background = scope === "full-window"
+          ? `color-mix(in srgb, ${tokens.sidebar} ${Math.round(tokens.sidebarAlpha * 100)}%, transparent)`
+          : tokens.sidebar;
+        const block = entry.block;
+        block.style.background = `color-mix(in srgb, ${tokens.surface} ${Math.round(tokens.surfaceAlpha * 100)}%, transparent)`;
+        block.style.border = `1px solid ${tokens.border}`;
+        block.style.borderRadius = `${state.shared.radius}px`;
+        if (context === "new-chat") {
+          const rect = promptRect(logicalWidth, logicalHeight,
+            state.shared.prompt.width, state.shared.prompt.x, state.shared.prompt.y);
+          block.style.left = `${rect.left}px`;
+          block.style.top = `${rect.top}px`;
+          block.style.width = `${rect.width}px`;
+          block.style.height = `${rect.height}px`;
+        } else {
+          block.style.left = `${STAGE_SIDEBAR_WIDTH + (mainWidth * 0.14)}px`;
+          block.style.top = `${logicalHeight - 134}px`;
+          block.style.width = `${mainWidth * 0.72}px`;
+          block.style.height = "110px";
         }
       }
     };
