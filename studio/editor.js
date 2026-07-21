@@ -1236,9 +1236,21 @@
       return { left: STAGE_SIDEBAR_WIDTH, width: logicalWidth - STAGE_SIDEBAR_WIDTH, height: logicalHeight };
     };
 
+    // Path strings are drawn from a small fixed vocabulary, so parsing each into
+    // segments once and reusing them spares a regex + split on every read — and
+    // a single layout pass reads dozens of paths.
+    const pathSegments = new Map();
+    const segmentsFor = (path) => {
+      let segments = pathSegments.get(path);
+      if (!segments) {
+        segments = path.replace(/\[(\d+)]/g, ".$1").split(".");
+        pathSegments.set(path, segments);
+      }
+      return segments;
+    };
     const statePath = (path) => {
       let node = state;
-      for (const part of path.replace(/\[(\d+)]/g, ".$1").split(".")) {
+      for (const part of segmentsFor(path)) {
         if (node == null) return undefined;
         node = node[part];
       }
