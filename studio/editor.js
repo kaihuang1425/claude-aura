@@ -2889,9 +2889,10 @@
 
     sharedInputs.forEach((input) => {
       const key = input.dataset.editorShared;
+      const unitOutput = key === "radius" ? document.getElementById("editor-radius-output")
+        : key === "blur" ? document.getElementById("editor-blur-output") : null;
       input.addEventListener("input", () => {
-        if (key === "radius") document.getElementById("editor-radius-output").value = `${input.value} px`;
-        if (key === "blur") document.getElementById("editor-blur-output").value = `${input.value} px`;
+        if (unitOutput) unitOutput.value = `${input.value} px`;
         if (input.type === "range") {
           setStageOverride(input.dataset.editorField, input.valueAsNumber);
           applyStageLayout();
