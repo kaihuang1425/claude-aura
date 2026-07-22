@@ -36,7 +36,7 @@
       cropKicker: "Framing",
       cardCropTitle: "Adjust card preview",
       backgroundCropTitle: "Adjust background",
-      cardCropHelp: "Drag the image to choose what appears on the theme card. Use the controls below for precise adjustments.",
+      cardCropHelp: "Drag the preserved master image to choose what appears on the theme card. Aura saves only the frame, so you can reframe it later.",
       backgroundCropHelp: "Drag the image to choose what stays in the Claude background. Save to apply the new framing.",
       dragToReposition: "Drag to reposition",
       horizontalPosition: "Horizontal position",
@@ -96,7 +96,7 @@
       cropKicker: "画面范围",
       cardCropTitle: "调整卡片预览",
       backgroundCropTitle: "调整背景",
-      cardCropHelp: "拖动图片，选择主题卡片中显示的区域。如需精细调整，请使用下方控件。",
+      cardCropHelp: "拖动保留的原图，选择主题卡片中显示的区域。Aura 仅保存画面范围，之后仍可重新调整。",
       backgroundCropHelp: "拖动图片，选择 Claude 背景中保留的区域。保存后会应用新的画面范围。",
       dragToReposition: "拖动以调整位置",
       horizontalPosition: "水平位置",
@@ -156,7 +156,7 @@
       cropKicker: "畫面範圍",
       cardCropTitle: "調整卡片預覽",
       backgroundCropTitle: "調整背景",
-      cardCropHelp: "拖曳圖片，選擇主題卡片要顯示的範圍。需要精細調整時，可使用下方控制項。",
+      cardCropHelp: "拖曳保留的原始圖片，選擇主題卡片要顯示的範圍。Aura 只會儲存畫面範圍，之後仍可重新調整。",
       backgroundCropHelp: "拖曳圖片，選擇 Claude 背景要保留的範圍。儲存後會套用新的畫面範圍。",
       dragToReposition: "拖曳以調整位置",
       horizontalPosition: "水平位置",
@@ -209,6 +209,8 @@
   const adjustThemePreview = document.getElementById("adjust-theme-preview");
   const adjustBackground = document.getElementById("adjust-background");
   const clearImage = document.getElementById("clear-image");
+  const railThemeMark = document.getElementById("rail-theme-mark");
+  const studioThemeIcon = document.getElementById("studio-theme-icon");
   const cropDialog = document.getElementById("crop-dialog");
   const cropTitle = document.getElementById("crop-title");
   const cropHelp = document.getElementById("crop-help");
@@ -230,6 +232,7 @@
     zoom: document.getElementById("crop-zoom-output"),
   };
   const DEFAULT_CROP = Object.freeze({ x: 50, y: 50, zoom: 1 });
+  const CARD_PREVIEW_MAX_ZOOM = 6;
   const state = {
     theme: "default",
     appearance: "system",
@@ -248,6 +251,21 @@
   let cropReturnFocus = null;
   let pendingCropSave = null;
   let appearancePending = false;
+  let editorController = null;
+  let requestedThemeMarkUrl = "";
+
+  railThemeMark.addEventListener("load", () => {
+    railThemeMark.parentElement?.classList.add("has-theme-mark");
+  });
+  railThemeMark.addEventListener("error", () => {
+    railThemeMark.parentElement?.classList.remove("has-theme-mark");
+    const fallback = "https://aura.assets/default/launcher-mark.png";
+    if (requestedThemeMarkUrl !== fallback) {
+      requestedThemeMarkUrl = fallback;
+      railThemeMark.src = fallback;
+      if (studioThemeIcon) studioThemeIcon.href = fallback;
+    }
+  });
 
   const setStatus = (text, tone = "ok") => {
     statusOut.textContent = text;
@@ -258,14 +276,33 @@
   const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
   const normalizeAspectRatio = (value) => finite(value) && value >= 0.5 && value <= 4 ? value : 16 / 9;
-  const normalizeCrop = (value, fallback = DEFAULT_CROP) => ({
+  const normalizeCrop = (value, fallback = DEFAULT_CROP, maximumZoom = 2) => ({
     x: finite(value?.x) ? clamp(value.x, 0, 100) : fallback.x,
     y: finite(value?.y) ? clamp(value.y, 0, 100) : fallback.y,
-    zoom: finite(value?.zoom) ? clamp(value.zoom, 1, 2) : fallback.zoom,
+    zoom: finite(value?.zoom) ? clamp(value.zoom, 1, maximumZoom) : fallback.zoom,
   });
-  const studioPreviewUrl = (value) => {
-    if (typeof value !== "string" || !/^assets\/theme-art\/[a-z0-9-]+\/card-preview\.webp$/.test(value)) return null;
-    return `https://aura.assets/${value.slice("assets/theme-art/".length)}`;
+  const studioPreviewUrl = (value, theme = null) => {
+    if (typeof value !== "string") return null;
+    const master = /^assets\/studio-previews\/masters\/([a-z0-9-]+)\.png$/.exec(value);
+    if (master && (!theme || master[1] === theme.name)) return `https://aura.previews/${master[1]}.png`;
+    if (/^assets\/theme-art\/[a-z0-9-]+\/card-preview\.webp$/.test(value)) {
+      return `https://aura.assets/${value.slice("assets/theme-art/".length)}`;
+    }
+    if (value === "card-preview.webp" && theme?.source === "user" && hostThemeIdPattern.test(theme.name)) {
+      return `https://aura.user-themes/${theme.name}/card-preview.webp`;
+    }
+    return null;
+  };
+  const launcherMarkUrl = (theme) => {
+    const asset = theme?.launcher?.asset;
+    const builtin = typeof asset === "string"
+      ? /^assets\/theme-art\/([a-z0-9-]+)\/launcher-mark\.png$/.exec(asset)
+      : null;
+    if (builtin) return `https://aura.assets/${builtin[1]}/launcher-mark.png`;
+    if (asset === "launcher-mark.png" && theme?.source === "user" && hostThemeIdPattern.test(theme.name)) {
+      return `https://aura.user-themes/${theme.name}/launcher-mark.png`;
+    }
+    return "https://aura.assets/default/launcher-mark.png";
   };
   const backgroundPreviewUrl = (value) => {
     if (typeof value !== "string") return null;
@@ -277,7 +314,10 @@
       return url.href;
     } catch { return null; }
   };
-  const cropForTheme = (themeId) => normalizeCrop(state.studioPreviewCrops[themeId]);
+  const defaultCropForTheme = (themeId) => normalizeCrop(
+    themes[themeId]?.studioPreviewFrame, DEFAULT_CROP, CARD_PREVIEW_MAX_ZOOM);
+  const cropForTheme = (themeId) => normalizeCrop(
+    state.studioPreviewCrops[themeId], defaultCropForTheme(themeId), CARD_PREVIEW_MAX_ZOOM);
   const cropsEqual = (left, right) => left && right
     && Math.abs(left.x - right.x) < 0.011
     && Math.abs(left.y - right.y) < 0.011
@@ -345,7 +385,15 @@
     toggleEnabled.setAttribute("aria-pressed", String(state.enabled));
     toggleEnabled.textContent = state.enabled ? t("originalLook") : t("applyTheme");
     const activeTheme = themes[state.theme];
-    const activeThemeImage = activeTheme ? studioPreviewUrl(activeTheme.studioPreview) : null;
+    const identityTheme = state.enabled ? activeTheme : themes.default;
+    const themeMarkUrl = launcherMarkUrl(identityTheme);
+    if (requestedThemeMarkUrl !== themeMarkUrl) {
+      requestedThemeMarkUrl = themeMarkUrl;
+      railThemeMark.parentElement?.classList.remove("has-theme-mark");
+      railThemeMark.src = themeMarkUrl;
+      if (studioThemeIcon) studioThemeIcon.href = themeMarkUrl;
+    }
+    const activeThemeImage = activeTheme ? studioPreviewUrl(activeTheme.studioPreview, activeTheme) : null;
     adjustThemePreview.hidden = !activeThemeImage;
     if (activeThemeImage) {
       adjustThemePreview.setAttribute("aria-label", t("adjustPreviewFor")
@@ -364,10 +412,15 @@
   const hostThemeIdPattern = /^[a-z][a-z0-9-]{1,39}$/;
   const hostThemeColorPattern = /^#[0-9a-f]{6}$/i;
   const hostThemeKeys = new Set([
-    "name", "label", "description", "labels", "descriptions", "swatches", "preview", "studioPreview", "source",
+    "name", "label", "description", "labels", "descriptions", "swatches", "preview", "launcher", "studioPreview",
+    "studioPreviewFrame", "source",
   ]);
   const hostThemeLocales = new Set(["en", "zh-CN", "zh-TW"]);
   const hostThemePreviewKeys = new Set(["chrome", "background", "surface", "accent", "text"]);
+  const hostThemeLauncherKeys = new Set([
+    "asset", "surface", "surfaceHover", "foreground", "accent", "border", "radius", "borderWidth",
+  ]);
+  const hostThemeLauncherAssetPattern = /^(?:assets\/theme-art\/[a-z0-9-]+\/launcher-mark\.png|launcher-mark\.png)$/;
 
   const plainRecord = (value) => value && typeof value === "object" && !Array.isArray(value);
   const hostText = (value, maximum) => {
@@ -420,8 +473,38 @@
 
     let studioPreview;
     if (value.studioPreview !== undefined) {
-      if (value.studioPreview !== null && !studioPreviewUrl(value.studioPreview)) return null;
+      if (value.studioPreview !== null && !studioPreviewUrl(value.studioPreview, value)) return null;
       studioPreview = value.studioPreview;
+    }
+
+    let studioPreviewFrame;
+    if (value.studioPreviewFrame !== undefined) {
+      if (!plainRecord(value.studioPreviewFrame)
+          || Object.keys(value.studioPreviewFrame).sort().join(",") !== "x,y,zoom"
+          || !finite(value.studioPreviewFrame.x) || value.studioPreviewFrame.x < 0 || value.studioPreviewFrame.x > 100
+          || !finite(value.studioPreviewFrame.y) || value.studioPreviewFrame.y < 0 || value.studioPreviewFrame.y > 100
+          || !finite(value.studioPreviewFrame.zoom) || value.studioPreviewFrame.zoom < 1
+          || value.studioPreviewFrame.zoom > CARD_PREVIEW_MAX_ZOOM) return null;
+      studioPreviewFrame = { ...value.studioPreviewFrame };
+    }
+
+    let launcher;
+    if (value.launcher !== undefined) {
+      if (!plainRecord(value.launcher)
+          || Object.keys(value.launcher).some((key) => !hostThemeLauncherKeys.has(key))
+          || typeof value.launcher.asset !== "string"
+          || !hostThemeLauncherAssetPattern.test(value.launcher.asset)) return null;
+      launcher = Object.create(null);
+      for (const key of ["surface", "surfaceHover", "foreground", "accent", "border"]) {
+        if (typeof value.launcher[key] !== "string" || !hostThemeColorPattern.test(value.launcher[key])) return null;
+        launcher[key] = value.launcher[key];
+      }
+      if (typeof value.launcher.radius !== "number" || value.launcher.radius < 8 || value.launcher.radius > 24
+          || typeof value.launcher.borderWidth !== "number" || value.launcher.borderWidth < 1
+          || value.launcher.borderWidth > 3) return null;
+      launcher.asset = value.launcher.asset;
+      launcher.radius = value.launcher.radius;
+      launcher.borderWidth = value.launcher.borderWidth;
     }
 
     let source;
@@ -438,13 +521,53 @@
       ...(descriptions === undefined ? {} : { descriptions }),
       ...(swatches === undefined ? {} : { swatches }),
       ...(preview === undefined ? {} : { preview }),
+      ...(launcher === undefined ? {} : { launcher }),
       ...(studioPreview === undefined ? {} : { studioPreview }),
+      ...(studioPreviewFrame === undefined ? {} : { studioPreviewFrame }),
       ...(source === undefined ? {} : { source }),
     };
   };
 
   const themeCardInput = (themeId) => [...grid.querySelectorAll("input[name='theme']")]
     .find((input) => input.value === themeId) ?? null;
+  const focusThemeCard = (themeId) => themeCardInput(themeId)?.focus();
+  const themeSource = (theme) => bundledThemeIds.has(theme.name) ? "builtin" : (theme.source ?? "user");
+  const syncThemeCardActions = (card, theme) => {
+    card.querySelector(".theme-card-actions")?.remove();
+    const actions = document.createElement("div");
+    actions.className = "theme-card-actions";
+    const source = themeSource(theme);
+    const sourceBadge = document.createElement("span");
+    sourceBadge.className = "theme-source-badge";
+    sourceBadge.textContent = editorController?.translate(source === "builtin" ? "builtInTheme" : "customTheme")
+      ?? (source === "builtin" ? "Built-in" : "Custom");
+    actions.appendChild(sourceBadge);
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "ghost-button";
+    if (source === "builtin") {
+      action.textContent = editorController?.translate("duplicateToCustomize") ?? "Duplicate to customize";
+      action.addEventListener("click", () => {
+        setStatus(t("statusApplying"), "busy");
+        send({ type: "create-theme-copy", theme: theme.name });
+      });
+      actions.appendChild(action);
+    } else {
+      action.textContent = editorController?.translate("editTheme") ?? "Edit";
+      action.addEventListener("click", () => {
+        setStatus(t("statusApplying"), "busy");
+        send({ type: "begin-theme-edit", theme: theme.name, reset: false });
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "ghost-button";
+      remove.textContent = editorController?.translate("deleteTheme") ?? "Delete";
+      remove.addEventListener("click", () => editorController?.requestDelete(
+        theme.name, localized(theme.labels, theme.label), remove));
+      actions.append(action, remove);
+    }
+    card.appendChild(actions);
+  };
   const removeHostThemeCard = (themeId) => {
     const item = cardFrames.get(themeId);
     if (item) cropResizeObserver?.unobserve(item.frame);
@@ -454,6 +577,8 @@
   const createHostThemeCard = (theme) => {
     const card = document.createElement("div");
     card.className = "theme-card";
+    const choice = document.createElement("div");
+    choice.className = "theme-card-choice";
     const input = document.createElement("input");
     input.type = "radio";
     input.name = "theme";
@@ -462,7 +587,7 @@
     const label = document.createElement("label");
     label.htmlFor = input.id;
 
-    const imageUrl = studioPreviewUrl(theme.studioPreview);
+    const imageUrl = studioPreviewUrl(theme.studioPreview, theme);
     if (imageUrl) {
       const frame = document.createElement("span");
       frame.className = "theme-card-preview-frame";
@@ -527,7 +652,8 @@
     badge.className = "selected-badge";
     badge.setAttribute("aria-hidden", "true");
     badge.textContent = t("selected");
-    card.append(input, label, badge);
+    choice.append(input, label, badge);
+    card.appendChild(choice);
     input.addEventListener("change", () => {
       state.theme = theme.name;
       state.enabled = true;
@@ -537,6 +663,7 @@
       }
       reflect();
     });
+    syncThemeCardActions(card, theme);
     grid.appendChild(card);
     if (imageUrl) layoutCardCrop(theme.name);
     return card;
@@ -569,6 +696,8 @@
           : incomingTheme.studioPreview;
         Object.assign(existing, incomingTheme, { labels, descriptions, preview });
         if (bundledPreview !== undefined) existing.studioPreview = bundledPreview;
+        const card = themeCardInput(incomingTheme.name)?.closest(".theme-card");
+        if (card) syncThemeCardActions(card, existing);
       } else {
         themes[incomingTheme.name] = incomingTheme;
         createHostThemeCard(incomingTheme);
@@ -581,9 +710,20 @@
     bridge.postMessage(message);
     return true;
   };
+  editorController = window.CLAUDE_AURA_EDITOR?.createController({
+    locale,
+    send,
+    setStatus,
+    translate: t,
+    focusThemeCard,
+  }) ?? null;
   if (bridge) {
     bridge.addEventListener("message", (event) => {
       const data = event.data ?? {};
+      if (data.type === "aura-mirror") {
+        editorController?.receiveMirror?.(data);
+        return;
+      }
       if (data.type === "state") {
         state.connected = true;
         let appearanceAcknowledged = false;
@@ -604,14 +744,16 @@
         const incomingCrops = Object.create(null);
         if (data.studioPreviewCrops && typeof data.studioPreviewCrops === "object" && !Array.isArray(data.studioPreviewCrops)) {
           for (const [themeId, crop] of Object.entries(data.studioPreviewCrops)) {
-            if (Object.hasOwn(themes, themeId) && studioPreviewUrl(themes[themeId].studioPreview)) {
-              incomingCrops[themeId] = normalizeCrop(crop);
+            if (Object.hasOwn(themes, themeId) && studioPreviewUrl(themes[themeId].studioPreview, themes[themeId])) {
+              incomingCrops[themeId] = normalizeCrop(
+                crop, defaultCropForTheme(themeId), CARD_PREVIEW_MAX_ZOOM);
             }
           }
         }
         state.studioPreviewCrops = incomingCrops;
         if (typeof data.status === "string") setStatus(data.status, data.tone ?? "ok");
         else if (appearanceAcknowledged) setStatus(t("statusReady"));
+        if (Object.hasOwn(data, "editor")) editorController?.receive(data.editor, state.appearance);
         if (cropContext?.kind === "background") {
           cropStage.style.setProperty("--crop-aspect-ratio", String(state.backgroundAspectRatio));
           syncCropEditor();
@@ -655,59 +797,10 @@
     });
   }
 
-  for (const theme of Object.values(themes)) {
-    const preview = theme.preview ?? {};
-    const imageUrl = studioPreviewUrl(theme.studioPreview);
-    const card = document.createElement("div");
-    card.className = "theme-card";
-    const inputId = `theme-${theme.name}`;
-    const swatches = (theme.swatches ?? []).slice(0, 4)
-      .map((color) => `<i style="background:${color}"></i>`).join("");
-    const previewMarkup = imageUrl
-      ? `<span class="theme-card-preview-frame" data-theme="${theme.name}" aria-hidden="true">
-          <img class="theme-card-preview" src="${imageUrl}" alt="" aria-hidden="true" draggable="false">
-        </span>`
-      : `<span class="mini" style="background:${preview.background ?? "#eee"}" aria-hidden="true">
-          <span class="mini-chrome" style="background:${preview.chrome ?? "#222"}">
-            <i style="background:${preview.text ?? "#fff"}"></i><i style="background:${preview.text ?? "#fff"}"></i>
-          </span>
-          <span class="mini-surface" style="background:${preview.surface ?? "#fff"}">
-            <span class="mini-text" style="background:${preview.text ?? "#333"}"></span>
-            <span class="mini-accent" style="background:${preview.accent ?? "#888"}"></span>
-          </span>
-        </span>`;
-    card.innerHTML = `
-      <input type="radio" name="theme" id="${inputId}" value="${theme.name}">
-      <label for="${inputId}">
-        ${previewMarkup}
-        <span class="theme-card-body">
-          <strong></strong>
-          <small></small>
-          <span class="swatches" aria-hidden="true">${swatches}</span>
-        </span>
-      </label>
-      <span class="selected-badge" aria-hidden="true">${t("selected")}</span>`;
-    card.querySelector("strong").textContent = localized(theme.labels, theme.label);
-    card.querySelector("small").textContent = localized(theme.descriptions, theme.description);
-    card.querySelector("input").addEventListener("change", () => {
-      state.theme = theme.name;
-      state.enabled = true;
-      setStatus(t("statusApplying"), "busy");
-      if (!send({ type: "set-theme", theme: theme.name })) {
-        setStatus(t("statusActive").replace("{0}", localized(theme.labels, theme.label)));
-      }
-      reflect();
-    });
-    grid.appendChild(card);
-    if (imageUrl) {
-      const frame = card.querySelector(".theme-card-preview-frame");
-      const image = frame.querySelector(".theme-card-preview");
-      cardFrames.set(theme.name, { frame, image });
-      image.addEventListener("load", () => layoutCardCrop(theme.name));
-      cropResizeObserver?.observe(frame);
-      layoutCardCrop(theme.name);
-    }
-  }
+  // Bundled themes render through the same DOM builder as host-installed themes
+  // (createHostThemeCard) so card structure, preview/crop wiring, and per-source
+  // actions have one source of truth instead of a parallel innerHTML template.
+  for (const theme of Object.values(themes)) createHostThemeCard(theme);
 
   toggleEnabled.addEventListener("click", () => {
     state.enabled = !state.enabled;
@@ -735,14 +828,26 @@
 
   const updateCropDraft = (patch) => {
     if (!cropContext) return;
-    cropContext.draft = normalizeCrop({ ...cropContext.draft, ...patch }, cropContext.draft);
+    cropContext.draft = normalizeCrop(
+      { ...cropContext.draft, ...patch }, cropContext.draft, cropContext.maximumZoom);
     syncCropEditor();
   };
 
-  const openCropEditor = ({ kind, theme = null, imageUrl, crop, positionSupported = true }, opener) => {
+  const openCropEditor = ({
+    kind, theme = null, imageUrl, crop, defaultCrop = DEFAULT_CROP, positionSupported = true,
+  }, opener) => {
     if (!imageUrl) { setStatus(t("previewUnavailable"), "error"); return; }
     cropReturnFocus = opener;
-    cropContext = { kind, theme, draft: normalizeCrop(crop) };
+    const maximumZoom = kind === "card" ? CARD_PREVIEW_MAX_ZOOM : 2;
+    const resetCrop = normalizeCrop(defaultCrop, DEFAULT_CROP, maximumZoom);
+    cropContext = {
+      kind,
+      theme,
+      maximumZoom,
+      resetCrop,
+      draft: normalizeCrop(crop, resetCrop, maximumZoom),
+    };
+    cropInputs.zoom.max = String(maximumZoom * 100);
     cropStage.dataset.kind = kind;
     cropStage.style.setProperty("--crop-aspect-ratio", String(
       kind === "card" ? 3 / 2 : state.backgroundAspectRatio));
@@ -766,8 +871,14 @@
 
   adjustThemePreview.addEventListener("click", () => {
     const theme = themes[state.theme];
-    const imageUrl = theme ? studioPreviewUrl(theme.studioPreview) : null;
-    openCropEditor({ kind: "card", theme: state.theme, imageUrl, crop: cropForTheme(state.theme) }, adjustThemePreview);
+    const imageUrl = theme ? studioPreviewUrl(theme.studioPreview, theme) : null;
+    openCropEditor({
+      kind: "card",
+      theme: state.theme,
+      imageUrl,
+      crop: cropForTheme(state.theme),
+      defaultCrop: defaultCropForTheme(state.theme),
+    }, adjustThemePreview);
   });
   adjustBackground.addEventListener("click", () => {
     openCropEditor({
@@ -782,7 +893,7 @@
     cropInputs[axis].addEventListener("input", () => updateCropDraft({ [axis]: Number(cropInputs[axis].value) }));
   }
   cropInputs.zoom.addEventListener("input", () => updateCropDraft({ zoom: Number(cropInputs.zoom.value) / 100 }));
-  cropReset.addEventListener("click", () => updateCropDraft(DEFAULT_CROP));
+  cropReset.addEventListener("click", () => updateCropDraft(cropContext?.resetCrop ?? DEFAULT_CROP));
 
   cropStage.addEventListener("pointerdown", (event) => {
     if (!cropContext || pendingCropSave || (event.button !== 0 && event.pointerType !== "touch")) return;
@@ -818,7 +929,7 @@
   cropStage.addEventListener("pointercancel", endCropDrag);
   cropSave.addEventListener("click", () => {
     if (!cropContext) return;
-    const saved = normalizeCrop(cropContext.draft);
+    const saved = normalizeCrop(cropContext.draft, cropContext.resetCrop, cropContext.maximumZoom);
     const message = cropContext.kind === "card"
       ? { type: "set-card-preview-crop", theme: cropContext.theme, ...saved }
       : { type: "set-image-framing", ...saved };

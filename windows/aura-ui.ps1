@@ -19,9 +19,15 @@ $LogPath = Join-Path $DataRoot 'aura-ui.log'
 $UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
 $StudioRoot = Join-Path $Root 'studio'
 $ThemeArtRoot = Join-Path $Root 'assets\theme-art'
+$StudioPreviewRoot = Join-Path $Root 'assets\studio-previews\masters'
 $AuraIconPath = Join-Path $Root 'assets\brand\claude-aura.ico'
 $StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
 $StudioBackgroundMaxBytes = 16 * 1024 * 1024
+$StudioEditorRoot = Join-Path $DataRoot 'theme-drafts'
+$StudioEditorPreviewRoot = Join-Path $StudioEditorRoot 'preview'
+$StudioEditorImportRoot = Join-Path $StudioEditorRoot 'imports'
+$StudioEditorImageMaxBytes = 16 * 1024 * 1024
+$ThemeAssetConverter = Join-Path $Root 'scripts\convert-theme-assets.mjs'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 function Write-AuraUiLog {
@@ -107,7 +113,9 @@ function ConvertTo-AuraUiThemeMetadata {
     descriptions = Get-AuraUiPropertyValue -InputObject $Item -Names @('descriptions')
     swatches = @(Get-AuraUiPropertyValue -InputObject $Item -Names @('swatches'))
     preview = Get-AuraUiPropertyValue -InputObject $Item -Names @('preview')
+    launcher = Get-AuraUiPropertyValue -InputObject $Item -Names @('launcher')
     studioPreview = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreview')
+    studioPreviewFrame = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreviewFrame')
     source = Get-AuraUiPropertyValue -InputObject $Item -Names @('source')
   }
 }
@@ -138,6 +146,42 @@ function New-AuraUiIcon {
     $source = [Drawing.Icon]::new($stream, $Size, $Size)
     return [Drawing.Icon]$source.Clone()
   } finally {
+    if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
+}
+
+function New-AuraUiThemeIcon {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [ValidateSet(16, 20, 24, 32, 40, 48, 64, 128)][int]$Size = 32
+  )
+  $stream = $null
+  $source = $null
+  $canvas = $null
+  $graphics = $null
+  $handle = [IntPtr]::Zero
+  try {
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Image]::FromStream($stream)
+    $canvas = [Drawing.Bitmap]::new($Size, $Size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [Drawing.Graphics]::FromImage($canvas)
+    $graphics.Clear([Drawing.Color]::Transparent)
+    $graphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
+    $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $Size, $Size))
+    $handle = $canvas.GetHicon()
+    $borrowed = [Drawing.Icon]::FromHandle($handle)
+    return [Drawing.Icon]$borrowed.Clone()
+  } finally {
+    if ($handle -ne [IntPtr]::Zero -and ('AuraWindow' -as [type])) {
+      try { [void][AuraWindow]::DestroyIcon($handle) } catch {}
+    }
+    if ($null -ne $graphics) { $graphics.Dispose() }
+    if ($null -ne $canvas) { $canvas.Dispose() }
     if ($null -ne $source) { $source.Dispose() }
     if ($null -ne $stream) { $stream.Dispose() }
   }
@@ -213,16 +257,20 @@ function Set-AuraUiPayloadState {
   if ($match.Success) { $script:ActiveLabel = $match.Groups['label'].Value }
   $themeMatch = [regex]::Match($script:Payload, '"theme":"(?<theme>[^"\\]+)"')
   if ($themeMatch.Success) { $script:ActiveThemeName = $themeMatch.Groups['theme'].Value }
+  Update-AuraUiLauncherStyle
 }
 
 function Set-AuraUiConfig {
   param([string[]]$Options)
+  $editorPayload = if ($script:StudioEditorState -and
+      (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true -and
+      $script:Payload) { $script:Payload } else { $null }
   $arguments = @($ThemeCli, 'set', '--config', $ConfigPath, '--user-themes', $UserThemesRoot) + $Options
   if ($script:Locale) { $arguments += @('--locale', $script:Locale) }
   $arguments += '--payload'
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
   $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  Set-AuraUiPayloadState -Payload $payload
+  Set-AuraUiPayloadState -Payload $(if ($editorPayload) { $editorPayload } else { $payload })
   if ($script:WebReady -or $script:StudioReady) { Set-AuraUiPreferredColorScheme }
   Update-AuraUiTrayAppearance
   Send-AuraUiStudioState
@@ -347,12 +395,319 @@ function Set-AuraUiPreferredColorScheme {
 }
 
 function Update-AuraUiTrayAppearance {
-  if ($null -eq $script:TrayAppearanceItem -or $script:TrayAppearanceItem.IsDisposed) { return }
-  $script:TrayAppearanceItem.Text = if (Get-AuraUiEnabled) {
+  $appearanceText = if (Get-AuraUiEnabled) {
     "$($script:UiCopy.originalLook)"
   } else {
     "$($script:UiCopy.applyTheme)"
   }
+  if ($null -ne $script:TrayAppearanceItem -and -not $script:TrayAppearanceItem.IsDisposed) {
+    $script:TrayAppearanceItem.Text = $appearanceText
+  }
+  if ($null -ne $script:LauncherAppearanceItem -and -not $script:LauncherAppearanceItem.IsDisposed) {
+    $script:LauncherAppearanceItem.Text = $appearanceText
+  }
+  Update-AuraUiLauncherStyle
+}
+
+function Get-AuraUiLauncherDefaultStyle {
+  return [PSCustomObject]@{
+    asset = 'assets/theme-art/default/launcher-mark.png'
+    surface = '#2F2937'
+    surfaceHover = '#3B3346'
+    foreground = '#F4DFBB'
+    accent = '#D66D4B'
+    border = '#655C70'
+    radius = 16
+    borderWidth = 1
+  }
+}
+
+function Get-AuraUiLauncherStyle {
+  $fallback = Get-AuraUiLauncherDefaultStyle
+  $themeName = if (Get-AuraUiEnabled) { Get-AuraUiSelectedThemeName } else { 'default' }
+  if (-not $themeName) { $themeName = 'default' }
+  $theme = Get-AuraUiThemeByName -Name $themeName
+  $raw = if ($null -ne $theme) { Get-AuraUiPropertyValue -InputObject $theme -Names @('launcher') } else { $null }
+  if ($null -eq $raw) { $raw = $fallback }
+  $style = [ordered]@{}
+  foreach ($key in @('surface', 'surfaceHover', 'foreground', 'accent', 'border')) {
+    $candidate = Get-AuraUiPropertyValue -InputObject $raw -Names @($key)
+    if ($null -eq $candidate -or "$candidate" -cnotmatch '^#[0-9A-Fa-f]{6}$') { $candidate = $fallback.$key }
+    $style[$key] = "$candidate".ToUpperInvariant()
+  }
+  $radius = Get-AuraUiPropertyValue -InputObject $raw -Names @('radius')
+  $borderWidth = Get-AuraUiPropertyValue -InputObject $raw -Names @('borderWidth')
+  try { $radius = [double]$radius } catch { $radius = [double]$fallback.radius }
+  try { $borderWidth = [double]$borderWidth } catch { $borderWidth = [double]$fallback.borderWidth }
+  if ([double]::IsNaN($radius) -or [double]::IsInfinity($radius) -or $radius -lt 8 -or $radius -gt 24) {
+    $radius = [double]$fallback.radius
+  }
+  if ([double]::IsNaN($borderWidth) -or [double]::IsInfinity($borderWidth) -or $borderWidth -lt 1 -or $borderWidth -gt 3) {
+    $borderWidth = [double]$fallback.borderWidth
+  }
+  $asset = Get-AuraUiPropertyValue -InputObject $raw -Names @('asset')
+  if ($null -eq $asset) { $asset = $fallback.asset }
+  $style.asset = "$asset"
+  $style.radius = $radius
+  $style.borderWidth = $borderWidth
+  $style.source = if ($null -ne $theme) { "$($theme.source)" } else { 'builtin' }
+  $style.theme = "$themeName"
+  return [PSCustomObject]$style
+}
+
+function Get-AuraUiLauncherAssetPath {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  $relative = "$($Style.asset)".Replace('/', [IO.Path]::DirectorySeparatorChar)
+  try {
+    if ("$($Style.asset)" -cmatch '^assets/theme-art/[a-z][a-z0-9-]{1,39}/launcher-mark\.png$') {
+      $rootPath = [IO.Path]::GetFullPath($ThemeArtRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
+      $candidate = [IO.Path]::GetFullPath((Join-Path $Root $relative))
+      if (-not $candidate.StartsWith($rootPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        return $null
+      }
+    } elseif ("$($Style.asset)" -ceq 'launcher-mark.png' -and "$($Style.source)" -ceq 'user') {
+      $themeRoot = [IO.Path]::GetFullPath((Join-Path $UserThemesRoot "$($Style.theme)"))
+      $candidate = [IO.Path]::GetFullPath((Join-Path $themeRoot 'launcher-mark.png'))
+      if (-not $candidate.StartsWith($themeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        return $null
+      }
+    } else {
+      return $null
+    }
+    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $null }
+    $item = Get-Item -LiteralPath $candidate -Force
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $null }
+    return $candidate
+  } catch { return $null }
+}
+
+function New-AuraUiRoundedRectanglePath {
+  param([Parameter(Mandatory = $true)][Drawing.RectangleF]$Bounds, [double]$Radius)
+  $path = [Drawing.Drawing2D.GraphicsPath]::new()
+  $radiusValue = [float][Math]::Max(1, [Math]::Min($Radius, [Math]::Min($Bounds.Width, $Bounds.Height) / 2))
+  $diameter = $radiusValue * 2
+  $path.AddArc($Bounds.Left, $Bounds.Top, $diameter, $diameter, 180, 90)
+  $path.AddArc($Bounds.Right - $diameter, $Bounds.Top, $diameter, $diameter, 270, 90)
+  $path.AddArc($Bounds.Right - $diameter, $Bounds.Bottom - $diameter, $diameter, $diameter, 0, 90)
+  $path.AddArc($Bounds.Left, $Bounds.Bottom - $diameter, $diameter, $diameter, 90, 90)
+  $path.CloseFigure()
+  return $path
+}
+
+function Update-AuraUiThemeIcons {
+  param([AllowNull()][string]$AssetPath)
+  if (-not $AssetPath -or -not ('AuraWindow' -as [type])) { return }
+  if ([string]::Equals($script:ThemeIdentityAssetPath, $AssetPath, [StringComparison]::OrdinalIgnoreCase)) { return }
+
+  $main = $null
+  $studio = $null
+  $notification = $null
+  try {
+    $main = New-AuraUiThemeIcon -Path $AssetPath -Size 64
+    $studio = New-AuraUiThemeIcon -Path $AssetPath -Size 64
+    $notification = New-AuraUiThemeIcon -Path $AssetPath -Size 32
+  } catch {
+    foreach ($pending in @($main, $studio, $notification)) {
+      if ($null -ne $pending) { try { $pending.Dispose() } catch {} }
+    }
+    Write-AuraUiLog -Message "Theme app icon could not be loaded: $($_.Exception.Message)"
+    return
+  }
+
+  $oldIcons = @($script:MainIcon, $script:StudioIcon, $script:NotificationIcon)
+  $script:MainIcon = $main
+  $script:StudioIcon = $studio
+  $script:NotificationIcon = $notification
+  $script:ThemeIdentityAssetPath = $AssetPath
+  if ($null -ne $script:Form -and -not $script:Form.IsDisposed) { $script:Form.Icon = $script:MainIcon }
+  if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Icon = $script:StudioIcon }
+  if ($null -ne $script:TrayIcon) { $script:TrayIcon.Icon = $script:NotificationIcon }
+  foreach ($oldIcon in $oldIcons) {
+    if ($null -ne $oldIcon) { try { $oldIcon.Dispose() } catch {} }
+  }
+}
+
+function Update-AuraUiLauncherRegion {
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  $radius = if ($null -ne $script:LauncherStyle) { [double]$script:LauncherStyle.radius } else { 16 }
+  $bounds = [Drawing.RectangleF]::new(0, 0, $script:Launcher.ClientSize.Width, $script:Launcher.ClientSize.Height)
+  $path = New-AuraUiRoundedRectanglePath -Bounds $bounds -Radius $radius
+  $oldRegion = $script:Launcher.Region
+  $script:Launcher.Region = [Drawing.Region]::new($path)
+  $path.Dispose()
+  if ($null -ne $oldRegion) { $oldRegion.Dispose() }
+}
+
+function Update-AuraUiLauncherStyle {
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  $style = Get-AuraUiLauncherStyle
+  $assetPath = Get-AuraUiLauncherAssetPath -Style $style
+  if ($null -eq $assetPath -and "$($style.asset)" -cne 'assets/theme-art/default/launcher-mark.png') {
+    $style = Get-AuraUiLauncherDefaultStyle
+    Add-Member -InputObject $style -NotePropertyName source -NotePropertyValue 'builtin' -Force
+    Add-Member -InputObject $style -NotePropertyName theme -NotePropertyValue 'default' -Force
+    $assetPath = Get-AuraUiLauncherAssetPath -Style $style
+  }
+  $mark = $null
+  if ($assetPath) {
+    $stream = $null
+    $source = $null
+    try {
+      $stream = [IO.File]::Open($assetPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+      $source = [Drawing.Image]::FromStream($stream)
+      $mark = [Drawing.Bitmap]::new($source)
+    } catch { Write-AuraUiLog -Message "Launcher mark could not be loaded: $($_.Exception.Message)" }
+    finally {
+      if ($null -ne $source) { $source.Dispose() }
+      if ($null -ne $stream) { $stream.Dispose() }
+    }
+  }
+  if ($null -ne $script:LauncherMark) { $script:LauncherMark.Dispose() }
+  $script:LauncherMark = $mark
+  $script:LauncherStyle = $style
+  $script:Launcher.BackColor = [Drawing.ColorTranslator]::FromHtml("$($style.surface)")
+  if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
+    $script:LauncherButton.BackColor = $script:Launcher.BackColor
+    $script:LauncherButton.FlatAppearance.MouseOverBackColor = $script:Launcher.BackColor
+    $script:LauncherButton.FlatAppearance.MouseDownBackColor = $script:Launcher.BackColor
+    $script:LauncherButton.Invalidate()
+  }
+  Update-AuraUiThemeIcons -AssetPath $assetPath
+  Update-AuraUiLauncherRegion
+}
+
+function Set-AuraUiLauncherExpanded {
+  param([bool]$Expanded)
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or $script:LauncherDragging) { return }
+  $targetWidth = if ($Expanded) { $script:LauncherExpandedWidth } else { $script:LauncherCompactSize }
+  if ($script:Launcher.ClientSize.Width -eq $targetWidth -and $script:LauncherExpanded -eq $Expanded) { return }
+  $oldBounds = $script:Launcher.Bounds
+  if ($Expanded) {
+    try {
+      $formLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0)).X
+      $formCenter = $formLeft + ($script:Form.ClientSize.Width / 2)
+      $script:LauncherExpandsLeft = ($oldBounds.Left + ($oldBounds.Width / 2)) -ge $formCenter
+    } catch { $script:LauncherExpandsLeft = $true }
+  }
+  $anchor = if ($script:LauncherExpandsLeft) { $oldBounds.Right } else { $oldBounds.Left }
+  $script:Launcher.ClientSize = [Drawing.Size]::new($targetWidth, $script:LauncherCompactSize)
+  $targetX = if ($script:LauncherExpandsLeft) { $anchor - $targetWidth } else { $anchor }
+  $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location ([Drawing.Point]::new($targetX, $oldBounds.Top))
+  $script:LauncherExpanded = $Expanded
+  Update-AuraUiLauncherRegion
+  if ($null -ne $script:LauncherButton) { $script:LauncherButton.Invalidate() }
+}
+
+function Test-AuraUiLauncherGrip {
+  param([Parameter(Mandatory = $true)][Drawing.Point]$Location)
+  if (-not $script:LauncherExpanded) { return $false }
+  if ($script:LauncherExpandsLeft) { return $Location.X -le 38 }
+  return $Location.X -ge ($script:Launcher.ClientSize.Width - 38)
+}
+
+function Get-AuraUiLauncherClampedLocation {
+  param([Parameter(Mandatory = $true)][Drawing.Point]$Location)
+  try {
+    $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
+    $bottomRight = $script:Form.PointToScreen(
+      [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
+  } catch { return $Location }
+  $gap = $script:LauncherSafeGap
+  $x = [Math]::Max($topLeft.X + $gap, [Math]::Min($Location.X, $bottomRight.X - $script:Launcher.Width - $gap))
+  $y = [Math]::Max($topLeft.Y + $gap, [Math]::Min($Location.Y, $bottomRight.Y - $script:Launcher.Height - $gap))
+  return [Drawing.Point]::new([int]$x, [int]$y)
+}
+
+function Read-AuraUiLauncherPosition {
+  try {
+    $path = Join-Path $DataRoot 'launcher-pos.json'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return }
+    $data = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $right = [int]$data.right
+    $bottom = [int]$data.bottom
+    if ($right -ge 0 -and $right -le 8000 -and $bottom -ge 0 -and $bottom -le 8000) {
+      $script:LauncherRightGap = [Math]::Max($script:LauncherSafeGap, $right)
+      $script:LauncherBottomGap = [Math]::Max($script:LauncherSafeGap, $bottom)
+    }
+  } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
+}
+
+function Save-AuraUiLauncherPosition {
+  try {
+    $bottomRight = $script:Form.PointToScreen(
+      [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
+    $script:LauncherRightGap = [int][Math]::Max($script:LauncherSafeGap, $bottomRight.X - ($script:Launcher.Location.X + $script:Launcher.Width))
+    $script:LauncherBottomGap = [int][Math]::Max($script:LauncherSafeGap, $bottomRight.Y - ($script:Launcher.Location.Y + $script:Launcher.Height))
+    $payload = [ordered]@{ right = $script:LauncherRightGap; bottom = $script:LauncherBottomGap } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText((Join-Path $DataRoot 'launcher-pos.json'), $payload)
+  } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
+}
+
+function Update-AuraUiLauncherPosition {
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized -or -not $script:Form.Visible) {
+    if ($script:Launcher.Visible) { $script:Launcher.Hide() }
+    return
+  }
+  if ($script:LauncherDragging) { return }
+  # Anchor to the bottom-right of the Claude content area by the saved gap so the
+  # launcher floats clear of Claude's left sidebar, centre composer, and top
+  # controls, and keeps the user's dragged position across window resizes.
+  try {
+    $bottomRight = $script:Form.PointToScreen(
+      [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
+  } catch { return }
+  $desired = [Drawing.Point]::new(
+    $bottomRight.X - $script:Launcher.Width - $script:LauncherRightGap,
+    $bottomRight.Y - $script:Launcher.Height - $script:LauncherBottomGap)
+  $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location $desired
+  if (-not $script:Launcher.Visible) {
+    $script:Launcher.Show($script:Form)
+  }
+}
+
+function Show-AuraUiFirstRunNavHint {
+  if ($null -eq $script:TrayIcon -or -not $script:TrayIcon.Visible) { return }
+  $marker = Join-Path $DataRoot 'nav-hint-seen'
+  if (Test-Path -LiteralPath $marker -PathType Leaf) { return }
+  try {
+    $script:TrayIcon.BalloonTipTitle = "$($script:UiCopy.navHintTitle)"
+    $script:TrayIcon.BalloonTipText = "$($script:UiCopy.navHintBody)"
+    $script:TrayIcon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+    $script:TrayIcon.ShowBalloonTip(9000)
+    [System.IO.File]::WriteAllText($marker, 'shown')
+  } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
+}
+
+function Register-AuraUiJumpList {
+  # Add an "Open Studio" task to the app's taskbar Jump List. Uses the managed
+  # WPF JumpList (catchable exceptions, no hand-written COM), which applies to the
+  # process's explicit AppUserModelID set at startup. The task relaunches this
+  # script with -OpenStudio; the single-instance guard turns that into an
+  # OpenStudio signal to the already-running window. Fully guarded so a shell that
+  # lacks WPF, or any failure, never affects the window.
+  try {
+    Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
+    $shellPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    $scriptPath = Join-Path $PSScriptRoot 'aura-ui.ps1'
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { return }
+    $jumpList = [System.Windows.Shell.JumpList]::new()
+    $jumpList.ShowFrequentCategory = $false
+    $jumpList.ShowRecentCategory = $false
+    $task = [System.Windows.Shell.JumpTask]::new()
+    $task.Title = "$($script:UiCopy.openStudio)"
+    $task.Description = "$($script:UiCopy.studioTitle)"
+    $task.ApplicationPath = $shellPath
+    $task.Arguments = '-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -OpenStudio' -f $scriptPath
+    $task.WorkingDirectory = $Root
+    if (Test-Path -LiteralPath $AuraIconPath -PathType Leaf) {
+      $task.IconResourcePath = $AuraIconPath
+      $task.IconResourceIndex = 0
+    }
+    [void]$jumpList.JumpItems.Add($task)
+    $jumpList.Apply()
+  } catch { Write-AuraUiLog -Message "Jump List registration skipped: $($_.Exception.Message)" }
 }
 
 function ConvertTo-AuraUiStudioNumber {
@@ -452,7 +807,7 @@ function Get-AuraUiStudioPreviewCrops {
       $result[$themeId] = [ordered]@{
         x = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('x')) -Minimum 0 -Maximum 100 -Label 'Studio preview x'
         y = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('y')) -Minimum 0 -Maximum 100 -Label 'Studio preview y'
-        zoom = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('zoom')) -Minimum 1 -Maximum 2 -Label 'Studio preview zoom'
+        zoom = ConvertTo-AuraUiStudioNumber -Value (Get-AuraUiPropertyValue -InputObject $crop -Names @('zoom')) -Minimum 1 -Maximum 6 -Label 'Studio preview zoom'
       }
     } catch {
       Write-AuraUiLog -Message "Ignored invalid Studio preview crop for $themeId."
@@ -579,11 +934,545 @@ function Get-AuraUiBackgroundAspectRatio {
   return [Math]::Round(16 / 9, 4)
 }
 
+function Assert-AuraUiStudioEditorRoots {
+  param([switch]$Create)
+  $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $expectedDataRoot = [IO.Path]::GetFullPath((Join-Path (Join-Path $localRoot 'ClaudeAura') 'data')).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $dataRootPath = [IO.Path]::GetFullPath($DataRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $editorRootPath = [IO.Path]::GetFullPath($StudioEditorRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $previewRootPath = [IO.Path]::GetFullPath($StudioEditorPreviewRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $importRootPath = [IO.Path]::GetFullPath($StudioEditorImportRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  if (-not [string]::Equals($dataRootPath, $expectedDataRoot, [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals($editorRootPath, (Join-Path $dataRootPath 'theme-drafts'), [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals($previewRootPath, (Join-Path $editorRootPath 'preview'), [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals($importRootPath, (Join-Path $editorRootPath 'imports'), [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Aura Studio editor storage is outside Claude Aura app data.'
+  }
+  foreach ($candidate in @(
+      (Join-Path $localRoot 'ClaudeAura'), $dataRootPath, $editorRootPath, $previewRootPath, $importRootPath)) {
+    if (-not (Test-Path -LiteralPath $candidate)) {
+      if (-not $Create) { throw 'Aura Studio editor storage is unavailable.' }
+      [void][IO.Directory]::CreateDirectory($candidate)
+    }
+    $item = Get-Item -LiteralPath $candidate -Force
+    if (-not $item.PSIsContainer -or
+        ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Aura Studio editor folders cannot be symbolic links or junctions.'
+    }
+  }
+  return $editorRootPath
+}
+
+function Test-AuraUiStudioExactProperties {
+  param(
+    [Parameter(Mandatory = $true)][object]$Message,
+    [Parameter(Mandatory = $true)][string[]]$Names
+  )
+  $actual = @($Message.PSObject.Properties | ForEach-Object { $_.Name })
+  if ($actual.Count -ne $Names.Count) { return $false }
+  foreach ($name in $Names) {
+    if ($actual -cnotcontains $name) { return $false }
+  }
+  return $true
+}
+
+function ConvertTo-AuraUiStudioInteger {
+  param(
+    [AllowNull()][object]$Value,
+    [Parameter(Mandatory = $true)][int]$Minimum,
+    [Parameter(Mandatory = $true)][int]$Maximum,
+    [Parameter(Mandatory = $true)][string]$Label
+  )
+  if ($null -eq $Value -or $Value -is [bool] -or $Value -is [string] -or $Value -is [char]) {
+    throw "$Label must be an integer."
+  }
+  try { $number = [Convert]::ToDouble($Value, [Globalization.CultureInfo]::InvariantCulture) }
+  catch { throw "$Label must be an integer." }
+  if ([double]::IsNaN($number) -or [double]::IsInfinity($number) -or
+      [Math]::Truncate($number) -ne $number -or $number -lt $Minimum -or $number -gt $Maximum) {
+    throw "$Label must be an integer between $Minimum and $Maximum."
+  }
+  return [int]$number
+}
+
+function ConvertTo-AuraUiBase64Url {
+  param([Parameter(Mandatory = $true)][string]$Value)
+  return [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
+function Assert-AuraUiStudioEditorPublicValue {
+  param(
+    [AllowNull()][object]$Value,
+    [AllowEmptyString()][string]$Name = '',
+    [int]$Depth = 0
+  )
+  if ($Depth -gt 10) { throw 'Aura Studio editor state is too deeply nested.' }
+  if ($null -eq $Value -or $Value -is [bool] -or
+      $Value -is [byte] -or $Value -is [sbyte] -or $Value -is [int16] -or $Value -is [uint16] -or
+      $Value -is [int32] -or $Value -is [uint32] -or $Value -is [int64] -or $Value -is [uint64] -or
+      $Value -is [single] -or $Value -is [double] -or $Value -is [decimal]) { return }
+  if ($Value -is [string] -or $Value -is [char]) {
+    $text = "$Value"
+    if ($text.Length -gt 4096) { throw 'Aura Studio editor state contains an oversized string.' }
+    if ($text -match '(?i)(?:^|[\s(])(?:[a-z]:[\\/]|\\\\)|\bfile:') {
+      throw 'Aura Studio editor state cannot expose a filesystem path.'
+    }
+    if ($Name -ceq 'previewUrl' -and
+        $text -cnotmatch '^https://aura\.editor/active/layer-[a-f0-9]{32}\.webp\?v=[a-f0-9]{64}$') {
+      throw 'Aura Studio editor state contains an invalid preview URL.'
+    }
+    return
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and
+      $Value -isnot [System.Collections.IDictionary] -and
+      $Value -isnot [System.Management.Automation.PSCustomObject]) {
+    $items = @($Value)
+    if ($items.Count -gt 256) { throw 'Aura Studio editor state contains too many items.' }
+    foreach ($item in $items) {
+      Assert-AuraUiStudioEditorPublicValue -Value $item -Depth ($Depth + 1)
+    }
+    return
+  }
+  $properties = if ($Value -is [System.Collections.IDictionary]) {
+    @($Value.Keys | ForEach-Object { [PSCustomObject]@{ Name = "$_"; Value = $Value[$_] } })
+  } else {
+    @($Value.PSObject.Properties)
+  }
+  if ($properties.Count -gt 256) { throw 'Aura Studio editor state contains too many properties.' }
+  foreach ($property in $properties) {
+    $propertyName = [string]$property.Name
+    if ($propertyName -cin @('path', 'file', 'fileName', 'sourcePath', 'targetPath', 'assetPath', 'draftPath')) {
+      throw 'Aura Studio editor state cannot expose a filesystem property.'
+    }
+    Assert-AuraUiStudioEditorPublicValue -Value $property.Value -Name $propertyName -Depth ($Depth + 1)
+  }
+}
+
+function ConvertTo-AuraUiStudioEditorState {
+  param([Parameter(Mandatory = $true)][object]$State)
+  if ($State -isnot [System.Management.Automation.PSCustomObject]) {
+    throw 'Aura Studio editor state must be an object.'
+  }
+  $allowed = @(
+    'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
+    'canUndo', 'canRedo', 'label', 'tokens', 'shared', 'layers', 'feedback',
+    'lastAction', 'actionSucceeded', 'error')
+  $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
+  foreach ($name in $actual) {
+    if ($allowed -cnotcontains $name) { throw 'Aura Studio editor state contains an unexpected property.' }
+  }
+  $activeProperty = $State.PSObject.Properties['active']
+  if ($null -eq $activeProperty -or $State.active -isnot [bool]) {
+    throw 'Aura Studio editor state requires a Boolean active value.'
+  }
+  if ($State.active) {
+    $required = @(
+      'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
+      'canUndo', 'canRedo', 'label', 'tokens', 'shared', 'layers', 'feedback')
+    foreach ($name in $required) {
+      if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
+    }
+    foreach ($name in @('id', 'sourceId')) {
+      if ($State.$name -isnot [string] -or $State.$name -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
+        throw "Aura Studio editor state has an invalid $name."
+      }
+    }
+    if ($State.source -isnot [string] -or $State.source -cnotin @('builtin', 'user')) {
+      throw 'Aura Studio editor state has an invalid source.'
+    }
+    if ($State.isNew -isnot [bool] -or $State.dirty -isnot [bool] -or
+        $State.canUndo -isnot [bool] -or $State.canRedo -isnot [bool]) {
+      throw 'Aura Studio editor state has an invalid Boolean value.'
+    }
+    if ($State.session -isnot [string] -or
+        $State.session -cnotmatch '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$') {
+      throw 'Aura Studio editor state has an invalid session.'
+    }
+    [void](ConvertTo-AuraUiStudioInteger -Value $State.revision -Minimum 0 -Maximum 2147483647 -Label 'Editor revision')
+    if ($State.label -isnot [string] -or -not $State.label.Trim() -or $State.label.Length -gt 80) {
+      throw 'Aura Studio editor state has an invalid label.'
+    }
+    if ($State.tokens -isnot [System.Management.Automation.PSCustomObject] -or
+        $null -eq $State.tokens.PSObject.Properties['light'] -or
+        $null -eq $State.tokens.PSObject.Properties['dark']) {
+      throw 'Aura Studio editor state has invalid mode tokens.'
+    }
+    if ($State.shared -isnot [System.Management.Automation.PSCustomObject]) {
+      throw 'Aura Studio editor state has invalid shared controls.'
+    }
+    $layers = @($State.layers)
+    if ($layers.Count -gt 8) { throw 'Aura Studio editor state contains too many layers.' }
+    if ($State.feedback -isnot [System.Management.Automation.PSCustomObject]) {
+      throw 'Aura Studio editor state has invalid feedback.'
+    }
+  }
+  if ($null -ne $State.PSObject.Properties['actionSucceeded'] -and $State.actionSucceeded -isnot [bool]) {
+    throw 'Aura Studio editor state has an invalid action result.'
+  }
+  if ($null -ne $State.PSObject.Properties['lastAction'] -and $null -ne $State.lastAction -and
+      ($State.lastAction -isnot [string] -or $State.lastAction -cnotin @(
+        'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
+        'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+        'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
+        'delete-user-theme'))) {
+    throw 'Aura Studio editor state has an invalid last action.'
+  }
+  if ($null -ne $State.PSObject.Properties['error'] -and $null -ne $State.error -and
+      $State.error -isnot [string]) {
+    throw 'Aura Studio editor state has an invalid error.'
+  }
+  Assert-AuraUiStudioEditorPublicValue -Value $State
+  $result = [ordered]@{}
+  foreach ($name in $allowed) {
+    $property = $State.PSObject.Properties[$name]
+    if ($null -ne $property) { $result[$name] = $property.Value }
+  }
+  return $result
+}
+
+function ConvertFrom-AuraUiStudioEditorResponse {
+  param([Parameter(Mandatory = $true)][string]$Raw)
+  try { $response = $Raw | ConvertFrom-Json } catch { throw 'Aura Studio editor helper returned invalid JSON.' }
+  if ($response -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $response -Names @(
+        'state', 'payload', 'themesChanged', 'configChanged', 'apply'))) {
+    throw 'Aura Studio editor helper returned an invalid response shape.'
+  }
+  if ($response.themesChanged -isnot [bool] -or $response.configChanged -isnot [bool]) {
+    throw 'Aura Studio editor helper returned an invalid change summary.'
+  }
+  if ($response.apply -isnot [string] -or
+      $response.apply -cnotin @('draft', 'saved', 'persisted', 'none')) {
+    throw 'Aura Studio editor helper returned an invalid apply action.'
+  }
+  if ($null -ne $response.payload -and $response.payload -isnot [string]) {
+    throw 'Aura Studio editor helper returned an invalid payload.'
+  }
+  if (($null -ne $response.payload -and -not $response.payload.Trim()) -or
+      ($response.apply -ceq 'none' -and $null -ne $response.payload) -or
+      ($response.apply -cne 'none' -and $null -eq $response.payload)) {
+    throw 'Aura Studio editor helper returned an inconsistent payload action.'
+  }
+  return [PSCustomObject]@{
+    State = ConvertTo-AuraUiStudioEditorState -State $response.state
+    Payload = $response.payload
+    ThemesChanged = [bool]$response.themesChanged
+    ConfigChanged = [bool]$response.configChanged
+    Apply = [string]$response.apply
+  }
+}
+
+function Invoke-AuraUiStudioEditorCore {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][string]$AssetPath
+  )
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  [void](Assert-AuraUiThemeInstallRoot -Create)
+  $requestJson = $Request | ConvertTo-Json -Depth 10 -Compress
+  $arguments = @(
+    $ThemeCli, 'studio', '--config', $ConfigPath, '--user-themes', $UserThemesRoot,
+    '--editor-root', $StudioEditorRoot, '--locale', $script:Locale,
+    '--request-base64', (ConvertTo-AuraUiBase64Url -Value $requestJson))
+  if ($AssetPath) {
+    $editorRoot = [IO.Path]::GetFullPath($StudioEditorRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $asset = [IO.Path]::GetFullPath($AssetPath)
+    $editorPrefix = $editorRoot + [IO.Path]::DirectorySeparatorChar
+    if (-not $asset.StartsWith($editorPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+      throw 'Aura Studio refused an editor asset outside its app-owned folder.'
+    }
+    $assetItem = Get-Item -LiteralPath $asset -Force
+    if (($assetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Aura Studio editor assets cannot be symbolic links.'
+    }
+    $arguments += @('--asset', $asset)
+  }
+  return ConvertFrom-AuraUiStudioEditorResponse -Raw (Invoke-AuraUiNode -CommandArguments $arguments)
+}
+
+function Get-AuraUiStudioEditorCoreState {
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  [void](Assert-AuraUiThemeInstallRoot -Create)
+  $raw = Invoke-AuraUiNode -CommandArguments @(
+    $ThemeCli, 'studio-state', '--config', $ConfigPath, '--user-themes', $UserThemesRoot,
+    '--editor-root', $StudioEditorRoot, '--locale', $script:Locale)
+  return ConvertFrom-AuraUiStudioEditorResponse -Raw $raw
+}
+
+function Sync-AuraUiStudioEditorDraft {
+  $result = Get-AuraUiStudioEditorCoreState
+  $script:StudioEditorState = $result.State
+  if ($null -ne $result.Payload) {
+    $payloadChanged = -not [string]::Equals($script:Payload, $result.Payload, [StringComparison]::Ordinal)
+    Set-AuraUiPayloadState -Payload $result.Payload
+    if ($payloadChanged -and $script:WebReady -and $result.Apply -cne 'none') { Apply-AuraUiTheme }
+  }
+  return $result
+}
+
+function Get-AuraUiStudioEditorStatus {
+  param(
+    [Parameter(Mandatory = $true)][string]$Action,
+    [bool]$Succeeded = $true
+  )
+  if (-not $Succeeded) {
+    switch -CaseSensitive ($Action) {
+      'save-theme-edit' { return "$($script:UiCopy.themeEditSaveFailed)" }
+      'delete-user-theme' { return "$($script:UiCopy.themeDeleteFailed)" }
+      'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageFailed)" }
+      default { return "$($script:UiCopy.themeEditFailed)" }
+    }
+  }
+  switch -CaseSensitive ($Action) {
+    'create-theme-copy' { return "$($script:UiCopy.themeCopyReady)" }
+    'begin-theme-edit' { return "$($script:UiCopy.themeEditReady)" }
+    'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageImported)" }
+    'save-theme-edit' { return "$($script:UiCopy.themeEditSaved)" }
+    'discard-theme-edit' { return "$($script:UiCopy.themeEditDiscarded)" }
+    'delete-user-theme' { return "$($script:UiCopy.themeDeleted)" }
+    default { return "$($script:UiCopy.themeDraftUpdated)" }
+  }
+}
+
+function Complete-AuraUiStudioEditorAction {
+  param(
+    [Parameter(Mandatory = $true)][string]$Action,
+    [Parameter(Mandatory = $true)][object]$Result
+  )
+  $script:StudioEditorState = $Result.State
+  if ($Result.ConfigChanged) {
+    $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Set-AuraUiPreferredColorScheme
+  }
+  if ($Result.ThemesChanged) { [void](Update-AuraUiThemes) }
+  if ($null -ne $Result.Payload) {
+    if (-not $Result.Payload.Trim()) { throw 'Aura Studio editor helper returned an empty payload.' }
+    Set-AuraUiPayloadState -Payload $Result.Payload
+    if ($Result.Apply -cne 'none') { Apply-AuraUiTheme }
+  }
+  Update-AuraUiTrayAppearance
+  $succeeded = $true
+  $actionSucceeded = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('actionSucceeded')
+  $errorValue = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('error')
+  if ($null -ne $actionSucceeded) { $succeeded = [bool]$actionSucceeded }
+  if ($null -ne $errorValue -and "$errorValue".Trim()) { $succeeded = $false }
+  Send-AuraUiStudioState -Status (Get-AuraUiStudioEditorStatus -Action $Action -Succeeded $succeeded) `
+    -Tone $(if ($succeeded) { 'ok' } else { 'error' }) -Action $Action -ActionSucceeded $succeeded
+  return $succeeded
+}
+
+function Assert-AuraUiStudioEditorSession {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  $active = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')
+  if ($active -ne $true) { throw 'Aura Studio does not have an active editor session.' }
+  $session = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session')
+  $revision = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('revision')
+  if ($Request.session -isnot [string] -or
+      -not [string]::Equals([string]$Request.session, [string]$session, [StringComparison]::Ordinal)) {
+    throw 'Aura Studio rejected an editor message from a different session.'
+  }
+  $requestedRevision = ConvertTo-AuraUiStudioInteger -Value $Request.revision -Minimum 0 -Maximum 2147483647 -Label 'Editor revision'
+  $activeRevision = ConvertTo-AuraUiStudioInteger -Value $revision -Minimum 0 -Maximum 2147483647 -Label 'Active editor revision'
+  if ($requestedRevision -ne $activeRevision) { throw 'Aura Studio rejected a stale editor revision.' }
+}
+
+function Get-AuraUiStudioKnownTheme {
+  param(
+    [Parameter(Mandatory = $true)][string]$Theme,
+    [switch]$UserOnly
+  )
+  if ($Theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') { throw 'Aura Studio theme id is invalid.' }
+  $item = Get-AuraUiThemeByName -Name $Theme
+  if ($null -eq $item -or -not [string]::Equals("$($item.name)", $Theme, [StringComparison]::Ordinal)) {
+    throw 'Aura Studio requested an unknown theme.'
+  }
+  if ($UserOnly -and "$($item.source)" -cne 'user') {
+    throw 'Built-in themes must be duplicated before they can be edited or deleted.'
+  }
+  return $item
+}
+
+function Invoke-AuraUiStudioEditorRequest {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][string]$AssetPath
+  )
+  $result = Invoke-AuraUiStudioEditorCore -Request $Request -AssetPath $AssetPath
+  return Complete-AuraUiStudioEditorAction -Action ([string]$Request.type) -Result $result
+}
+
+function Invoke-AuraUiCreateThemeCopy {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true) {
+    throw 'Finish or discard the current Aura Studio edit first.'
+  }
+  [void](Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme))
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiBeginThemeEdit {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  $active = (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
+  $activeId = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('id')
+  if ($active) {
+    if (-not $Request.reset -or
+        -not [string]::Equals([string]$activeId, [string]$Request.theme, [StringComparison]::Ordinal)) {
+      throw 'Finish or discard the current Aura Studio edit first.'
+    }
+  } else {
+    [void](Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme) -UserOnly)
+  }
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiSetThemeToken {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiSetThemeLayer {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiPickThemeLayerImage {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  Assert-AuraUiStudioEditorSession -Request $Request
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  $targetPath = $null
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseThemeLayerImageTitle)"
+    $dialog.Filter = "$($script:UiCopy.imagesFilter)|*.png;*.jpg;*.jpeg;*.webp;*.avif"
+    $dialog.CheckFileExists = $true
+    $dialog.Multiselect = $false
+    $dialog.RestoreDirectory = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      $script:StudioEditorState['lastAction'] = 'pick-theme-layer-image'
+      $script:StudioEditorState['actionSucceeded'] = $false
+      $script:StudioEditorState['error'] = $null
+      Send-AuraUiStudioState -Action 'pick-theme-layer-image' -ActionSucceeded $false
+      return $false
+    }
+    $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
+    if (-not $sourceItem.PSIsContainer -and
+        ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
+        $sourceItem.Length -gt 0 -and $sourceItem.Length -le $StudioEditorImageMaxBytes) {
+      $targetPath = Join-Path $StudioEditorImportRoot ('layer-{0}.webp' -f [Guid]::NewGuid().ToString('N'))
+    } else {
+      throw 'The selected theme artwork is not a supported regular image file.'
+    }
+    $conversionJson = Invoke-AuraUiNode -CommandArguments @(
+      $ThemeAssetConverter, '--studio-import', $sourceItem.FullName,
+      '--target', $targetPath, '--output-root', $StudioEditorRoot)
+    try { $conversion = $conversionJson | ConvertFrom-Json } catch { throw 'The artwork converter returned invalid JSON.' }
+    if ($conversion -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $conversion -Names @('path', 'bytes', 'width', 'height'))) {
+      throw 'The artwork converter returned an invalid response shape.'
+    }
+    $convertedPath = [IO.Path]::GetFullPath([string]$conversion.path)
+    if (-not [string]::Equals($convertedPath, [IO.Path]::GetFullPath($targetPath), [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'The artwork converter returned an unexpected output path.'
+    }
+    [void](ConvertTo-AuraUiStudioInteger -Value $conversion.bytes -Minimum 1 -Maximum 399999 -Label 'Converted artwork bytes')
+    [void](ConvertTo-AuraUiStudioInteger -Value $conversion.width -Minimum 1 -Maximum 32768 -Label 'Converted artwork width')
+    [void](ConvertTo-AuraUiStudioInteger -Value $conversion.height -Minimum 1 -Maximum 32768 -Label 'Converted artwork height')
+    return Invoke-AuraUiStudioEditorRequest -Request $Request -AssetPath $convertedPath
+  } finally {
+    $dialog.Dispose()
+    if ($targetPath -and (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+      try {
+        $target = Get-Item -LiteralPath $targetPath -Force
+        if (($target.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
+            [string]::Equals($target.DirectoryName, [IO.Path]::GetFullPath($StudioEditorImportRoot), [StringComparison]::OrdinalIgnoreCase)) {
+          [IO.File]::Delete($target.FullName)
+        }
+      } catch { Write-AuraUiLog -Message "Studio import cleanup failed: $($_.Exception.Message)" }
+    }
+  }
+}
+
+function Invoke-AuraUiRemoveThemeLayer {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiMoveThemeLayer {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiUndoThemeEdit {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiRedoThemeEdit {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiSaveThemeEdit {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiDiscardThemeEdit {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiDeleteUserTheme {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true) {
+    throw 'Finish or discard the current Aura Studio edit before deleting a theme.'
+  }
+  [void](Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme) -UserOnly)
+  $configuredTheme = if ($null -ne $script:Config) {
+    Get-AuraUiPropertyValue -InputObject $script:Config -Names @('theme')
+  } else { $null }
+  if ([string]::Equals([string]$configuredTheme, [string]$Request.theme, [StringComparison]::Ordinal) -or
+      [string]::Equals([string]$script:ActiveThemeName, [string]$Request.theme, [StringComparison]::Ordinal)) {
+    Set-AuraUiConfig -Options @('--theme', 'default', '--enabled', 'true')
+    $restoredTheme = Get-AuraUiPropertyValue -InputObject $script:Config -Names @('theme')
+    if (-not [string]::Equals([string]$restoredTheme, 'default', [StringComparison]::Ordinal) -or
+        -not [string]::Equals([string]$script:ActiveThemeName, 'default', [StringComparison]::Ordinal)) {
+      throw 'Aura Studio could not apply Default before deleting the active theme.'
+    }
+    Apply-AuraUiTheme
+  }
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
 function Send-AuraUiStudioState {
   param(
     [AllowEmptyString()][string]$Status = '',
     [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok',
-    [ValidateSet('', 'set-image-framing', 'set-card-preview-crop')][string]$Action = '',
+    [ValidateSet(
+      '', 'set-image-framing', 'set-card-preview-crop',
+      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
+      'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+      'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
+      'delete-user-theme')][string]$Action = '',
     [bool]$ActionSucceeded = $true
   )
   if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
@@ -616,6 +1505,7 @@ function Send-AuraUiStudioState {
       backgroundCrop = Get-AuraUiStudioBackgroundCrop
       studioPreviewCrops = Get-AuraUiStudioPreviewCrops
       themes = @($script:Themes)
+      editor = $script:StudioEditorState
       status = $Status
       tone = $Tone
     }
@@ -623,7 +1513,7 @@ function Send-AuraUiStudioState {
       $state['action'] = $Action
       $state['actionSucceeded'] = $ActionSucceeded
     }
-    $json = $state | ConvertTo-Json -Depth 6 -Compress
+    $json = $state | ConvertTo-Json -Depth 10 -Compress
     $script:StudioWebView.CoreWebView2.PostWebMessageAsJson($json)
   } catch {
     Write-AuraUiLog -Message "Studio state update failed: $($_.Exception.Message)"
@@ -639,6 +1529,7 @@ function Show-AuraUiStudio {
   Set-AuraUiFormWithinWorkingArea -Form $script:StudioForm
   $script:StudioForm.Activate()
   $script:StudioForm.BringToFront()
+  Request-AuraUiMirror
 }
 
 function Show-AuraUiMain {
@@ -649,6 +1540,155 @@ function Show-AuraUiMain {
   }
   $script:Form.Activate()
   $script:Form.BringToFront()
+}
+
+function Set-AuraUiPreviewSize {
+  param([Parameter(Mandatory = $true)][string]$Size)
+  $customWidth = 0
+  $customHeight = 0
+  if ($Size -cmatch '^(\d{3,4})x(\d{3,4})$') {
+    $customWidth = [int]$Matches[1]
+    $customHeight = [int]$Matches[2]
+    if ($customWidth -lt 920 -or $customWidth -gt 3840 -or $customHeight -lt 620 -or $customHeight -gt 2400) {
+      throw 'Aura preview size is not allowed.'
+    }
+  } elseif ($Size -cnotin @('launch', 'wide', 'full')) {
+    throw 'Aura preview size is not allowed.'
+  }
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  Show-AuraUiMain
+  if ($Size -ceq 'full') {
+    $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+    Request-AuraUiMirror
+    return
+  }
+  $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+  if ($customWidth -gt 0) {
+    # Custom dimensions may exceed the working area on purpose: the Studio
+    # mirror still captures the full webview, so oversized states remain
+    # reviewable on smaller monitors. Only the location is kept on screen.
+    $script:Form.ClientSize = [Drawing.Size]::new($customWidth, $customHeight)
+    $workingArea = [System.Windows.Forms.Screen]::FromControl($script:Form).WorkingArea
+    $script:Form.Location = [Drawing.Point]::new(
+      [Math]::Max($workingArea.Left, [Math]::Min($script:Form.Location.X, $workingArea.Right - 240)),
+      [Math]::Max($workingArea.Top, [Math]::Min($script:Form.Location.Y, $workingArea.Bottom - 160)))
+  } else {
+    $script:Form.ClientSize = if ($Size -ceq 'wide') {
+      [Drawing.Size]::new(1560, 940)
+    } else {
+      [Drawing.Size]::new(1180, 640)
+    }
+    Set-AuraUiFormWithinWorkingArea -Form $script:Form
+  }
+  Request-AuraUiMirror
+}
+
+function Request-AuraUiMirror {
+  if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) { return }
+  $script:MirrorDue = [DateTime]::UtcNow.AddMilliseconds(350)
+}
+
+function Start-AuraUiMirrorCapture {
+  try {
+    $script:MirrorStream = [IO.MemoryStream]::new()
+    $script:MirrorCaptureTask = $script:WebView.CoreWebView2.CapturePreviewAsync(
+      [Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat]::Jpeg, $script:MirrorStream)
+  } catch {
+    Write-AuraUiLog -Message "Aura mirror capture failed: $($_.Exception.Message)"
+    if ($null -ne $script:MirrorStream) {
+      $script:MirrorStream.Dispose()
+      $script:MirrorStream = $null
+    }
+    $script:MirrorCaptureTask = $null
+  }
+}
+
+function Update-AuraUiMirror {
+  # Runs on the UI timer: never blocks on an incomplete probe or capture task.
+  if ($null -ne $script:MirrorCaptureTask) {
+    if (-not $script:MirrorCaptureTask.IsCompleted) { return }
+    $task = $script:MirrorCaptureTask
+    $stream = $script:MirrorStream
+    $script:MirrorCaptureTask = $null
+    $script:MirrorStream = $null
+    try {
+      [void]$task.GetAwaiter().GetResult()
+      if ($null -ne $script:StudioWebView -and $null -ne $script:StudioWebView.CoreWebView2 -and $stream.Length -gt 0 -and $stream.Length -le 8000000) {
+        $geometry = $script:MirrorGeometry
+        $width = [int]$script:WebView.ClientSize.Width
+        $height = [int]$script:WebView.ClientSize.Height
+        if ($null -ne $geometry -and $geometry.innerWidth -ge 200 -and $geometry.innerHeight -ge 200) {
+          # CSS pixels, so the page-reported layout rectangles line up 1:1.
+          $width = [int]$geometry.innerWidth
+          $height = [int]$geometry.innerHeight
+        }
+        $payload = [ordered]@{
+          type = 'aura-mirror'
+          image = 'data:image/jpeg;base64,' + [Convert]::ToBase64String($stream.ToArray())
+          width = $width
+          height = $height
+        }
+        if ($null -ne $geometry) {
+          $rect = $null
+          if ($null -ne $geometry.main) {
+            $rect = [ordered]@{
+              left = [double]$geometry.main.left; top = [double]$geometry.main.top
+              width = [double]$geometry.main.width; height = [double]$geometry.main.height
+            }
+          }
+          $promptRect = $null
+          if ($null -ne $geometry.prompt) {
+            $promptRect = [ordered]@{
+              left = [double]$geometry.prompt.left; top = [double]$geometry.prompt.top
+              width = [double]$geometry.prompt.width; height = [double]$geometry.prompt.height
+            }
+          }
+          $payload['geometry'] = [ordered]@{
+            context = [string]$geometry.context
+            mode = [string]$geometry.mode
+            main = $rect
+            prompt = $promptRect
+          }
+        }
+        $script:StudioWebView.CoreWebView2.PostWebMessageAsJson(($payload | ConvertTo-Json -Depth 6 -Compress))
+      }
+    } catch {
+      Write-AuraUiLog -Message "Aura mirror capture failed: $($_.Exception.Message)"
+    } finally {
+      if ($null -ne $stream) { $stream.Dispose() }
+    }
+    return
+  }
+  if ($null -ne $script:MirrorProbeTask) {
+    if (-not $script:MirrorProbeTask.IsCompleted) { return }
+    $task = $script:MirrorProbeTask
+    $script:MirrorProbeTask = $null
+    $script:MirrorGeometry = $null
+    try {
+      $raw = $task.GetAwaiter().GetResult()
+      if ($raw -and $raw -cne 'null') { $script:MirrorGeometry = $raw | ConvertFrom-Json }
+    } catch {
+      Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
+    }
+    Start-AuraUiMirrorCapture
+    return
+  }
+  if ($null -eq $script:MirrorDue -or [DateTime]::UtcNow -lt $script:MirrorDue) { return }
+  $script:MirrorDue = $null
+  if (-not $script:WebReady -or $null -eq $script:WebView -or $null -eq $script:WebView.CoreWebView2) { return }
+  if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
+  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) { return }
+  # The renderer marks the live layout; read it so the Studio stage aligns
+  # its overlays with the real sidebar, prompt block, context, and mode.
+  $probe = '(() => { try { const root = document.documentElement; const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }; return { context: root.dataset.claudeAuraContext || "other", mode: root.dataset.claudeAuraEffectiveMode || "light", innerWidth: window.innerWidth, innerHeight: window.innerHeight, main: rect(document.querySelector("[data-claude-aura-main-canvas]")), prompt: rect(document.querySelector("[data-claude-aura-prompt]")) }; } catch { return null; } })()'
+  try {
+    $script:MirrorProbeTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($probe)
+  } catch {
+    Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
+    Start-AuraUiMirrorCapture
+  }
 }
 
 function Invoke-AuraUiOpenDesktopApp {
@@ -1001,7 +2041,7 @@ function Invoke-AuraUiSetCardPreviewCrop {
   if (-not $knownTheme) { throw 'The Studio requested an unknown preview theme.' }
   $xValue = ConvertTo-AuraUiStudioNumber -Value $X -Minimum 0 -Maximum 100 -Label 'Studio preview x'
   $yValue = ConvertTo-AuraUiStudioNumber -Value $Y -Minimum 0 -Maximum 100 -Label 'Studio preview y'
-  $zoomValue = ConvertTo-AuraUiStudioNumber -Value $Zoom -Minimum 1 -Maximum 2 -Label 'Studio preview zoom'
+  $zoomValue = ConvertTo-AuraUiStudioNumber -Value $Zoom -Minimum 1 -Maximum 6 -Label 'Studio preview zoom'
   $culture = [Globalization.CultureInfo]::InvariantCulture
   Set-AuraUiConfig -Options @(
     '--studio-preview-theme', $Theme,
@@ -1036,6 +2076,169 @@ function Invoke-AuraUiSetAppearance {
   Send-AuraUiStudioState
 }
 
+function Assert-AuraUiStudioEditorMessage {
+  param([Parameter(Mandatory = $true)][object]$Message)
+  $type = [string]$Message.type
+  if ($type -in @('create-theme-copy', 'begin-theme-edit', 'delete-user-theme')) {
+    if ($Message.theme -isnot [string] -or $Message.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
+      throw 'Aura Studio editor theme id is invalid.'
+    }
+    if ($type -ceq 'begin-theme-edit' -and $Message.reset -isnot [bool]) {
+      throw 'Aura Studio editor reset must be a Boolean.'
+    }
+    return
+  }
+
+  if ($Message.session -isnot [string] -or
+      $Message.session -cnotmatch '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$') {
+    throw 'Aura Studio editor session is invalid.'
+  }
+  [void](ConvertTo-AuraUiStudioInteger -Value $Message.revision -Minimum 0 -Maximum 2147483647 -Label 'Editor revision')
+
+  switch -CaseSensitive ($type) {
+    'set-theme-token' {
+      if ($Message.mode -isnot [string] -or
+          $Message.mode -cnotin @('light', 'dark', 'shared', 'mode-copy') -or
+          $Message.token -isnot [string]) {
+        throw 'Aura Studio theme token mode or id is invalid.'
+      }
+      if ($Message.mode -ceq 'mode-copy') {
+        if ($Message.token -cne 'tokens' -or $Message.value -isnot [string] -or
+            $Message.value -cnotin @('light', 'dark')) {
+          throw 'Aura Studio mode copy is invalid.'
+        }
+        return
+      }
+      if ($Message.mode -cin @('light', 'dark')) {
+        if ($Message.token -cin @('canvas', 'sidebar', 'surface', 'text', 'accent', 'border')) {
+          if ($Message.value -isnot [string] -or $Message.value -cnotmatch '^#[0-9A-Fa-f]{6}$') {
+            throw 'Aura Studio color tokens require a six-digit hex color.'
+          }
+          return
+        }
+        if ($Message.token -ceq 'surfaceAlpha') {
+          [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.35 -Maximum 1 -Label 'Surface alpha')
+          return
+        }
+        if ($Message.token -ceq 'sidebarAlpha') {
+          [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.62 -Maximum 1 -Label 'Sidebar alpha')
+          return
+        }
+        throw 'Aura Studio mode token is not allowed.'
+      }
+      switch -CaseSensitive ($Message.token) {
+        'fontUi' {
+          if ($Message.value -isnot [string] -or
+              $Message.value -cnotin @('system-sans', 'humanist-sans', 'rounded-sans')) {
+            throw 'Aura Studio UI font is not allowed.'
+          }
+          break
+        }
+        'fontDisplay' {
+          if ($Message.value -isnot [string] -or
+              $Message.value -cnotin @('system-sans', 'humanist-sans', 'rounded-sans', 'editorial-serif')) {
+            throw 'Aura Studio display font is not allowed.'
+          }
+          break
+        }
+        'radius' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 32 -Label 'Theme radius'); break }
+        'blur' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 40 -Label 'Theme blur'); break }
+        'shadow' {
+          if ($Message.value -isnot [string] -or $Message.value -cnotin @('none', 'soft', 'elevated')) {
+            throw 'Aura Studio shadow preset is not allowed.'
+          }
+          break
+        }
+        'backgroundScope' {
+          if ($Message.value -isnot [string] -or $Message.value -cnotin @('content', 'full-window')) {
+            throw 'Aura Studio background scope is not allowed.'
+          }
+          break
+        }
+        'promptWidth' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.4 -Maximum 0.96 -Label 'Prompt width'); break }
+        'promptX' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -0.35 -Maximum 0.35 -Label 'Prompt horizontal position'); break }
+        'promptY' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -0.3 -Maximum 0.3 -Label 'Prompt vertical position'); break }
+        default { throw 'Aura Studio shared token is not allowed.' }
+      }
+      break
+    }
+    'set-theme-layer' {
+      [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
+      if ($Message.preset -isnot [string] -or $Message.preset -cnotin @('shared', 'normal', 'wide') -or
+          $Message.property -isnot [string]) {
+        throw 'Aura Studio layer preset or property is invalid.'
+      }
+      if ($Message.preset -ceq 'shared') {
+        switch -CaseSensitive ($Message.property) {
+          'role' {
+            if ($Message.value -isnot [string] -or
+                $Message.value -cnotin @('background', 'hero', 'corner', 'decoration')) { throw 'Theme layer role is invalid.' }
+            break
+          }
+          'appearance' {
+            if ($Message.value -isnot [string] -or $Message.value -cnotin @('all', 'light', 'dark')) { throw 'Theme layer appearance is invalid.' }
+            break
+          }
+          'context' {
+            if ($Message.value -isnot [string] -or $Message.value -cnotin @('all', 'new-chat', 'conversation')) { throw 'Theme layer context is invalid.' }
+            break
+          }
+          'viewport' {
+            if ($Message.value -isnot [string] -or $Message.value -cnotin @('all', 'normal', 'wide')) { throw 'Theme layer viewport is invalid.' }
+            break
+          }
+          'visible' { if ($Message.value -isnot [bool]) { throw 'Theme layer visibility must be a Boolean.' }; break }
+          'opacity' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 1 -Label 'Theme layer opacity'); break }
+          'mask' {
+            if ($Message.value -isnot [string] -or $Message.value -cnotin @('none', 'soft-right')) { throw 'Theme layer mask is invalid.' }
+            break
+          }
+          'mobile' {
+            if ($Message.value -isnot [string] -or $Message.value -cnotin @('keep', 'reduce', 'hide')) { throw 'Theme layer mobile behavior is invalid.' }
+            break
+          }
+          default { throw 'Aura Studio shared layer property is not allowed.' }
+        }
+        return
+      }
+      switch -CaseSensitive ($Message.property) {
+        'anchor' {
+          if ($Message.value -isnot [string] -or $Message.value -cnotin @(
+              'top-left', 'top', 'top-right', 'left', 'center', 'right',
+              'bottom-left', 'bottom', 'bottom-right')) { throw 'Theme layer anchor is invalid.' }
+          break
+        }
+        'focalX' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 100 -Label 'Theme layer focal x'); break }
+        'focalY' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 100 -Label 'Theme layer focal y'); break }
+        'positionX' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -100 -Maximum 100 -Label 'Theme layer x'); break }
+        'positionY' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -100 -Maximum 100 -Label 'Theme layer y'); break }
+        'scale' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.25 -Maximum 3 -Label 'Theme layer scale'); break }
+        default { throw 'Aura Studio framing property is not allowed.' }
+      }
+      break
+    }
+    'pick-theme-layer-image' {
+      [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum -1 -Maximum 7 -Label 'Theme layer index')
+      if ($Message.role -isnot [string] -or
+          $Message.role -cnotin @('background', 'hero', 'corner', 'decoration')) {
+        throw 'Aura Studio image layer role is invalid.'
+      }
+      break
+    }
+    'remove-theme-layer' {
+      [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
+      break
+    }
+    'move-theme-layer' {
+      [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
+      if ($Message.direction -isnot [string] -or $Message.direction -cnotin @('up', 'down')) {
+        throw 'Aura Studio layer move direction is invalid.'
+      }
+      break
+    }
+  }
+}
+
 function Get-AuraUiStudioMessage {
   param(
     [Parameter(Mandatory = $true)][string]$Json,
@@ -1058,12 +2261,32 @@ function Get-AuraUiStudioMessage {
     'set-enabled' { 'type'; 'enabled'; break }
     'set-image-framing' { 'type'; 'x'; 'y'; 'zoom'; break }
     'set-card-preview-crop' { 'type'; 'theme'; 'x'; 'y'; 'zoom'; break }
+    'create-theme-copy' { 'type'; 'theme'; break }
+    'begin-theme-edit' { 'type'; 'theme'; 'reset'; break }
+    'set-theme-token' { 'type'; 'session'; 'revision'; 'mode'; 'token'; 'value'; break }
+    'set-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'preset'; 'property'; 'value'; break }
+    'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; break }
+    'remove-theme-layer' { 'type'; 'session'; 'revision'; 'index'; break }
+    'move-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'direction'; break }
+    'undo-theme-edit' { 'type'; 'session'; 'revision'; break }
+    'redo-theme-edit' { 'type'; 'session'; 'revision'; break }
+    'save-theme-edit' { 'type'; 'session'; 'revision'; break }
+    'discard-theme-edit' { 'type'; 'session'; 'revision'; break }
+    'delete-user-theme' { 'type'; 'theme'; break }
+    'set-aura-preview' { 'type'; 'size'; break }
+    'set-aura-topmost' { 'type'; 'enabled'; break }
     default { 'type'; break }
   })
   $propertyNames = @($message.PSObject.Properties | ForEach-Object { $_.Name })
   if ($propertyNames.Count -ne $expectedProperties.Count) { throw 'Studio message has unexpected properties.' }
   foreach ($name in $expectedProperties) {
     if ($propertyNames -cnotcontains $name) { throw 'Studio message is missing a required property.' }
+  }
+  if ($type -in @(
+      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
+      'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
+      'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme')) {
+    Assert-AuraUiStudioEditorMessage -Message $message
   }
   return $message
 }
@@ -1076,7 +2299,12 @@ function Invoke-AuraUiStudioMessage {
   $message = Get-AuraUiStudioMessage -Json $Json -Source $Source
   $type = [string]$message.type
   switch -CaseSensitive ($type) {
-    'get-state' { Send-AuraUiStudioState; break }
+    'get-state' {
+      [void](Sync-AuraUiStudioEditorDraft)
+      Send-AuraUiStudioState
+      Request-AuraUiMirror
+      break
+    }
     'set-theme' {
       if ($message.theme -isnot [string]) { throw 'Studio theme must be a string.' }
       Invoke-AuraUiSelectTheme -Theme ([string]$message.theme)
@@ -1104,11 +2332,40 @@ function Invoke-AuraUiStudioMessage {
       break
     }
     'open-aura' { Show-AuraUiMain; break }
+    'set-aura-preview' {
+      if ($message.size -isnot [string]) { throw 'Aura preview size must be a string.' }
+      Set-AuraUiPreviewSize -Size ([string]$message.size)
+      break
+    }
+    'set-aura-topmost' {
+      if ($message.enabled -isnot [bool]) { throw 'Aura topmost state must be a Boolean.' }
+      if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+        $script:Form.TopMost = [bool]$message.enabled
+        if ([bool]$message.enabled) { Show-AuraUiMain }
+      }
+      break
+    }
+    'refresh-aura-mirror' { Request-AuraUiMirror; break }
     'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
     'import-theme' {
       [void](Invoke-AuraUiImportTheme -Owner $script:StudioForm)
       break
     }
+    'create-theme-copy' { [void](Invoke-AuraUiCreateThemeCopy -Request $message); break }
+    'begin-theme-edit' { [void](Invoke-AuraUiBeginThemeEdit -Request $message); break }
+    'set-theme-token' { [void](Invoke-AuraUiSetThemeToken -Request $message); break }
+    'set-theme-layer' { [void](Invoke-AuraUiSetThemeLayer -Request $message); break }
+    'pick-theme-layer-image' {
+      [void](Invoke-AuraUiPickThemeLayerImage -Request $message -Owner $script:StudioForm)
+      break
+    }
+    'remove-theme-layer' { [void](Invoke-AuraUiRemoveThemeLayer -Request $message); break }
+    'move-theme-layer' { [void](Invoke-AuraUiMoveThemeLayer -Request $message); break }
+    'undo-theme-edit' { [void](Invoke-AuraUiUndoThemeEdit -Request $message); break }
+    'redo-theme-edit' { [void](Invoke-AuraUiRedoThemeEdit -Request $message); break }
+    'save-theme-edit' { [void](Invoke-AuraUiSaveThemeEdit -Request $message); break }
+    'discard-theme-edit' { [void](Invoke-AuraUiDiscardThemeEdit -Request $message); break }
+    'delete-user-theme' { [void](Invoke-AuraUiDeleteUserTheme -Request $message); break }
   }
 }
 
@@ -1139,8 +2396,24 @@ $script:StudioMessageTypes = @(
   'set-enabled',
   'open-aura',
   'open-desktop',
-  'import-theme'
+  'import-theme',
+  'create-theme-copy',
+  'begin-theme-edit',
+  'set-theme-token',
+  'set-theme-layer',
+  'pick-theme-layer-image',
+  'remove-theme-layer',
+  'move-theme-layer',
+  'undo-theme-edit',
+  'redo-theme-edit',
+  'save-theme-edit',
+  'discard-theme-edit',
+  'delete-user-theme',
+  'set-aura-preview',
+  'set-aura-topmost',
+  'refresh-aura-mirror'
 )
+$script:StudioEditorState = [ordered]@{ active = $false }
 $script:StudioForm = $null
 $script:StudioWebView = $null
 $script:StudioEnsureTask = $null
@@ -1149,6 +2422,11 @@ $script:StudioInitializationFailed = $false
 $script:StudioBackgroundFingerprint = $null
 $script:StudioBackgroundPreviewUrl = $null
 $script:StudioBackgroundPreviewPath = $null
+$script:MirrorCaptureTask = $null
+$script:MirrorStream = $null
+$script:MirrorDue = $null
+$script:MirrorProbeTask = $null
+$script:MirrorGeometry = $null
 $script:WebViewEnvironment = $null
 $script:TrayIcon = $null
 $script:TrayMenu = $null
@@ -1159,7 +2437,29 @@ $script:TrayExitItem = $null
 $script:MainIcon = $null
 $script:StudioIcon = $null
 $script:NotificationIcon = $null
+$script:ThemeIdentityAssetPath = $null
 $script:StudioOpenSignal = $null
+$script:Launcher = $null
+$script:LauncherButton = $null
+$script:LauncherMenu = $null
+$script:LauncherAppearanceItem = $null
+$script:LauncherStyle = $null
+$script:LauncherMark = $null
+$script:LauncherDragging = $false
+$script:LauncherDragged = $false
+$script:LauncherDragArmed = $false
+$script:LauncherClickArmed = $false
+$script:LauncherDragStart = $null
+$script:LauncherDragOrigin = $null
+$script:LauncherHover = $false
+$script:LauncherExpanded = $false
+$script:LauncherExpandsLeft = $true
+$script:LauncherCompactSize = 48
+$script:LauncherExpandedWidth = 176
+$script:LauncherSafeGap = 16
+$script:LauncherRightGap = 16
+$script:LauncherBottomGap = 16
+$script:JumpListRegistered = $false
 $script:Closing = $false
 $mutex = $null
 $ownsMutex = $false
@@ -1169,6 +2469,7 @@ try {
     throw 'Claude Aura must run in a standard Windows desktop session.'
   }
 
+  [void](Assert-AuraUiStudioEditorRoots -Create)
   New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot, $StudioBackgroundRoot | Out-Null
   $script:Node = Get-AuraNodeRuntime
   $locale = [Globalization.CultureInfo]::CurrentUICulture.Name
@@ -1198,6 +2499,7 @@ try {
     $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Set-AuraUiPayloadState -Payload $initialPayload
   }
+  [void](Sync-AuraUiStudioEditorDraft)
 
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
@@ -1225,9 +2527,16 @@ public static class AuraWindow {
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string className, string windowName);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr handle, int command);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr handle);
+  [DllImport("shell32.dll")] public static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appID);
 }
 '@
   }
+  # Give the process a stable taskbar identity so it stops grouping under the
+  # generic PowerShell host. This is also the prerequisite for attaching a
+  # taskbar Jump List to the running window in a later pass.
+  try { [void][AuraWindow]::SetCurrentProcessExplicitAppUserModelID('ClaudeAura') } catch {}
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $studioSignalCreatedNew = $false
   $script:StudioOpenSignal = [System.Threading.EventWaitHandle]::new(
@@ -1260,6 +2569,7 @@ public static class AuraWindow {
   $script:Form.StartPosition = 'Manual'
   $script:Form.ClientSize = [Drawing.Size]::new(1180, 640)
   $script:Form.MinimumSize = [Drawing.Size]::new(920, 620)
+  $script:Form.add_SizeChanged({ Request-AuraUiMirror })
   $script:Form.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
   $script:Form.Icon = $script:MainIcon
   $script:Form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
@@ -1386,6 +2696,223 @@ public static class AuraWindow {
   $script:Form.Controls.Add($content)
   $script:LoadingPanel.BringToFront()
 
+  # A themed floating launcher: a separate owned overlay window pinned safely
+  # inside the content. Being its own top-level window it renders above the
+  # WebView without an in-content control's airspace limits, reserves no layout
+  # space, never reflows or clips Claude, and keeps the main form content-only.
+  # Hover names Studio and exposes a dedicated drag grip; the body opens Studio,
+  # while right-click exposes appearance and Desktop actions. It never touches
+  # the claude.ai document.
+  $script:LauncherMenu = [System.Windows.Forms.ContextMenuStrip]::new()
+  $launcherStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
+  $script:LauncherAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
+  $launcherDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
+  [void]$script:LauncherMenu.Items.AddRange(@($launcherStudioItem, $script:LauncherAppearanceItem, $launcherDesktopItem))
+  $script:LauncherMenu.add_Opening({ Update-AuraUiTrayAppearance })
+  $launcherStudioItem.add_Click({ Show-AuraUiStudio })
+  $script:LauncherAppearanceItem.add_Click({
+    try {
+      Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
+    } catch {
+      Write-AuraUiLog -Message $_.Exception.ToString()
+      Show-AuraUiMessage -Title "$($script:UiCopy.appearanceNotChangedTitle)" -Icon Warning -Message "$($script:UiCopy.appearanceNotChangedMessage)"
+    }
+  })
+  $launcherDesktopItem.add_Click({
+    try {
+      Invoke-AuraUiOpenDesktopApp
+    } catch {
+      Write-AuraUiLog -Message $_.Exception.ToString()
+      Show-AuraUiMessage -Title "$($script:UiCopy.desktopNotFoundTitle)" -Icon Information -Message "$($script:UiCopy.desktopNotFoundMessage)"
+    }
+  })
+
+  $script:Launcher = [System.Windows.Forms.Form]::new()
+  $script:Launcher.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+  $script:Launcher.ShowInTaskbar = $false
+  $script:Launcher.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+  $script:Launcher.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
+  $script:Launcher.ClientSize = [Drawing.Size]::new($script:LauncherCompactSize, $script:LauncherCompactSize)
+  $script:Launcher.BackColor = [Drawing.ColorTranslator]::FromHtml('#2F2937')
+  $script:Launcher.Opacity = 0.96
+  $script:Launcher.Text = 'Claude Aura'
+
+  $script:LauncherButton = [System.Windows.Forms.Button]::new()
+  $script:LauncherButton.Dock = 'Fill'
+  $script:LauncherButton.Text = ''
+  $script:LauncherButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $script:LauncherButton.FlatAppearance.BorderSize = 0
+  $script:LauncherButton.FlatAppearance.MouseOverBackColor = $script:Launcher.BackColor
+  $script:LauncherButton.FlatAppearance.MouseDownBackColor = $script:Launcher.BackColor
+  $script:LauncherButton.BackColor = $script:Launcher.BackColor
+  $script:LauncherButton.UseVisualStyleBackColor = $false
+  $script:LauncherButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+  $script:LauncherButton.TabStop = $false
+  $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
+  $script:LauncherButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+  # Owner-drawn so every validated theme can supply its own launcher material
+  # and local mark while an absent or invalid launcher always falls back to Aura.
+  $script:LauncherButton.add_Paint({
+    param($sender, $eventArgs)
+    $graphics = $eventArgs.Graphics
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $width = $sender.ClientSize.Width
+    $height = $sender.ClientSize.Height
+    if ($width -le 0 -or $height -le 0) { return }
+    $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
+    $surface = if ($script:LauncherHover) { "$($style.surfaceHover)" } else { "$($style.surface)" }
+    $fill = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml($surface))
+    $borderWidth = [float]$style.borderWidth
+    $bounds = [Drawing.RectangleF]::new($borderWidth / 2, $borderWidth / 2, $width - $borderWidth, $height - $borderWidth)
+    $shape = New-AuraUiRoundedRectanglePath -Bounds $bounds -Radius ([double]$style.radius)
+    $graphics.FillPath($fill, $shape)
+    $fill.Dispose()
+    $rim = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml("$($style.border)"), $borderWidth)
+    $graphics.DrawPath($rim, $shape)
+    $rim.Dispose()
+    $shape.Dispose()
+
+    $iconX = if (-not $script:LauncherExpanded) {
+      [Math]::Floor(($width - 32) / 2)
+    } elseif ($script:LauncherExpandsLeft) {
+      $width - 40
+    } else { 8 }
+    if ($null -ne $script:LauncherMark) {
+      $previousInterpolation = $graphics.InterpolationMode
+      $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $graphics.DrawImage($script:LauncherMark, [Drawing.Rectangle]::new($iconX, 8, 32, 32))
+      $graphics.InterpolationMode = $previousInterpolation
+    } else {
+      $markCenterX = $iconX + 16
+      $markCenterY = 24
+      $markPen = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml("$($style.foreground)"), 2.2)
+      $markPen.StartCap = [Drawing.Drawing2D.LineCap]::Round
+      $markPen.EndCap = [Drawing.Drawing2D.LineCap]::Round
+      for ($index = 0; $index -lt 8; $index++) {
+        $angle = (-90 + ($index * 45)) * [Math]::PI / 180
+        $graphics.DrawLine($markPen,
+          [float]($markCenterX + [Math]::Cos($angle) * 8.5), [float]($markCenterY + [Math]::Sin($angle) * 8.5),
+          [float]($markCenterX + [Math]::Cos($angle) * 13), [float]($markCenterY + [Math]::Sin($angle) * 13))
+      }
+      $markPen.Dispose()
+      $core = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml("$($style.accent)"))
+      $graphics.FillEllipse($core, $markCenterX - 5, $markCenterY - 5, 10, 10)
+      $core.Dispose()
+    }
+
+    if ($script:LauncherExpanded) {
+      $gripLeft = if ($script:LauncherExpandsLeft) { 0 } else { $width - 38 }
+      $dividerX = if ($script:LauncherExpandsLeft) { 38 } else { $width - 39 }
+      $divider = [Drawing.Pen]::new([Drawing.Color]::FromArgb(70, [Drawing.ColorTranslator]::FromHtml("$($style.foreground)")), 1)
+      $graphics.DrawLine($divider, $dividerX, 11, $dividerX, $height - 11)
+      $divider.Dispose()
+      $textLeft = if ($script:LauncherExpandsLeft) { 46 } else { 48 }
+      $textRight = if ($script:LauncherExpandsLeft) { $width - 47 } else { $width - 46 }
+      $textRect = [Drawing.Rectangle]::new($textLeft, 0, [Math]::Max(1, $textRight - $textLeft), $height)
+      $font = [Drawing.Font]::new('Segoe UI Semibold', 9.5, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Point)
+      $flags = [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor
+        [System.Windows.Forms.TextFormatFlags]::SingleLine -bor
+        [System.Windows.Forms.TextFormatFlags]::EndEllipsis -bor
+        [System.Windows.Forms.TextFormatFlags]::NoPrefix
+      [System.Windows.Forms.TextRenderer]::DrawText($graphics, "$($script:UiCopy.openStudio)", $font, $textRect,
+        [Drawing.ColorTranslator]::FromHtml("$($style.foreground)"), $flags)
+      $font.Dispose()
+      $grip = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(155, [Drawing.ColorTranslator]::FromHtml("$($style.foreground)")))
+      $gripCenter = $gripLeft + 19
+      foreach ($offsetX in @(-3, 3)) {
+        foreach ($offsetY in @(-6, 0, 6)) {
+          $graphics.FillEllipse($grip, [float]($gripCenter + $offsetX - 1.2), [float](24 + $offsetY - 1.2), 2.4, 2.4)
+        }
+      }
+      $grip.Dispose()
+    }
+  })
+  $script:LauncherButton.add_MouseDown({
+    param($sender, $eventArgs)
+    if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+      $script:LauncherDragArmed = Test-AuraUiLauncherGrip -Location $eventArgs.Location
+      $script:LauncherClickArmed = -not $script:LauncherDragArmed
+      $script:LauncherDragging = $script:LauncherDragArmed
+      $script:LauncherDragged = $false
+      if ($script:LauncherDragArmed) {
+        $script:LauncherDragStart = [System.Windows.Forms.Cursor]::Position
+        $script:LauncherDragOrigin = $script:Launcher.Location
+      }
+    }
+  })
+  $script:LauncherButton.add_MouseMove({
+    param($sender, $eventArgs)
+    if (-not $script:LauncherDragging) {
+      $sender.Cursor = if (Test-AuraUiLauncherGrip -Location $eventArgs.Location) {
+        [System.Windows.Forms.Cursors]::SizeAll
+      } else { [System.Windows.Forms.Cursors]::Hand }
+      return
+    }
+    $now = [System.Windows.Forms.Cursor]::Position
+    $deltaX = $now.X - $script:LauncherDragStart.X
+    $deltaY = $now.Y - $script:LauncherDragStart.Y
+    if (-not $script:LauncherDragged -and ([Math]::Abs($deltaX) -gt 6 -or [Math]::Abs($deltaY) -gt 6)) {
+      $script:LauncherDragged = $true
+    }
+    if ($script:LauncherDragged) {
+      $target = [Drawing.Point]::new($script:LauncherDragOrigin.X + $deltaX, $script:LauncherDragOrigin.Y + $deltaY)
+      $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location $target
+    }
+  })
+  $script:LauncherButton.add_MouseUp({
+    param($sender, $eventArgs)
+    if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Right) {
+      $script:LauncherDragging = $false
+      $script:LauncherDragArmed = $false
+      $script:LauncherClickArmed = $false
+      $script:LauncherMenu.Show($script:LauncherButton, $eventArgs.Location)
+      return
+    }
+    if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+      $moved = $script:LauncherDragged
+      $wasDragArmed = $script:LauncherDragArmed
+      $wasClickArmed = $script:LauncherClickArmed
+      $script:LauncherDragging = $false
+      $script:LauncherDragged = $false
+      $script:LauncherDragArmed = $false
+      $script:LauncherClickArmed = $false
+      if ($wasDragArmed) {
+        Set-AuraUiLauncherExpanded -Expanded $false
+      }
+      if ($moved -and $wasDragArmed) {
+        Save-AuraUiLauncherPosition
+      } elseif ($wasClickArmed) {
+        Show-AuraUiStudio
+      }
+    }
+  })
+  $script:LauncherButton.add_MouseEnter({
+    $script:LauncherHover = $true
+    if ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Opacity = 1.0 }
+    Set-AuraUiLauncherExpanded -Expanded $true
+    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) { $script:LauncherButton.Invalidate() }
+  })
+  $script:LauncherButton.add_MouseLeave({
+    $script:LauncherHover = $false
+    if ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Opacity = 0.96 }
+    if (-not $script:LauncherDragging) { Set-AuraUiLauncherExpanded -Expanded $false }
+    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) { $script:LauncherButton.Invalidate() }
+  })
+  $script:Launcher.Controls.Add($script:LauncherButton)
+  $script:Launcher.add_FormClosing({
+    param($sender, $eventArgs)
+    if (-not $script:Closing -and $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
+      $eventArgs.Cancel = $true
+      $sender.Hide()
+    }
+  })
+
+  Read-AuraUiLauncherPosition
+  $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition })
+  $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition })
+  $script:Form.add_Shown({ Update-AuraUiLauncherPosition })
+  Update-AuraUiTrayAppearance
+
   $script:RetryButton.add_Click({
     if ($script:WebReady -and $null -ne $script:WebView.CoreWebView2) {
       Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
@@ -1397,6 +2924,10 @@ public static class AuraWindow {
   $timer.Interval = 60
   $timer.add_Tick({
     if ($script:Closing) { return }
+    if (-not $script:JumpListRegistered) {
+      $script:JumpListRegistered = $true
+      Register-AuraUiJumpList
+    }
     try {
       if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
         Show-AuraUiStudio
@@ -1439,9 +2970,27 @@ public static class AuraWindow {
           } else {
             Write-AuraUiLog -Message "Studio theme artwork folder is missing: $ThemeArtRoot"
           }
+          if (Test-Path -LiteralPath $StudioPreviewRoot -PathType Container) {
+            $studioCore.SetVirtualHostNameToFolderMapping(
+              'aura.previews',
+              $StudioPreviewRoot,
+              [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          } else {
+            Write-AuraUiLog -Message "Studio preview master folder is missing: $StudioPreviewRoot"
+          }
+          if (Test-Path -LiteralPath $UserThemesRoot -PathType Container) {
+            $studioCore.SetVirtualHostNameToFolderMapping(
+              'aura.user-themes',
+              $UserThemesRoot,
+              [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          }
           $studioCore.SetVirtualHostNameToFolderMapping(
             'aura.background',
             $StudioBackgroundRoot,
+            [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          $studioCore.SetVirtualHostNameToFolderMapping(
+            'aura.editor',
+            $StudioEditorPreviewRoot,
             [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
           $studioCore.add_NavigationStarting({
             param($sender, $eventArgs)
@@ -1470,12 +3019,29 @@ public static class AuraWindow {
                 $failedMessage = $eventArgs.WebMessageAsJson | ConvertFrom-Json
                 if ($failedMessage.type -is [string] -and
                     $script:StudioMessageTypes -ccontains $failedMessage.type -and
-                    $failedMessage.type -in @('set-image-framing', 'set-card-preview-crop')) {
+                    $failedMessage.type -in @(
+                      'set-image-framing', 'set-card-preview-crop',
+                      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
+                      'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+                      'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
+                      'delete-user-theme')) {
                   $failedAction = [string]$failedMessage.type
                 }
               } catch {}
               if ($failedAction) {
-                Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error -Action $failedAction -ActionSucceeded $false
+                if ($failedAction -in @(
+                    'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
+                    'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+                    'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
+                    'delete-user-theme')) {
+                  $script:StudioEditorState['lastAction'] = $failedAction
+                  $script:StudioEditorState['actionSucceeded'] = $false
+                  $script:StudioEditorState['error'] = 'request-rejected'
+                  Send-AuraUiStudioState -Status (Get-AuraUiStudioEditorStatus -Action $failedAction -Succeeded $false) `
+                    -Tone error -Action $failedAction -ActionSucceeded $false
+                } else {
+                  Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error -Action $failedAction -ActionSucceeded $false
+                }
               } else {
                 Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error
               }
@@ -1528,6 +3094,7 @@ public static class AuraWindow {
             # opaque cover over a working, signed-in interface.
             $script:PageReady = $true
             Hide-AuraUiLoading
+            Show-AuraUiFirstRunNavHint
             if ($enabled) { Apply-AuraUiTheme }
           } else {
             Hide-AuraUiLoading
@@ -1552,6 +3119,43 @@ public static class AuraWindow {
         $core.add_ProcessFailed({
           Show-AuraUiLoading -Message "$($script:UiCopy.reloadRetry)" -Retry $true
         })
+        # Keyboard accelerators live on CoreWebView2Controller, which this pinned
+        # WinForms SDK (1.0.4078.44) does not surface publicly. Reach it through
+        # the control's private field. The whole registration is guarded so a
+        # missing field or SDK change can never abort startup — the shortcut is a
+        # convenience on top of the rail and tray, never a load-bearing path.
+        try {
+          $controllerField = $script:WebView.GetType().GetField(
+            '_coreWebView2Controller', [System.Reflection.BindingFlags]'Instance,NonPublic')
+          $controller = if ($null -ne $controllerField) { $controllerField.GetValue($script:WebView) } else { $null }
+          if ($null -ne $controller) {
+            $controller.add_AcceleratorKeyPressed({
+              param($sender, $eventArgs)
+              try {
+                if ($eventArgs.KeyEventKind -ne [Microsoft.Web.WebView2.Core.CoreWebView2KeyEventKind]::KeyDown -and
+                    $eventArgs.KeyEventKind -ne [Microsoft.Web.WebView2.Core.CoreWebView2KeyEventKind]::SystemKeyDown) { return }
+                $modifiers = [System.Windows.Forms.Control]::ModifierKeys
+                $hasControl = ($modifiers -band [System.Windows.Forms.Keys]::Control) -ne 0
+                $hasShift = ($modifiers -band [System.Windows.Forms.Keys]::Shift) -ne 0
+                if (-not ($hasControl -and $hasShift)) { return }
+                switch ([int]$eventArgs.VirtualKey) {
+                  0x53 { $eventArgs.Handled = $true; Show-AuraUiStudio; break }
+                  0x41 {
+                    $eventArgs.Handled = $true
+                    try {
+                      Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
+                    } catch {
+                      Write-AuraUiLog -Message $_.Exception.ToString()
+                    }
+                    break
+                  }
+                }
+              } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
+            })
+          } else {
+            Write-AuraUiLog -Message 'Keyboard accelerators unavailable: WebView2 controller was not reachable.'
+          }
+        } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
         $script:WebReady = $true
         $core.Navigate('https://claude.ai/')
       }
@@ -1568,6 +3172,7 @@ public static class AuraWindow {
         }
         if ($covered) { Hide-AuraUiLoading }
         Send-AuraUiStudioState
+        Request-AuraUiMirror
         if ($script:PendingRestore) {
           $script:PendingRestore = $false
           $script:PendingApply = $false
@@ -1578,6 +3183,7 @@ public static class AuraWindow {
           Apply-AuraUiTheme
         }
       }
+      Update-AuraUiMirror
     } catch {
       $script:EnvironmentTask = $null
       $script:EnsureTask = $null
@@ -1619,7 +3225,10 @@ public static class AuraWindow {
     }
     if ($script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Close() }
     if ($script:StudioWebView -and -not $script:StudioWebView.IsDisposed) { $script:StudioWebView.Dispose() }
+    if ($script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Close() }
+    if ($script:LauncherMark) { $script:LauncherMark.Dispose(); $script:LauncherMark = $null }
     if ($script:TrayMenu) { $script:TrayMenu.Dispose() }
+    if ($script:LauncherMenu) { $script:LauncherMenu.Dispose() }
     if ($script:WebView) { $script:WebView.Dispose() }
   })
 
@@ -1658,6 +3267,7 @@ public static class AuraWindow {
   $script:MainIcon = $null
   $script:StudioIcon = $null
   $script:NotificationIcon = $null
+  $script:ThemeIdentityAssetPath = $null
   if ($ownsMutex -and $null -ne $mutex) {
     try { $mutex.ReleaseMutex() } catch {}
   }

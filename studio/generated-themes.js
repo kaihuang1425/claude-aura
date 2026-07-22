@@ -2,6 +2,7 @@
 window.CLAUDE_AURA_THEMES = {
   "default": {
     "name": "default",
+    "source": "builtin",
     "variant": "default",
     "label": "Default",
     "description": "Claude Aura’s familiar indigo foundation with calm, balanced controls.",
@@ -28,7 +29,18 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#5D54C7",
       "text": "#242238"
     },
+    "launcher": {
+      "asset": "assets/theme-art/default/launcher-mark.png",
+      "surface": "#2F2937",
+      "surfaceHover": "#3B3346",
+      "foreground": "#F4DFBB",
+      "accent": "#D66D4B",
+      "border": "#655C70",
+      "radius": 16,
+      "borderWidth": 1
+    },
     "studioPreview": null,
+    "studioPreviewFrame": null,
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": null,
@@ -450,6 +462,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "japanese-film-editorial": {
     "name": "japanese-film-editorial",
+    "source": "builtin",
     "variant": "japanese-film-editorial",
     "label": "Japanese Film Editorial",
     "description": "Warm paper, charcoal ink, muted indigo, and restrained vermilion.",
@@ -476,7 +489,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#B64B32",
       "text": "#272824"
     },
-    "studioPreview": "assets/theme-art/japanese-film-editorial/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/japanese-film-editorial/launcher-mark.png",
+      "surface": "#F2E8D5",
+      "surfaceHover": "#E7D7BC",
+      "foreground": "#252725",
+      "accent": "#B64B32",
+      "border": "#8E7B62",
+      "radius": 12,
+      "borderWidth": 1
+    },
+    "studioPreview": "assets/studio-previews/masters/japanese-film-editorial.png",
+    "studioPreviewFrame": {
+      "x": 77.76,
+      "y": 8.98,
+      "zoom": 3.651
+    },
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": [
@@ -957,6 +985,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "korean-prestige": {
     "name": "korean-prestige",
+    "source": "builtin",
     "variant": "korean-prestige",
     "label": "Korean Prestige",
     "description": "Midnight navy, silver structure, and precise architectural glass.",
@@ -983,7 +1012,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#5A91E6",
       "text": "#EDF3FA"
     },
-    "studioPreview": "assets/theme-art/korean-prestige/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/korean-prestige/launcher-mark.png",
+      "surface": "#071426",
+      "surfaceHover": "#10243C",
+      "foreground": "#EDF3FA",
+      "accent": "#5A91E6",
+      "border": "#66758B",
+      "radius": 14,
+      "borderWidth": 1
+    },
+    "studioPreview": "assets/studio-previews/masters/korean-prestige.png",
+    "studioPreviewFrame": {
+      "x": 82.34,
+      "y": 8.61,
+      "zoom": 3.274
+    },
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": [
@@ -1464,6 +1508,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "cartoon-studio": {
     "name": "cartoon-studio",
+    "source": "builtin",
     "variant": "cartoon-studio",
     "label": "Cartoon Studio",
     "description": "Cream, coral, teal, and sunny yellow with friendly inked details.",
@@ -1490,7 +1535,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#248C88",
       "text": "#302820"
     },
-    "studioPreview": "assets/theme-art/cartoon-studio/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/cartoon-studio/launcher-mark.png",
+      "surface": "#FFF6E7",
+      "surfaceHover": "#FFE8C4",
+      "foreground": "#302820",
+      "accent": "#EA6047",
+      "border": "#302820",
+      "radius": 18,
+      "borderWidth": 2
+    },
+    "studioPreview": "assets/studio-previews/masters/cartoon-studio.png",
+    "studioPreviewFrame": {
+      "x": 92.79,
+      "y": 10.48,
+      "zoom": 3.651
+    },
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": [
@@ -1953,6 +2013,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "anime-twilight": {
     "name": "anime-twilight",
+    "source": "builtin",
     "variant": "anime-twilight",
     "label": "Anime Twilight",
     "description": "Twilight blue glass, pale cyan, violet, and warm window light.",
@@ -1979,7 +2040,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#A98FE8",
       "text": "#F1F1FF"
     },
-    "studioPreview": "assets/theme-art/anime-twilight/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/anime-twilight/launcher-mark.png",
+      "surface": "#111A49",
+      "surfaceHover": "#202A68",
+      "foreground": "#F1F1FF",
+      "accent": "#F0B875",
+      "border": "#756FC0",
+      "radius": 18,
+      "borderWidth": 1
+    },
+    "studioPreview": "assets/studio-previews/masters/anime-twilight.png",
+    "studioPreviewFrame": {
+      "x": 96.1,
+      "y": 8.25,
+      "zoom": 3.374
+    },
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": [
@@ -2413,6 +2489,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "study-library": {
     "name": "study-library",
+    "source": "builtin",
     "variant": "study-library",
     "label": "Study Library",
     "description": "Ivory paper, forest green, oxblood, graphite, and quiet brass.",
@@ -2439,7 +2516,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#2D614B",
       "text": "#292B26"
     },
-    "studioPreview": "assets/theme-art/study-library/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/study-library/launcher-mark.png",
+      "surface": "#F4EEDC",
+      "surfaceHover": "#E7DEC4",
+      "foreground": "#292B26",
+      "accent": "#AA884C",
+      "border": "#1F523F",
+      "radius": 10,
+      "borderWidth": 1
+    },
+    "studioPreview": "assets/studio-previews/masters/study-library.png",
+    "studioPreviewFrame": {
+      "x": 50,
+      "y": 55,
+      "zoom": 1
+    },
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": [
@@ -2895,6 +2987,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "japanese-idol": {
     "name": "japanese-idol",
+    "source": "builtin",
     "variant": "japanese-idol",
     "label": "Japanese Idol",
     "description": "Warm cream, blush, rose, and pearlescent lilac with fine ribbons.",
@@ -2921,7 +3014,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#DA6F8D",
       "text": "#3B2930"
     },
-    "studioPreview": "assets/theme-art/japanese-idol/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/japanese-idol/launcher-mark.png",
+      "surface": "#FFF5F1",
+      "surfaceHover": "#FFE5EB",
+      "foreground": "#3B2930",
+      "accent": "#DA6F8D",
+      "border": "#C7B3E6",
+      "radius": 20,
+      "borderWidth": 1
+    },
+    "studioPreview": "assets/studio-previews/masters/japanese-idol.png",
+    "studioPreviewFrame": {
+      "x": 86.85,
+      "y": 9.49,
+      "zoom": 3.194
+    },
     "newChatLayout": null,
     "artwork": null,
     "artworkLayers": [
@@ -3409,6 +3517,7 @@ window.CLAUDE_AURA_THEMES = {
   },
   "korean-idol": {
     "name": "korean-idol",
+    "source": "builtin",
     "variant": "korean-idol",
     "label": "Korean Idol",
     "description": "Cool white, periwinkle, holographic silver, and structured music glass.",
@@ -3435,7 +3544,22 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#7757D9",
       "text": "#292244"
     },
-    "studioPreview": "assets/theme-art/korean-idol/card-preview.webp",
+    "launcher": {
+      "asset": "assets/theme-art/korean-idol/launcher-mark.png",
+      "surface": "#241D43",
+      "surfaceHover": "#33275C",
+      "foreground": "#F7F6FF",
+      "accent": "#79D7E4",
+      "border": "#8F78DF",
+      "radius": 16,
+      "borderWidth": 1
+    },
+    "studioPreview": "assets/studio-previews/masters/korean-idol.png",
+    "studioPreviewFrame": {
+      "x": 83.47,
+      "y": 11.82,
+      "zoom": 3.507
+    },
     "newChatLayout": {
       "widthRatio": 0.76,
       "offsetXRatio": -0.07,

@@ -187,6 +187,7 @@
       slotCard2: "Card 2",
       slotCard3: "Card 3",
       slotBrandMark: "Brand mark",
+      slotLauncherMark: "App + launcher mark",
       stageTitle: "Live framing stage",
       stageNotice: "The stage uses your draft's real colors and artwork, but it is not a Claude preview. Confirm in the actual Aura window.",
       stageSize: "Framing set",
@@ -237,7 +238,8 @@
       stageSelectedAnnounce: "{0} selected.",
       stageScaleHandle: "Resize artwork",
       stageWidthHandle: "Adjust prompt width",
-      promptTemplate: "Create a {0} theme artwork asset. Subject: {1}. Visual direction: {2}. {3} Decorative artwork only; no interface text, controls, logos, remote resources, or photographic people. Keep the composition usable when clipped at different window sizes.",
+      promptTemplate: "Create a {0} theme artwork asset. Subject: {1}. Visual direction: {2}. {3} Decorative artwork only; no interface text, controls, borrowed logos, remote resources, or photographic people. Keep the composition usable when clipped at different window sizes.",
+      launcherPromptTemplate: "Create a production-ready {0}. Subject: {1}. Visual direction: {2}. {3} Output one square transparent PNG at exactly 96×96 px. Keep the silhouette legible at 24–48 px and centered inside a 72×72 px safe area. Use no words, interface controls, borrowed logos, remote resources, photographic people, opaque background, border, or baked drop shadow.",
       promptFallbackSubject: "an original abstract motif",
       promptFallbackStyle: "quiet, polished, and legible behind interface content",
       promptRuleBackground: "Use a wide opaque scene with low detail through the central text-safe area.",
@@ -245,6 +247,7 @@
       promptRuleCorner: "Use a transparent composition that remains intentional when clipped at the viewport edge.",
       promptRuleCard: "Use a square transparent composition with the subject concentrated in the bottom-right 40%.",
       promptRuleBrand: "Use a small, flat, original mark with no words or borrowed brand shapes.",
+      promptRuleLauncher: "Design one original compact mark that represents the theme across the floating launcher, title bar, taskbar, tray, and Studio.",
     },
     "zh-CN": {
       navEditor: "主题编辑器",
@@ -430,6 +433,7 @@
       slotCard2: "卡片 2",
       slotCard3: "卡片 3",
       slotBrandMark: "品牌标记",
+      slotLauncherMark: "应用与启动器标记",
       stageTitle: "实时构图画布",
       stageNotice: "画布会使用草稿的真实颜色与图片，但不是 Claude 预览。请以实际 Aura 窗口为准。",
       stageSize: "构图预设",
@@ -480,7 +484,8 @@
       stageSelectedAnnounce: "已选中{0}。",
       stageScaleHandle: "缩放图片",
       stageWidthHandle: "调整提示区域宽度",
-      promptTemplate: "创建一个{0}主题图片素材。主体：{1}。视觉方向：{2}。{3} 图片仅用于装饰；不得包含界面文字、控件、标识、远程资源或真实人物照片。请确保构图在不同窗口尺寸下裁切后仍可使用。",
+      promptTemplate: "创建一个{0}主题图片素材。主体：{1}。视觉方向：{2}。{3} 图片仅用于装饰；不得包含界面文字、控件、他人品牌标识、远程资源或真实人物照片。请确保构图在不同窗口尺寸下裁切后仍可使用。",
+      launcherPromptTemplate: "创建一个可直接使用的{0}。主体：{1}。视觉方向：{2}。{3} 输出一张 96×96 px 的正方形透明 PNG。图形需在 24–48 px 下清晰可辨，并位于中央 72×72 px 的安全区域内。不得包含文字、界面控件、他人品牌标识、远程资源、真实人物照片、不透明背景、外框或图片自带阴影。",
       promptFallbackSubject: "原创抽象图案",
       promptFallbackStyle: "安静、精致，并确保界面内容清晰可读",
       promptRuleBackground: "使用宽幅不透明场景，中央文字安全区域保持低细节。",
@@ -488,6 +493,7 @@
       promptRuleCorner: "使用透明构图，确保在视口边缘裁切后仍然完整自然。",
       promptRuleCard: "使用方形透明构图，主体集中在右下方 40% 范围内。",
       promptRuleBrand: "使用不含文字及他人品牌造型的小型原创平面标记。",
+      promptRuleLauncher: "设计一个能代表主题的原创紧凑标记，用于悬浮启动器、标题栏、任务栏、系统托盘和 Studio。",
     },
     "zh-TW": {
       navEditor: "主題編輯器",
@@ -673,6 +679,7 @@
       slotCard2: "卡片 2",
       slotCard3: "卡片 3",
       slotBrandMark: "品牌標記",
+      slotLauncherMark: "App 與啟動器圖示",
       stageTitle: "即時構圖畫布",
       stageNotice: "畫布會套用草稿的實際顏色和圖片，但不是 Claude 預覽，請以實際的 Aura 視窗為準。",
       stageSize: "構圖預設",
@@ -723,7 +730,8 @@
       stageSelectedAnnounce: "已選取{0}。",
       stageScaleHandle: "縮放圖片",
       stageWidthHandle: "調整提示區塊寬度",
-      promptTemplate: "建立一張{0}主題圖片素材。主體：{1}。視覺方向：{2}。{3} 圖片只作裝飾；不要放入介面文字、控制項、標誌、遠端資源或真實人物照片。請讓構圖在不同視窗大小下裁切後仍可使用。",
+      promptTemplate: "建立一張{0}主題圖片素材。主體：{1}。視覺方向：{2}。{3} 圖片只作裝飾；不要放入介面文字、控制項、他人品牌標誌、遠端資源或真實人物照片。請讓構圖在不同視窗大小下裁切後仍可使用。",
+      launcherPromptTemplate: "建立一個可直接使用的{0}。主體：{1}。視覺方向：{2}。{3} 輸出一張 96×96 px 的正方形透明 PNG。圖案在 24–48 px 大小下仍要清楚可辨，並置於中央 72×72 px 的安全區域。不要放入文字、介面控制項、他人品牌標誌、遠端資源、真實人物照片、不透明背景、外框或圖片內建陰影。",
       promptFallbackSubject: "原創抽象圖案",
       promptFallbackStyle: "安靜、精緻，並讓介面內容保持清楚易讀",
       promptRuleBackground: "使用寬幅不透明場景，中央文字安全區域保持低細節。",
@@ -731,6 +739,7 @@
       promptRuleCorner: "使用透明構圖，讓圖片在視窗邊緣裁切後仍然自然完整。",
       promptRuleCard: "使用方形透明構圖，主體集中在右下方 40% 範圍內。",
       promptRuleBrand: "使用不含文字或他人品牌造型的小型原創平面標記。",
+      promptRuleLauncher: "設計一個能代表主題的原創精簡圖示，用在浮動啟動器、標題列、工作列、系統匣和 Studio。",
     },
   };
 
@@ -797,7 +806,7 @@
     ["background", "slotBackground"], ["hero", "slotHero"],
     ["corner-top-right", "slotCornerTopRight"], ["corner-bottom", "slotCornerBottom"],
     ["card-1", "slotCard1"], ["card-2", "slotCard2"], ["card-3", "slotCard3"],
-    ["brand-mark", "slotBrandMark"],
+    ["brand-mark", "slotBrandMark"], ["launcher-mark", "slotLauncherMark"],
   ]);
 
   // Stage geometry mirrors assets/renderer-inject.js: wide begins at 1440px
@@ -2977,12 +2986,14 @@
     const promptRule = (slot) => slot === "background" ? tr("promptRuleBackground")
       : slot === "hero" ? tr("promptRuleHero")
         : slot.startsWith("corner-") ? tr("promptRuleCorner")
-          : slot.startsWith("card-") ? tr("promptRuleCard") : tr("promptRuleBrand");
+          : slot.startsWith("card-") ? tr("promptRuleCard")
+            : slot === "launcher-mark" ? tr("promptRuleLauncher") : tr("promptRuleBrand");
     const buildPrompt = () => {
       const slotOption = SLOT_OPTIONS.find(([value]) => value === promptSlot.value) ?? SLOT_OPTIONS[0];
       const subject = cleanPromptText(promptSubject.value) || tr("promptFallbackSubject");
       const style = cleanPromptText(promptStyle.value) || tr("promptFallbackStyle");
-      promptOutput.value = format(tr("promptTemplate"), tr(slotOption[1]), subject, style, promptRule(slotOption[0]));
+      const template = slotOption[0] === "launcher-mark" ? "launcherPromptTemplate" : "promptTemplate";
+      promptOutput.value = format(tr(template), tr(slotOption[1]), subject, style, promptRule(slotOption[0]));
       announce(tr("promptBuilt"));
     };
     document.getElementById("prompt-builder-build").addEventListener("click", buildPrompt);
