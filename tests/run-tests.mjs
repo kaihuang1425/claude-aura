@@ -1393,15 +1393,9 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
   assert.deepEqual(artifactFiles.filter((file) => retiredFixturePatterns.some((pattern) => pattern.test(file))), [],
     "A retired fixture image or render harness artifact was recreated");
 
-  const [queuePlan, workOrders, blockedPlan] = await Promise.all([
-    fs.readFile(path.join(PROJECT_ROOT, "docs", "plans", "QUEUE.md"), "utf8"),
-    fs.readFile(path.join(PROJECT_ROOT, "docs", "plans", "WORK_ORDERS.md"), "utf8"),
-    fs.readFile(path.join(PROJECT_ROOT, "docs", "plans", "BLOCKED.md"), "utf8"),
-  ]);
-  assert.match(queuePlan, /remove and never\s+regenerate the reconstructed offline preview, fake\/fixture UI images/i);
-  assert.match(workOrders, /Permanent evidence policy[\s\S]*Do not regenerate it\./);
-  assert(!blockedPlan.includes("later queued capture sweep may use the existing Node spawn-based screenshot launcher"),
-    "A blocked item still schedules a retired offline screenshot retry");
+  // The planning docs under docs/plans/ are now developer-local (git rm --cached
+  // + .gitignore), so they are no longer asserted here; the retired-fixture-image
+  // guard above is the shipped enforcement and stays.
 });
 
 test("theme-cli scaffolds a complete starter kit and validates it", async () => {
