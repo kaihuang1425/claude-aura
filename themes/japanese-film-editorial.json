@@ -23,6 +23,16 @@
     "hoverLift": 0.5,
     "transitionMs": 180
   },
+  "launcher": {
+    "asset": "assets/theme-art/japanese-film-editorial/launcher-mark.png",
+    "surface": "#F2E8D5",
+    "surfaceHover": "#E7D7BC",
+    "foreground": "#252725",
+    "accent": "#B64B32",
+    "border": "#8E7B62",
+    "radius": 12,
+    "borderWidth": 1
+  },
   "light": {
     "semantic": {
       "--aura-background-primary": "42 38% 94%",

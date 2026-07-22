@@ -23,6 +23,16 @@
     "hoverLift": 1,
     "transitionMs": 190
   },
+  "launcher": {
+    "asset": "assets/theme-art/anime-twilight/launcher-mark.png",
+    "surface": "#111A49",
+    "surfaceHover": "#202A68",
+    "foreground": "#F1F1FF",
+    "accent": "#F0B875",
+    "border": "#756FC0",
+    "radius": 18,
+    "borderWidth": 1
+  },
   "light": {
     "semantic": {
       "--aura-background-primary": "229 45% 94%",

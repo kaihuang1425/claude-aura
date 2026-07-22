@@ -23,6 +23,16 @@
     "hoverLift": 2,
     "transitionMs": 150
   },
+  "launcher": {
+    "asset": "assets/theme-art/cartoon-studio/launcher-mark.png",
+    "surface": "#FFF6E7",
+    "surfaceHover": "#FFE8C4",
+    "foreground": "#302820",
+    "accent": "#EA6047",
+    "border": "#302820",
+    "radius": 18,
+    "borderWidth": 2
+  },
   "light": {
     "semantic": {
       "--aura-background-primary": "40 62% 95%",

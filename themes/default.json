@@ -23,6 +23,16 @@
     "hoverLift": 1,
     "transitionMs": 160
   },
+  "launcher": {
+    "asset": "assets/theme-art/default/launcher-mark.png",
+    "surface": "#2F2937",
+    "surfaceHover": "#3B3346",
+    "foreground": "#F4DFBB",
+    "accent": "#D66D4B",
+    "border": "#655C70",
+    "radius": 16,
+    "borderWidth": 1
+  },
   "light": {
     "semantic": {
       "--aura-background-primary": "232 38% 96%",

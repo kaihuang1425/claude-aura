@@ -1,7 +1,15 @@
 node_modules/
 dist/
 release/
-theme_demo_previews/
+
+# Local workspace instructions and planning records
+AGENTS.md
+.agents/
+.codex/
+docs/PROGRESS.md
+docs/contracts/
+docs/plans/
+
 # Supplied per-theme source kits (PNG masters, specs, QA) live in directories
 # under themes/; only the derived copies in assets/theme-art ship.
 themes/*/

@@ -22,13 +22,44 @@ font, image, or other resource is fetched from the network.
 
 ## Runtime assets
 
-- `japanese-film-editorial.svg` — warm paper, ink, film-frame details, and an editorial portrait.
-- `korean-prestige.svg` — midnight architectural glass and blue-silver structure.
-- `cartoon-studio/` — generated cream paper background and an original transparent non-human productivity mascot, plus the Studio selector preview.
-- `anime-twilight/` — generated painterly twilight cityscape background plus the Studio selector preview.
-- `study-library/` — generated ivory paper background and a transparent books, index-cards, fountain-pen, and shelf still life, plus the Studio selector preview.
-- `kawaii-idol/` — layered Japanese Idol background, hero, sakura, marks, and motifs.
-- `korean-idol/` — layered Korean Idol atmosphere, constellation, and hero.
+- `japanese-film-editorial/` — independent light and dark paper/ink
+  backgrounds plus appearance-matched editorial portraits.
+- `korean-prestige/` — independent pearl-day and midnight architectural
+  backgrounds plus matched clean-alpha portraits.
+- `cartoon-studio/` — independent cream-day and deep-teal-night backgrounds,
+  with one shared transparent non-human productivity mascot.
+- `anime-twilight/` — one painterly twilight cityscape intentionally reused in
+  both appearances because it is already dark-authored.
+- `study-library/` — independent ivory and deep-forest archival paper
+  backgrounds with one shared books, index-cards, pen, and shelf still life.
+- `kawaii-idol/` — light background and portrait plus mutually exclusive dark
+  new-chat and conversation scenes.
+- `korean-idol/` — a light scene and portrait plus mutually exclusive dark
+  new-chat and conversation scenes, derived from `themes/korean-idol/`.
+
+Default intentionally has no runtime artwork. Dedicated dark files are real
+production layers, never blanket color filters over the light artwork.
+
+## Floating launcher marks
+
+Every permanent theme has one `launcher-mark.png`: a static, transparent
+96×96 PNG built from Aura's eight-ray identity geometry and the theme's own
+palette. One validated file serves the running main window, Studio window,
+taskbar, notification area, Studio rail, and floating launcher. These marks are
+Aura chrome, not Claude-page artwork. They contain no text, load only from
+allowlisted local theme folders, and fall back to `default/launcher-mark.png`
+as one unit if a theme omits or loses its mark.
+
+Regenerate all eight byte-stable marks with:
+
+```powershell
+node scripts/build-launcher-assets.mjs
+```
+
+The theme JSON controls the surrounding surface, hover surface, label/grip
+foreground, accent, border, radius, and border width. The Windows host retains
+the click target, dedicated drag grip, safe edge spacing, and accessibility
+name regardless of theme styling.
 
 ## Studio selector previews
 

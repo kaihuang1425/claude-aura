@@ -12,6 +12,12 @@
   const appearance = settings.appearance || "system";
   const media = appearance === "system" ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
   const mode = () => appearance === "system" ? (media?.matches ? "dark" : "light") : appearance;
+  const viewport = () => {
+    const screenWide = window.screen?.availWidth > 0 && window.screen?.availHeight > 0
+      && window.innerWidth >= window.screen.availWidth - 32
+      && window.innerHeight >= window.screen.availHeight - 96;
+    return document.fullscreenElement || screenWide || window.innerWidth >= 1440 ? "w" : "n";
+  };
   const SIDEBAR_MARKER = "data-claude-aura-sidebar";
   const MAIN_MARKER = "data-claude-aura-main-canvas";
   const PROMPT_MARKER = "data-claude-aura-prompt";
@@ -140,14 +146,31 @@
   };
 
   const applyArtworkContext = (context) => {
-    for (const { element, layer } of artBindings) {
+    const view = viewport();
+    root.dataset.claudeAuraViewport = view === "w" ? "wide" : "normal";
+    const anchors = { tl: [0, 0], t: [50, 0], tr: [100, 0], l: [0, 50], c: [50, 50], r: [100, 50], bl: [0, 100], b: [50, 100], br: [100, 100] };
+    for (const { element, image, layer } of artBindings) {
       if (!element.isConnected) continue;
       const contextKey = context === "new-chat" ? "n" : context === "conversation" ? "c" : "o";
       const override = layer.c?.[contextKey] ?? null;
-      const hidden = override?.h === true || layer.a && layer.a !== mode()[0];
+      const hidden = layer.x === 0 || override?.h === true
+        || layer.a && layer.a !== mode()[0]
+        || layer.t && layer.t !== contextKey
+        || layer.v && layer.v !== view;
       element.dataset.artContext = context;
-      element.style.setProperty("background-position", override?.p ?? layer.p ?? "right center");
-      element.style.setProperty("background-size", override?.s ?? layer.s ?? "min(58vw, 860px) auto");
+      element.dataset.artViewport = view === "w" ? "wide" : "normal";
+      if (image && Array.isArray(layer.n)) {
+        const frame = view === "w" && Array.isArray(layer.w) ? layer.w : layer.n;
+        const anchorCode = view === "w" ? (layer.z || layer.h || "c") : (layer.h || "c");
+        const anchor = anchors[anchorCode] || anchors.c;
+        image.style.setProperty("left", `calc(${anchor[0]}% + ${frame[0]}%)`);
+        image.style.setProperty("top", `calc(${anchor[1]}% + ${frame[1]}%)`);
+        image.style.setProperty("transform", `translate(${-frame[2]}%, ${-frame[3]}%) scale(${frame[4]})`);
+        image.style.setProperty("transform-origin", `${frame[2]}% ${frame[3]}%`);
+      } else {
+        element.style.setProperty("background-position", override?.p ?? layer.p ?? "right center");
+        element.style.setProperty("background-size", override?.s ?? layer.s ?? "min(58vw, 860px) auto");
+      }
       const opacity = override?.o ?? layer.o;
       if (typeof opacity === "number") {
         element.style.setProperty("--aura-layer-opacity", String(opacity));
@@ -268,7 +291,7 @@
       addLayerDiv("claude-aura-gradient");
       addLayerDiv("claude-aura-image");
       const artLayers = Array.isArray(settings.artLayers)
-        ? settings.artLayers.filter((layer) => layer && typeof layer.d === "string").slice(0, 4)
+        ? settings.artLayers.filter((layer) => layer && (typeof layer.d === "string" || Number.isInteger(layer.d))).slice(0, 8)
         : [];
       if (artLayers.length) {
         artBindings = [];
@@ -276,15 +299,27 @@
           const element = addLayerDiv("claude-aura-theme-art claude-aura-theme-art-layer");
           element.dataset.artMask = layer.k === "n" ? "none" : "soft-right";
           element.dataset.artMobile = layer.m === "h" ? "hide" : layer.m === "k" ? "keep" : "reduce";
-          element.dataset.artRole = layer.r === "b" ? "background" : layer.r === "h" ? "hero" : "decoration";
-          element.style.setProperty("background-image", `url(${JSON.stringify(layer.d)})`);
-          element.style.setProperty("background-position", layer.p || "right center");
-          element.style.setProperty("background-size", layer.s || "min(58vw, 860px) auto");
+          element.dataset.artRole = layer.r === "b" ? "background" : layer.r === "h" ? "hero" : layer.r === "c" ? "corner" : "decoration";
+          const dataUrl = Number.isInteger(layer.d) ? settings.u?.[layer.d] : layer.d;
+          if (typeof dataUrl !== "string") continue;
+          let frameImage = null;
+          if (Array.isArray(layer.n)) {
+            element.dataset.artFramed = "true";
+            frameImage = document.createElement("img");
+            frameImage.alt = "";
+            frameImage.setAttribute("aria-hidden", "true");
+            frameImage.src = dataUrl;
+            element.appendChild(frameImage);
+          } else {
+            element.style.setProperty("background-image", `url(${JSON.stringify(dataUrl)})`);
+            element.style.setProperty("background-position", layer.p || "right center");
+            element.style.setProperty("background-size", layer.s || "min(58vw, 860px) auto");
+          }
           if (typeof layer.o === "number") {
             element.style.setProperty("--aura-layer-opacity", String(layer.o));
             element.style.setProperty("opacity", String(layer.o));
           }
-          artBindings.push({ element, layer });
+          artBindings.push({ element, image: frameImage, layer });
         }
       } else {
         artBindings = [];
@@ -292,6 +327,7 @@
       }
       addLayerDiv("claude-aura-grain");
       addLayerDiv("claude-aura-vignette");
+      backdrop.dataset.artScope = settings.q === "c" ? "content" : "full-window";
       document.body.prepend(backdrop);
     }
     syncSemanticLayout();
@@ -326,6 +362,7 @@
       delete html.dataset.claudeAuraAppearance;
       delete html.dataset.claudeAuraEffectiveMode;
       delete html.dataset.claudeAuraContext;
+      delete html.dataset.claudeAuraViewport;
       delete html.dataset.claudeAuraDigest;
     }
     delete window[STATE_KEY];
@@ -348,10 +385,12 @@
   const onContextSignal = () => scheduleEnsure();
   window.addEventListener("popstate", onContextSignal);
   window.addEventListener("resize", onContextSignal, { passive: true });
+  document.addEventListener?.("fullscreenchange", onContextSignal);
   window.navigation?.addEventListener?.("currententrychange", onContextSignal);
   const stopContextListeners = () => {
     window.removeEventListener("popstate", onContextSignal);
     window.removeEventListener("resize", onContextSignal);
+    document.removeEventListener?.("fullscreenchange", onContextSignal);
     window.navigation?.removeEventListener?.("currententrychange", onContextSignal);
   };
   let observedHead = null;

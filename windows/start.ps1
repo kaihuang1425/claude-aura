@@ -2,12 +2,14 @@
 param(
   [string]$Theme,
   [string]$Image,
-  [switch]$ClearImage
+  [switch]$ClearImage,
+  [switch]$OpenStudio
 )
 
-$arguments = @('-Mode', 'Open')
-if ($Theme) { $arguments += @('-Theme', $Theme) }
-if ($Image) { $arguments += @('-Image', [System.IO.Path]::GetFullPath($Image)) }
-if ($ClearImage) { $arguments += '-ClearImage' }
-& (Join-Path $PSScriptRoot 'aura-ui.ps1') @arguments
+$auraArguments = @{ Mode = 'Open' }
+if ($Theme) { $auraArguments.Theme = $Theme }
+if ($Image) { $auraArguments.Image = [System.IO.Path]::GetFullPath($Image) }
+if ($ClearImage) { $auraArguments.ClearImage = $true }
+if ($OpenStudio) { $auraArguments.OpenStudio = $true }
+& (Join-Path $PSScriptRoot 'aura-ui.ps1') @auraArguments
 exit $LASTEXITCODE

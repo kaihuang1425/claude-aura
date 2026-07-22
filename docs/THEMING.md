@@ -2,7 +2,8 @@
 
 Claude Aura themes are registered interface systems. A theme combines localized
 picker metadata, semantic light and dark tokens, typography, shape, effects,
-wallpaper behavior, optional component variants, and optional isolated artwork.
+wallpaper behavior, optional launcher material, optional component variants,
+and optional isolated artwork.
 
 Do not add a theme by placing an unregistered JSON file in `themes/`. The
 registry is the source of truth for order, stable IDs, labels, descriptions,
@@ -13,13 +14,13 @@ swatches, preview colors, and artwork slots.
 | File | Responsibility |
 | --- | --- |
 | `themes/registry.json` | Canonical order, Default ID, legacy aliases, localized picker metadata, swatches, preview colors, and artwork metadata |
-| `themes/<id>.json` | Light/dark semantic values, typography, shape, effects, wallpaper behavior, and optional custom CSS |
+| `themes/<id>.json` | Light/dark semantic values, typography, shape, effects, wallpaper behavior, optional launcher material, and optional custom CSS |
 | `scripts/theme-core.mjs` | Schema validation, locale normalization, fallback resolution, semantic defaults, compatibility-token expansion, artwork validation, and payload compilation |
 | `assets/base.css` | Shared runtime styling driven by semantic variables |
 | `assets/theme-variants.css` | Centralized component-level differentiation selected by the stable root theme attribute |
 | `assets/renderer-inject.js` | Reversible in-page installation and cleanup of the compiled theme payload |
 | `windows/aura-ui.ps1` | Localized, persistent, keyboard-accessible theme gallery for the Windows companion |
-| `scripts/build-preview.mjs` | Generates the offline harness data from `listThemes()` |
+| `scripts/build-studio-themes.mjs` | Generates Aura Studio's theme-card metadata from `listThemes()` |
 
 The compiler applies the selected ID through
 `data-claude-aura-theme="<id>"`. Shared components consume semantic variables;
@@ -95,7 +96,7 @@ of one to four layers. Each layer supports `path`, `position`, `size`,
 (`soft-right` for the right-anchored edge fade, or `none`). Layers are embedded
 as data URLs only for the active theme and render as inert, pointer-safe
 backdrop divs behind the interface (see the japanese-idol entry for a layered
-example: watercolor background, hero portrait, and two sakura clusters). Keep
+example: appearance-specific backgrounds plus a context-aware hero). Keep
 raster layers optimized WebP; `scripts/convert-theme-assets.mjs` shows the
 local conversion pattern. The chrome portion of every payload must stay under
 65 KB and total embedded artwork under 1.4 MB (enforced by the tests).
@@ -123,11 +124,24 @@ Top-level fields are:
 | `typography` | UI, display, body, and monospace system-font stacks plus display weight and tracking |
 | `shape` | Control, card, composer, and icon radii plus border width |
 | `effects` | Soft/elevated shadows, hover lift, and transition duration |
+| `launcher` | Optional local mark and material tokens for Aura's host-owned Studio launcher |
 | `light`, `dark` | Semantic colors and wallpaper behavior for each appearance mode |
 | `customCss` | Optional narrowly scoped CSS for exceptional cases |
 
 Use reliable system-font fallbacks. Claude Aura has no runtime font CDN and
 does not bundle third-party font files.
+
+### Floating launcher
+
+`launcher` is optional. Omitting it inherits the complete Default design. When
+present, it accepts only `asset`, `surface`, `surfaceHover`, `foreground`,
+`accent`, `border`, `radius`, and `borderWidth`. Permanent themes use
+`assets/theme-art/<id>/launcher-mark.png`; standalone user kits may use only a
+kit-local `launcher-mark.png`. Marks are static transparent 96×96 PNGs below
+400 KB. Foreground must clear 4.5:1 contrast against both surfaces, radius is
+8–24, and border width is 1–3. The theme controls appearance only: Aura retains
+the 48 px click target, localized hover label, dedicated drag grip, safe edge
+gap, keyboard name, and Default fallback.
 
 ## Semantic tokens
 
@@ -223,15 +237,18 @@ Bundled SVG requirements:
   the root; and
 - fictional, non-endorsing figures when a human form is used.
 
-The composites under `theme_demo_previews` are art-direction references only.
-Never register, read, trace, vectorize, or embed them in a runtime theme. The
-renderer and preview builder do not read them, and the release builder excludes
-the directory. The built-in Studio selector pipeline is the only narrow
-exception: maintainers may use `convert-theme-assets.mjs --card-previews` to
-produce explicit text- and control-free 640 x 360 crops under
-`assets/theme-art/<id>/card-preview.webp`. Those files are decorative picker
-media, not theme backgrounds; user themes must provide their own distributable
-selector artwork.
+Theme-selection masters live under `assets/studio-previews/masters/`. They are
+product media for Aura Studio only: never register, trace, vectorize, or embed
+them in a renderer theme, and never offer them as UI evidence. Studio loads the
+uncropped file through the isolated `aura.previews` host and applies registry
+or user `x`, `y`, and `zoom` framing in the browser; reframing changes config,
+not image bytes. The compatibility command
+`convert-theme-assets.mjs --card-previews` may still rebuild the retired 640 x
+360 fallbacks under `assets/theme-art/<id>/card-preview.webp`, but current cards
+use the masters. Unassigned alternates belong under
+`assets/studio-previews/references/` and are excluded from releases and
+installed copies. User themes must provide their own distributable selector
+artwork.
 
 ## Contrast and accessibility
 
@@ -270,24 +287,29 @@ Legacy aliases currently preserve earlier saved choices:
 
 Do not remove an alias while released configurations may still contain it.
 
-The offline preview stores its own theme and mode in browser-local storage. It
-does not update the installed app configuration.
-
-## Validate and preview
+## Validate and inspect
 
 ```powershell
 npm run themes
 node scripts/theme-cli.mjs list --locale zh-CN
 node scripts/theme-cli.mjs validate --theme my-theme
-npm run preview:build
-npm run preview:serve
+npm run studio:build
 npm test
 npm run check
+npm run verify:cycle
+node scripts/theme-cli.mjs qa my-theme
 ```
 
-Open `http://127.0.0.1:4173/preview/` after starting the preview server. Inspect
-both modes, Home and Code, keyboard focus, the composer, menus, dialogs, and the
-component-state examples.
+`npm run verify:cycle` is a non-image compile/validation pass for all eight
+stable themes in Light and Dark. `theme-cli qa` writes a production-asset
+`status.json` audit only. Neither command creates a preview or UI image.
+
+Open the installed Aura Studio, then apply the theme in the actual Aura
+WebView2 window on live `claude.ai`. Inspect both appearance modes, new-chat
+and conversation contexts, normal and fullscreen sizes, keyboard focus, the
+composer, menus, dialogs, and sidebar translucency. A whole-window live Aura
+capture is the only UI visual evidence; never generate a fake DOM, offline
+preview, QA board, contact sheet, headless screenshot, or image golden.
 
 Before packaging, run the checks and then:
 
@@ -296,4 +318,5 @@ npm run release
 ```
 
 The release archive intentionally omits `.git`, dependency/build directories,
-logs, temporary files, and `theme_demo_previews`.
+logs, temporary files, and `assets/studio-previews/references/`. The registered
+Studio preview masters ship because the picker uses them; the renderer does not.

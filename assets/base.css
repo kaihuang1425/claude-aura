@@ -81,6 +81,23 @@ html.claude-aura body {
   mask-image: none;
 }
 
+#claude-aura-backdrop[data-art-scope="content"] .claude-aura-theme-art {
+  left: var(--aura-main-start, 0);
+  overflow: hidden;
+}
+
+#claude-aura-backdrop .claude-aura-theme-art[data-art-framed="true"] > img {
+  position: absolute;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  pointer-events: none !important;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+
 #claude-aura-backdrop .claude-aura-grain {
   background-image:
     radial-gradient(circle at 20% 20%, rgb(255 255 255 / 0.05) 0 0.55px, transparent 0.8px),

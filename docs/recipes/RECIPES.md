@@ -20,36 +20,63 @@ Shared rules:
 - Backgrounds: `position center / size cover / mobile keep / mask none`.
 - Any slot marked (await) → asset-request.md entry, not procedural art.
 
+Floating launcher material (asset is
+`assets/theme-art/<theme-id>/launcher-mark.png` for every row):
+
+The asset is also the running theme identity for both Aura windows, taskbar,
+notification area, and Studio rail; only the surrounding launcher material
+uses the table below.
+
+| Theme | Surface | Hover | Foreground | Accent | Border | Radius | Width |
+| --- | --- | --- | --- | --- | --- | ---: | ---: |
+| default | `#2F2937` | `#3B3346` | `#F4DFBB` | `#D66D4B` | `#655C70` | 16 | 1 |
+| japanese-film-editorial | `#F2E8D5` | `#E7D7BC` | `#252725` | `#B64B32` | `#8E7B62` | 12 | 1 |
+| korean-prestige | `#071426` | `#10243C` | `#EDF3FA` | `#5A91E6` | `#66758B` | 14 | 1 |
+| cartoon-studio | `#FFF6E7` | `#FFE8C4` | `#302820` | `#EA6047` | `#302820` | 18 | 2 |
+| anime-twilight | `#111A49` | `#202A68` | `#F1F1FF` | `#F0B875` | `#756FC0` | 18 | 1 |
+| study-library | `#F4EEDC` | `#E7DEC4` | `#292B26` | `#AA884C` | `#1F523F` | 10 | 1 |
+| japanese-idol | `#FFF5F1` | `#FFE5EB` | `#3B2930` | `#DA6F8D` | `#C7B3E6` | 20 | 1 |
+| korean-idol | `#241D43` | `#33275C` | `#F7F6FF` | `#79D7E4` | `#8F78DF` | 16 | 1 |
+
+The compact launcher is 48×48 px with a 16 px safe edge gap. Hover expands
+to 176×48 px, exposes the localized Studio label and a dedicated six-dot drag
+grip, and keeps the icon under the pointer whether expansion opens left or
+right. Theme styling never changes those interaction dimensions.
+
 ## default
 - No artwork. surfaceAlpha 0.90/0.84 (unchanged). inputBorderAlpha 0.14.
 
 ## japanese-film-editorial
 - surfaceAlpha 0.82/0.80 · sidebarAlpha 0.94/0.92 · inputBorderAlpha 0.16
-- Slots: background = warm paper grain with faint film strip (await);
-  hero = charcoal-ink male portrait, right third, matte edges (await);
-  corner-top-right = ink-brush branch (await).
-- Layers: background opacity 0.45; hero right center, `auto min(80%, 700px)`,
-  opacity 0.85; corner top-right `min(15vw, 240px) auto`, opacity 0.8,
-  mobile hide.
+- Slots: light-background = warm paper/ink editorial atmosphere;
+  dark-background = independently authored charcoal-night paper/ink
+  atmosphere; light-hero/dark-hero = matched charcoal-ink portraits with
+  appearance-authored light, right third, matte edges.
+- Layers: appearance-matched background opacity 0.45; matched hero right center,
+  `auto min(80%, 700px)`, opacity 0.85; conversation and unknown contexts hide
+  the hero so Claude content remains unobstructed.
 
 ## korean-prestige
 - surfaceAlpha 0.76/0.72 · sidebarAlpha 0.88/0.86 · inputBorderAlpha 0.15
 - SUPPLIED KIT: `themes/korean-prestige/` (K-pop asset packages; wordmark v2
   present, more arriving). Read each package's own spec/HANDOFF docs before
   wiring; use the package's @1x/@2x WebP outputs where provided.
-- Slots: background = midnight architectural glass gradient (await);
-  hero = editorial male portrait, cool rim light, right third (await).
-- Layers: background opacity 0.55; hero right bottom,
-  `auto min(84%, 740px)`, opacity 0.88.
+- Slots: light-background = pearl/ice-blue architectural glass;
+  dark-background = supplied midnight architectural glass; light-hero and
+  dark-hero = matched clean-alpha editorial portraits, right third.
+- Layers: appearance-matched background opacity 0.55; matched hero right
+  bottom, `auto min(84%, 740px)`, opacity 0.88; conversation and unknown
+  contexts hide the hero so Claude content remains unobstructed.
 
 ## cartoon-studio
 - surfaceAlpha 0.86/0.82 · sidebarAlpha 0.92/0.88 · inputBorderAlpha 0.20
   (borders stay 2px inked — soften color only, keep the ink personality)
-- Slots: background = flat cream texture with sparse doodles (await);
-  hero = original non-human mascot, bottom-right (await);
-  card-1..3 = tool doodles (await).
-- Layers: background opacity 0.5; mascot right bottom,
-  `min(26vw, 420px) auto`, opacity 0.95, mask none (clean sticker edges).
+- Slots: light-background = flat cream texture with sparse doodles;
+  dark-background = independently authored deep teal-charcoal paper with
+  edge doodles; hero = shared original non-human mascot, bottom-right.
+- Layers: appearance-matched background opacity 0.5; mascot right bottom,
+  `min(26vw, 420px) auto`, opacity 0.95, mask none (clean sticker edges),
+  conversation and unknown contexts hidden.
 
 ## anime-twilight
 - surfaceAlpha 0.70/0.66 · sidebarAlpha 0.84/0.80 · inputBorderAlpha 0.16
@@ -59,22 +86,30 @@ Shared rules:
 
 ## study-library
 - surfaceAlpha 0.86/0.84 · sidebarAlpha 0.92/0.90 · inputBorderAlpha 0.14
-- No character (hard rule). Slots: background = ivory paper fiber (await);
-  corner-bottom = desk/shelf still-life vignette, bottom-left (await).
-- Layers: background opacity 0.4; corner bottom-left
+- No character (hard rule). Slots: light-background = ivory paper fiber;
+  dark-background = independently authored deep forest-charcoal archival
+  paper; shared corner-bottom = desk/shelf still-life vignette, bottom-left.
+- Layers: appearance-matched background opacity 0.4; corner bottom-left
   `min(20vw, 320px) auto`, opacity 0.6, mobile hide.
 
 ## japanese-idol (kawaii) — assets exist; parity pass only
 - surfaceAlpha 0.72/0.76 · sidebarAlpha 0.88/0.90 · inputBorderAlpha 0.16
-- Keep current four layers (background 0.5 / hero 0.92 soft-right /
-  sakura-top-right 0.9 / sakura-bottom 0.75). Add from the kit when wiring
-  decor slots: brand-mark = mark.svg; card-1..3 = existing card SVGs.
-- Parity gaps vs board: kawaii logo in brand position, card illustrations,
-  "keep shining" sticker near top-right (opacity 0.95, `min(6vw, 96px)`).
+- Light keeps the approved background at 0.5 and hero at 0.92 with a soft-right
+  mask on new chat; conversation and unknown contexts hide the portrait.
+- Dark uses two independently authored, full-bleed scenes with consistent
+  night lighting: upward/right subject for new chat, preserved lower/right
+  subject for conversation. They are mutually exclusive at `right top / cover /
+  keep / opacity 0.82 / mask none`; unknown contexts show neither.
+- Preview-only cards, marks, stickers, and decorative SVGs are retired and are
+  not runtime assets.
 
 ## korean-idol
-- surfaceAlpha 0.74/0.70 · sidebarAlpha 0.88/0.84 · inputBorderAlpha 0.15
-- Slots: background = holographic gradient with fine grid (await);
-  hero = original K-pop-editorial female portrait, right third (await).
-- Layers: background opacity 0.5; hero right center,
-  `auto min(82%, 720px)`, opacity 0.85.
+- surfaceAlpha 0.52/0.55 · sidebarAlpha 0.88/0.84 · inputBorderAlpha 0.15.
+- SUPPLIED KIT: `themes/korean-idol/`. Light uses the approved atmosphere plus
+  constellation composite and its isolated portrait. Dark uses two approved
+  full-scene assets: the upward-shifted subject for new-chat and the preserved
+  lower subject for conversation.
+- Dark context scenes are mutually exclusive, `right top / cover / keep /
+  opacity 0.78 / mask none`; unknown contexts show neither. Light retains its
+  atmosphere and portrait composition on new chat, while conversation and
+  unknown contexts hide the isolated portrait.

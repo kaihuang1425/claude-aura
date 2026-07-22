@@ -28,276 +28,10 @@ Production artwork and decorative Studio card media remain product assets, not
 evidence. Source references and asset guides may inform production work, but
 they never prove runtime behavior.
 
-## Codex desktop-agent launch and capture runbook
-
-This section is the operational runbook for GPT-5.6 Sol Max and later Codex
-desktop agents. It does not relax the evidence rules above. The user gave
-standing approval on 2026-07-20 for an agent working in this repository to
-install, launch, relaunch, and foreground Claude Aura and Claude Aura Studio
-whenever live product verification requires it. That approval does not extend
-to entering credentials, changing Claude account data, publishing captures,
-deleting unrelated processes, pushing, or merging.
-
-Treat that approval as persistent project authorization. Do not ask the user to
-repeat it in a later work order or agent session. Before declaring an
-actual-Aura checkpoint blocked, the agent must attempt the complete install,
-launch, window-selection, and native-capture sequence below and record the
-exact failure. The user-supplied fallback is permitted only after those
-self-capture attempts fail.
-
-### 1. Prepare the current build
-
-1. Read `AGENTS.md`, the active work order, and this complete protocol.
-2. Confirm the branch and preserve every pre-existing worktree change. Never
-   reset or clean the repository to prepare a capture.
-3. Run the work order's mechanical gates before visual review. At minimum this
-   includes the PowerShell parser check, `npm run check`,
-   `npm run verify:cycle`, and the explicit payload-minus-art budget check.
-4. Install the current workspace so the live window cannot accidentally use an
-   older `%LOCALAPPDATA%\ClaudeAura\app` copy. Run the installer with the shell
-   tool, not by typing a command into a Windows application:
-
-   ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<repo>\windows\install.ps1"
-   ```
-
-   The installer writes to the per-user application, Desktop, and Start-menu
-   locations, so request the required sandbox escalation directly. The user's
-   standing launch approval means no separate conversational confirmation is
-   needed. A successful install prints the install root and passes the current
-   test suite before copying the application.
-5. If an older Aura instance prevents installation, first use Aura's own tray
-   **Exit** action. Never terminate an arbitrary `powershell.exe`. A process may
-   be stopped only when its exact command line has been safely confirmed as the
-   Aura host and normal product shutdown is unavailable.
-
-### 2. Launch or foreground Aura and Studio
-
-Use the shell tool to invoke the installed shortcuts. Do not automate a
-terminal, the Windows Run dialog, a `.cmd` file, or PowerShell through Computer
-Use. The two responsibilities remain separate: the shell launches the product;
-Computer Use controls and captures the resulting window.
-
-```powershell
-$desktop = [Environment]::GetFolderPath('Desktop')
-Start-Process -FilePath (Join-Path $desktop 'Claude Aura.lnk')
-Start-Process -FilePath (Join-Path $desktop 'Claude Aura Studio.lnk')
-```
-
-If `Start-Process` creates a valid Aura host whose WinForms window is not on the
-interactive desktop returned by Computer Use, do not conclude that capture is
-unavailable. Confirm the exact host command line, close only that confirmed
-Aura host when normal product shutdown is unavailable, and launch the shortcut
-through the interactive Explorer shell:
-
-```powershell
-explorer.exe "<absolute Desktop path>\Claude Aura.lnk"
-explorer.exe "<absolute Desktop path>\Claude Aura Studio.lnk"
-```
-
-This Explorer-launch recovery was verified on 2026-07-20. It placed both forms
-on the same desktop exposed by the official Computer Use capture runtime. Never
-use it as authority to terminate an unverified `powershell.exe` process.
-
-The Start-menu copies live under
-`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Claude Aura\`. Launching
-**Claude Aura** again foregrounds the existing single instance. Launching
-**Claude Aura Studio** again signals the existing Aura process and foregrounds
-Studio. The normal Aura and Studio shortcuts must remain separate.
-
-After launch, allow the WebView2 processes to initialize. A running PowerShell
-host or `msedgewebview2.exe` process is readiness information only; it is never
-visual evidence.
-
-### 3. Select a window through Computer Use
-
-Use the `computer-use` skill and read its `SKILL.md`, `guidance`, and
-`confirmations` documentation before Windows automation. Initialize the
-official client in `node_repl`; do not build a custom helper or use PowerShell
-UI Automation.
-
-1. Call `sky.list_apps()` or `sky.list_windows()`.
-2. Filter the returned windows for the exact title `Claude Aura` or
-   `Claude Aura Studio`.
-3. Continue only when the filter returns exactly one window. Rehydrate that
-   returned object with `sky.get_window(...)`, activate it, and obtain a fresh
-   `sky.get_window_state(...)` before every state-derived action.
-4. Never invent a window object, guess an HWND, reuse a stale screenshot ID, or
-   act on coordinates from an earlier observation.
-
-Aura is a PowerShell-hosted WinForms/WebView2 application. Some Computer Use
-runtime versions do not enumerate its form even while the product is visibly
-running. An exact returned Aura window remains the preferred control and
-capture target. If no exact Aura window is returned:
-
-1. use the interactive Explorer-launch recovery above, then launch the
-   applicable shortcut once more to exercise the single-instance foreground
-   signal;
-2. wait two seconds and retry `list_windows()` once;
-3. follow the Computer Use recovery guidance once, including a runtime reset
-   only when that guidance calls for it;
-4. if Aura is visibly foreground but still not enumerated, select exactly one
-   File Explorer window returned on that same interactive desktop and request
-   a fresh screenshot state without activating Explorer. The 2026-07-20
-   runtime returned a `zIndex: 0`, origin `(0, 0)`, 1920 x 1080 full-monitor
-   screenshot in addition to the Explorer-region screenshot. The unaltered
-   full-monitor image is valid capture evidence only when it visibly includes
-   the complete foreground Aura outer window, title bar, and live `claude.ai`;
-   and
-5. treat this as capture-only recovery. Do not send Aura coordinates or input
-   through the Explorer target. If there is no native full-monitor screenshot
-   containing the complete Aura window, stop.
-
-If that sequence provides native capture but not Aura/Studio input, continue
-with the mandatory process-scoped WebView2 control path below. Automated
-capture is unavailable only after both paths fail. Do not bypass them with a
-fabricated window handle, direct PowerShell screen capture, an ordinary browser
-render, or reconstructed HTML. Leave the checkpoint open and ask the user for
-the whole-window captures described below only after recording both failures.
-
-### 3A. Drive the installed WebViews when WinForms is capture-only
-
-Microsoft documents `--remote-debugging-port=0` as the WebView2 agent-control
-path. Use it only as a process-scoped launch argument for the unchanged,
-installed Aura build. The reference is
-[Microsoft Edge DevTools MCP for WebView2](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/devtools-mcp-server).
-Do not add a registry value, edit a shortcut, patch Aura, or persist a debug
-switch.
-
-1. Preserve the current `%LOCALAPPDATA%\ClaudeAura\data\config.json`, record
-   the exact display topology, and identify the Aura host by its full command
-   line. Close only that verified host if Aura's own **Exit** action is not
-   targetable.
-2. Set `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=0` only
-   in the shell process that starts the installed
-   `%LOCALAPPDATA%\ClaudeAura\app\windows\aura-ui.ps1`. Start with
-   `-OpenStudio` when Studio is part of the review, then immediately restore or
-   remove the environment variable in the controlling shell. The child keeps
-   the launch-scoped setting; later normal launches do not.
-3. Wait for `DevToolsActivePort` below the owned
-   `%LOCALAPPDATA%\ClaudeAura\webview` tree. Read its first line as the local
-   port and attach the bundled Playwright client to
-   `http://127.0.0.1:<port>`. Accept only the two real targets:
-   `https://aura.studio/index.html` and signed-in `https://claude.ai/...`.
-   Never attach to an authentication, password-manager, CAPTCHA, or unrelated
-   target.
-4. Drive state only through the product's real surfaces: choose the theme and
-   appearance in Studio, activate Studio's `#open-aura` action, and use an
-   existing live Claude navigation link to reach `new-chat` or `conversation`.
-   It is acceptable to inspect Aura-owned root markers, artwork decode state,
-   viewport size, and computed hover/focus styling. Do not send a prompt,
-   modify account data, or use script-created DOM as evidence.
-5. Use Computer Use native whole-window/full-monitor output for every accepted
-   image. A Playwright or DevTools screenshot is never visual evidence. The
-   process-scoped connection supplies input and machine-readable state only.
-6. Close the debug-scoped Aura host after capture, relaunch the normal shortcut,
-   restore the exact saved config and display topology, and verify that no
-   debug argument remains in the normal Aura/WebView2 process command line.
-
-This path was exercised successfully on 2026-07-21 after Aura and Studio were
-visible in native capture but absent from `sky.list_windows()` and
-`sky.list_apps()`. Consequently, that enumeration limitation alone is not a
-valid reason to block a future live-Aura work order.
-
-### 4. Drive the live review
-
-When both windows are targetable:
-
-1. In Studio, choose the required theme and **Light** or **Dark** appearance and
-   wait for the host-confirmed state update.
-2. Exercise the selected, hover/active, and visible keyboard-focus treatments.
-   Keep labels as live text and verify the Studio content region scrolls at its
-   supported minimum size without a blank nested document scroller.
-3. Use Studio's **Back to Claude Aura** action and confirm it foregrounds the
-   Aura window. Keep the separate official Claude Desktop action distinct.
-4. In Aura, confirm the loading cover is gone and the displayed document is the
-   authenticated live `claude.ai`, not Claude Desktop or an ordinary browser.
-5. Capture an empty new chat and an existing conversation wherever the theme
-   has context-specific art or prompt placement. Never reposition or send the
-   conversation composer as part of testing.
-6. Wait for all applicable artwork to decode and for two animation frames to
-   settle before taking each capture.
-7. After the matrix, select **Original look** and confirm all Aura styles,
-   markers, backdrop layers, prompt placement, context adjustments, and forced
-   appearance are removed.
-8. For a high-DPI requirement, first record
-   `[System.Windows.Forms.Screen]::AllScreens`. Use an actual Windows display
-   whose current Settings accessibility tree reports the required scale and
-   recommended physical resolution; do not simulate DPI in CSS or DevTools.
-   Relaunch Aura on that display, preserve one native whole-Aura capture plus a
-   supplemental native notification-area capture, then restore and verify the
-   original display topology before continuing.
-
-Never automate sign-in, passwords, password managers, or authentication
-dialogs. If the live profile is signed out, ask the user to complete sign-in.
-
-### 5. Save an automated capture without altering it
-
-Call `sky.get_window_state({ window, include_screenshot: true })` on the exact
-returned Aura window, or use the capture-only Explorer recovery above. The
-accepted image is the native screenshot that already contains the complete Aura
-outer window, including its title bar. Do not crop, compose multiple
-screenshots, resize, annotate, recolor, or re-encode it.
-
-When the task requires a persistent evidence file, the raw data-URL bytes may
-be written once under the gitignored `dist/verify/live-aura/` directory. This
-is evidence preservation, not a second inspection pass. A future agent may use
-the following pattern in `node_repl`, with a fresh `state` and an absolute
-output path:
-
-```js
-{
-  const shot = state.screenshots.find((candidate) =>
-    candidate.id === "<fresh whole-window screenshot id>",
-  );
-  const match = shot?.url?.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/s);
-  if (!match) {
-    throw new Error("Expected one native PNG, JPEG, or WebP capture");
-  }
-  const extension = match[1] === "jpeg" ? "jpg" : match[1];
-  const bytes = Buffer.from(match[2], "base64");
-  const fs = await import("node:fs/promises");
-  await fs.writeFile(`<absolute capture path>.${extension}`, bytes);
-}
-```
-
-The official runtime returned native JPEG data on 2026-07-20. Preserve the
-reported MIME type and matching extension; a PNG-only assumption or JPEG-to-PNG
-conversion would alter the evidence. For Explorer recovery, identify the fresh
-full-monitor screenshot by its returned metadata and visually confirm that it
-contains the complete Aura window before preserving those exact bytes.
-
-If the API returns separate parent-window and popup screenshots, do not combine
-them. Obtain a native whole-window capture that already includes the requested
-menu or dialog, or request that capture from the user.
-
-Studio, Desktop-shortcut, Start-menu, and notification-area images may support
-the identity and navigation review, but they never replace an Aura capture of
-live `claude.ai`. Record the Aura and Studio title-bar icons, the two separate
-shortcuts, and the notification-area icon at normal and high DPI when the
-available display supports those checks.
-
-### 6. User-supplied fallback
-
-If automated whole-window capture is unavailable, foreground Aura with the
-shortcut and give the user these exact instructions:
-
-1. click the Aura window so it is active;
-2. press **Alt+Print Screen** to capture the complete active window, including
-   the title bar;
-3. paste into Paint and save directly as PNG without cropping or editing; and
-4. place the files under `dist/verify/live-aura/` using the filenames below.
-
-Ask the user to report the selected theme, appearance, page context, Windows
-display scaling, and normal/maximized state. The agent can calculate the PNG
-dimensions and hashes afterward. Do not check off the work order, update a
-visual approval claim, or commit until the required files and explicit review
-outcome exist.
-
 ## Actual Aura WebView2 review
 
-At each asset mini-checkpoint and again at HUMAN CHECKPOINT C and WO-16, launch
-the real Aura main window with an authenticated live `claude.ai` document.
+For every visual-acceptance pass, launch the real Aura main window with an
+authenticated live `claude.ai` document.
 Claude Desktop, an ordinary browser, a content-only WebView capture, Studio,
 an asset guide, and any reconstructed page are not whole-window Aura evidence.
 
@@ -354,7 +88,61 @@ Also capture these stress cases when the available display supports them:
 For a Full-window background scope, the artwork must visibly extend behind the
 sidebar and the marked sidebar must remain legible as one translucent overlay.
 For Content-canvas scope, the sidebar must remain outside the artwork field.
-Exercise both scopes during WO-18 acceptance.
+Exercise both scopes during custom-theme acceptance.
+
+### Floating launcher interaction
+
+Cycle all eight stable themes and confirm the compact launcher changes to the
+registered local mark, surface, border, and radius without moving closer than
+16 px to a content edge. For each switch, confirm that the same mark also
+appears on the Aura and Studio windows, taskbar, notification area, and Studio
+rail; Original look must restore Default across all of them. Keep whole-window evidence for at least one light
+launcher and one dark launcher in both states: compact 48×48 and hovered
+176×48 with the localized **Open Studio** label and visible six-dot grip. Click
+the body to open Studio; separately drag only from the grip, then confirm a
+later body click still opens Studio. Finally apply a temporary theme with no
+`launcher` object and confirm the complete Default design appears. Theme
+styling must never hide the launcher, turn the body into a drag zone, or create
+more than one launcher window.
+
+### Custom-theme workflow
+
+Before editing a theme, open **Adjust card preview** for two built-ins. Drag to
+a distant part of each uncropped master, zoom beyond 200%, save, reopen the
+dialog, and confirm the frame persists. Reset one theme and confirm its
+registry starting frame returns. The master file hashes must remain unchanged;
+only `studioPreviewCrops` may change.
+
+Create one temporary custom theme through the installed Studio and keep its
+captures under `dist/verify/live-aura/checkpoint-d/`. Record the complete
+host-confirmed sequence in the adjacent manifest:
+
+1. duplicate a built-in, make a valid Dark token change, undo it, redo it, and
+   reset once; after reset, confirm the duplicate still uses the built-in
+   variant recipe and has returned to the source's approved Dark composition
+   before continuing;
+2. import at least one raster through the host picker, confirm local WebP
+   conversion and budget feedback, save, apply, close Aura, and relaunch it;
+3. prove the saved theme and artwork survive restart, then exercise Content
+   canvas and Full window scope;
+4. for each background scope, in the real signed-in Aura window capture Light
+   and Dark at an empty new chat and an existing conversation, first at a
+   normal window size and then maximized/fullscreen (the complete scope ×
+   appearance × context × viewport matrix); and
+5. navigate, change appearance, and resize between captures, confirming one
+   mutually exclusive intended scene with no duplicate or ghosted layer. End by
+   deleting the temporary theme and verify that Default is active first and no
+   installed or draft residue remains.
+
+The evidence set must include the whole Aura outer window and live
+`claude.ai`. It must show that Content-canvas artwork excludes the sidebar and
+Full-window artwork continues behind one readable translucent sidebar. Record
+the Studio locale used for the walkthrough, keyboard operation of every edited
+control, visible focus, the host-confirmed save result, and the restart boundary.
+Record the automated complete-key localization result for en, zh-CN, and zh-TW
+alongside the locale used for the end-to-end walkthrough.
+Studio itself and its asset guide may support the walkthrough record but are
+never substitutes for these live Aura captures.
 
 Judge only what Aura controls: artwork identity, visibility, crop, focal
 position, context/appearance/viewport selection, materials, palette,

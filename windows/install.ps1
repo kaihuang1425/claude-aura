@@ -36,6 +36,15 @@ try {
     'japanese-idol',
     'korean-idol'
   )
+  $documentationNames = @(
+    'ACCEPTANCE_AUDIT.md',
+    'FILE_MANIFEST.md',
+    'IMPLEMENTATION_REPORT.md',
+    'SCREENSHOT_PLAN.md',
+    'THEME_KIT_SPEC.md',
+    'THEMING.md',
+    'TROUBLESHOOTING.md'
+  )
   if (Test-Path -LiteralPath (Join-Path $SourceRoot '.git')) {
     & $node.Path (Join-Path $SourceRoot 'tests\run-tests.mjs')
     if ($LASTEXITCODE -ne 0) { throw 'Claude Aura checks failed; installation stopped.' }
@@ -65,7 +74,23 @@ try {
     }
     $installedDocs = Join-Path $installRoot 'docs'
     New-Item -ItemType Directory -Force -Path $installedDocs | Out-Null
-    Copy-Item -Path (Join-Path $SourceRoot 'docs\*.md') -Destination $installedDocs -Force
+    foreach ($documentationName in $documentationNames) {
+      $sourceDocumentation = Join-Path (Join-Path $SourceRoot 'docs') $documentationName
+      if (-not (Test-Path -LiteralPath $sourceDocumentation -PathType Leaf)) {
+        throw "Required documentation is missing: $sourceDocumentation"
+      }
+      Copy-Item -LiteralPath $sourceDocumentation -Destination $installedDocs -Force
+    }
+    foreach ($installedDocumentation in @(Get-ChildItem -LiteralPath $installedDocs -Force)) {
+      $keepDocumentation = (-not $installedDocumentation.PSIsContainer) -and
+        ($documentationNames -contains $installedDocumentation.Name)
+      if ($keepDocumentation) { continue }
+      $resolvedDocumentation = [IO.Path]::GetFullPath($installedDocumentation.FullName)
+      if (-not $resolvedDocumentation.StartsWith($installRootFull + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove a path outside the Aura installation: $resolvedDocumentation"
+      }
+      Remove-Item -LiteralPath $resolvedDocumentation -Recurse -Force
+    }
     foreach ($file in @('README.md', 'SECURITY.md', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md', 'LICENSE', 'package.json',
       'config.example.json', 'Install Claude Aura.cmd', 'Install Claude Aura.command', 'Uninstall Claude Aura.cmd')) {
       $source = Join-Path $SourceRoot $file
@@ -94,6 +119,7 @@ try {
     (Join-Path $installRootFull 'docs\theme-screenshots'),
     (Join-Path $installRootFull 'tests\fixtures'),
     (Join-Path $installRootFull 'dist\qa'),
+    (Join-Path $installRootFull 'assets\studio-previews\references'),
     (Join-Path $installRootFull 'assets\theme-art\japanese-film-editorial.svg'),
     (Join-Path $installRootFull 'assets\theme-art\japanese-film-editorial\hero.webp'),
     (Join-Path $installRootFull 'assets\theme-art\korean-prestige.svg'),

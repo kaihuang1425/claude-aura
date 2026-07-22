@@ -26,9 +26,7 @@ The update adds:
   theme;
 - isolated SVG and WebP renderer artwork for the seven optional themes;
 - persistent stable theme IDs, safe fallback to Default, and migration aliases
-  for the four earlier theme names; and
-- an offline QA preview covering Home, Code, composer controls, menus, dialogs,
-  and common interface states.
+  for the four earlier theme names.
 
 The Windows implementation remains a WebView2 companion window. Anthropic's
 signed desktop shell remains unchanged, and **Desktop app** still opens the
@@ -93,11 +91,57 @@ consumer experience described here is the Windows WebView2 companion.
 | **Apply theme** | Restores the saved Aura theme after using Original look |
 | **Desktop app** | Opens the official Claude Desktop app without modifying it |
 
+The floating Aura launcher follows the active theme. At rest it is a quiet
+48 px mark; hover expands it to show **Open Studio** and a separate six-dot
+drag grip, so opening and moving it are distinct actions. Aura keeps it at
+least 16 px from the content edge. Each built-in theme ships its own local
+mark and material treatment; custom themes may provide one, and an absent or
+invalid design falls back to Default without removing Studio access.
+That same validated mark is the running app identity: switching themes updates
+the Aura window, Studio window, taskbar, notification area, floating launcher,
+and Studio rail together. Original look returns all of those surfaces to the
+Default Aura mark.
+
 The selected theme persists across restarts. A custom image is decorative and
 never replaces Claude with a screenshot. Wide, quiet images with low contrast
 usually work best. Animated GIF backgrounds are hidden when Aura or the operating
 system requests reduced motion; the same safeguard covers APNG, animated WebP,
 and animated AVIF backgrounds.
+
+### Create a custom theme
+
+Open **Claude Aura Studio** and choose **Duplicate to customize** on any
+built-in theme. Built-ins remain unchanged; Studio creates an editable copy and
+applies its last valid draft to the real Aura window. You can edit Light and
+Dark tokens independently, copy one token set to the other, choose approved
+system fonts and material settings, position the new-chat prompt, and arrange
+up to eight decorative artwork layers.
+
+A duplicate keeps the built-in theme's complete visual recipe, including its
+Dark-specific composition and layout. Studio does not rebuild Dark from Light;
+only an explicit **Copy Light to Dark** action replaces the Dark token set.
+Untouched interface-font, display-font, radius/shape, and shadow controls keep
+following Aura's bundled source recipe; editing one customizes only that control
+group. Recipe references are restricted to the eight built-in IDs and are
+always resolved from Aura's own validated theme files.
+
+Each layer can target an appearance, page context, and normal or
+wide/fullscreen viewport. Its normal and wide framing remain independent.
+Choose **Content canvas** to keep artwork out of the sidebar or **Full window**
+to continue it behind the translucent sidebar. Imported PNG, JPEG, WebP, or
+AVIF files are converted locally to budgeted WebP assets; Studio never receives
+their source paths and makes no network request.
+
+The local artwork prompt builder includes an **App + launcher mark** option. It
+produces a ready-to-copy brief for the exact 96 × 96 transparent asset, compact
+safe area, small-size legibility, and every Aura surface that reuses the mark.
+
+Contrast and byte-budget results update with the draft. An invalid change stays
+editable, but Aura continues showing the last valid draft. Undo, redo, reset,
+cancel, save, restart persistence, and deletion all operate on Aura-owned local
+data. Deleting the active user theme first returns Aura to Default. See
+[docs/THEME_KIT_SPEC.md](docs/THEME_KIT_SPEC.md) for the complete editor and
+theme-kit contract.
 
 ## Built-in themes
 
@@ -118,29 +162,12 @@ Earlier saved IDs migrate automatically: `midnight` to `default`, `ember` to
 `japanese-film-editorial`, `forest` to `study-library`, and `sakura` to
 `japanese-idol`. An unknown ID falls back safely to `default`.
 
-## Offline preview
-
-The offline preview is an illustrative QA harness, not a copy of the production
-Claude interface. It uses the same registry metadata and design tokens as the
-runtime implementation.
-
-```powershell
-npm run preview:build
-npm run preview:serve
-```
-
-Then open `http://127.0.0.1:4173/preview/`. Theme and mode selections in the
-preview use browser-local storage and do not change the installed app's saved
-configuration. Repeatable screenshot URLs, readiness checks, responsive sizes,
-and evidence filenames are defined in
-[docs/SCREENSHOT_PLAN.md](docs/SCREENSHOT_PLAN.md).
-
 ## For contributors
 
 The project has no npm or runtime font dependencies. Node.js uses built-in
-modules to validate themes, generate the renderer payload, build the preview,
-and create release archives. The WebView2 SDK files are vendored with their
-license and notice.
+modules to validate themes, generate the renderer payload and Aura Studio
+metadata, and create release archives. The WebView2 SDK files are vendored with
+their license and notice.
 
 Useful commands:
 
@@ -148,7 +175,7 @@ Useful commands:
 npm run themes
 node scripts/theme-cli.mjs list --locale zh-TW
 node scripts/theme-cli.mjs validate --theme anime-twilight
-npm run preview:build
+npm run studio:build
 npm test
 npm run check
 npm run release
@@ -160,13 +187,15 @@ and [docs/IMPLEMENTATION_REPORT.md](docs/IMPLEMENTATION_REPORT.md) for the syste
 overview. The exhaustive deliverable path list is in
 [docs/FILE_MANIFEST.md](docs/FILE_MANIFEST.md).
 
-The `theme_demo_previews` directory contains art-direction references only. Its
-raw composite images are never used as runtime UI or preview backgrounds, and
-the release builder excludes the entire directory. Six text-free derivatives
-under `assets/theme-art/<id>/card-preview.webp` are used only by Aura Studio's
-theme cards; they are never injected into Claude. Release archives are built
-from an explicit file and directory allowlist, so local configuration, saved
-state, agent metadata, and unrelated workspace files are not packaged.
+Aura Studio preview media lives under `assets/studio-previews/`. Each theme card
+loads an uncropped master and applies `x`, `y`, and `zoom` framing at display
+time, so dragging the crop window never overwrites the source and it can always
+be reframed. These full concept images are picker media only: the renderer never
+loads them as Claude artwork or backgrounds, and they are not visual evidence.
+Alternate art direction is clearly separated under `references/` and excluded
+from releases and installed copies. Release archives use an explicit allowlist,
+so local configuration, saved state, internal workspace metadata, and unrelated
+files are not packaged.
 
 ## Troubleshooting and security
 

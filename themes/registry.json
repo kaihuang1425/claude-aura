@@ -50,7 +50,8 @@
         "accent": "#B64B32",
         "text": "#272824"
       },
-      "studioPreview": "assets/theme-art/japanese-film-editorial/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/japanese-film-editorial.png",
+      "studioPreviewFrame": { "x": 77.76, "y": 8.98, "zoom": 3.651 },
       "artwork": null,
       "artworkLayers": [
         {
@@ -123,7 +124,8 @@
         "accent": "#5A91E6",
         "text": "#EDF3FA"
       },
-      "studioPreview": "assets/theme-art/korean-prestige/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/korean-prestige.png",
+      "studioPreviewFrame": { "x": 82.34, "y": 8.61, "zoom": 3.274 },
       "artwork": null,
       "artworkLayers": [
         {
@@ -196,7 +198,8 @@
         "accent": "#248C88",
         "text": "#302820"
       },
-      "studioPreview": "assets/theme-art/cartoon-studio/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/cartoon-studio.png",
+      "studioPreviewFrame": { "x": 92.79, "y": 10.48, "zoom": 3.651 },
       "artwork": null,
       "artworkLayers": [
         {
@@ -254,7 +257,8 @@
         "accent": "#A98FE8",
         "text": "#F1F1FF"
       },
-      "studioPreview": "assets/theme-art/anime-twilight/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/anime-twilight.png",
+      "studioPreviewFrame": { "x": 96.1, "y": 8.25, "zoom": 3.374 },
       "artwork": null,
       "artworkLayers": [
         {
@@ -288,7 +292,8 @@
         "accent": "#2D614B",
         "text": "#292B26"
       },
-      "studioPreview": "assets/theme-art/study-library/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/study-library.png",
+      "studioPreviewFrame": { "x": 50, "y": 55, "zoom": 1 },
       "artwork": null,
       "artworkLayers": [
         {
@@ -342,7 +347,8 @@
         "accent": "#DA6F8D",
         "text": "#3B2930"
       },
-      "studioPreview": "assets/theme-art/japanese-idol/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/japanese-idol.png",
+      "studioPreviewFrame": { "x": 86.85, "y": 9.49, "zoom": 3.194 },
       "artwork": null,
       "artworkLayers": [
         {
@@ -419,7 +425,8 @@
         "accent": "#7757D9",
         "text": "#292244"
       },
-      "studioPreview": "assets/theme-art/korean-idol/card-preview.webp",
+      "studioPreview": "assets/studio-previews/masters/korean-idol.png",
+      "studioPreviewFrame": { "x": 83.47, "y": 11.82, "zoom": 3.507 },
       "newChatLayout": {
         "widthRatio": 0.76,
         "offsetXRatio": -0.07,

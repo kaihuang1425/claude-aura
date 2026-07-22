@@ -5,6 +5,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { AURA_VERSION, PROJECT_ROOT } from "./theme-core.mjs";
 import { buildAuraIcon } from "./build-aura-icon.mjs";
+import { buildLauncherAssets } from "./build-launcher-assets.mjs";
 
 const RELEASE_ROOT_FILES = new Set([
   "CONTRIBUTING.md",
@@ -18,6 +19,16 @@ const RELEASE_ROOT_FILES = new Set([
   "Uninstall Claude Aura.cmd",
   "config.example.json",
   "package.json",
+]);
+const RELEASE_DOCUMENT_FILES = new Set([
+  "docs/ACCEPTANCE_AUDIT.md",
+  "docs/FILE_MANIFEST.md",
+  "docs/IMPLEMENTATION_REPORT.md",
+  "docs/SCREENSHOT_PLAN.md",
+  "docs/THEME_KIT_SPEC.md",
+  "docs/THEMING.md",
+  "docs/TROUBLESHOOTING.md",
+  "docs/recipes/RECIPES.md",
 ]);
 const RELEASE_DIRECTORIES = new Map([
   ["assets", new Set([".avif", ".css", ".ico", ".js", ".md", ".png", ".svg", ".webp"])],
@@ -39,8 +50,20 @@ const RETIRED_RELEASE_DIRECTORIES = new Set([
   "docs/theme-screenshots",
   "tests/fixtures",
 ]);
+const SOURCE_ONLY_RELEASE_DIRECTORIES = new Set([
+  "assets/studio-previews/references",
+]);
 const REQUIRED_RELEASE_FILES = new Set([
   "scripts/asset-audit.mjs",
+  "scripts/build-launcher-assets.mjs",
+  ...[
+    "default", "japanese-film-editorial", "korean-prestige", "cartoon-studio",
+    "anime-twilight", "study-library", "japanese-idol", "korean-idol",
+  ].map((theme) => `assets/theme-art/${theme}/launcher-mark.png`),
+  ...[
+    "japanese-film-editorial", "korean-prestige", "cartoon-studio",
+    "anime-twilight", "study-library", "japanese-idol", "korean-idol",
+  ].map((theme) => `assets/studio-previews/masters/${theme}.png`),
 ]);
 const LOCAL_STATE_NAMES = new Set(["config.json", "config.local.json", "state.json"]);
 const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
@@ -75,10 +98,21 @@ function isRetiredReleasePath(relativePath) {
   return [...RETIRED_RELEASE_DIRECTORIES].some((directory) => normalized === directory || normalized.startsWith(`${directory}/`));
 }
 
+function isSourceOnlyReleasePath(relativePath) {
+  const normalized = relativePath.replaceAll("\\", "/");
+  return [...SOURCE_ONLY_RELEASE_DIRECTORIES]
+    .some((directory) => normalized === directory || normalized.startsWith(`${directory}/`));
+}
+
 function shouldEnterDirectory(relativePath) {
   const segments = pathSegments(relativePath);
   if (segments.length === 0 || isLocalOrTemporary(segments) || isRetiredReleasePath(relativePath)
+    || isSourceOnlyReleasePath(relativePath)
     || !RELEASE_DIRECTORIES.has(segments[0])) return false;
+  if (segments[0] === "docs" && segments.length > 1) {
+    const prefix = `${relativePath.replaceAll("\\", "/")}/`;
+    return [...RELEASE_DOCUMENT_FILES].some((file) => file.startsWith(prefix));
+  }
   // Directories under themes/ are supplied source kits (masters, specs, QA).
   // They are never distributed; only top-level theme JSON files ship.
   if (segments[0] === "themes" && segments.length > 1) return false;
@@ -88,10 +122,12 @@ function shouldEnterDirectory(relativePath) {
 function shouldIncludeFile(relativePath) {
   const normalized = relativePath.replaceAll("\\", "/");
   const segments = pathSegments(normalized);
-  if (segments.length === 0 || isLocalOrTemporary(segments) || isRetiredReleasePath(normalized)) return false;
+  if (segments.length === 0 || isLocalOrTemporary(segments) || isRetiredReleasePath(normalized)
+      || isSourceOnlyReleasePath(normalized)) return false;
   if (segments.length === 1) return RELEASE_ROOT_FILES.has(segments[0]);
 
   const root = segments[0];
+  if (root === "docs") return RELEASE_DOCUMENT_FILES.has(normalized);
   const extension = path.extname(segments.at(-1)).toLowerCase();
   return RELEASE_DIRECTORIES.get(root)?.has(extension) ?? false;
 }
@@ -170,6 +206,7 @@ function makeZip(entries) {
 }
 
 await buildAuraIcon();
+await buildLauncherAssets();
 const outputDirectory = path.join(PROJECT_ROOT, "release");
 await fs.mkdir(outputDirectory, { recursive: true });
 const files = (await collect(PROJECT_ROOT)).sort((a, b) => a.archivePath.localeCompare(b.archivePath));

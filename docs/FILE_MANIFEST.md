@@ -3,24 +3,20 @@
 The `work/full-theme-system` branch has no tracked baseline commit, so Git cannot
 reliably classify paths as created versus modified. The list below is the
 exhaustive current deliverable surface, excluding generated release output,
-local agent metadata, and the unsafe reference composites. The retired
-reconstructed offline-preview files, preview-only artwork, and comparison
-screenshots are not deliverables.
+local workspace metadata, internal planning records, and the unsafe reference
+surfaces outside the categorized asset tree. The retired reconstructed
+offline-preview files and comparison screenshots are not deliverables.
 
-## Agent operations
+## Product specifications
 
-- `AGENTS.md`
-- `docs/PROGRESS.md`
 - `docs/THEME_KIT_SPEC.md`
-- `docs/contracts/ASSET_CONTRACT.md`
-- `docs/plans/BLOCKED.md`
-- `docs/plans/QUEUE.md`
-- `docs/plans/WORK_ORDERS.md`
 - `docs/recipes/RECIPES.md`
 
-## Aura Studio (hosted by WO-05)
+## Aura Studio
 
 - `studio/app.js`
+- `studio/editor.css`
+- `studio/editor.js`
 - `studio/generated-themes.js`
 - `studio/index.html`
 - `studio/styles.css`
@@ -50,6 +46,40 @@ screenshots are not deliverables.
 - `assets/renderer-inject.js`
 - `assets/theme-variants.css`
 - `assets/theme-art/README.md`
+
+### Aura Studio preview media
+
+Uncropped, preserved masters used only by the local Studio theme cards. Studio
+stores framing metadata separately, so dragging or zooming a card never
+rewrites these files. Full-interface concept images remain product selector
+media only: they are never renderer backgrounds and never count as visual
+acceptance evidence. The clearly separated `references/` directory is
+repository-only and excluded from releases and installed copies.
+
+- `assets/studio-previews/README.md`
+- `assets/studio-previews/masters/anime-twilight.png`
+- `assets/studio-previews/masters/cartoon-studio.png`
+- `assets/studio-previews/masters/japanese-film-editorial.png`
+- `assets/studio-previews/masters/japanese-idol.png`
+- `assets/studio-previews/masters/korean-idol.png`
+- `assets/studio-previews/masters/korean-prestige.png`
+- `assets/studio-previews/masters/study-library.png`
+- `assets/studio-previews/references/cartoon-ocean-alternate.png`
+
+### Floating launcher marks
+
+Deterministic transparent 96×96 Aura marks for the host-owned Studio launcher.
+Each permanent theme supplies its own palette; missing or invalid theme marks
+fall back to Default.
+
+- `assets/theme-art/default/launcher-mark.png`
+- `assets/theme-art/japanese-film-editorial/launcher-mark.png`
+- `assets/theme-art/korean-prestige/launcher-mark.png`
+- `assets/theme-art/cartoon-studio/launcher-mark.png`
+- `assets/theme-art/anime-twilight/launcher-mark.png`
+- `assets/theme-art/study-library/launcher-mark.png`
+- `assets/theme-art/japanese-idol/launcher-mark.png`
+- `assets/theme-art/korean-idol/launcher-mark.png`
 
 ### Japanese Film Editorial runtime assets
 
@@ -101,10 +131,11 @@ lives under `themes/study-library/`; these WebPs are rebuilt with
 - `assets/theme-art/study-library/corner-bottom.webp`
 - `assets/theme-art/study-library/dark-background.webp`
 
-### Aura Studio selector thumbnails
+### Legacy Aura Studio selector thumbnails
 
-Small 640 × 360 WebP derivatives used only by the local Studio theme cards.
-The raw reference composites remain gitignored and are not distributed.
+Small 640 × 360 WebP derivatives retained as compatibility fallbacks. Current
+cards load the uncropped masters above and apply their saved frame at display
+time.
 
 - `assets/theme-art/anime-twilight/card-preview.webp`
 - `assets/theme-art/cartoon-studio/card-preview.webp`
@@ -160,6 +191,7 @@ the retired reconstructed preview are not deliverables.
 
 - `scripts/asset-audit.mjs`
 - `scripts/build-aura-icon.mjs`
+- `scripts/build-launcher-assets.mjs`
 - `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
 - `scripts/convert-theme-assets.mjs`

@@ -10,6 +10,7 @@ import {
 } from "./theme-core.mjs";
 
 const ARTWORK_ROOT = path.resolve(PROJECT_ROOT, "assets", "theme-art");
+const STUDIO_PREVIEW_ROOT = path.resolve(PROJECT_ROOT, "assets", "studio-previews", "masters");
 const MIME_TYPES = new Map([
   [".avif", "image/avif"],
   [".png", "image/png"],
@@ -20,6 +21,9 @@ const MODES = ["light", "dark"];
 const CHROME_PAYLOAD_LIMIT = 65_000;
 const EMBEDDED_ARTWORK_LIMIT = 1_400_000;
 const RASTER_LAYER_LIMIT = 400_000;
+const STUDIO_PREVIEW_LIMIT = 3_000_000;
+const LAUNCHER_ASSET_PATTERN = /^assets\/theme-art\/[a-z][a-z0-9-]{1,39}\/launcher-mark\.png$/;
+const STUDIO_PREVIEW_PATTERN = /^assets\/studio-previews\/masters\/([a-z][a-z0-9-]{1,39})\.png$/;
 
 function slash(value) {
   return value.replaceAll(path.sep, "/");
@@ -200,6 +204,105 @@ async function resolveAssets(entry) {
   return { assets, layered };
 }
 
+async function resolveLauncherAsset(theme) {
+  const registry = theme.launcher;
+  if (!registry || !LAUNCHER_ASSET_PATTERN.test(registry.asset ?? "")) {
+    throw new Error(`Theme launcher must reference an isolated built-in launcher mark: ${theme.name}`);
+  }
+  const candidate = path.resolve(PROJECT_ROOT, registry.asset);
+  if (!isWithin(ARTWORK_ROOT, candidate)) {
+    throw new Error(`Theme launcher must remain inside ${ARTWORK_ROOT}: ${registry.asset}`);
+  }
+  const [realRoot, realPath] = await Promise.all([
+    fs.realpath(ARTWORK_ROOT),
+    fs.realpath(candidate).catch((error) => {
+      if (error.code === "ENOENT") throw new Error(`Registered launcher mark is missing: ${registry.asset}`);
+      throw error;
+    }),
+  ]);
+  if (!isWithin(realRoot, realPath)) {
+    throw new Error(`Registered launcher mark resolves outside ${realRoot}: ${registry.asset}`);
+  }
+  const bytes = await fs.readFile(realPath);
+  if (!bytes.length) throw new Error(`Registered launcher mark is empty: ${registry.asset}`);
+  const image = inspectArtwork(bytes, "png", registry.asset);
+  if (image.width !== 96 || image.height !== 96 || image.alpha !== true) {
+    throw new Error(`Launcher mark must be a transparent 96×96 PNG: ${registry.asset}`);
+  }
+  const budgetPass = bytes.length < RASTER_LAYER_LIMIT;
+  if (!budgetPass) {
+    throw new Error(`Launcher mark exceeds the ${RASTER_LAYER_LIMIT} byte asset budget: ${registry.asset}`);
+  }
+  return {
+    path: registry.asset,
+    bytes: bytes.length,
+    sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+    format: "png",
+    mime: "image/png",
+    image: {
+      width: image.width,
+      height: image.height,
+      alpha: image.alpha,
+      alphaExpected: true,
+      fullBleedExpected: false,
+    },
+    budget: {
+      limitBytesExclusive: RASTER_LAYER_LIMIT,
+      pass: budgetPass,
+    },
+    registry: {
+      surface: registry.surface,
+      surfaceHover: registry.surfaceHover,
+      foreground: registry.foreground,
+      accent: registry.accent,
+      border: registry.border,
+      radius: registry.radius,
+      borderWidth: registry.borderWidth,
+    },
+  };
+}
+
+async function resolveStudioPreviewAsset(theme) {
+  if (!theme.studioPreview) return null;
+  const match = STUDIO_PREVIEW_PATTERN.exec(theme.studioPreview);
+  if (!match || match[1] !== theme.name) {
+    throw new Error(`Studio preview master must be scoped to its theme id: ${theme.name}`);
+  }
+  const candidate = path.resolve(PROJECT_ROOT, theme.studioPreview);
+  if (!isWithin(STUDIO_PREVIEW_ROOT, candidate)) {
+    throw new Error(`Studio preview master must remain inside ${STUDIO_PREVIEW_ROOT}: ${theme.studioPreview}`);
+  }
+  const [realRoot, realPath] = await Promise.all([
+    fs.realpath(STUDIO_PREVIEW_ROOT),
+    fs.realpath(candidate).catch((error) => {
+      if (error.code === "ENOENT") throw new Error(`Studio preview master is missing: ${theme.studioPreview}`);
+      throw error;
+    }),
+  ]);
+  if (!isWithin(realRoot, realPath)) {
+    throw new Error(`Studio preview master resolves outside ${realRoot}: ${theme.studioPreview}`);
+  }
+  const bytes = await fs.readFile(realPath);
+  const image = inspectArtwork(bytes, "png", theme.studioPreview);
+  if (image.width < 256 || image.height < 256) {
+    throw new Error(`Studio preview master is too small: ${theme.studioPreview}`);
+  }
+  const budgetPass = bytes.length > 0 && bytes.length < STUDIO_PREVIEW_LIMIT;
+  if (!budgetPass) throw new Error(`Studio preview master exceeds ${STUDIO_PREVIEW_LIMIT} bytes: ${theme.studioPreview}`);
+  return {
+    path: theme.studioPreview,
+    bytes: bytes.length,
+    sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+    format: "png",
+    mime: "image/png",
+    image,
+    frame: theme.studioPreviewFrame ? { ...theme.studioPreviewFrame } : null,
+    usage: "studio-picker-only",
+    renderer: false,
+    budget: { limitBytesExclusive: STUDIO_PREVIEW_LIMIT, pass: budgetPass },
+  };
+}
+
 async function writeJsonAtomic(filePath, value) {
   const temporary = `${filePath}.tmp-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
   await fs.writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -225,6 +328,8 @@ export async function generateAssetAudit(themeId, { cwd = process.cwd() } = {}) 
   if (!entry) throw new Error(`Unknown theme: ${themeId}`);
   const theme = (await listThemes({ locale: "en" })).find((candidate) => candidate.name === canonicalId);
   const { assets, layered } = await resolveAssets(entry);
+  const launcherAsset = await resolveLauncherAsset(theme);
+  const studioPreviewAsset = await resolveStudioPreviewAsset(theme);
 
   const payloads = [];
   for (const mode of MODES) {
@@ -277,7 +382,7 @@ export async function generateAssetAudit(themeId, { cwd = process.cwd() } = {}) 
   if (!isWithin(resolvedCwd, realOutputDir)) throw new Error(`QA output resolves outside ${resolvedCwd}`);
 
   const statusPath = path.join(outputDir, "status.json");
-  const rawArtworkBytes = assets.reduce((total, asset) => total + asset.bytes, 0);
+  const rawArtworkBytes = assets.reduce((total, asset) => total + asset.bytes, launcherAsset.bytes);
   const status = {
     schemaVersion: 2,
     theme: { id: canonicalId, label: theme.label },
@@ -292,12 +397,18 @@ export async function generateAssetAudit(themeId, { cwd = process.cwd() } = {}) 
         chromePayloadBytesExclusive: CHROME_PAYLOAD_LIMIT,
         embeddedArtworkBytesExclusive: EMBEDDED_ARTWORK_LIMIT,
         rasterLayerBytesExclusive: RASTER_LAYER_LIMIT,
+        studioPreviewBytesExclusive: STUDIO_PREVIEW_LIMIT,
       },
       rawArtworkBytes,
-      pass: payloads.every((payload) => payload.budgetPass) && assets.every((asset) => asset.budget.pass),
+      pass: payloads.every((payload) => payload.budgetPass)
+        && assets.every((asset) => asset.budget.pass)
+        && launcherAsset.budget.pass
+        && (studioPreviewAsset?.budget.pass ?? true),
     },
     payloads,
     assets,
+    launcherAsset,
+    studioPreviewAsset,
   };
   await writeJsonAtomic(statusPath, status);
   return {
@@ -305,7 +416,7 @@ export async function generateAssetAudit(themeId, { cwd = process.cwd() } = {}) 
     outputDir: slash(path.relative(resolvedCwd, outputDir)),
     boardPath: null,
     statusPath,
-    assetCount: assets.length,
+    assetCount: assets.length + 1 + (studioPreviewAsset ? 1 : 0),
     layerCount: layered ? assets.length : 0,
     modes: [...MODES],
   };

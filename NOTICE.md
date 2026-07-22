@@ -25,14 +25,15 @@ has no artwork asset. Runtime artwork is supplied as self-contained SVG or
 derived WebP layers; it contains no remote resources or bundled font files and
 remains separate from the functional Claude interface.
 
-Files under `theme_demo_previews` are supplied art-direction references, not
-runtime assets. The raw composites are ignored by Git and excluded from
-installers, preview generation, and releases. Six text-free 640 x 360 crops are
-distributed under `assets/theme-art/<id>/card-preview.webp` solely as decorative
-Aura Studio selector media; Study Library's selector is derived from its
-isolated runtime SVG. No full composite, baked interface control, or interface
-text is shipped, and selector thumbnails are never injected into Claude as
-backgrounds.
+Uncropped theme-selection masters under `assets/studio-previews/masters` are
+distributed solely as Aura Studio picker media. Some are full-interface concept
+composites and may contain baked sample controls or text; they are never
+injected into Claude, used as renderer backgrounds, or accepted as product UI
+evidence. Studio saves framing separately and never rewrites these masters.
+Alternate art direction under `assets/studio-previews/references` remains
+source-only and is excluded from installers and releases. Legacy 640 x 360
+selector crops under `assets/theme-art/<id>/card-preview.webp` remain
+compatibility fallbacks only.
 
 User-provided images remain the property and responsibility of the user.
 Confirm image, trademark, likeness, and distribution rights before sharing a

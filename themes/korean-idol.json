@@ -23,6 +23,16 @@
     "hoverLift": 1,
     "transitionMs": 170
   },
+  "launcher": {
+    "asset": "assets/theme-art/korean-idol/launcher-mark.png",
+    "surface": "#241D43",
+    "surfaceHover": "#33275C",
+    "foreground": "#F7F6FF",
+    "accent": "#79D7E4",
+    "border": "#8F78DF",
+    "radius": 16,
+    "borderWidth": 1
+  },
   "light": {
     "semantic": {
       "--aura-background-primary": "246 55% 97%",
@@ -74,7 +84,7 @@
     },
     "wallpaper": {
       "gradient": "linear-gradient(115deg, transparent 0 56%, rgb(111 224 235 / .1) 56% 57%, transparent 57%), radial-gradient(circle at 78% 10%, rgb(139 105 232 / .3), transparent 34%), radial-gradient(circle at 14% 84%, rgb(81 204 218 / .16), transparent 38%), linear-gradient(145deg, #120e29 0%, #21183e 52%, #142a36 100%)",
-      "surfaceAlpha": 0.42,
+      "surfaceAlpha": 0.55,
       "sidebarAlpha": 0.84,
       "imageOpacity": 0.14,
       "artOpacity": 0.4,

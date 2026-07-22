@@ -72,11 +72,12 @@ Aura project assets licensed under the repository's MIT License. They contain
 no bundled third-party fonts or remote resources and do not add a software
 dependency or runtime service.
 
-The raw art-direction composites under `theme_demo_previews` are not runtime or
-release assets. Six small text-free crops derived from the project-supplied
-references are distributed only as Aura Studio selector thumbnails; the seventh
-thumbnail is derived from the Study Library SVG. The renderer and offline
-preview never load these selector files as Claude artwork or backgrounds.
+The project-supplied concept images under `assets/studio-previews/masters` are
+distributed only as Aura Studio theme-selection media. The live renderer never
+loads these files as Claude artwork or backgrounds, and Studio framing never
+modifies their bytes. Alternate concepts under
+`assets/studio-previews/references` are source-only and excluded from releases.
+The older 640 x 360 WebP selector crops remain compatibility fallbacks.
 
 Claude Aura 0.3 adds no npm package or runtime font dependency. Theme font
 stacks use locally available system fallbacks. The WebView2 SDK listed above is

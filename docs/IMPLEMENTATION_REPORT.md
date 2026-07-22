@@ -30,6 +30,15 @@ Five changes landed after the initial eight-theme system:
    Studio, Study Library, Japanese Idol, Korean Idol, and Korean Prestige select
    dedicated dark production layers where needed. Anime Twilight intentionally
    reuses its intrinsically dark cityscape, and Default remains artwork-free.
+6. **Theme-aware running-app identity and Studio launcher.** All eight permanent
+   themes define an optional launcher material and one deterministic transparent
+   96×96 Aura mark shared by the main/Studio windows, taskbar, notification area,
+   Studio rail, and floating launcher.
+   The host presents a quiet 48 px control, expands on hover to name Studio and
+   expose a dedicated drag grip, preserves a 16 px safe edge gap, and falls back
+   to the complete Default design when metadata or an asset is absent. Custom
+   schema-v1/v2 kits may opt into one exact kit-local mark; validation enforces
+   dimensions, alpha, contrast, paths, and byte budgets.
 
 ## Japanese Idol runtime artwork
 
@@ -86,8 +95,7 @@ records both Light and Dark on live `claude.ai`; the separate approximately
 1280 × 720 stress review remains ordered under WO-16.
 
 At WO-10 completion, the available bridge could not target the
-PowerShell-hosted Aura window; the two exhausted attempts remain recorded under
-WO-09 in `docs/plans/BLOCKED.md`. The later WO-17 matrix supplied actual-Aura
+PowerShell-hosted Aura window. The later WO-17 matrix supplied actual-Aura
 Light/Dark evidence, and the user approved it at HUMAN CHECKPOINT C on
 2026-07-21. Fixture and QA images have been deleted and cannot be regenerated
 as a substitute.
@@ -104,10 +112,8 @@ anime-twilight` records a status-only asset and Light/Dark payload audit.
 
 The 2026-07-21 WO-17 actual-Aura matrix records Anime Twilight Light and Dark
 at 1920 × 1080 on live `claude.ai`; the user approved that evidence at HUMAN
-CHECKPOINT C. A separate two-attempt failure for the retired supplemental
-offline capture is preserved as history under WO-11 in
-`docs/plans/BLOCKED.md`; that method is no longer part of the verification or
-acceptance path.
+CHECKPOINT C. The retired supplemental offline capture method is no longer
+part of the verification or acceptance path.
 
 ## Study Library approved artwork
 
@@ -186,9 +192,10 @@ surface by responsibility.
 | --- | --- | --- |
 | Registry and themes | `themes/registry.json`, the eight canonical theme JSON files, and compatibility files `themes/midnight.json`, `themes/ember.json`, `themes/forest.json`, and `themes/sakura.json` | Canonical IDs, localized metadata, semantic light/dark roles, typography, shape, effects, wallpaper recipes, and legacy migration |
 | Shared renderer styling | `assets/base.css`, `assets/theme-variants.css`, `assets/renderer-inject.js` | Semantic production coverage, centralized component variants, root attributes, artwork layers, cleanup, and accessibility preferences |
-| Runtime artwork and Studio selectors | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers plus seven small local, user-framable theme-card thumbnails and provenance |
-| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork auditing, Studio metadata generation, and release collection |
-| Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | DPI-aware localized native gallery plus Aura Studio, live application, adjustable card/background framing, accessibility, best-effort DWM title-bar palette, allowlisted install, verification/restore helpers, and explicit app/data removal |
+| Runtime artwork and app identity | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers and eight deterministic marks shared by the running app and launcher |
+| Studio selector media | `assets/studio-previews/` | Seven preserved uncropped, user-framable masters plus a clearly separated source-only alternate and provenance |
+| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-launcher-assets.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork/launcher auditing, deterministic launcher generation, Studio metadata generation, and release collection |
+| Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | DPI-aware localized content-only host plus Aura Studio, live application, adjustable card/background framing, dynamic theme identity, accessibility, allowlisted install, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
 | Verification | `tests/run-tests.mjs`, `scripts/verify-cycle.mjs`, `scripts/asset-audit.mjs`, `package.json`, `config.example.json` | Twenty end-to-end/static checks, payload-only Light/Dark compilation for all eight themes, status-only artwork audits, build commands, and Default baseline |
 | Documentation and policy | `README.md`, `CONTRIBUTING.md`, `docs/THEMING.md`, `docs/TROUBLESHOOTING.md`, `docs/FILE_MANIFEST.md`, `docs/SCREENSHOT_PLAN.md`, `docs/ACCEPTANCE_AUDIT.md`, this report, `SECURITY.md`, `NOTICE.md`, `THIRD_PARTY_NOTICES.md`, `.gitignore` | Use, maintenance, troubleshooting, exhaustive file inventory, repeatable capture, acceptance evidence, licensing, exclusions, and deliverables |
@@ -291,17 +298,20 @@ gitignored. Runtime artwork is separate from the functional interface,
 contains no embedded controls or UI text, and is non-focusable, hidden from
 assistive technology, and pointer-inert. Default uses no renderer artwork.
 
-Studio selector media is a distinct asset class: six cards use small art-only
-crops from the supplied visual references and Study Library uses a
-deterministic composition of its two approved source masters. Reference pixels
-occur only in these decorative selector thumbnails, next to live labels; full
-interface composites are never injected into Claude as renderer art.
+Studio selector media is a distinct asset class under
+`assets/studio-previews/masters/`. Seven non-Default cards load preserved,
+uncropped PNG masters through the isolated `aura.previews` virtual host. The
+registry supplies each initial `x`, `y`, and `zoom` frame, user adjustments are
+stored in config, and no crop operation rewrites a master. Six files preserve
+the supplied full concept images byte-for-byte; Study Library uses a
+byte-for-byte copy of its transparent source-kit book artwork.
 
-The raw `theme_demo_previews` composites remain art-direction sources only. The
-runtime compiler never reads or embeds them, and the release builder skips the
-directory entirely. `convert-theme-assets.mjs` may derive small text-free
-Studio selector crops into `assets/theme-art/<id>/`; only those compressed
-derivatives are served by the local `aura.assets` virtual host.
+These images are decorative picker media beside live labels. They are never
+injected into Claude, used as renderer backgrounds, or accepted as visual
+evidence. The unused ocean concept is categorized separately under
+`assets/studio-previews/references/` and is excluded from releases and installed
+copies. `convert-theme-assets.mjs --card-previews` now rebuilds only legacy 640
+× 360 compatibility fallbacks without modifying the masters.
 
 User-selected background images remain local decorative inputs and are
 validated for supported extension, matching content signature, and size before
@@ -398,6 +408,7 @@ Results recorded through 2026-07-21:
 | WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark 1920 x 1080 review pass. The user approved the visual evidence at HUMAN CHECKPOINT C. |
 | WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
 | WO-17 live Aura UX and identity cycle | Complete actual-Aura Light/Dark matrix for all eight themes on live `claude.ai`; Original-look cleanup; Korean Idol new-chat/conversation contexts; representative hover/selected state; Studio Back-to-Aura activation; one content scroller; and Aura title-bar/tray identity at normal DPI and actual 2560 × 1600 / 200% display scaling. |
+| WO-18 themed identity/launcher/preview amendment | Twenty automated checks, all eight Light/Dark payload cycles, eight status-only asset audits, deterministic mark rebuild equality, exact preview-master hashes/dimensions, non-destructive frame metadata, release/install scoping, and dynamic running-app identity source assertions pass. The installed focused smoke check in `dist/verify/live-aura/wo18-identity-preview-smoke/manifest.json` cycled all eight marks, visibly synchronized Japanese Film across the running app surfaces available in one native full-monitor capture, and proved persisted/resettable 600% framing against an unchanged 1709×920 master. The complete localized editor and launcher hover/click/grip walkthrough remains HUMAN CHECKPOINT D. |
 | WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass. After the first Checkpoint C review rejected the Light framing, the top-right 74%/660px revision was recaptured in actual Aura across Light/Dark new-chat/conversation; Dark is unchanged. The user approved HUMAN CHECKPOINT C on 2026-07-21 and the recorded assets/hashes are frozen. |
 
 Before creating an archive, run the checks and then:
@@ -408,10 +419,11 @@ npm run release
 
 The release builder creates a versioned ZIP and SHA-256 file from explicit
 distributable top-level files, directories, and supported file types. Source
-control and agent metadata, local configuration/state, dependency/build output,
-temporary files, logs, existing release output, and `theme_demo_previews` are
-therefore excluded. Windows and macOS installers also run the test suite before
-copying an installation.
+control metadata, internal planning records, local configuration/state,
+dependency/build output, temporary files, logs, existing release output, and
+source-only `assets/studio-previews/references/` are therefore excluded. The
+registered preview masters are shipped product media. Windows and macOS
+installers also run the test suite before copying an installation.
 
 ## Visual evidence
 
@@ -464,25 +476,26 @@ sidebar contains user account data:
 These are real Aura WebView2 captures of live `claude.ai`; their recorded hashes
 identify the reviewed files without establishing an automated image baseline.
 
-## Supplied references and Studio selector derivatives
+## Supplied references and Studio preview masters
 
-All seven supplied source files are opaque full-interface composites rather than
-isolated renderer artwork. The originals are ignored by Git, installers,
-runtime compilation, and release collection:
+Six supplied full-interface concept images are preserved byte-for-byte and
+renamed by frozen theme ID under `assets/studio-previews/masters/`:
 
-- `theme_demo_previews/c1cad58a-97a8-4dd1-8270-14a52658fa4f.png`
-- `theme_demo_previews/Claude app interface with K-pop theme.png`
-- `theme_demo_previews/Claude's friendly productivity dashboard.png`
-- `theme_demo_previews/Claude's ocean-themed assistant dashboard.png`
-- `theme_demo_previews/Elegant Japanese-inspired app interface.png`
-- `theme_demo_previews/Kawaii idol-themed app interface.png`
-- `theme_demo_previews/Sleek dark mode app dashboard.png`
+- `assets/studio-previews/masters/anime-twilight.png`
+- `assets/studio-previews/masters/cartoon-studio.png`
+- `assets/studio-previews/masters/japanese-film-editorial.png`
+- `assets/studio-previews/masters/japanese-idol.png`
+- `assets/studio-previews/masters/korean-idol.png`
+- `assets/studio-previews/masters/korean-prestige.png`
 
-No full composite, interface control, or baked interface text is distributed.
-For the Checkpoint B Studio picker, six small 640 × 360 art-led crops are
-derived from these references and stored under `assets/theme-art/<id>/`; the
-Study Library card is composed from its two approved source masters instead.
-These local thumbnails are decorative selector media with live adjacent labels.
+`assets/studio-previews/masters/study-library.png` is the preserved transparent
+book artwork from that source kit. The unused ocean concept moved to
+`assets/studio-previews/references/cartoon-ocean-alternate.png`; it remains in
+the repository for future art direction but does not ship. Full composites may
+contain sample interface controls and text, so their scope is deliberately
+narrow: Aura Studio theme-selection media only, never renderer structure,
+Claude backgrounds, or visual evidence. The 640 × 360 WebPs under
+`assets/theme-art/<id>/card-preview.webp` remain compatibility fallbacks.
 They are never injected into Claude or used as runtime backgrounds.
 
 ## Remaining limitations
@@ -494,7 +507,7 @@ They are never injected into Claude or used as runtime backgrounds.
   unsupported attributes or system policy can leave some chrome unchanged. The
   themed toolbar and WebView remain independent of this enhancement, and no
   Claude or Windows binary is patched.
-- Supplied portrait pixels appear only in the small Studio selector thumbnails.
+- Supplied portrait pixels appear only in uncropped Studio selector masters.
   Renderer backgrounds continue to use isolated project artwork; closer runtime
   portrait fidelity still requires separately licensed, isolated source art.
 - The macOS scripts remain a reversible legacy launcher; the native, non-technical
@@ -507,6 +520,7 @@ They are never injected into Claude or used as runtime backgrounds.
 - Preserve readable, operable UI when artwork is absent.
 - Update shared semantic styling before adding one-off selectors.
 - Recheck selectors when `claude.ai` changes its rendered structure.
-- Treat screenshot composites as raw references. Only explicit, text-free Studio
-  selector derivatives under `assets/theme-art/<id>/` may ship; never inject a
-  composite or selector thumbnail into Claude as runtime artwork.
+- Register a full concept composite only as a theme-scoped Studio master under
+  `assets/studio-previews/masters/`, with separate framing metadata. Put
+  unassigned alternates under source-only `references/`. Never inject either
+  class into Claude as runtime artwork or use it as visual evidence.

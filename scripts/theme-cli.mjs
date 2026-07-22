@@ -6,6 +6,8 @@ import {
   buildPayloadFromCompiled,
   compileTheme,
   DEFAULT_CONFIG,
+  executeStudioRequest,
+  hydrateStudioDraft,
   listThemes,
   normalizeLocale,
   PROJECT_ROOT,
@@ -25,6 +27,7 @@ const SLOT_SPECS = [
   ["card-2", "square, transparent, subject in the bottom-right 40%"],
   ["card-3", "square, transparent, subject in the bottom-right 40%"],
   ["brand-mark", "optional, small, flat; restyles the starburst identity"],
+  ["launcher-mark", "optional 96×96 transparent PNG; restyles the floating Aura Studio launcher"],
 ];
 
 function parse(argv) {
@@ -104,8 +107,10 @@ ${rows}
 Use only artwork you have the right to distribute. Keep interface text out of
 the images; minimal decorative lettering inside the art is okay. Keep every
 resource local and offline, and leave unused slots absent instead of creating
-placeholder images. PNGs in this folder are source inputs, never runtime
-backgrounds.
+placeholder images. Decorative PNGs in this folder are source inputs, never
+runtime backgrounds. To use \`launcher-mark.png\`, set \`theme.launcher.asset\`
+to \`launcher-mark.png\` in both generated theme JSON files; otherwise Aura
+inherits its safe Default launcher.
 
 Before pasting the registry snippet, replace its labels and descriptions with
 independently written en, zh-CN, and zh-TW theme copy.
@@ -209,11 +214,14 @@ Commands:
   validate <kit-folder>
   validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
       [--user-themes <path>]
+  studio --config <path> --user-themes <path> --editor-root <path>
+      --locale <tag> --request-base64 <base64url-json> [--asset <absolute-webp-path>]
+  studio-state --config <path> --user-themes <path> --editor-root <path> --locale <tag>
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
       [--appearance system|light|dark]
       [--image-opacity <0..0.55>] [--image-position <css-position>] [--image-zoom <1..2>]
       [--studio-preview-theme <id> --studio-preview-x <0..100>
-       --studio-preview-y <0..100> --studio-preview-zoom <1..2>]
+       --studio-preview-y <0..100> --studio-preview-zoom <1..6>]
       [--reduce-motion true|false] [--enabled true|false]
       [--user-themes <path>] [--payload]
 `);
@@ -227,6 +235,55 @@ const emitWarning = (message) => process.stderr.write(`Warning: ${message}\n`);
 const runtimeOptions = { userThemesDir, onWarning: emitWarning };
 if (command === "help" || command === "--help") {
   help();
+} else if (command === "studio") {
+  const allowed = new Set(["config", "user-themes", "editor-root", "locale", "request-base64", "asset"]);
+  const unsupported = Object.keys(options).find((key) => !allowed.has(key));
+  if (unsupported) throw new Error(`Unsupported studio option: --${unsupported}`);
+  for (const key of ["config", "user-themes", "editor-root", "locale", "request-base64"]) {
+    if (typeof options[key] !== "string" || !options[key]) throw new Error(`--${key} is required`);
+  }
+  const encoded = options["request-base64"];
+  if (encoded.length > 131_072 || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
+    throw new Error("--request-base64 must be unpadded base64url JSON");
+  }
+  const requestBytes = Buffer.from(encoded, "base64url");
+  if (requestBytes.toString("base64url") !== encoded || requestBytes.length > 98_304) {
+    throw new Error("--request-base64 is not canonical base64url JSON");
+  }
+  const requestText = requestBytes.toString("utf8");
+  if (requestText.includes("\uFFFD")) throw new Error("--request-base64 must contain valid UTF-8 JSON");
+  let request;
+  try {
+    request = JSON.parse(requestText);
+  } catch (error) {
+    throw new Error(`--request-base64 contains invalid JSON: ${error.message}`);
+  }
+  if (options.asset !== undefined && !path.isAbsolute(options.asset)) {
+    throw new Error("--asset must be an absolute host-owned path");
+  }
+  const result = await executeStudioRequest({
+    request,
+    configPath: path.resolve(options.config),
+    userThemesDir: path.resolve(options["user-themes"]),
+    editorRoot: path.resolve(options["editor-root"]),
+    locale: options.locale,
+    assetPath: options.asset ?? null,
+  });
+  process.stdout.write(JSON.stringify(result));
+} else if (command === "studio-state") {
+  const allowed = new Set(["config", "user-themes", "editor-root", "locale"]);
+  const unsupported = Object.keys(options).find((key) => !allowed.has(key));
+  if (unsupported) throw new Error(`Unsupported studio-state option: --${unsupported}`);
+  for (const key of ["config", "user-themes", "editor-root", "locale"]) {
+    if (typeof options[key] !== "string" || !options[key]) throw new Error(`--${key} is required`);
+  }
+  const result = await hydrateStudioDraft({
+    configPath: path.resolve(options.config),
+    userThemesDir: path.resolve(options["user-themes"]),
+    editorRoot: path.resolve(options["editor-root"]),
+    locale: options.locale,
+  });
+  process.stdout.write(JSON.stringify(result));
 } else if (command === "scaffold") {
   if (positionals.length !== 1 || Object.keys(options).length) {
     throw new Error("Usage: theme-cli scaffold <id>");
@@ -254,6 +311,7 @@ if (command === "help" || command === "--help") {
     descriptions,
     swatches,
     preview,
+    launcher,
     artwork,
     source,
   }) => ({
@@ -264,6 +322,7 @@ if (command === "help" || command === "--help") {
     descriptions,
     swatches,
     preview,
+    launcher,
     source,
     artwork: artwork ? {
       path: artwork.path,

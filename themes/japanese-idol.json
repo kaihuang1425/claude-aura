@@ -23,6 +23,16 @@
     "hoverLift": 1.5,
     "transitionMs": 180
   },
+  "launcher": {
+    "asset": "assets/theme-art/japanese-idol/launcher-mark.png",
+    "surface": "#FFF5F1",
+    "surfaceHover": "#FFE5EB",
+    "foreground": "#3B2930",
+    "accent": "#DA6F8D",
+    "border": "#C7B3E6",
+    "radius": 20,
+    "borderWidth": 1
+  },
   "light": {
     "semantic": {
       "--aura-background-primary": "13 58% 96%",
