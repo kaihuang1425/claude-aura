@@ -46,7 +46,22 @@ for diagnosis.
 
 That is expected in Aura 0.3. The **Desktop app** button opens Anthropic's
 signed application unchanged. Use the main Claude Aura window for the themed
-Claude interface.
+Claude interface. Aura 0.3 also does not theme native Claude Desktop Code or
+the Claude Code terminal, and ordinary Claude chat inside Aura cannot read a
+local project.
+
+Aura Code is release-blocking work for the final release. Its approved plan is
+CLI-first: Aura will guide the user to an official local Claude Code/Remote
+Control engine while theming the supported live `claude.ai/code` conversation.
+The first Code activation will offer local Aura setup, an existing session,
+the full native Desktop workspace, or no local editing, with the setup and its
+benefits, limitations, and privacy details available again in Settings.
+Matching official terminal themes support direct CLI and Agent View use.
+Claude Desktop remains the unchanged, unthemed full-workspace destination
+rather than a hidden Aura dependency. Aura will use a direct handoff only if
+that documented route passes its feasibility gate; otherwise it will offer
+truthful current guidance. Optional Agent View status, Desktop minimization,
+and VS Code theming ship only if their separate feasibility gates pass.
 
 ## A custom image does not appear
 

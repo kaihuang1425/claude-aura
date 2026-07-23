@@ -64,6 +64,13 @@ Claude Aura 在专用的 Microsoft Edge WebView2 窗口中打开真实的
 | 提供 Studio，用于创建本地自定义主题 | 声称自己是 Anthropic 产品或官方主题系统 |
 | 在应用内提供**原始外观** | 关闭样式时删除已保存的主题 |
 
+Aura 0.3 目前只为实时网站应用主题，尚不会为 Claude Desktop 的 Code
+界面或 Claude Code 终端应用主题；Aura 中的普通聊天也不能直接访问本地项目。
+最终发布前，必须完成 Aura Code 并通过验收：使用官方
+[Remote Control](https://code.claude.com/docs/en/remote-control)，验证 Aura
+能够在实时 `claude.ai/code` 中操作本地 Claude Code 会话，并提供匹配的终端
+主题导出，作为受限环境下的替代方案。整个过程不会修改 Claude Desktop。
+
 <p align="right">(<a href="#readme-top">返回顶部</a>)</p>
 
 ## 主题展示
@@ -315,6 +322,8 @@ WebView2 相关帮助。
 - [x] 专用的 Windows WebView2 伴侣应用及可撤销的**原始外观**
 - [x] 八个支持浅色和深色模式的稳定内置主题
 - [ ] 完成并评审无代码 Studio 可视化编辑器
+- [ ] 完成并验收 Aura Code：通过官方 Remote Control 为本地 Claude Code
+      会话应用主题，并支持导出配套终端主题
 - [ ] 发布 30 分钟自定义主题教程
 - [ ] 执行最终发布校验
 

@@ -38,8 +38,10 @@ document, the tooling is not finished.
    flat selected-image inspector. A new image defaults to the currently selected Light/Dark
    appearance and New chat/Conversation page instead of leaking into another
    state. A layer intentionally set to All appearances or All pages is labelled
-   as shared. Selection, pointer drag, keyboard movement, and reorder keep the
-   same opaque layer ID even when another layer is visually above it.
+   as shared. For schema-v2 artwork, **All pages** means New chat and
+   Conversation only; it never opts the layer into Aura Code. Selection,
+   pointer drag, keyboard movement, and reorder keep the same opaque layer ID
+   even when another layer is visually above it.
 5. The preview and dimension controls stay beside the live preview in both
    editor levels. Choose Standard or Wide, or type a bounded width and height;
    width below 1440 uses the Standard position set and width at or above 1440
@@ -81,7 +83,10 @@ document, the tooling is not finished.
    arbitrary conversation or navigate away from an unsent prompt. The host refreshes the
    capture after Claude's source or in-page history changes. Captures are never
    written to disk, and the privacy notice remains visible in both editor
-   levels. They are placement aids, not acceptance evidence. **Review in Aura**
+   levels. Aura Code is deliberately excluded from this mirror because it may
+   contain source, diffs, paths, and tool output. Code inherits validated theme
+   presentation but does not become an artwork-placement page. Captures are
+   placement aids, not acceptance evidence. **Review in Aura**
    is an explicit detached review action; routine size changes keep Studio in
    front so they do not force a window switch after every adjustment. The local
    prompt builder only drafts asset-generation text and makes no model or
@@ -165,6 +170,24 @@ properties each target supports. Themes cannot add a page, selector, route, or
 target. If Claude adds a page later, Aura adds one tested registry adapter and
 the editor presents it in the existing View control; it does not add another
 navigation tier or build a Light/Dark × page × dimensions folder tree.
+
+Before the v1 tutorial and release sweep, WO-27 registers `code` beside
+`new-chat` and `conversation`. Code applies the accepted theme's semantic
+palette, typography, shapes, focus, and materials to a closed set of
+host-discovered roles on live `claude.ai/code`. It does not add schema-v2
+artwork contexts or Code-specific editor controls, and it never gives the page
+project authority. WO-27 is CLI-first: the official local Claude Code CLI, in
+the Remote Control mode selected by its feasibility spike, is the default
+engine and owns filesystem access, tools, MCP, project configuration,
+worktrees, execution, and permissions. Claude Desktop is an explicit full
+native workspace destination rather than a hidden Aura dependency; its direct
+handoff is used only if the dedicated gate passes, otherwise Aura offers
+truthful current guidance. VS Code is an optional separately gated themeable
+IDE route. Missing or ambiguous live-web roles stay native; Original look
+removes the Code adapter.
+Matching Claude Code terminal and optional VS Code theme exports are separate
+bounded colour projections, not copies of Aura artwork or layout and never
+evidence that native Claude Desktop Code was styled.
 
 WO-26 adds opt-in fluid composition between the existing Standard 1180×640 and
 Wide 1560×940 endpoints. Existing and incompatible themes keep the discrete
@@ -307,7 +330,8 @@ A frame contains `anchor`, `positionX`, `positionY`, `focalX`, `focalY`, and
 100, focal coordinates from 0 to 100, and scale from 0.25 to 3. Artwork roles
 are `background`, `hero`, `corner`, or `decoration`. Appearance is `all`,
 `light`, or `dark`; context is `all`, `new-chat`, or `conversation`; viewport
-is `all`, `normal`, or `wide`.
+is `all`, `normal`, or `wide`. In this artwork contract, context `all` means
+both supported chat contexts and excludes the registered Code view.
 
 For a legacy layer, those two frame objects are dormant compatibility seeds
 until the first framing edit. Studio computes them from the actual WebP

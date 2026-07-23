@@ -67,6 +67,14 @@ live interface with a screenshot.
 | Provides Studio for local custom themes | Claim to be an Anthropic product or official theme system |
 | Offers **Original look** inside the app | Delete saved themes when styling is turned off |
 
+Aura 0.3 currently themes the live website only. It does not yet theme native
+Claude Desktop Code or the Claude Code terminal, and ordinary chat inside Aura
+does not gain local-project access. Before the final release, Aura Code must
+pass a release-blocking proof with a themed official
+[Remote Control](https://code.claude.com/docs/en/remote-control) session on live
+`claude.ai/code`; matching terminal-theme export covers restricted
+environments without patching Claude Desktop.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Theme showcase
@@ -330,6 +338,8 @@ and WebView2 help.
 - [x] Dedicated Windows WebView2 companion and reversible **Original look**
 - [x] Eight stable built-in themes with Light and Dark support
 - [ ] Complete and review the no-code Studio visual editor
+- [ ] Complete and approve Aura Code for official local Claude Code Remote
+      Control, with matching terminal-theme export
 - [ ] Publish the 30-minute custom-theme tutorial
 - [ ] Run the final release verification sweep
 

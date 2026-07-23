@@ -64,6 +64,14 @@ Claude Aura 會在獨立的 Microsoft Edge WebView2 視窗中開啟真正的
 | 提供 Studio 來建立本機自訂主題 | 宣稱是 Anthropic 產品或官方主題系統 |
 | 在 App 內提供 **原始外觀** | 關閉主題樣式時刪除已儲存的主題 |
 
+Aura 0.3 目前只會替即時網站套用主題，還不會替 Claude Desktop 的 Code
+介面或 Claude Code 終端機套用主題；Aura 裡的一般對話也無法直接存取本機
+專案。正式發行前，必須完成 Aura Code 並通過驗收：透過官方
+[Remote Control](https://code.claude.com/docs/en/remote-control)，證明 Aura
+能在即時 `claude.ai/code` 中操作本機 Claude Code 工作階段，並提供相符的
+終端機主題匯出，讓無法使用 Remote Control 的環境仍有可用選項。整個流程
+不會修改 Claude Desktop。
+
 <p align="right">(<a href="#readme-top">回到頂端</a>)</p>
 
 ## 主題展示
@@ -320,6 +328,8 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 - [x] 獨立的 Windows WebView2 伴隨工具，以及可還原的 **原始外觀**
 - [x] 8 個順序固定的內建主題，支援淺色與深色外觀
 - [ ] 完成並檢查免寫程式碼的 Studio 視覺化編輯器
+- [ ] 完成並驗收 Aura Code：透過官方 Remote Control 替本機 Claude Code
+      工作階段套用主題，並可匯出相符的終端機主題
 - [ ] 發布 30 分鐘自訂主題教學
 - [ ] 執行最後一輪發行驗證
 

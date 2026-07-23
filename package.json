@@ -2,7 +2,7 @@
   "name": "claude-aura",
   "version": "0.3.0",
   "private": true,
-  "description": "A reversible theme companion for Claude.",
+  "description": "A reversible theme companion for the live Claude website.",
   "type": "module",
   "scripts": {
     "test": "node tests/run-tests.mjs",

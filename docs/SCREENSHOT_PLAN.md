@@ -54,7 +54,7 @@ For each capture:
 4. Capture the entire Aura window, including title bar, WebView bounds, real
    sidebar, content canvas, and any requested live menu or dialog. Do not crop
    to WebView content, reconstruct the page, or edit captured pixels.
-5. Record theme ID, appearance, `new-chat|conversation|other` context, UTC
+5. Record theme ID, appearance, `new-chat|conversation|code|other` context, UTC
    timestamp, commit, payload digest, outer-window pixels, WebView CSS viewport,
    DPR, Windows display scaling, maximized state, and capture path in a manifest
    beside the images.
@@ -360,6 +360,113 @@ cards, the labelled guide/stage, and the launcher mark may show their intended
 media. Studio itself and its asset guide may support the walkthrough record but
 are never substitutes for these live Aura captures. These Studio-shell checks
 are part of the still-open HUMAN CHECKPOINT D.
+
+### Styled local Claude Code (HUMAN CHECKPOINT CODE)
+
+This is release-blocking v1 evidence for WO-27. It occurs after HUMAN
+CHECKPOINT D and before the tutorial or final release sweep. Use an installed
+Aura build, a current official Claude Code release, and a newly created
+disposable Git repository containing only non-sensitive sentinel content.
+Record the tested versions and official-documentation review date. Keep the
+manifest and logs free of credentials, account or organization data, hostname,
+the exact project path, and the Remote Control URL. The visible session may
+contain only the purpose-built sentinel names, prompt, transcript, diff, and
+content required for this matrix—never real project material.
+
+Begin with onboarding unset. Record whole-window actual Aura states for the
+first-click choice and the **Continue without local editing** result, then reset
+through Settings and complete **Use local projects in Aura**. No process,
+folder, or setting may change before consent. Keep installation, sign-in,
+organization, workspace-trust, permission, policy, and error UI visible in the
+official CLI surface; these native setup observations are functional evidence,
+not Aura screenshots.
+
+Confirm separately that every picker, launch, pin, stop, restart, and
+full-workspace action begins with a current native-host gesture; Studio and the
+live remote page receive no privileged local-project verb or exact path.
+
+Start or attach to the verified CLI-first official Remote Control session,
+select it through the real `claude.ai/code` session list inside Aura, and
+retain Claude Code's normal workspace-trust and permission flow. From Aura,
+read the sentinel, approve one bounded write, interrupt a running turn, and
+reject one permission request. Prove the local edit separately with a
+before/after hash and bounded content assertion in the disposable directory. A
+screenshot cannot prove local filesystem access, process locality, permission
+preservation, or the absence of forbidden persisted fields.
+
+Capture every built-in in Light and Dark on both:
+
+- the real Code session list with the local session visibly available; and
+- the active local session with representative transcript, tool/result,
+  code/diff, composer, navigation, focus, selected, disabled, warning/error,
+  connection, and permission states.
+
+This is 32 whole-window actual Aura states before representative stress and
+fallback captures. Chat-only artwork, new-chat placement, greetings, and
+prompt widgets must be absent. Native permission, authentication, trust,
+billing, organization-policy, safety, account, menu, and dialog surfaces must
+remain legible and unchanged in meaning and interaction.
+
+Add representative whole-window states for:
+
+- the first-click Aura Local / full Desktop / no-local / existing-session /
+  Back choice, the condensed benefits/limitations notice, and the
+  Settings-reopened setup and privacy panel;
+- one explicitly pinned disposable project before and after restart, its
+  removal, and the truthful disconnected state that proves a shortcut is not a
+  connection claim; use non-sensitive canaries to prove Aura-owned
+  project config contains only label/path/route, Aura-owned logs and
+  diagnostics contain no exact path, and none of those stores contains a
+  session URL, credential, prompt, transcript, diff, tool output, or account
+  identity, without dumping official WebView site storage;
+- visible initial local-engine setup followed by every shipped
+  visible/minimized/background state, including Open console and exact-process
+  stop only if post-spike implementation gate B earned `managed-background`;
+  verify retained process/creation/child-job identity, PID reuse and
+  stale-handle fallback, and explicit keep-or-stop choices on close/forget;
+- the named concurrency result: at least two bounded concurrent sessions with
+  isolated worktrees under `multi-session-worktree`, or a distinct explicit
+  process for every exercised session under `one-process-per-session`, with no
+  simulated server-level multi-session controls;
+- collapsed and expanded Code navigation, normal and wide windows, and the
+  selected representative DPI;
+- Chat → Code list → active Code session → Chat, with no stale marker,
+  observer, artwork, forced appearance, or Studio capture;
+- local-process exit, truthful disconnect, restart, and reconnect without
+  restarting Aura;
+- forced colors, increased contrast, reduced motion, keyboard-only operation,
+  and visible focus;
+- missing or ambiguous role discovery, theme failure, and unavailable `/code`
+  structure, each retaining usable native Code and navigation back to Chat; and
+- Original look, which removes every Aura Code style and marker without
+  stopping the local process.
+
+Studio's in-memory live-page mirror must remain disabled for the entire Code
+route. Build the disposable session so captures contain no private code, local
+path, identity, credential, or account data. Inspect each untouched capture
+before sharing; if it contains sensitive information, discard it and recapture
+rather than editing its pixels.
+
+Export one built-in and one valid user theme as official Light/Dark Claude Code
+terminal-theme JSON, validate the exact files, select them through the
+official `/theme` flow, and confirm local CLI and Agent View work still
+function. Under `desktop-direct`, exercise the verified Desktop full-workspace
+and `/desktop` handoffs, preserve native trust/permission UI, and return to
+Aura. Under `desktop-guidance-only`, verify that the action opens current
+official guidance and makes no direct-handoff or existing-session claim. If
+Agent View status, Desktop minimization, or VS Code handoff/theme ships,
+exercise each separately against its spike contract. These are manual
+functional checks, not Aura visual evidence.
+
+A terminal screenshot, native Claude Desktop Code, VS Code, ordinary browser,
+fixture, reconstructed Code UI, headless screenshot, contact sheet, QA board,
+or image golden cannot satisfy HUMAN CHECKPOINT CODE. Confirm separately that
+native Claude Desktop remains unchanged and unthemed, and record a copy review
+of the complete benefits, tradeoffs, known limitations, privacy, process, and
+separate-history disclosure in `en`, `zh-CN`, and `zh-TW`, including that local
+execution does not keep file content, paths, diffs, or tool/command output
+on-device when Claude Code includes them in model requests or synchronized
+sessions.
 
 ### Phase 2 instant prompts (HUMAN CHECKPOINT E)
 
