@@ -723,7 +723,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   for (const id of [
     "editor-context-editing", "editor-context-applies", "editor-context-source", "editor-context-frame",
   ]) assert(studioHtml.includes(`id="${id}"`), `${id} is missing from the persistent context strip`);
-  assert.match(studioHtml, /id="editor-document-details" class="editor-document-details"/,
+  assert.match(studioHtml,
+    /id="editor-document-details" class="editor-document-details-panel"[^>]+hidden/,
     "Localized names and descriptions must remain available as document details");
   assert.equal((studioHtml.match(/data-editor-branch="widgets"/g) ?? []).length, 1,
     "Widgets must contain only the already authorized App identity surface");
@@ -749,15 +750,44 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Validation and budgets must remain one global Advanced section, not a fourth branch");
   const inspectorContextBlock = studioEditor.match(
     /const refreshInspectorContext\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
+  const inspectorSourceBlock = studioEditor.match(
+    /const fieldUsesThemeOriginal\s*=\s*\(field\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
+  assert.match(inspectorSourceBlock,
+    /state\.shared\.prompt\.native[\s\S]{0,180}?hasStageOverridePrefix\("shared\.prompt"\)/,
+    "New-chat placement provenance must follow its native inherited state and local override");
+  assert.match(inspectorSourceBlock,
+    /state\.shared\.inherited\[inherited\[1\]\][\s\S]{0,120}?stageOverrides\.has\(field\)/,
+    "Shared material provenance must follow the selected field rather than unrelated draft edits");
+  assert(!inspectorContextBlock.includes("hasUnsavedEdits()"),
+    "Source must not make every target Customized because an unrelated field is dirty");
   assert.match(inspectorContextBlock,
-    /contextSource\.textContent\s*=\s*state\s*&&\s*hasUnsavedEdits\(\)[\s\S]{0,120}?customizedSource[\s\S]{0,80}?themeOriginalSource/,
-    "Source must truthfully distinguish an inherited theme from an unsaved customized draft");
+    /const tokenMode[\s\S]{0,220}?contextApplies\.textContent[\s\S]{0,180}?background\.layer[\s\S]{0,220}?interface\.new-chat-area[\s\S]{0,260}?tokenMode/,
+    "Applies-to text must follow the selected property family, including mode-specific colors");
+  const layerScopeBlock = studioEditor.match(
+    /const layerScopeLabel\s*=\s*\(layer\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(layerScopeBlock,
+    /stageOverrides\.get\(`layers\[\$\{layer\.index}]\.\$\{property}`\) \?\? layer\[property\]/,
+    "Layer Applies to must reflect a staged scope immediately, including while host sync is deferred");
   assert.match(inspectorContextBlock,
-    /contextApplies\.textContent[\s\S]{0,700}?interface\.new-chat-area[\s\S]{0,300}?background\.layer/,
-    "Applies-to text must follow the selected capability rather than a generic page label");
+    /const fieldFrame\s*=\s*\/\^layers[\s\S]{0,180}?contextFrameRow\.hidden\s*=\s*!fieldFrame/,
+    "Only a responsive image-frame property may show the Standard or Wide edit target");
   assert.match(inspectorContextBlock,
-    /contextFrameRow\.hidden\s*=\s*!capability\.axes\.includes\("frame"\)[\s\S]{0,350}?customFrameUses/,
-    "Responsive targets must disclose whether a custom preview resolves to Standard or Wide");
+    /const editFrameLabel[\s\S]{0,140}?const previewFrameLabel\s*=\s*tr\(stageViewport[\s\S]{0,320}?editFrameLabel[\s\S]{0,120}?customFrameUses"\), previewFrameLabel/,
+    "A custom preview must name its resolved saved set without replacing the field's edit target");
+  const targetPickerBlock = studioEditor.match(
+    /const syncTargetPicker\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
+  assert.match(targetPickerBlock,
+    /const onlyTarget\s*=\s*entries\.length === 1[\s\S]{0,180}?targetPicker\.hidden\s*=\s*onlyTarget[\s\S]{0,180}?contextEditing\.hidden\s*=\s*!onlyTarget/,
+    "A one-target branch must show its target as context instead of a redundant dropdown");
+  const editingTargetLabelBlock = studioEditor.match(
+    /const editingTargetLabel\s*=\s*\(target\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(editingTargetLabelBlock,
+    /target !== "background\.layer"[\s\S]{0,220}?selectedLayer\.index \+ 1/,
+    "The Background target picker must identify the selected image instead of only saying Images");
+  assert.match(targetPickerBlock, /option\.textContent\s*=\s*editingTargetLabel\(entry\.id\)/,
+    "The selected-image label must be visible in the multi-target picker");
   const setInspectorTargetBlock = studioEditor.match(
     /const setInspectorTarget\s*=\s*\([\s\S]*?\n\s*};/)?.[0] ?? "";
   assert.match(setInspectorTargetBlock,
@@ -1543,7 +1573,21 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   const flushStageKeyBlock = studioEditor.match(/const flushStageKeyChanges\s*=\s*\(\)\s*=>[\s\S]*?\n\s*};/)?.[0] ?? "";
   assert.match(flushStageKeyBlock, /stageKeyPaths\.clear\(\)[\s\S]{0,180}?commitStagePaths\(paths\)/,
     "Debounced keyboard edits must flush their pending paths before document actions");
-  const stageEscapeBlock = studioEditor.match(/if \(event\.key === "Escape"\) \{[\s\S]*?\n\s*return;\n\s*}/)?.[0] ?? "";
+  const commitStagePathsBlock = studioEditor.match(
+    /const commitStagePaths\s*=\s*\(paths\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(commitStagePathsBlock,
+    /Math\.abs\(value - saved\) < 0\.00005\)\s*\{[\s\S]{0,100}?stageOverrides\.delete\(path\)/,
+    "Returning a gesture to its saved value must clear stale Customized provenance");
+  const endStageDragBlock = studioEditor.match(
+    /const endStageDrag\s*=\s*\(event\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(endStageDragBlock,
+    /commitStagePaths\(stageItemPaths\(drag\.selection\)\)[\s\S]{0,100}?renderStage\(\)[\s\S]{0,100}?refreshInspectorContext\(\)/,
+    "Ending a no-op gesture must refresh provenance after local overrides are cleared");
+  const stageEscapeBlock = studioEditor.match(
+    /if \(event\.key === "Escape"\) \{[\s\S]*?}\s*const step =/,
+  )?.[0] ?? "";
   assert.match(stageEscapeBlock, /stageKeyPaths\.delete\(path\)[\s\S]{0,400}?reflectStageInputs\(paths\)/,
     "Escape must cancel pending keyboard paths and restore their inspector values");
   const buttonStateBlock = studioEditor.match(/const reflectButtonStates\s*=\s*\(\)\s*=>[\s\S]*?\n\s*};/)?.[0] ?? "";
@@ -1602,7 +1646,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     Object.keys(expectedEditorMessageShapes),
   "The editor page and Windows host must share the exact editor action allowlist");
 
-  const editorStringsMatch = studioEditor.match(/const STRINGS\s*=\s*(\{[\s\S]*?\n  \});\n\n  const ID_PATTERN/);
+  const editorStringsMatch = studioEditor.match(/const STRINGS\s*=\s*(\{[\s\S]*?\r?\n  \});\r?\n\r?\n  const ID_PATTERN/);
   assert(editorStringsMatch, "Editor locale dictionaries could not be isolated");
   const editorStrings = new Function(`return (${editorStringsMatch[1]});`)();
   assert.deepEqual(Object.keys(editorStrings).sort(), ["en", "zh-CN", "zh-TW"]);
@@ -1654,6 +1698,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /id="editor-document-details"[\s\S]{0,500}?data-editor-i18n="themeIdentityHelp"/,
     "Quick customize must expose theme identity through Document details");
+  const documentDetailsOpenBlock = studioEditor.match(
+    /const setDocumentDetailsOpen\s*=\s*\([\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(documentDetailsOpenBlock,
+    /data-editor-metadata="label"[\s\S]{0,180}?normalizedLocale[\s\S]{0,300}?focus\(\{\s*preventScroll:\s*true\s*}\)/,
+    "Opening Document details must move focus past the sticky commands to the localized name field");
+  assert.match(studioEditor,
+    /documentDetailsPanel\?\.addEventListener\("keydown"[\s\S]{0,180}?event\.key !== "Escape"[\s\S]{0,180}?returnFocus:\s*true/,
+    "Escape from Document details must return focus to its persistent disclosure button");
   assert.match(studioHtml,
     /class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface\.new-chat-area"/,
     "Canvas selection must route the new-chat area to its Interface target in both editor levels");
@@ -1714,9 +1767,19 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /const focusBelowInspector\s*=\s*\([\s\S]*?\n\s*};/)?.[0] ?? "";
   assert.match(focusBelowInspectorBlock, /focus\(\{\s*preventScroll:\s*true\s*}\)/,
     "Validation focus must suppress the browser's sticky-header-obscured scroll position");
-  assert.match(focusBelowInspectorBlock,
-    /inspectorHead\.getBoundingClientRect\(\)\.bottom[\s\S]{0,400}?editorControls\.scrollTop\s*\+=\s*delta/,
-    "Validation recovery must measure the live inspector header and scroll the target below it");
+  assert.match(focusBelowInspectorBlock, /revealWithinInspector\(target\)/,
+    "Validation recovery and target navigation must share one viewport reveal path");
+  const revealDeltaSource = studioEditor.match(
+    /const inspectorRevealDelta\s*=\s*\(rect,\s*visibleTop,\s*visibleBottom\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert(revealDeltaSource, "Inspector reveal geometry helper is missing");
+  const inspectorRevealDelta = Function(
+    `${revealDeltaSource}; return inspectorRevealDelta;`,
+  )();
+  assert.equal(inspectorRevealDelta({ top: 32, bottom: 60 }, 20, 100), 0);
+  assert.equal(inspectorRevealDelta({ top: 8, bottom: 30 }, 20, 100), -12);
+  assert.equal(inspectorRevealDelta({ top: 90, bottom: 118 }, 20, 100), 18,
+    "A target below the inspector viewport must scroll downward into view");
   assert.match(studioEditor, /(?:function|const)\s+validationMessageFor\b/,
     "Validation summaries must translate safe error categories into recovery guidance");
   assert(!/format\(tr\("validationIssue"\),\s*first\.field\)/.test(studioEditor),
@@ -1997,7 +2060,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Height-only Studio resizes must refit the canvas from its bounded preview pane");
   assert.match(stageObserverBlock, /window\.addEventListener\("resize",\s*applyStageLayout,\s*\{\s*passive:\s*true\s*}\)/,
     "Canvas fitting must retain a window-resize fallback when ResizeObserver is unavailable");
-  assert.match(studioHtml, /<div class="editor-inspector-head">[\s\S]{0,1800}?class="editor-inspector-nav"/,
+  assert.match(studioHtml, /<div class="editor-inspector-head">[\s\S]*?class="editor-inspector-nav"/,
     "Quick customize and Advanced navigation must share one measured sticky inspector header with the level switch");
   const inspectorNavRule = studioEditorCss.match(/\.editor-inspector-nav\s*\{([^}]*)\}/)?.[1] ?? "";
   assert(!/position:\s*sticky/.test(inspectorNavRule) && !/top:\s*108px/.test(inspectorNavRule),
@@ -2010,6 +2073,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditorCss,
     /\.editor-inspector-tab\[aria-pressed="true"\]\s+\.editor-branch-glyph\s*\{[^}]*background:\s*var\(--branch-tool\)/,
     "The active tool must have more than a thin text-tab underline");
+  const branchDetailRule = [
+    ...studioEditorCss.matchAll(/\.editor-branch-copy small\s*\{([^}]*)\}/g),
+  ].map((match) => match[1]).find((rule) => rule.includes("color:")) ?? "";
+  assert.match(branchDetailRule, /color:\s*var\(--ink-muted\)[\s\S]*?text-overflow:\s*ellipsis/);
+  assert(!/position:\s*absolute/.test(branchDetailRule),
+    "A wide inspector must keep the three tool descriptions visible");
+  assert.match(studioEditorCss,
+    /@container theme-inspector \(max-width: 379px\)[\s\S]{0,1800}?\.editor-branch-copy\s*\{[^}]*position:\s*absolute[^}]*width:\s*1px/,
+    "A narrow inspector may collapse the branch toolbar to its recognizable icons");
+  assert.match(studioEditorCss,
+    /@container theme-inspector \(max-width: 409px\)[\s\S]{0,900}?\.editor-inspector-title-row[\s\S]{0,900}?\.editor-command-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    "Header actions must stack beyond the icon-only breakpoint so the 380–409 px range cannot overlap");
   assert(!/data-level="advanced"[^{}]*\.editor-inspector-nav/.test(studioEditorCss),
     "Advanced must not replace or reorder the shared three-branch architecture");
   const inspectorHeadRule = studioEditorCss.match(/\.editor-inspector-head\s*\{([^}]*)\}/)?.[1] ?? "";
@@ -2018,6 +2093,67 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The sticky inspector header must not leave a scroll-through strip above itself");
   assert.match(inspectorHeadRule, /border:\s*0[\s\S]*?border-bottom:\s*1px[\s\S]*?background:\s*var\(--surface\)[\s\S]*?box-shadow:\s*none/,
     "The inspector header must be opaque and flat so scrolled controls cannot leak through it");
+  const studioVariableDeclarations = new Set(
+    [...`${studioCss}\n${studioEditorCss}`.matchAll(/--([a-z0-9-]+)\s*:/gi)]
+      .map((match) => `--${match[1]}`),
+  );
+  const unresolvedEditorVariables = [
+    ...studioEditorCss.matchAll(/var\(\s*(--[a-z0-9-]+)\s*([,)])/gi),
+  ]
+    .filter(([, name, separator]) => (
+      separator === ")" && !studioVariableDeclarations.has(name)
+    ))
+    .map(([, name]) => name);
+  assert.deepEqual([...new Set(unresolvedEditorVariables)].sort(), [],
+    "Editor CSS must not use an undeclared custom property without a fallback");
+  const editorScrollerSelectors = [
+    ...studioEditorCss.matchAll(/([^{}]+)\{([^{}]*)\}/g),
+  ]
+    .filter(([, , declarations]) => (
+      /overflow(?:-[xy])?\s*:\s*(?:auto|scroll)\b/.test(declarations)
+    ))
+    .flatMap(([, selectors]) => selectors.split(",").map((value) => value.trim()))
+    .filter((selector) => selector.startsWith(".editor-"));
+  assert.deepEqual(
+    [...new Set(editorScrollerSelectors)].sort(),
+    [".editor-controls", ".editor-stagecol"],
+    "Inspector disclosures must not add another editor-prefixed scroller",
+  );
+  const documentDetailsPanelRule = studioEditorCss.match(
+    /\.editor-document-details-panel\s*\{([^}]*)\}/,
+  )?.[1] ?? "";
+  assert.match(documentDetailsPanelRule, /background:\s*var\(--raised\)/,
+    "Document details must have an opaque declared Studio surface");
+  assert(!/position:\s*(?:absolute|fixed|sticky)\b/.test(documentDetailsPanelRule)
+      && !/max-height\s*:|overflow(?:-[xy])?\s*:\s*(?:auto|scroll)\b/.test(documentDetailsPanelRule),
+    "Document details must remain in inspector flow and use the inspector scrollbar");
+  const htmlElementBlock = (source, opening) => {
+    const start = source.indexOf(opening);
+    if (start < 0) return "";
+    const tag = /^<([a-z][\w-]*)\b/i.exec(opening)?.[1];
+    if (!tag) return "";
+    const token = new RegExp(`<${tag}\\b|</${tag}>`, "gi");
+    token.lastIndex = start;
+    let depth = 0;
+    for (let match; (match = token.exec(source));) {
+      depth += match[0][1] === "/" ? -1 : 1;
+      if (depth === 0) return source.slice(start, token.lastIndex);
+    }
+    return "";
+  };
+  const inspectorHeadMarkup = htmlElementBlock(
+    studioHtml, '<div class="editor-inspector-head">',
+  );
+  const inspectorControlsMarkup = htmlElementBlock(
+    studioHtml, '<div class="editor-controls">',
+  );
+  assert(inspectorHeadMarkup.includes('id="editor-document-details-toggle"'),
+    "Document details must remain available from the persistent header");
+  assert(!inspectorHeadMarkup.includes('class="editor-document-details-panel"')
+      && !inspectorHeadMarkup.includes('id="editor-advanced-notice"'),
+  "Disclosures and notices must scroll in normal flow instead of covering properties");
+  assert(inspectorControlsMarkup.includes('class="editor-document-details-panel"'),
+    "Document details must remain an in-flow part of the inspector");
   assert.match(studioEditorCss, /\.color-field\s*\{[^}]*grid-template-areas:[^}]*"label label"[^}]*"picker value"/,
     "Compact token cards must place labels above their picker and value instead of overflowing fixed columns");
   const stageSelectionBlock = studioEditor.match(
@@ -2027,11 +2163,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(stageSelectionBlock,
     /selection\?\.kind === "layer"[\s\S]{0,220}?selectedLayerId = selection\.id[\s\S]{0,500}?setInspectorTarget\("background\.layer"\)/,
     "Selecting artwork must route to Background while preserving its opaque layer ID");
+  assert.match(stageSelectionBlock,
+    /const card = layerList\.querySelector[\s\S]{0,700}?revealWithinInspector\(card\.querySelector\("summary"\) \?\? card\)/,
+    "Selecting artwork on the canvas must reveal its corresponding inspector card");
   assert(!/dataset\.level === "advanced"[\s\S]{0,120}?setInspectorTarget\("background\.layer"\)/.test(stageSelectionBlock),
     "Quick artwork selection must not be gated behind Advanced mode");
   assert.match(stageSelectionBlock,
-    /selection\?\.kind === "prompt"[\s\S]{0,120}?setInspectorTarget\("interface\.new-chat-area"\)/,
-    "Selecting the new-chat area must route to Interface without leaving image controls visible");
+    /selection\?\.kind === "prompt"[\s\S]{0,160}?setInspectorTarget\("interface\.new-chat-area",\s*\{\s*reveal\s*}\)/,
+    "Selecting the new-chat area must route to and reveal Interface without leaving image controls visible");
   assert.match(studioEditor,
     /stageRing\.dataset\.stageHandle\s*=\s*"move"[\s\S]{0,100}?stageRing\.setAttribute\("aria-hidden",\s*"true"\)/,
     "The current selection ring must provide a pointer move surface without becoming a duplicate keyboard control");
@@ -2044,8 +2183,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /const directSelection = itemNode \? stageSelectionFromNode\(itemNode\) : null[\s\S]{0,240}?let selection = stageSelection[\s\S]{0,120}?if \(directSelection\)/,
     "Dragging the selection ring must preserve the layer chosen in the palette while direct image clicks may retarget it");
   assert.match(stagePointerBlock,
-    /if \(!handle && !directSelection\)[\s\S]{0,120}?selectStageBranchSurface\(\)/,
-    "Blank or click-through canvas clicks must select only the active branch's overall target");
+    /if \(!handle && !directSelection\)[\s\S]{0,160}?if \(selectStageBranchSurface\(\)\) event\.preventDefault\(\)/,
+    "Blank canvas clicks must be consumed only when that branch has a truthful canvas target");
+  assert.match(stagePointerBlock,
+    /selection\.kind === "layer"[\s\S]{0,260}?inspectorField\s*=\s*`layers\[\$\{index}]\.frames\.\$\{stageViewport}/,
+    "An explicit artwork gesture must align the inspector with the frame it will edit");
   assert.match(stagePointerBlock, /!state \|\| isBlockingAction\(\)/,
     "A structural (index-changing) response must settle before another pointer drag can resolve the selected layer ID to an index; background value patches must not block it");
   const stageSelectionModeBlock = studioEditor.match(
@@ -2061,9 +2203,17 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(stageNodeInteractiveBlock,
     /tabIndex\s*=\s*interactive \? 0 : -1[\s\S]{0,120}?toggleAttribute\("inert",\s*!interactive\)[\s\S]{0,180}?aria-hidden/,
     "Non-matching canvas objects must leave both the pointer path and keyboard/accessibility tree");
-  assert.match(studioEditor,
-    /const selectStageBranchSurface[\s\S]{0,280}?inspectorBranch === "interface" \? "interface\.theme"[\s\S]{0,160}?inspectorBranch === "background" \? "background\.canvas"[\s\S]{0,120}?"widgets\.app-identity"/,
-    "Blank-canvas selection must stay inside the active branch");
+  const selectStageBranchSurfaceBlock = studioEditor.match(
+    /const selectStageBranchSurface\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(selectStageBranchSurfaceBlock,
+    /inspectorBranch === "widgets"[\s\S]{0,160}?return false/,
+    "Widgets must reject blank WebView canvas selection");
+  assert.match(selectStageBranchSurfaceBlock,
+    /inspectorBranch === "interface" \? "interface\.theme"\s*:\s*"background\.canvas"/,
+    "Interface and Background blank canvas selection must stay inside their active branch");
+  assert(!selectStageBranchSurfaceBlock.includes('"widgets.app-identity"'),
+    "The host-only App identity may be selected only through its local preview");
   assert(!studioEditor.includes("stage-chip-prompt"),
     "The Background image palette must not expose an Interface target");
   assert.match(studioEditorCss,
@@ -2101,12 +2251,25 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Changing editor level must preserve the same branch and target");
   assert(!/(?:stageContext|selectedMode|backgroundScope|inspectorTarget)\s*=/.test(levelSwitchBlock),
     "Changing editor level must not rewrite preview context, appearance, scope, or target");
+  const viewportSwitchBlock = studioEditor.match(
+    /stageViewportInputs\.forEach\([\s\S]*?\n\s*}\)\);/,
+  )?.[0] ?? "";
+  assert(!/inspectorField\s*=/.test(viewportSwitchBlock),
+    "Changing Previewing dimensions alone must not retarget Applies to or Edit target");
+  assert.match(viewportSwitchBlock, /refreshInspectorContext\(\)/,
+    "Changing Previewing dimensions must still refresh the custom-size resolution label");
   assert.match(studioEditor,
     /setInspectorTarget\(target,\s*\{\s*reveal:\s*true\s*\}\)/,
     "Explicit branch and target navigation must reveal the selected section below the sticky header");
-  assert.match(studioEditor,
-    /const setInspectorTarget[\s\S]{0,1300}?inspectorHead\.getBoundingClientRect\(\)\.bottom[\s\S]{0,300}?editorControls\.scrollTop\s*\+=/,
-    "Target navigation must reveal controls inside the independent inspector pane");
+  const revealWithinInspectorBlock = studioEditor.match(
+    /const revealWithinInspector\s*=\s*\(target\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(revealWithinInspectorBlock,
+    /inspectorHead\.getBoundingClientRect\(\)\.bottom[\s\S]{0,320}?inspectorRevealDelta[\s\S]{0,160}?editorControls\.scrollTop\s*\+=\s*delta/,
+    "Target navigation must reveal controls above or below the independent inspector viewport");
+  assert.match(setInspectorTargetBlock,
+    /querySelector\(":scope > h2, :scope > h3"\)[\s\S]{0,120}?revealWithinInspector\(heading\)/,
+    "Target navigation must reveal the section heading rather than bottom-aligning a tall section");
   assert(!/selectStageItem[\s\S]{0,700}?scrollIntoView/.test(studioEditor),
     "Selecting artwork on the live canvas must not scroll the inspector away from the canvas");
   assert.match(studioHtml,
@@ -2129,6 +2292,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     ],
     "The host-owned capability registry must contain only WO-18 targets",
   );
+  assert.deepEqual(
+    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.new-chat-area")?.axes,
+    [],
+    "Shared new-chat placement must not claim separate Standard and Wide saved values",
+  );
+  assert(editorApi.capabilityRegistry
+    .find((entry) => entry.id === "background.layer")?.axes.includes("frame"),
+    "Artwork framing must retain its real Standard and Wide edit axis");
   for (const entry of editorApi.capabilityRegistry) {
     assert.deepEqual(
       Object.keys(entry).sort(),
@@ -3745,7 +3916,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     /const ordinarySections = \["themes", "background", "create", "settings"\]/,
     "Settings must leave the ordinary shell with the other sections during an editor session");
 
-  const stringsMatch = studioApp.match(/const STRINGS = (\{[\s\S]*?\n  \});\n\n  const params/);
+  const stringsMatch = studioApp.match(/const STRINGS = (\{[\s\S]*?\r?\n  \});\r?\n\r?\n  const params/);
   assert(stringsMatch, "Studio locale dictionaries could not be isolated");
   const studioStrings = Function(`"use strict"; return (${stringsMatch[1]});`)();
   assert.deepEqual(Object.keys(studioStrings).sort(), ["en", "zh-CN", "zh-TW"]);

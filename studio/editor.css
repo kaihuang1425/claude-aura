@@ -1,4 +1,5 @@
-/* WO-18 visual theme editor. The only scrolling region remains .content. */
+/* WO-18 visual theme editor. The preview and inspector are the only bounded
+   editor scrollers; disclosures must remain in the inspector's normal flow. */
 
 .theme-card-choice {
   position: relative;
@@ -192,7 +193,7 @@
 .editor-toolbar {
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 8px;
+  margin: 0;
 }
 
 .editor-toolbar button {
@@ -265,14 +266,14 @@
 }
 
 .editor-section {
-  margin-top: 30px;
-  padding-top: 26px;
+  margin-top: 22px;
+  padding-top: 18px;
   border-top: var(--shell-section-rule-width) var(--shell-section-rule-style) var(--border-soft);
 }
 
 .editor-section + .editor-section {
-  margin-top: 30px;
-  padding-top: 26px;
+  margin-top: 22px;
+  padding-top: 18px;
 }
 
 .editor-section h2,
@@ -1436,14 +1437,21 @@
   accent-color: var(--accent);
 }
 
+.editor-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .editor-inspector-head {
   position: sticky;
   z-index: 10;
   top: 0;
   display: grid;
-  gap: 9px;
+  gap: 7px;
   margin-top: 0;
-  padding: 10px 0 12px;
+  padding: 8px 0 10px;
   border: 0;
   border-bottom: 1px solid var(--border-soft);
   border-radius: 0;
@@ -1508,26 +1516,26 @@
 .editor-inspector-nav {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
+  gap: 3px;
   margin-top: 0;
-  padding: 4px;
-  border: 1px solid var(--border-soft);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--raised) 70%, transparent);
-  box-shadow: inset 0 1px rgb(255 255 255 / 0.12);
+  padding: 3px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
 }
 
 .editor-inspector-tab {
   --branch-tool: var(--branch-interface);
   display: grid;
-  grid-template-columns: 25px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
-  min-height: 50px;
-  padding: 6px 7px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  min-height: 38px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--ink-secondary);
   font: inherit;
@@ -1546,17 +1554,17 @@
 .editor-branch-glyph {
   display: grid;
   place-items: center;
-  width: 25px;
-  height: 25px;
-  border: 1px solid color-mix(in srgb, var(--branch-tool) 46%, var(--border-soft));
-  border-radius: 6px;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
   background: color-mix(in srgb, var(--branch-tool) 11%, var(--surface));
   color: var(--branch-tool);
 }
 
 .editor-branch-glyph svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   overflow: visible;
   fill: none;
   stroke: currentColor;
@@ -1568,7 +1576,7 @@
 .editor-branch-copy {
   display: grid;
   min-width: 0;
-  gap: 1px;
+  gap: 0;
 }
 
 .editor-branch-copy strong,
@@ -1580,53 +1588,33 @@
 
 .editor-branch-copy strong {
   color: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 720;
 }
 
 .editor-branch-copy small {
+  overflow: hidden;
   color: var(--ink-muted);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-inspector-tab:hover:not([aria-pressed="true"]) {
-  border-color: color-mix(in srgb, var(--branch-tool) 24%, var(--border-soft));
   background: color-mix(in srgb, var(--branch-tool) 7%, transparent);
   color: var(--ink);
 }
 
 .editor-inspector-tab[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--branch-tool) 42%, var(--border-soft));
-  background: color-mix(in srgb, var(--branch-tool) 13%, var(--surface));
+  background: color-mix(in srgb, var(--branch-tool) 14%, var(--surface));
   color: var(--ink);
-  box-shadow: inset 0 -3px var(--branch-tool), 0 1px 4px rgb(0 0 0 / 0.08);
+  box-shadow: inset 3px 0 var(--branch-tool);
 }
 
 .editor-inspector-tab[aria-pressed="true"] .editor-branch-glyph {
-  border-color: var(--branch-tool);
   background: var(--branch-tool);
   color: #ffffff;
-}
-
-.editor-branch-help {
-  display: grid;
-  grid-template-columns: 6px minmax(0, 1fr);
-  align-items: center;
-  gap: 7px;
-  min-height: 26px;
-  margin: -2px 2px 0;
-  color: var(--ink-secondary);
-  font-size: 10.5px;
-  line-height: 1.35;
-}
-
-.editor-branch-help::before {
-  width: 6px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--active-branch-tool);
-  content: "";
 }
 
 .editor-level label,
@@ -1642,29 +1630,56 @@
   transform: scale(0.98);
 }
 
+.editor-selection-bar {
+  display: grid;
+  grid-template-columns: minmax(118px, 0.82fr) minmax(0, 1.7fr);
+  align-items: stretch;
+  gap: 10px;
+  padding-top: 1px;
+}
+
 .editor-target-picker {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
   color: var(--ink-secondary);
-  font-size: 11px;
-  font-weight: 650;
+}
+
+.editor-target-picker > b {
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .editor-target-picker select {
   min-width: 0;
-  min-height: 34px;
+  min-height: 30px;
+  padding-block: 3px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.editor-target-picker output {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .editor-context-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 12px;
-  padding: 8px 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: 10px;
-  background: var(--surface-raised);
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+  padding: 3px 0 3px 10px;
+  border: 0;
+  border-left: 3px solid var(--active-branch-tool);
+  background: transparent;
 }
 
 .editor-context-strip > span {
@@ -1675,23 +1690,23 @@
 
 .editor-context-strip b {
   color: var(--ink-muted);
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .editor-context-strip output {
-  overflow: hidden;
   color: var(--ink);
-  font-size: 11px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 10.5px;
+  line-height: 1.3;
+  white-space: normal;
 }
 
 .editor-advanced-notice {
-  margin: -2px 0 0;
+  margin: 10px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--active-branch-tool);
   color: var(--ink-muted);
   font-size: 10.5px;
 }
@@ -1700,36 +1715,25 @@
   display: none;
 }
 
-.editor-document-details {
-  position: relative;
+.editor-document-details-panel {
+  margin-top: 10px;
+  padding: 13px 14px 15px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--raised);
 }
 
-.editor-document-details > summary {
-  width: max-content;
-  color: var(--ink-secondary);
-  font-size: 11px;
-  font-weight: 650;
-  cursor: pointer;
+.editor-document-details-panel h3 {
+  margin: 0;
+  font-size: 14px;
 }
 
-.editor-document-details-body {
-  position: absolute;
-  z-index: 12;
-  top: calc(100% + 8px);
-  right: 0;
-  left: 0;
-  max-height: min(420px, calc(100vh - 250px));
-  padding: 12px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-raised);
-  box-shadow: var(--shadow);
+.editor-document-details-panel > .help {
+  margin: 4px 0 0;
 }
 
-.editor-document-details-body > .help {
-  margin: 0 0 10px;
+.editor-view[data-level="simple"] .editor-document-details-panel .editor-metadata-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .editor-view [data-editor-branch] {
@@ -2279,13 +2283,41 @@
   }
 }
 
+@container theme-inspector (max-width: 409px) {
+  .editor-inspector-title-row {
+    grid-template-areas:
+      "back title"
+      "actions actions";
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .editor-inspector-head-actions {
+    justify-content: flex-end;
+  }
+
+  .editor-inspector-head-actions .ghost-button,
+  .editor-inspector-head-actions .primary-button {
+    min-height: 30px;
+    padding: 4px 7px;
+    font-size: 10.5px;
+  }
+
+  .editor-command-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .editor-command-row .editor-toolbar {
+    justify-content: flex-end;
+  }
+}
+
 @container theme-inspector (max-width: 379px) {
   .editor-inspector-tab {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 22px;
     justify-items: center;
-    gap: 3px;
-    min-height: 52px;
-    padding: 5px 3px;
+    min-height: 36px;
+    padding: 4px;
     text-align: center;
   }
 
@@ -2299,13 +2331,14 @@
     height: 16px;
   }
 
-  .editor-branch-copy small {
-    display: none;
-  }
-
-  .editor-branch-copy strong {
-    max-width: 100%;
-    font-size: 10.5px;
+  .editor-branch-copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .editor-add-artwork {
@@ -2434,7 +2467,7 @@
   .editor-inspector-nav,
   .editor-branch-glyph,
   .editor-context-strip,
-  .editor-document-details-body {
+  .editor-document-details-panel {
     background: Canvas;
     color: CanvasText;
     backdrop-filter: none;
@@ -2453,10 +2486,6 @@
     border-color: Highlight;
     background: Highlight;
     color: HighlightText;
-  }
-
-  .editor-branch-help::before {
-    background: Highlight;
   }
 
   .editor-launcher-preview[aria-pressed="true"] {

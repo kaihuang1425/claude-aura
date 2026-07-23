@@ -225,15 +225,23 @@
             </div>
           </div>
           <div class="editor-inspector-head-actions">
+            <button type="button" id="editor-document-details-toggle" class="ghost-button" aria-expanded="false" aria-controls="editor-document-details" data-editor-i18n="documentDetails">Document details</button>
             <button type="button" id="editor-cancel" class="ghost-button" data-editor-i18n="cancelEditing">Cancel</button>
             <button type="button" id="editor-save" class="primary-button" aria-describedby="editor-quick-feedback editor-error-summary" data-editor-i18n="saveTheme">Save theme</button>
           </div>
         </div>
-        <fieldset class="editor-level segmented-control">
-          <legend class="sr-only" data-editor-i18n="editorLevel">Editing mode</legend>
-          <label><input type="radio" name="editor-level" value="simple" checked> <span data-editor-i18n="levelSimple">Quick customize</span></label>
-          <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">Advanced</span></label>
-        </fieldset>
+        <div class="editor-command-row">
+          <fieldset class="editor-level segmented-control">
+            <legend class="sr-only" data-editor-i18n="editorLevel">Editing mode</legend>
+            <label><input type="radio" name="editor-level" value="simple" checked> <span data-editor-i18n="levelSimple">Quick customize</span></label>
+            <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">Advanced</span></label>
+          </fieldset>
+          <div class="editor-toolbar" role="group" aria-label="Edit history" data-editor-i18n-aria-label="historyActions">
+            <button type="button" id="editor-undo" class="ghost-button" data-editor-i18n="undo">Undo</button>
+            <button type="button" id="editor-redo" class="ghost-button" data-editor-i18n="redo">Redo</button>
+            <button type="button" id="editor-reset" class="ghost-button" data-editor-i18n="resetChanges">Reset</button>
+          </div>
+        </div>
         <div class="editor-inspector-nav" role="toolbar" aria-orientation="horizontal" data-editor-i18n-aria-label="inspectorSections" aria-label="Theme editor tools">
           <button type="button" class="editor-inspector-tab" data-editor-branch-target="interface" aria-pressed="true">
             <span class="editor-branch-glyph" aria-hidden="true">
@@ -272,60 +280,56 @@
             </span>
           </button>
         </div>
-        <p id="editor-branch-help" class="editor-branch-help" aria-live="polite"></p>
-        <label class="editor-target-picker" for="editor-target-picker">
-          <span data-editor-i18n="targetPicker">Target</span>
-          <select id="editor-target-picker"></select>
-        </label>
-        <div class="editor-context-strip" aria-live="polite">
-          <span><b data-editor-i18n="editingContext">Editing</b><output id="editor-context-editing"></output></span>
-          <span><b data-editor-i18n="appliesToContext">Applies to</b><output id="editor-context-applies"></output></span>
-          <span><b data-editor-i18n="sourceContext">Source</b><output id="editor-context-source"></output></span>
-          <span id="editor-context-frame-row"><b data-editor-i18n="editTargetContext">Edit target</b><output id="editor-context-frame"></output></span>
-        </div>
-        <p id="editor-advanced-notice" class="editor-advanced-notice" data-editor-i18n="advancedValuesNotice">This target has additional values in Advanced.</p>
-        <details id="editor-document-details" class="editor-document-details">
-          <summary data-editor-i18n="documentDetails">Document details</summary>
-          <div class="editor-document-details-body">
-            <p class="help" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
-            <div class="editor-control-grid editor-metadata-grid">
-              <label class="editor-field" for="editor-label-en">
-                <span data-editor-i18n="themeNameEn">English name</span>
-                <input id="editor-label-en" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="en" data-editor-field="metadata.labels.en">
-              </label>
-              <label class="editor-field" for="editor-label-zh-cn">
-                <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
-                <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
-              </label>
-              <label class="editor-field" for="editor-label-zh-tw">
-                <span data-editor-i18n="themeNameZhTw">Traditional Chinese (Taiwan) name</span>
-                <input id="editor-label-zh-tw" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-TW" data-editor-field="metadata.labels.zh-TW">
-              </label>
-            </div>
-            <div class="editor-control-grid editor-metadata-grid advanced-only">
-              <label class="editor-field" for="editor-description-en">
-                <span data-editor-i18n="themeDescriptionEn">English description</span>
-                <textarea id="editor-description-en" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="en" data-editor-field="metadata.descriptions.en"></textarea>
-              </label>
-              <label class="editor-field" for="editor-description-zh-cn">
-                <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
-                <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
-              </label>
-              <label class="editor-field" for="editor-description-zh-tw">
-                <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese (Taiwan) description</span>
-                <textarea id="editor-description-zh-tw" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-TW" data-editor-field="metadata.descriptions.zh-TW"></textarea>
-              </label>
-            </div>
+        <p id="editor-branch-help" class="sr-only" aria-live="polite"></p>
+        <div class="editor-selection-bar">
+          <div class="editor-target-picker">
+            <b id="editor-target-label" data-editor-i18n="editingContext">Editing</b>
+            <select id="editor-target-picker" aria-labelledby="editor-target-label"></select>
+            <output id="editor-context-editing" aria-labelledby="editor-target-label" hidden></output>
           </div>
-        </details>
+          <div class="editor-context-strip" aria-live="polite">
+            <span><b data-editor-i18n="appliesToContext">Applies to</b><output id="editor-context-applies"></output></span>
+            <span><b data-editor-i18n="sourceContext">Source</b><output id="editor-context-source"></output></span>
+            <span id="editor-context-frame-row"><b data-editor-i18n="editTargetContext">Edit target</b><output id="editor-context-frame"></output></span>
+          </div>
+        </div>
       </div>
+
+      <section id="editor-document-details" class="editor-document-details-panel" role="region" aria-labelledby="editor-document-details-title" hidden>
+        <h3 id="editor-document-details-title" data-editor-i18n="documentDetails">Document details</h3>
+        <p class="help" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
+        <div class="editor-control-grid editor-metadata-grid">
+          <label class="editor-field" for="editor-label-en">
+            <span data-editor-i18n="themeNameEn">English name</span>
+            <input id="editor-label-en" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="en" data-editor-field="metadata.labels.en">
+          </label>
+          <label class="editor-field" for="editor-label-zh-cn">
+            <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
+            <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
+          </label>
+          <label class="editor-field" for="editor-label-zh-tw">
+            <span data-editor-i18n="themeNameZhTw">Traditional Chinese (Taiwan) name</span>
+            <input id="editor-label-zh-tw" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-TW" data-editor-field="metadata.labels.zh-TW">
+          </label>
+        </div>
+        <div class="editor-control-grid editor-metadata-grid advanced-only">
+          <label class="editor-field" for="editor-description-en">
+            <span data-editor-i18n="themeDescriptionEn">English description</span>
+            <textarea id="editor-description-en" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="en" data-editor-field="metadata.descriptions.en"></textarea>
+          </label>
+          <label class="editor-field" for="editor-description-zh-cn">
+            <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
+            <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
+          </label>
+          <label class="editor-field" for="editor-description-zh-tw">
+            <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese (Taiwan) description</span>
+            <textarea id="editor-description-zh-tw" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-TW" data-editor-field="metadata.descriptions.zh-TW"></textarea>
+          </label>
+        </div>
+      </section>
       <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
       <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
-      <div class="editor-toolbar" role="group" aria-label="Edit history" data-editor-i18n-aria-label="historyActions">
-        <button type="button" id="editor-undo" class="ghost-button" data-editor-i18n="undo">Undo</button>
-        <button type="button" id="editor-redo" class="ghost-button" data-editor-i18n="redo">Redo</button>
-        <button type="button" id="editor-reset" class="ghost-button" data-editor-i18n="resetChanges">Reset</button>
-      </div>
+      <p id="editor-advanced-notice" class="editor-advanced-notice" data-editor-i18n="advancedValuesNotice">This target has additional values in Advanced.</p>
 
       <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.theme" aria-labelledby="editor-colors-title">
         <h2 id="editor-colors-title" data-editor-i18n="colorsAndSurfaces">Colors</h2>

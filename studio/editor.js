@@ -291,9 +291,9 @@
       branchInterfaceDetail: "Surfaces & layout",
       branchBackgroundDetail: "Canvas & images",
       branchWidgetsDetail: "Aura controls",
-      branchInterfaceHelp: "Interface tool: select interface regions; images stay click-through.",
-      branchBackgroundHelp: "Background tool: select the theme canvas or images; interface regions stay click-through.",
-      branchWidgetsHelp: "Widgets tool: select Aura-owned controls in their local previews.",
+      branchInterfaceHelp: "Interface tool. Select Overall interface or New chat area on the canvas.",
+      branchBackgroundHelp: "Background tool. Select the theme canvas or an image on the canvas.",
+      branchWidgetsHelp: "Widgets tool. Select App identity in its local preview.",
       targetPicker: "Target",
       editingContext: "Editing",
       appliesToContext: "Applies to",
@@ -631,9 +631,9 @@
       branchInterfaceDetail: "外观与布局",
       branchBackgroundDetail: "画布与图片",
       branchWidgetsDetail: "Aura 控件",
-      branchInterfaceHelp: "界面工具：选择界面区域；图片不会拦截点击。",
-      branchBackgroundHelp: "背景工具：选择主题画布或图片；界面区域不会拦截点击。",
-      branchWidgetsHelp: "小组件工具：在专用预览中选择 Aura 控件。",
+      branchInterfaceHelp: "界面工具。可在画布中选择“整体界面”或“新对话区域”。",
+      branchBackgroundHelp: "背景工具。可在画布中选择“主题画布”或图片。",
+      branchWidgetsHelp: "小组件工具。请在专用预览中选择“应用标识”。",
       targetPicker: "编辑对象",
       editingContext: "正在编辑",
       appliesToContext: "作用范围",
@@ -971,9 +971,9 @@
       branchInterfaceDetail: "外觀與版面",
       branchBackgroundDetail: "畫布與圖片",
       branchWidgetsDetail: "Aura 控制項",
-      branchInterfaceHelp: "介面工具：選取介面區域；圖片不會攔截點選。",
-      branchBackgroundHelp: "背景工具：選取主題畫布或圖片；介面區域不會攔截點選。",
-      branchWidgetsHelp: "小工具：在專用預覽中選取 Aura 控制項。",
+      branchInterfaceHelp: "介面工具。可在畫布上選取「整體介面」或「新對話區域」。",
+      branchBackgroundHelp: "背景工具。可在畫布上選取「主題畫布」或圖片。",
+      branchWidgetsHelp: "小工具。請在專用預覽中選取「App 識別」。",
       targetPicker: "編輯項目",
       editingContext: "正在編輯",
       appliesToContext: "套用範圍",
@@ -1252,7 +1252,7 @@
       id: "interface.new-chat-area",
       branch: "interface",
       views: ["new-chat"],
-      axes: ["frame"],
+      axes: [],
       captureGeometry: "new-chat-area",
       selectionBehavior: "stage-prompt",
     },
@@ -1563,6 +1563,12 @@
     || work.stageKeyDebounce
   );
 
+  const inspectorRevealDelta = (rect, visibleTop, visibleBottom) => {
+    if (rect.top < visibleTop) return rect.top - visibleTop;
+    if (rect.bottom > visibleBottom) return rect.bottom - visibleBottom;
+    return 0;
+  };
+
   function createController({ locale, send, setStatus, translate, focusThemeCard, onStudioStyleChange }) {
     const normalizedLocale = Object.hasOwn(STRINGS, locale) ? locale : "en";
     const tr = (key) => STRINGS[normalizedLocale][key] ?? translate?.(key) ?? STRINGS.en[key] ?? key;
@@ -1622,7 +1628,8 @@
     const contextSource = document.getElementById("editor-context-source");
     const contextFrame = document.getElementById("editor-context-frame");
     const contextFrameRow = document.getElementById("editor-context-frame-row");
-    const documentDetails = document.getElementById("editor-document-details");
+    const documentDetailsPanel = document.getElementById("editor-document-details");
+    const documentDetailsToggle = document.getElementById("editor-document-details-toggle");
     const switchSupportedPreviewButton = document.getElementById("editor-switch-supported-preview");
     const stageRoot = document.getElementById("editor-stage");
     for (const input of metadataInputs) {
@@ -1636,6 +1643,7 @@
     let renderedLayerSignature = null;
     let inspectorBranch = "interface";
     let inspectorTarget = "interface.theme";
+    let inspectorField = null;
     const targetByBranch = {
       interface: "interface.theme",
       background: "background.canvas",
@@ -1654,6 +1662,7 @@
     let entryAppearance = null;
     let appearanceTouched = false;
     let topmostEnabled = false;
+    const stageOverrides = new Map();
     const coalescedChanges = new Map();
     const deferredChanges = new Map();
     let changeFlushTimer = null;
@@ -1862,6 +1871,13 @@
     };
 
     const targetLabel = (target) => tr(CAPABILITY_TARGETS[target]?.labelKey ?? "targetPicker");
+    const editingTargetLabel = (target) => {
+      if (target !== "background.layer") return targetLabel(target);
+      const selectedLayer = state?.layers?.find((layer) => layer.id === selectedLayerId);
+      return selectedLayer
+        ? format(tr("layerNumber"), selectedLayer.index + 1)
+        : targetLabel(target);
+    };
     const branchHelpKey = (branch) => ({
       interface: "branchInterfaceHelp",
       background: "branchBackgroundHelp",
@@ -1884,6 +1900,9 @@
     };
     const syncStageSelectionMode = () => {
       if (branchHelp) branchHelp.textContent = tr(branchHelpKey(inspectorBranch));
+      for (const tab of branchTabs) {
+        tab.title = tr(branchHelpKey(tab.dataset.editorBranchTarget));
+      }
       if (!stageRoot) return;
       stageRoot.dataset.selectionBranch = inspectorBranch;
       const prompt = stageRoot.querySelector(".stage-prompt");
@@ -1909,50 +1928,152 @@
       targetPicker.replaceChildren(...entries.map((entry) => {
         const option = document.createElement("option");
         option.value = entry.id;
-        option.textContent = targetLabel(entry.id);
+        option.textContent = editingTargetLabel(entry.id);
         return option;
       }));
       targetPicker.value = inspectorTarget;
+      const onlyTarget = entries.length === 1;
+      targetPicker.hidden = onlyTarget;
+      targetPicker.disabled = onlyTarget;
+      contextEditing.hidden = !onlyTarget;
+      contextEditing.textContent = targetLabel(inspectorTarget);
+    };
+    const inspectorTargetForField = (field) => {
+      if (typeof field !== "string") return null;
+      if (field.startsWith("tokens.")
+          || /^shared\.(fontUi|fontDisplay|radius|blur|shadow)$/.test(field)) {
+        return "interface.theme";
+      }
+      if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
+        return "interface.new-chat-area";
+      }
+      if (field === "shared.backgroundScope") return "background.canvas";
+      if (field === "layers" || field.startsWith("layers[")) return "background.layer";
+      if (field === "launcher" || field.startsWith("launcher.")) return "widgets.app-identity";
+      return null;
+    };
+    const defaultInspectorField = (target) => {
+      if (target === "interface.theme") return `tokens.${selectedMode}.canvas`;
+      if (target === "interface.new-chat-area") return "shared.prompt";
+      if (target === "background.canvas") return "shared.backgroundScope";
+      if (target === "background.layer") {
+        const index = state?.layers?.findIndex((layer) => layer.id === selectedLayerId) ?? -1;
+        return index >= 0 ? `layers[${index}]` : "layers";
+      }
+      return "launcher";
+    };
+    const normalizeInspectorField = (field) => {
+      const token = /^tokens\.(?:light|dark)\.(.+)$/.exec(field ?? "");
+      if (token) return `tokens.${selectedMode}.${token[1]}`;
+      const layer = /^layers\[\d+](.*)$/.exec(field ?? "");
+      if (layer) {
+        const index = state?.layers?.findIndex((item) => item.id === selectedLayerId) ?? -1;
+        if (index >= 0) return `layers[${index}]${layer[1]}`;
+      }
+      return field;
+    };
+    const hasStageOverridePrefix = (prefix) => [...stageOverrides.keys()]
+      .some((path) => path === prefix || path.startsWith(`${prefix}.`));
+    const fieldUsesThemeOriginal = (field) => {
+      if (!state) return true;
+      if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
+        return state.shared.prompt.native && !hasStageOverridePrefix("shared.prompt");
+      }
+      const inherited = /^shared\.(fontUi|fontDisplay|radius|shadow)$/.exec(field);
+      if (inherited) {
+        return Boolean(state.shared.inherited[inherited[1]]) && !stageOverrides.has(field);
+      }
+      return false;
     };
     const layerScopeLabel = (layer) => {
       if (!layer) return tr("allPagesScope");
-      const appearance = layer.appearance === "all" ? tr("allModesScope")
-        : tr(layer.appearance === "dark" ? "appearanceDark" : "appearanceLight");
-      const page = layer.context === "all" ? tr("allPagesScope")
-        : tr(layer.context === "conversation" ? "contextConversation" : "contextNewChat");
-      const frame = layer.viewport === "all"
+      const scopeValue = (property) => (
+        stageOverrides.get(`layers[${layer.index}].${property}`) ?? layer[property]
+      );
+      const appearanceValue = scopeValue("appearance");
+      const contextValue = scopeValue("context");
+      const viewportValue = scopeValue("viewport");
+      const appearance = appearanceValue === "all" ? tr("allModesScope")
+        : tr(appearanceValue === "dark" ? "appearanceDark" : "appearanceLight");
+      const page = contextValue === "all" ? tr("allPagesScope")
+        : tr(contextValue === "conversation" ? "contextConversation" : "contextNewChat");
+      const frame = viewportValue === "all"
         ? `${tr("frameStandard")} + ${tr("frameWide")}`
-        : tr(layer.viewport === "wide" ? "frameWide" : "frameStandard");
+        : tr(viewportValue === "wide" ? "frameWide" : "frameStandard");
       return `${appearance} · ${page} · ${frame}`;
     };
     const refreshInspectorContext = () => {
       const capability = CAPABILITY_BY_ID.get(inspectorTarget);
       if (!capability) return;
+      inspectorField = normalizeInspectorField(
+        inspectorTargetForField(inspectorField) === inspectorTarget
+          ? inspectorField : defaultInspectorField(inspectorTarget),
+      );
       const selectedLayer = state?.layers?.find((layer) => layer.id === selectedLayerId) ?? null;
-      contextEditing.textContent = inspectorTarget === "background.layer" && selectedLayer
-        ? format(tr("layerNumber"), selectedLayer.index + 1)
-        : targetLabel(inspectorTarget);
-      contextApplies.textContent = inspectorTarget === "interface.theme"
-        ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
+      const selectedOption = targetPicker.querySelector(
+        `option[value="${CSS.escape(inspectorTarget)}"]`,
+      );
+      if (selectedOption) selectedOption.textContent = editingTargetLabel(inspectorTarget);
+      if (!contextEditing.hidden) {
+        contextEditing.textContent = editingTargetLabel(inspectorTarget);
+      }
+      const tokenMode = /^tokens\.(light|dark)\./.exec(inspectorField)?.[1] ?? null;
+      contextApplies.textContent = inspectorTarget === "background.layer"
+        ? layerScopeLabel(selectedLayer)
         : inspectorTarget === "interface.new-chat-area"
-          ? `${tr("contextNewChat")} · ${tr(stageViewport === "wide" ? "frameWide" : "frameStandard")}`
-          : inspectorTarget === "background.layer"
-            ? layerScopeLabel(selectedLayer)
+          ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr("frameStandard")} + ${tr("frameWide")}`
+          : tokenMode
+            ? `${tr(tokenMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
             : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
-      contextSource.textContent = state && hasUnsavedEdits()
-        ? tr("customizedSource") : tr("themeOriginalSource");
-      contextFrameRow.hidden = !capability.axes.includes("frame");
-      const frameLabel = tr(stageViewport === "wide" ? "frameWide" : "frameStandard");
+      contextSource.textContent = fieldUsesThemeOriginal(inspectorField)
+        ? tr("themeOriginalSource") : tr("customizedSource");
+      const fieldFrame = /^layers\[\d+]\.frames\.(normal|wide)\./.exec(inspectorField)?.[1] ?? null;
+      contextFrameRow.hidden = !fieldFrame;
+      const editFrameLabel = tr(fieldFrame === "wide" ? "frameWide" : "frameStandard");
+      const previewFrameLabel = tr(stageViewport === "wide" ? "frameWide" : "frameStandard");
       const preset = Object.values(STAGE_SIZES).some(
         ([width, height]) => width === stagePreviewSize[0] && height === stagePreviewSize[1],
       );
-      contextFrame.textContent = preset ? frameLabel : format(tr("customFrameUses"), frameLabel);
+      contextFrame.textContent = preset
+        ? editFrameLabel
+        : `${editFrameLabel} · ${format(tr("customFrameUses"), previewFrameLabel)}`;
       const available = capability.views.includes(stageContext);
       editor.dataset.targetAvailable = String(available);
+    };
+    const revealWithinInspector = (target) => {
+      if (!target || !editorControls || !inspectorHead) return;
+      const controlsRect = editorControls.getBoundingClientRect();
+      const visibleTop = Math.max(
+        controlsRect.top, inspectorHead.getBoundingClientRect().bottom,
+      ) + 12;
+      const visibleBottom = controlsRect.bottom - 12;
+      const delta = inspectorRevealDelta(target.getBoundingClientRect(), visibleTop, visibleBottom);
+      if (delta) editorControls.scrollTop += delta;
+    };
+    const setDocumentDetailsOpen = (
+      open, { reveal = false, returnFocus = false, focusPanel = false } = {},
+    ) => {
+      if (!documentDetailsPanel || !documentDetailsToggle) return;
+      documentDetailsPanel.hidden = !open;
+      documentDetailsToggle.setAttribute("aria-expanded", String(open));
+      if (returnFocus) documentDetailsToggle.focus();
+      if (open && (reveal || focusPanel)) requestAnimationFrame(() => {
+        const firstLocalizedName = documentDetailsPanel.querySelector(
+          `[data-editor-metadata="label"][data-editor-locale="${CSS.escape(normalizedLocale)}"]`,
+        );
+        const destination = focusPanel
+          ? firstLocalizedName ?? documentDetailsPanel
+          : documentDetailsPanel.querySelector("h3") ?? documentDetailsPanel;
+        if (focusPanel) destination.focus({ preventScroll: true });
+        if (reveal) revealWithinInspector(destination);
+      });
     };
     const setInspectorTarget = (target, { focusBranch = false, reveal = false } = {}) => {
       const capability = CAPABILITY_BY_ID.get(target);
       if (!capability) return false;
+      if (inspectorTargetForField(inspectorField) !== target) {
+        inspectorField = defaultInspectorField(target);
+      }
       inspectorTarget = target;
       inspectorBranch = capability.branch;
       targetByBranch[inspectorBranch] = target;
@@ -1974,10 +2095,9 @@
         const firstSection = editor.querySelector(
           `[data-editor-targets~="${CSS.escape(target)}"]:not([hidden])`,
         );
-        if (!firstSection || !editorControls || !inspectorHead) return;
-        const visibleTop = inspectorHead.getBoundingClientRect().bottom + 12;
-        const sectionTop = firstSection.getBoundingClientRect().top;
-        if (sectionTop < visibleTop) editorControls.scrollTop += sectionTop - visibleTop;
+        if (!firstSection) return;
+        const heading = firstSection.querySelector(":scope > h2, :scope > h3") ?? firstSection;
+        revealWithinInspector(heading);
       });
       return true;
     };
@@ -2028,9 +2148,29 @@
     launcherPreview?.addEventListener("click", () => {
       if (inspectorBranch !== "widgets") return;
       stageSelection = null;
+      inspectorField = "launcher";
       setInspectorTarget("widgets.app-identity", { reveal: true });
       syncStageHud();
       announce(format(tr("stageSelectedAnnounce"), targetLabel("widgets.app-identity")));
+    });
+    const trackInspectorField = (event) => {
+      const control = event.target.closest?.("[data-editor-field]");
+      if (!control || !editorControls?.contains(control)) return;
+      const field = control.dataset.editorField;
+      if (inspectorTargetForField(field) !== inspectorTarget) return;
+      inspectorField = field;
+      refreshInspectorContext();
+    };
+    editorControls?.addEventListener("focusin", trackInspectorField);
+    editorControls?.addEventListener("input", trackInspectorField);
+    editorControls?.addEventListener("change", trackInspectorField);
+    documentDetailsToggle?.addEventListener("click", () => {
+      setDocumentDetailsOpen(documentDetailsPanel.hidden, { reveal: true, focusPanel: true });
+    });
+    documentDetailsPanel?.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setDocumentDetailsOpen(false, { returnFocus: true });
     });
 
     const resetStudioViewport = (hash) => {
@@ -2079,7 +2219,7 @@
       targetByBranch.background = "background.canvas";
       targetByBranch.widgets = "widgets.app-identity";
       setInspectorTarget("interface.theme");
-      documentDetails.open = false;
+      setDocumentDetailsOpen(false);
       stageMirror = null;
       stageLiveMirror = null;
       stageMirrorCache.clear();
@@ -2158,7 +2298,6 @@
     // pointer stream produces at most one layout pass per displayed frame.
     let stageDragFrame = 0;
     let stageDragEvent = null;
-    const stageOverrides = new Map();
     const stageLayerNodes = new Map();
     // Memoized lookups of the range inputs mirrored during a drag; nodes are
     // re-resolved automatically once a layer-card rebuild disconnects them.
@@ -2331,7 +2470,11 @@
         const promptKey = /^shared\.prompt\.(width|x|y)$/.exec(path)?.[1];
         const saved = promptKey ? promptStateValue(promptKey) : statePath(path);
         if (!(adoptsNativePrompt && promptKey)
-            && typeof value === "number" && typeof saved === "number" && Math.abs(value - saved) < 0.00005) continue;
+            && typeof value === "number" && typeof saved === "number"
+            && Math.abs(value - saved) < 0.00005) {
+          stageOverrides.delete(path);
+          continue;
+        }
         const message = messageForStagePath(path, value);
         if (message) messages.push(message);
       }
@@ -2926,7 +3069,7 @@
       for (const card of layerList.querySelectorAll(".layer-card")) {
         const selected = card.dataset.layerId === selectedLayerId;
         card.dataset.selected = String(selected);
-        if (selected) card.open = true;
+        card.open = selected;
       }
     };
 
@@ -2942,15 +3085,20 @@
         const layer = layerForId(selection.id);
         if (!layer) return;
         selectedLayerId = selection.id;
+        const card = layerList.querySelector(`[data-layer-id="${CSS.escape(selection.id)}"]`);
         if (reveal) {
-          const card = layerList.querySelector(`[data-layer-id="${CSS.escape(selection.id)}"]`);
           if (card) card.open = true;
         }
         syncSelectedLayerCards();
+        inspectorField = `layers[${layer.index}].frames.${stageViewport}.positionX`;
         setInspectorTarget("background.layer");
+        if (reveal && card) requestAnimationFrame(() => {
+          revealWithinInspector(card.querySelector("summary") ?? card);
+        });
         announce(format(tr("stageSelectedAnnounce"), format(tr("layerNumber"), layer.index + 1)));
       } else if (selection?.kind === "prompt") {
-        setInspectorTarget("interface.new-chat-area");
+        inspectorField = "shared.prompt";
+        setInspectorTarget("interface.new-chat-area", { reveal });
         announce(format(tr("stageSelectedAnnounce"), tr("stagePromptTag")));
       }
       syncStageHud();
@@ -2964,14 +3112,19 @@
       return stageSelectionAllowed(selection) ? selection : null;
     };
     const selectStageBranchSurface = () => {
+      if (inspectorBranch === "widgets") {
+        announce(tr("branchWidgetsHelp"));
+        return false;
+      }
       const target = inspectorBranch === "interface" ? "interface.theme"
-        : inspectorBranch === "background" ? "background.canvas"
-          : "widgets.app-identity";
+        : "background.canvas";
       stageSelection = null;
+      inspectorField = defaultInspectorField(target);
       setInspectorTarget(target, { reveal: true });
       syncStageHud();
       renderStage();
       announce(format(tr("stageSelectedAnnounce"), targetLabel(target)));
+      return true;
     };
 
     const stageInputFor = (path) => {
@@ -3011,8 +3164,7 @@
       const itemNode = event.target.closest?.("[data-stage-item]");
       const directSelection = itemNode ? stageSelectionFromNode(itemNode) : null;
       if (!handle && !directSelection) {
-        event.preventDefault();
-        selectStageBranchSurface();
+        if (selectStageBranchSurface()) event.preventDefault();
         return;
       }
       event.preventDefault();
@@ -3023,7 +3175,6 @@
         itemNode.focus?.();
       }
       if (!selection || !stageSelectionAllowed(selection)) return;
-      if (selection.kind === "prompt") seedNativePromptOverrides();
       const [logicalWidth, logicalHeight] = stageLogicalSize();
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
       const scale = stageFrame.clientWidth > 0 ? stageFrame.clientWidth / logicalWidth : 1;
@@ -3034,6 +3185,15 @@
         ? stageLayerNodes.get(selection.id)?.item
         : stagePromptEl)?.getBoundingClientRect();
       const handleKind = handle?.dataset.stageHandle;
+      if (selection.kind === "layer") {
+        const index = layerIndexForId(selection.id);
+        if (index >= 0) {
+          inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
+        }
+      } else {
+        inspectorField = "shared.prompt";
+      }
+      refreshInspectorContext();
       const corner = handle?.dataset.corner ?? "se";
       stageDrag = {
         pointerId: event.pointerId,
@@ -3084,6 +3244,7 @@
         const factor = 1 + (((drag.signX * (event.clientX - drag.startX)) + (drag.signY * (event.clientY - drag.startY))) / drag.rectSize);
         setStageOverride(`${prefix}scale`, clampNumber(drag.start[`${prefix}scale`] * factor, 0.25, 3));
       } else if (drag.kind === "prompt-move") {
+        seedNativePromptOverrides();
         let nextX = clampNumber(drag.start["shared.prompt.x"] + (dx / drag.mainWidth), -0.35, 0.35);
         let nextY = clampNumber(drag.start["shared.prompt.y"] + (dy / drag.mainHeight), -0.3, 0.3);
         if (!event.altKey) {
@@ -3095,6 +3256,7 @@
         setStageOverride("shared.prompt.x", nextX);
         setStageOverride("shared.prompt.y", nextY);
       } else if (drag.kind === "prompt-width") {
+        seedNativePromptOverrides();
         setStageOverride("shared.prompt.width",
           clampNumber(drag.start["shared.prompt.width"] + (drag.signX * dx * 2 / drag.mainWidth), 0.4, 0.96));
       }
@@ -3108,6 +3270,7 @@
       computeStageDragOverrides(stageDrag, event);
       applyStageLayout();
       reflectStageInputs(stageItemPaths(stageDrag.selection));
+      refreshInspectorContext();
     };
 
     stageRoot.addEventListener("pointermove", (event) => {
@@ -3132,6 +3295,7 @@
       stageDrag = null;
       commitStagePaths(stageItemPaths(drag.selection));
       renderStage();
+      refreshInspectorContext();
     };
     stageRoot.addEventListener("pointerup", endStageDrag);
     stageRoot.addEventListener("pointercancel", endStageDrag);
@@ -3212,6 +3376,14 @@
       if (!changed) return;
       event.preventDefault();
       stageSelection = selection;
+      if (selection.kind === "layer") {
+        const index = layerIndexForId(selection.id);
+        if (index >= 0) {
+          inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
+        }
+      } else {
+        inspectorField = "shared.prompt";
+      }
       applyStageLayout();
       reflectStageInputs(stageItemPaths(selection));
       if (stageKeyTimer) clearTimeout(stageKeyTimer);
@@ -3219,6 +3391,7 @@
       for (const path of paths) stageKeyPaths.add(path);
       stageKeyTimer = setTimeout(flushStageKeyChanges, 220);
       reflectButtonStates();
+      refreshInspectorContext();
     });
 
     const previewWidthInput = document.getElementById("stage-real-width");
@@ -3245,6 +3418,7 @@
       stagePreviewSize = dimensions;
       stageViewport = dimensions[0] >= 1440 ? "wide" : "normal";
       reflectStageViewport();
+      refreshInspectorContext();
       selectStageMirror();
       renderStage();
       return true;
@@ -3295,6 +3469,7 @@
       // Viewport controls resize Aura without foregrounding it; the next
       // private capture becomes the stage backdrop while Studio stays usable.
       sendPreviewSize(input.value === "wide" ? "wide" : "launch", stagePreviewSize);
+      refreshInspectorContext();
       selectStageMirror();
       renderStage();
     }));
@@ -3321,6 +3496,7 @@
       if (backdropToggleInput.checked && hasUsableMirrorGeometry(stageLiveMirror)) {
         stageViewport = stageLiveMirror.geometry.viewport;
         reflectStageViewport();
+        refreshInspectorContext();
       }
       selectStageMirror();
       renderStage();
@@ -3340,6 +3516,7 @@
         if (!sendPreviewSize(size)) return;
         stageViewport = "wide";
         reflectStageViewport();
+        refreshInspectorContext();
         renderStage();
         announce(tr("stageRealShown"));
       });
@@ -4259,22 +4436,14 @@
               : "interface.theme";
       setInspectorTarget(target);
       if (field.startsWith("metadata.") || field.startsWith("labels.")
-          || field.startsWith("descriptions.")) documentDetails.open = true;
+          || field.startsWith("descriptions.")) setDocumentDetailsOpen(true);
       return direct;
     };
 
     const focusBelowInspector = (target) => {
       if (!target) return;
       target.focus({ preventScroll: true });
-      if (!editorControls || !inspectorHead) return;
-      const targetRect = target.getBoundingClientRect();
-      const controlsRect = editorControls.getBoundingClientRect();
-      const visibleTop = Math.max(controlsRect.top, inspectorHead.getBoundingClientRect().bottom) + 12;
-      const visibleBottom = controlsRect.bottom - 12;
-      const delta = targetRect.top < visibleTop
-        ? targetRect.top - visibleTop
-        : targetRect.bottom > visibleBottom ? targetRect.bottom - visibleBottom : 0;
-      if (delta) editorControls.scrollTop += delta;
+      revealWithinInspector(target);
     };
 
     const focusError = (field) => {
@@ -4570,10 +4739,19 @@
       selectedMode = input.value;
       selectStageMirror();
       reflectTokens();
+      refreshInspectorContext();
       renderStage();
     }));
-    document.getElementById("copy-light-dark").addEventListener("click", () => queueTokenChange("mode-copy", "tokens", "light"));
-    document.getElementById("copy-dark-light").addEventListener("click", () => queueTokenChange("mode-copy", "tokens", "dark"));
+    document.getElementById("copy-light-dark").addEventListener("click", () => {
+      inspectorField = "tokens.dark.canvas";
+      refreshInspectorContext();
+      queueTokenChange("mode-copy", "tokens", "light");
+    });
+    document.getElementById("copy-dark-light").addEventListener("click", () => {
+      inspectorField = "tokens.light.canvas";
+      refreshInspectorContext();
+      queueTokenChange("mode-copy", "tokens", "dark");
+    });
 
     metadataInputs.forEach((input) => input.addEventListener("change", () => {
       const data = input.dataset;
