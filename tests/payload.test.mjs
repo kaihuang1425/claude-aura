@@ -136,11 +136,11 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
     /\[data-claude-aura-brand-host="ready"\]\s*>\s*\[data-claude-aura-brand-image\][^{]*\{[^}]*visibility:\s*visible/s,
     "Only a decoded ready-state wordmark may become visible");
   assert.match(koreanIdolBundle.css,
-    /\[data-claude-aura-brand-image\][^{]*\{[^}]*color:\s*hsl\(var\(--aura-sidebar-text-primary\)\)[^}]*background-color:\s*currentColor[^}]*mask-image:\s*var\(--aura-brand-mask\)/s,
-    "The full wordmark silhouette must be painted from the actual sidebar-label token");
-  assert.match(koreanIdolBundle.css,
-    /\[data-claude-aura-brand-loader\][^{]*\{[^}]*display:\s*none!important/s,
-    "The decoded source image must remain an inert, non-visual mask loader");
+    /\[data-claude-aura-brand-loader\][^{]*\{[^}]*display:\s*block!important[^}]*width:\s*100%!important[^}]*height:\s*100%!important[^}]*object-fit:\s*contain!important/s,
+    "The decoded full-color wordmark must be the visible, fitted image");
+  assert.doesNotMatch(koreanIdolBundle.css,
+    /\[data-claude-aura-brand-image\][^{]*\{[^}]*(?:background-color:\s*currentColor|mask-image:\s*var\(--aura-brand-mask\))/s,
+    "Theme wordmarks must preserve their authored colors instead of becoming monochrome masks");
 
   for (const locale of ["en", "zh-CN", "zh-TW"]) {
     for (const appearance of ["light", "dark", "system"]) {
@@ -500,8 +500,8 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(failedLightMark["aria-hidden"], "true");
   assert.equal(
     failedLightMark.style.getPropertyValue("--aura-brand-mask"),
-    `url("${bundle.settings.brandWordmark.lightDataUrl}")`,
-    "The visible Light lockup must use the decoded asset only as an alpha mask",
+    "",
+    "The Light lockup must render the authored raster instead of masking it",
   );
   assert.equal(first.row["data-claude-aura-brand-host"], undefined,
     "The host must not hide its native logo while the Light wordmark is pending");
@@ -570,8 +570,8 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(darkImage.src, bundle.settings.brandWordmark.darkDataUrl);
   assert.equal(
     darkMark.style.getPropertyValue("--aura-brand-mask"),
-    `url("${bundle.settings.brandWordmark.darkDataUrl}")`,
-    "The Dark asset must also be monochrome-painted from the sidebar label token",
+    "",
+    "The Dark lockup must render its appearance-specific raster instead of masking it",
   );
   darkImage.naturalWidth = 344;
   darkImage.onload();

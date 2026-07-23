@@ -267,7 +267,6 @@
     mark.setAttribute(BI, `${settings.version}:${settings.digest}`);
     mark.style.setProperty("inset-inline-start", `${t.offset}px`);
     mark.style.setProperty("width", `${t.width}px`);
-    mark.style.setProperty("--aura-brand-mask", `url("${source}")`);
     im.alt = "";
     im.draggable = false;
     im.decoding = "async";
