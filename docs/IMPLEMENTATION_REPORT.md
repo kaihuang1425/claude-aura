@@ -2,15 +2,26 @@
 
 ## 0.3.x follow-up fixes
 
-Five changes landed after the initial eight-theme system:
+Eight changes landed after the initial eight-theme system:
 
 1. **First-sign-in blank screen (fixed).** The WebView loading cover only hid when
    the async theme-injection script confirmed `"installed":true`. The first
    sign-in's OAuth redirect/reload burst could invalidate that script, stranding
-   the opaque cover over a loaded, signed-in page until a restart. The cover is now
-   hidden on the real `NavigationCompleted` signal for a claude.ai document, with
-   theme injection running non-blockingly and self-healing; the opaque cover is
-   reserved for genuine navigation/process failures. See `windows/aura-ui.ps1`.
+   the opaque cover over a loaded, signed-in page until a restart. The first repair
+   decoupled page reveal from theme injection, but a live recurrence exposed two
+   remaining OAuth races: Aura replaced a requested sign-in popup with a navigation
+   in the main WebView, breaking the popup/opener handoff, and an older cancelled
+   navigation could complete after its replacement and put the cover back. Aura now
+   leaves trusted Claude/sign-in popups unhandled so WebView2 preserves the real
+   `window.opener`, correlates starts and completions by `NavigationId`, ignores
+   superseded completions, and treats a current claude.ai `DOMContentLoaded` event
+   as concrete readiness even when completion later reports cancellation. Theme
+   injection remains non-blocking, while genuine current-document failures retain
+   the Retry cover. The executable redirect-sequence regression covers stale
+   failure, DOM-ready cancellation, genuine failure, success, popup allowlisting,
+   and unsafe-scheme blocking. The verified build was installed and the user
+   confirmed a successful first sign-in on 2026-07-23. See
+   `windows/aura-ui.ps1` and `tests/studio-editor.test.mjs`.
 2. **UTF-8 helper decoding (fixed).** `aura-ui.ps1` now sets an explicit UTF-8
    `StandardOutputEncoding` on the Node helper and reads `config.json` as UTF-8, so
    localized theme metadata no longer corrupts on OEM-code-page systems (Big5/GBK).
@@ -31,14 +42,37 @@ Five changes landed after the initial eight-theme system:
    dedicated dark production layers where needed. Anime Twilight intentionally
    reuses its intrinsically dark cityscape, and Default remains artwork-free.
 6. **Theme-aware running-app identity and Studio launcher.** All eight permanent
-   themes define an optional launcher material and one deterministic transparent
-   96×96 Aura mark shared by the main/Studio windows, taskbar, notification area,
-   Studio rail, and floating launcher.
-   The host presents a quiet 48 px control, expands on hover to name Studio and
-   expose a dedicated drag grip, preserves a 16 px safe edge gap, and falls back
-   to the complete Default design when metadata or an asset is absent. Custom
-   schema-v1/v2 kits may opt into one exact kit-local mark; validation enforces
-   dimensions, alpha, contrast, paths, and byte budgets.
+   themes now use distinct authored 1254×1254 transparent identity sources,
+   deterministically reduced to a transparent 96×96 PNG and a native nine-frame
+   ICO at 16/20/24/32/40/48/64/128/256 px. The active identity is shared by the
+   main/Studio windows, taskbar, notification area, Studio rail, floating
+   launcher, and the exact four owned Aura/Studio Desktop and Start shortcuts.
+   The host presents one permanently circular 48 px control with a 16 px safe
+   edge gap. A whole-button press becomes a drag beyond a DPI-scaled 6 px
+   threshold, release before that threshold opens Studio, and right-click opens
+   the host menu; hover changes material only. It falls back to the complete
+   Default design when metadata or an asset is absent or Original look is
+   active. Custom schema-v1/v2 kits still opt into one exact
+   kit-local 96×96 PNG; the host derives a content-addressed ICO under Aura-owned
+    data, while validation enforces dimensions, alpha, contrast, paths, and byte
+    budgets.
+7. **Theme-aware Studio shell.** Selecting a built-in or user theme now applies
+   the same validated visual language to Studio's content shell through one
+   strict, artwork-free `studioStyle` projection. Light/Dark colors and alphas,
+   approved fonts, radius, blur, and shadow are derived by the theme core and
+   exact-shape validated again at the bridge and page boundaries. Active edits
+   project the same last-valid document Aura is rendering; Original look applies
+   the complete Default projection in System appearance. Renderer artwork,
+   personal wallpaper, arbitrary CSS, remote resources, and source paths are
+   excluded.
+8. **Bespoke permanent-theme Studio chrome.** The eight immutable built-in
+   themes now add distinct fixed shell structure on top of the validated colour
+   projection: heading/rule proportions, panel/card edge and elevation, rail
+   geometry and active marker, and section treatment. Studio freezes the
+   generated built-in key set before accepting host metadata, so user themes
+   and active drafts retain neutral chrome and cannot claim a permanent
+   profile. Reduced motion removes lift; increased contrast and forced colours
+   remove decorative profile treatments; the editor stage remains isolated.
 
 ## Japanese Idol runtime artwork
 
@@ -67,7 +101,7 @@ approved HUMAN CHECKPOINT C on 2026-07-21; the four production assets and their
 recorded source/runtime hashes are frozen.
 
 The runtime claude.ai skin ships real artwork through a layered artwork system:
-a theme may declare up to four `artworkLayers` (optimized WebP or SVG), each
+a theme may declare up to eight `artworkLayers` (optimized WebP or SVG), each
 embedded as a data URL only when that theme is active and rendered as an inert,
 pointer-safe backdrop with per-layer position, size, opacity, mobile behavior,
 appearance, semantic context, and an optional edge-fade mask. Japanese Idol
@@ -149,14 +183,14 @@ real Claude interface with screenshots.
 
 | Order | Stable ID | Display name | Artwork |
 | ---: | --- | --- | --- |
-| 1 | `default` | Default | None |
-| 2 | `japanese-film-editorial` | Japanese Film Editorial | Appearance-specific light/dark backgrounds and matched portraits under `assets/theme-art/japanese-film-editorial/` |
-| 3 | `korean-prestige` | Korean Prestige | Pearl-day/midnight architectural backgrounds plus matched clean-alpha portraits |
-| 4 | `cartoon-studio` | Cartoon Studio | Appearance-specific light/dark backgrounds plus shared original mascot |
-| 5 | `anime-twilight` | Anime Twilight | One layered `assets/theme-art/anime-twilight/background.webp` cityscape |
-| 6 | `study-library` | Study Library | Appearance-specific light/dark paper backgrounds plus shared bottom-left still life |
-| 7 | `japanese-idol` | Japanese Idol | Light background/portrait plus mutually exclusive dark new-chat/conversation scenes |
-| 8 | `korean-idol` | Korean Idol | Four `assets/theme-art/korean-idol/*.webp` assets: light scene, hero, dark new-chat scene, and dark conversation scene |
+| 1 | `default` | Default | No scene artwork; separate Light/Dark full in-page wordmark PNGs |
+| 2 | `japanese-film-editorial` | Japanese Film Editorial | Appearance-specific light/dark backgrounds and matched portraits plus separate Light/Dark full in-page wordmark PNGs under `assets/theme-art/japanese-film-editorial/` |
+| 3 | `korean-prestige` | Korean Prestige | Pearl-day/midnight architectural backgrounds, matched clean-alpha portraits, and separate Light/Dark full in-page wordmark PNGs |
+| 4 | `cartoon-studio` | Cartoon Studio | Appearance-specific light/dark backgrounds, shared original mascot, and separate Light/Dark full in-page wordmark PNGs |
+| 5 | `anime-twilight` | Anime Twilight | One layered `assets/theme-art/anime-twilight/background.webp` cityscape plus separate Light/Dark full in-page wordmark PNGs |
+| 6 | `study-library` | Study Library | Appearance-specific light/dark paper backgrounds, shared bottom-left still life, and separate Light/Dark full in-page wordmark PNGs |
+| 7 | `japanese-idol` | Japanese Idol | Light background/portrait, mutually exclusive dark new-chat/conversation scenes, and separate Light/Dark full in-page wordmark PNGs |
+| 8 | `korean-idol` | Korean Idol | Four `assets/theme-art/korean-idol/*.webp` scene assets plus separate Light/Dark full in-page wordmark PNGs |
 
 The order is defined once in `themes/registry.json` and reused by command-line,
 Aura Studio, and validation consumers.
@@ -183,18 +217,18 @@ interface remain usable when decorative artwork cannot load.
 
 ## Change-set inventory
 
-The working branch has no tracked baseline commit, so Git cannot distinguish
-new files from modified files. `docs/FILE_MANIFEST.md` provides the exhaustive
-path-level deliverable list; the table below summarizes that implementation
-surface by responsibility.
+Git tracks the repository baseline, while the current WO-18 work tree also
+contains uncommitted implementation changes. `docs/FILE_MANIFEST.md` provides
+the exhaustive path-level deliverable list; the table below summarizes that
+implementation surface by responsibility.
 
 | Area | Files | Responsibility |
 | --- | --- | --- |
 | Registry and themes | `themes/registry.json`, the eight canonical theme JSON files, and compatibility files `themes/midnight.json`, `themes/ember.json`, `themes/forest.json`, and `themes/sakura.json` | Canonical IDs, localized metadata, semantic light/dark roles, typography, shape, effects, wallpaper recipes, and legacy migration |
 | Shared renderer styling | `assets/base.css`, `assets/theme-variants.css`, `assets/renderer-inject.js` | Semantic production coverage, centralized component variants, root attributes, artwork layers, cleanup, and accessibility preferences |
-| Runtime artwork and app identity | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers and eight deterministic marks shared by the running app and launcher |
-| Studio selector media | `assets/studio-previews/` | Seven preserved uncropped, user-framable masters plus a clearly separated source-only alternate and provenance |
-| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-launcher-assets.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork/launcher auditing, deterministic launcher generation, Studio metadata generation, and release collection |
+| Runtime artwork and app identity | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers, eight separate Light/Dark in-page wordmark pairs, plus eight deterministic 96×96 PNG/nine-frame ICO pairs shared by running and installed identity surfaces |
+| Studio selector media and source references | `assets/studio-previews/` | Seven preserved uncropped, user-framable masters plus clearly separated repository-only alternates, authored 1254×1254 launcher sources, eight normalized in-page wordmark sources, prompts, and provenance |
+| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-core/*.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-brand-wordmarks.mjs`, `scripts/build-launcher-assets.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork/identity auditing, deterministic wordmark and launcher generation, Studio metadata generation, and release collection |
 | Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | DPI-aware localized content-only host plus Aura Studio, live application, adjustable card/background framing, dynamic theme identity, accessibility, allowlisted install, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
 | Verification | `tests/run-tests.mjs`, `scripts/verify-cycle.mjs`, `scripts/asset-audit.mjs`, `package.json`, `config.example.json` | Twenty end-to-end/static checks, payload-only Light/Dark compilation for all eight themes, status-only artwork audits, build commands, and Default baseline |
@@ -238,9 +272,72 @@ for horizontal position, vertical position, and zoom, reset, cancel, or save.
 The background stage receives the live Claude WebView aspect ratio, and Studio
 waits for a host acknowledgement before reporting success or closing.
 
+The WO-18 feasibility amendment makes the editor task-oriented at the same
+1080 × 720 product window. **Create** starts a visual copy of Default.
+**Quick customize** keeps localized naming, four essential colour rows,
+background scope, basic image actions, privacy, validation, and Save visible
+without exposing passing ratios or raw schema groups. **Advanced** retains the
+complete state matrix, supporting colours, placement, and exact numeric inputs
+beside sliders. Both levels use the same flat image list and selection model.
+Light/Dark, page, and Standard/Wide are global preview controls beside the live
+preview; dimensions update directly without an Apply step. Selecting an image
+or the new-chat area opens its relevant inspector, while explicit inspector
+navigation corrects any scroll offset below the opaque sticky header. Image
+selection and temporary preview-only hiding use opaque layer identities, so
+reorder does not silently switch the edited subject. Personal wallpaper is
+labelled as device-local and separate from theme-owned artwork.
+
+The page control is a deterministic preview selector rather than a hidden
+navigation command. An explicit New chat or Conversation choice stays pinned
+when an asynchronous mirror arrives. Studio keeps a bounded, session-only cache
+of at most two validated, exact-size, exact-mode captures—one for each semantic
+page—and swaps them immediately. Claude source and SPA-history changes schedule
+a new capture through the existing coalesced, generation-guarded mirror path.
+When a matching page has not been captured, Studio shows the labelled placement
+guide and an explicit **Switch in Aura…** action instead of displaying the other
+page as live. This avoids guessing a conversation or abandoning unsent input.
+
+All editor mutations now pass through one serialized/coalescing path. The new
+`apply-theme-patch` action accepts one to sixteen exact allowlisted token,
+layer, or localized-metadata changes. The page resolves layer identities to the
+latest index immediately before sending; PowerShell and Node validate the
+envelope independently; and Node applies one patch to a cloned document as one
+revision, compile, persistence write, live apply, and Undo entry. Theme IDs are
+not editable. The bridge keeps filesystem paths and arbitrary CSS unavailable.
+
+Theme selection now restyles Studio's HTML shell as well as Aura. Both the
+registered-theme list and the active editor state receive the canonical
+`studioStyle` DTO from the theme core. Its Light/Dark maps carry the validated
+canvas, sidebar, surface, raised surface, text hierarchy, accent, on-accent,
+border, focus, and alpha values; the shared map carries only approved font IDs,
+bounded radius/blur, and a shadow enum. PowerShell and the Studio page require
+the exact object shape, then `studio/app.js` maps it to a fixed set of root CSS
+variables used by `studio/styles.css` and `studio/editor.css`. The on-accent
+value is used for filled controls, and forced-colors rules clear projected
+colors so Windows can retain authority.
+
+An active edit's shell style is deliberately calculated from
+`lastValidDocument`, even while current invalid values and feedback stay in the
+controls. This keeps the Aura payload and Studio shell on the same accepted
+revision through rapid edits, Undo/Redo, restart, and recovery. Original look
+uses the complete Default projection and System/Windows effective mode rather
+than retaining part of the previous custom theme. The projection carries no
+artwork or personal-wallpaper URL and exposes no custom CSS or filesystem path;
+theme cards, the labelled stage/guide, and the validated launcher mark remain
+separate bounded media surfaces.
+
+Permanent-theme chrome is an additional closed page policy, not kit data.
+`studio/app.js` snapshots the initially generated built-in IDs, maps only those
+eight IDs to fixed `data-studio-shell` branches, and maps host-added themes and
+active editor drafts to neutral chrome. `studio/styles.css` gives every
+permanent profile a complete and pairwise-distinct non-colour signature across
+heading/rule, card/panel, rail/marker, and section variables. The same variables
+style the gallery and editor components without touching preview or stage
+pixels. No profile block contains raw colours, URLs, paths, images, or artwork.
+
 On supported Windows versions, Aura also makes best-effort Desktop Window
 Manager calls for the dark-caption preference and the caption, caption-text,
-and border colors of the main and gallery windows. Unsupported attributes,
+and border colors of the main and Studio windows. Unsupported attributes,
 system policy, and platform-controlled chrome are allowed to win; API exceptions
 are logged, and unsuccessful requests do not prevent Studio, the WebView, or
 theme selection from working.
@@ -312,6 +409,14 @@ evidence. The unused ocean concept is categorized separately under
 `assets/studio-previews/references/` and is excluded from releases and installed
 copies. `convert-theme-assets.mjs --card-previews` now rebuilds only legacy 640
 × 360 compatibility fallbacks without modifying the masters.
+
+The same source-only references area contains
+`launcher-marks-v2/`: eight distinct authored transparent 1254×1254 sources and
+their exact prompt record. `build-launcher-assets.mjs` deterministically derives
+each shipped transparent 96×96 PNG and nine-frame ICO. Sources and prompts never
+ship. Built-ins consume the ICO directly for native Windows surfaces and owned
+shortcuts; custom themes continue to supply only a 96×96 PNG, from which the host
+creates a content-addressed Aura-owned ICO.
 
 User-selected background images remain local decorative inputs and are
 validated for supported extension, matching content signature, and size before
@@ -388,27 +493,39 @@ payload compilation in both appearance modes, the prohibition on fixture-image
 generation, and release exclusions. `theme-cli qa <id>` writes only a JSON
 asset/payload status record; it does not create a UI board or screenshot.
 
-Results recorded through 2026-07-21:
+Results recorded through 2026-07-23:
+
+The current shared work tree has completed every non-visual gate below. Windows
+release candidates are built from the explicit distribution allowlist and
+checked byte-for-byte against the workspace and installed application. Each
+source edit invalidates that snapshot, so the authoritative archive digest is
+the generated `.sha256` sidecar and the final candidate must be rebuilt and
+reinstalled after the source tree and live checkpoint settle.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | Passed, 20/20 |
-| `npm run check` | Passed; JavaScript and platform parsing plus the 20-test suite |
-| `npm run verify:cycle` | Payload-only verifier: runs the test suite, then compiles and syntax-checks all eight themes in Light and Dark (17 gates); it launches no browser and writes no images |
-| PowerShell parser | Passed on `windows/aura-ui.ps1`: 11,986 tokens, zero errors |
-| Explicit payload budgets | Passed 48 locale/theme/appearance cases; maximum payload-minus-art 64,700 bytes and maximum embedded art 653,140 bytes |
+| `npm test` | Passed, 21/21 |
+| `npm run check` | Passed, 21/21; includes JavaScript and platform parsing plus the complete test suite |
+| `npm run verify:cycle` | Passed, 17/17; the payload-only verifier runs the test suite, then compiles and syntax-checks all eight themes in Light and Dark; it launches no browser and writes no images |
+| PowerShell parser | Passed for all eight `windows/*.ps1` files through the suite; the edited `windows/aura-ui.ps1`, `windows/install.ps1`, and `windows/uninstall.ps1` also pass an explicit zero-error parse |
+| Explicit payload budgets | Passed 48 locale/theme/appearance cases; maximum payload-minus-art 64,430 bytes and maximum embedded art 662,664 bytes |
 | Lint | Not configured in the repository; there is no linter dependency or lint script, so this gate is explicitly not applicable rather than represented by `npm run check` |
 | Typecheck | Not applicable; the project contains JavaScript, PowerShell, and shell sources with no TypeScript sources, `tsconfig.json`, or typecheck script |
-| `npm run release` | Passed on the completed source; archive inspection found `assets/brand/aura-mark.svg` and `assets/brand/claude-aura.ico` |
-| Release archive rebuild | Passed on 2026-07-17; the versioned ZIP and matching SHA-256 sidecar were regenerated from the explicit distribution allowlist, with no local configuration, composite-reference, or nested-release entries |
+| Historical `npm run release` snapshot | The earlier 2026-07-22 WO-18 snapshot produced a 153-entry, 15,024,082-byte archive with SHA-256 `8d2e113aaca9483ea9802f0e647f15a6403641106358c3461df485e3ba3ff248`. It predates the current uncommitted fixes and is not current release evidence. |
+| Current Windows release status | A provisional versioned candidate is present and has passed exact workspace ↔ ZIP ↔ installed-tree path/hash comparison. Its digest is recorded only in the generated `.sha256` sidecar so the packaged report does not invalidate its own archive. Rebuild, reinstall, and repeat the comparison after every source edit and once more after HUMAN CHECKPOINT D. |
+| WO-18 in-page brand identity | The repository-only reference tree freezes one normalized horizontal `Claude` source per built-in and records source provenance/prompts: exact supplied full lockups for Japanese Film Editorial and Japanese Idol, the approved supplied Korean Idol raster, and newly authored Default, Korean Prestige, Cartoon Studio, Anime Twilight, and Study Library directions. The deterministic builder emits appearance-specific Light/Dark PNGs under all eight theme-art directories. One artwork-budgeted renderer channel preserves the native wrapper, reveals one inert image only after decode on a unique expanded host, and restores the native visual for collapsed/undersized, ambiguous, failed, forced-colors, Original-look, cleanup, and remount paths. Runtime derivatives and the builder ship; normalized sources, prompts, and ignored source kits do not. This is mechanical implementation evidence only: live expanded-sidebar Light/Dark quality across all eight themes and selector/fallback behavior remain open at HUMAN CHECKPOINT D. |
 | Windows title-bar source check | Passed; best-effort DWM dark-caption and caption/text/border attributes are present with a non-fatal fallback path |
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
-| Aura Studio framing walkthrough | Passed on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were verified. The offline walkthrough images were retired and deleted on 2026-07-20 and are not acceptance evidence. |
+| Aura Studio framing simulator exercise | Mechanically exercised on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were checked. This was not an acceptance pass: the offline walkthrough images were retired and deleted on 2026-07-20, and actual-Aura review remains the only visual evidence. |
 | WO-10 Cartoon Studio asset cycle | Source/runtime checksum freeze, two-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark review pass. The user approved the visual evidence at HUMAN CHECKPOINT C; the narrower 1280 x 720 stress case remains in WO-16. |
 | WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark 1920 x 1080 review pass. The user approved the visual evidence at HUMAN CHECKPOINT C. |
 | WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
 | WO-17 live Aura UX and identity cycle | Complete actual-Aura Light/Dark matrix for all eight themes on live `claude.ai`; Original-look cleanup; Korean Idol new-chat/conversation contexts; representative hover/selected state; Studio Back-to-Aura activation; one content scroller; and Aura title-bar/tray identity at normal DPI and actual 2560 × 1600 / 200% display scaling. |
-| WO-18 themed identity/launcher/preview amendment | Twenty automated checks, all eight Light/Dark payload cycles, eight status-only asset audits, deterministic mark rebuild equality, exact preview-master hashes/dimensions, non-destructive frame metadata, release/install scoping, and dynamic running-app identity source assertions pass. The installed focused smoke check in `dist/verify/live-aura/wo18-identity-preview-smoke/manifest.json` cycled all eight marks, visibly synchronized Japanese Film across the running app surfaces available in one native full-monitor capture, and proved persisted/resettable 600% framing against an unchanged 1709×920 master. The complete localized editor and launcher hover/click/grip walkthrough remains HUMAN CHECKPOINT D. |
+| WO-18 themed identity/launcher/preview amendment | Twenty-one automated checks, all eight Light/Dark payload cycles, eight status-only asset audits, deterministic mark rebuild equality, exact preview-master hashes/dimensions, non-destructive frame metadata, release/install scoping, and dynamic running-app identity source assertions pass. The installed focused smoke check in `dist/verify/live-aura/wo18-identity-preview-smoke/manifest.json` cycled all eight marks, visibly synchronized Japanese Film across the running app surfaces available in one native full-monitor capture, and proved persisted/resettable 600% framing against an unchanged 1709×920 master. The complete localized editor and permanent-circle launcher cold-start/hover/click/whole-button-drag/menu walkthrough remains HUMAN CHECKPOINT D. |
+| WO-18 premium identity correction | The prior generic palette-swapped mark direction was rejected on 2026-07-22. Eight distinct authored sources, deterministic 96×96 PNGs, per-theme nine-frame ICOs, owned Desktop/Start shortcut switching, custom content-addressed ICO derivation, and Original-look Default fallback supersede it. The current source snapshot passes `npm run check` 21/21, `npm run verify:cycle` 17/17, all eight `theme-cli qa <id>` audits with the exact 16/20/24/32/40/48/64/128/256 ICO frame set, and zero parse errors across all eight Windows PowerShell files. The release must still be regenerated after HUMAN CHECKPOINT D and the final source tree settle. WO-18 is not complete; corrected live quality and the complete interaction review remain open. |
+| WO-18 editor-feasibility amendment | The current shared snapshot passes `npm run check` 21/21, `npm run verify:cycle` 17/17, all eight status-only theme audits, and all eight Windows PowerShell parses. Executable core tests cover bounded exact patches, rollback, one-step multi-field Undo/Redo, localized metadata persistence, stable layer identities through reorder, route-section exclusivity, renderer-selected Standard/Wide framing, clipped live-main geometry, and queued/debounced/in-flight unsaved status. Front-end contracts cover visual Create, Quick/Advanced separation, coalescing, exact numeric controls, privacy, validation recovery, the persistent Back/status/Cancel/Save header, and the 1080 px two-pane breakpoint. Exact Windows package/install comparison must be repeated after every source edit. The actual-window interaction and visual approval remain open at HUMAN CHECKPOINT D; no offline substitute is accepted. |
+| WO-18 Studio-shell theming amendment | `studioStyleFromTheme` supplies one canonical dual-mode projection to generated built-ins, runtime user-theme listings, and last-valid editor state. Exact bridge/page validation, fixed root-variable mapping, contrast-safe material compositing, Default/System Original-look fallback, on-accent foreground use, forced-colors reset, and artwork/wallpaper/CSS/path exclusions have direct regression coverage. The complete mechanical gates and Windows package/install parity are rechecked after source edits. Acceptance remains Partial until the installed all-eight Light/Dark/System cycle, valid/invalid draft synchronization, user-theme restart, Original-look reset, and accessibility/media-exclusion review complete at HUMAN CHECKPOINT D. |
+| WO-18 permanent Studio-shell profiles | Eight closed Aura-owned profile branches add pairwise-distinct non-colour structure for the permanent themes. Selection is limited to the immutable generated-theme snapshot; host-added themes and active drafts use neutral chrome. Regressions require the exact eight IDs, a complete variable set, at least two structural differences per pair, no raw colour/media/path channel, reduced-motion lift removal, and high-contrast/forced-colours decoration removal. `npm run check` passes 21/21, `npm run verify:cycle` passes 17/17, all eight status-only audits pass, and the focused Studio regression passes. Exact Windows package/install comparison must be repeated after every source edit. Acceptance remains Partial until the installed 1080×720 Gallery/settings Light/Dark/System walkthrough confirms each profile and the neutral Quick/Advanced draft boundary. |
 | WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass. After the first Checkpoint C review rejected the Light framing, the top-right 74%/660px revision was recaptured in actual Aura across Light/Dark new-chat/conversation; Dark is unchanged. The user approved HUMAN CHECKPOINT C on 2026-07-21 and the recorded assets/hashes are frozen. |
 
 Before creating an archive, run the checks and then:
@@ -421,9 +538,13 @@ The release builder creates a versioned ZIP and SHA-256 file from explicit
 distributable top-level files, directories, and supported file types. Source
 control metadata, internal planning records, local configuration/state,
 dependency/build output, temporary files, logs, existing release output, and
-source-only `assets/studio-previews/references/` are therefore excluded. The
-registered preview masters are shipped product media. Windows and macOS
-installers also run the test suite before copying an installation.
+source-only `assets/studio-previews/references/` are therefore excluded,
+including launcher source images and their prompt record. The derived
+`assets/theme-art/<id>/launcher-mark.png` and `launcher-mark.ico` files and the
+registered preview masters are shipped product media. From a repository
+checkout, the installer runs the complete suite before copying. An extracted
+release has no Git metadata or source-only references, so its installer runs
+the eight shipped-theme validation preflight before the exact-tree swap.
 
 ## Visual evidence
 
@@ -476,7 +597,7 @@ sidebar contains user account data:
 These are real Aura WebView2 captures of live `claude.ai`; their recorded hashes
 identify the reviewed files without establishing an automated image baseline.
 
-## Supplied references and Studio preview masters
+## Supplied references, identity sources, and Studio preview masters
 
 Six supplied full-interface concept images are preserved byte-for-byte and
 renamed by frozen theme ID under `assets/studio-previews/masters/`:
@@ -498,6 +619,25 @@ Claude backgrounds, or visual evidence. The 640 × 360 WebPs under
 `assets/theme-art/<id>/card-preview.webp` remain compatibility fallbacks.
 They are never injected into Claude or used as runtime backgrounds.
 
+`assets/studio-previews/references/launcher-marks-v2/` holds the eight authored
+transparent 1254×1254 built-in identity sources and exact prompt record. They
+remain repository-only; deterministic transparent 96×96 PNGs and nine-frame
+ICOs under `assets/theme-art/<id>/` are the distributable derivatives. These
+source and derived assets are not live visual evidence. The complete revised
+identity-quality review remains pending HUMAN CHECKPOINT D.
+
+`assets/studio-previews/references/in-page-brand-wordmarks-v1/` preserves one
+normalized 344×124 horizontal `Claude` source per built-in plus `PROMPTS.md`.
+Japanese Film Editorial and Japanese Idol reuse exact supplied full lockups,
+Korean Idol reuses its approved supplied raster, and Default, Korean Prestige,
+Cartoon Studio, Anime Twilight, and Study Library use newly authored sources
+matched to their frozen recipes. `scripts/build-brand-wordmarks.mjs` validates
+the source set and emits a separate shipped Light/Dark pair under every
+`assets/theme-art/<id>/`. The source tree is excluded from releases, and the
+renderer keeps Claude's native compact visual outside a uniquely discovered
+expanded sidebar. Mechanical wiring does not replace the required all-eight
+actual-Aura Light/Dark and fallback review.
+
 ## Remaining limitations
 
 - Production styling targets the current semantic and ARIA structure rendered by
@@ -510,6 +650,19 @@ They are never injected into Claude or used as runtime backgrounds.
 - Supplied portrait pixels appear only in uncropped Studio selector masters.
   Renderer backgrounds continue to use isolated project artwork; closer runtime
   portrait fidelity still requires separately licensed, isolated source art.
+- The revised themed identity requires an actual-Aura quality pass across the
+  running surfaces and four owned Desktop/Start shortcuts at HUMAN CHECKPOINT D;
+  source files and offline asset inspection cannot close that gate.
+- The eight built-in in-page wordmark pairs require the same actual-Aura
+  checkpoint in expanded Light and Dark navigation plus collapsed/native,
+  asset-failure, forced-colors, Original-look, and SPA-remount fallback states.
+  Compiled payload and lifecycle assertions cannot prove current upstream
+  selector compatibility, native interaction preservation, or final visual
+  fit.
+- Studio shell projection intentionally excludes renderer artwork and personal
+  wallpaper. Its all-eight mode cycle, last-valid/error behavior, saved-theme
+  restart, Original-look reset, and forced-colors behavior still require the
+  installed live review at HUMAN CHECKPOINT D.
 - The macOS scripts remain a reversible legacy launcher; the native, non-technical
   rich gallery is the supported Windows WebView2 experience.
 
