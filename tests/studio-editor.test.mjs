@@ -2991,18 +2991,63 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(launcherPositionUpdate,
     /if \(-not \$script:Launcher\.Visible\)\s*\{[\s\S]{0,220}?-not \(Update-AuraUiLauncherStyle\)[\s\S]{0,80}?return[\s\S]{0,220}?\$null -eq \$script:EffectiveLauncherIdentity[\s\S]{0,80}?return[\s\S]{0,120}?\$script:Launcher\.Show\(\$script:Form\)/,
     "The launcher must never Show unless a complete effective identity exists");
-  assert.match(launcherPositionUpdate, /Update-AuraUiLauncherHintPosition/,
-    "Aura window geometry changes must reposition an open launcher guide");
+  assert.match(launcherPositionUpdate,
+    /Update-AuraUiLauncherHintPosition[\s\S]{0,80}?Update-AuraUiLauncherTipPosition/,
+    "Aura window geometry changes must reposition every open launcher popup");
+  const launcherPopupLocation = powershellFunction("Get-AuraUiLauncherPopupLocation");
+  assert.match(launcherPopupLocation,
+    /if \(\$desiredX -lt \$Bounds\.Left\)\s*\{\s*\$desiredX = \$Anchor\.Left\s*\}/,
+    "A launcher popup must flip horizontally before clamping at the left edge");
+  assert.match(launcherPopupLocation,
+    /if \(\$desiredY -lt \$Bounds\.Top\)\s*\{\s*\$desiredY = \$Anchor\.Bottom \+ \$Gap\s*\}/,
+    "A launcher popup must flip below the button before clamping at the top edge");
+  const launcherPopupRegression = [
+    "$ErrorActionPreference='Stop'",
+    "Add-Type -AssemblyName System.Drawing",
+    `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
+    "$tokens=$null;$errors=$null",
+    "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+    "if($errors.Count){throw 'Could not parse Aura UI for launcher popup regression'}",
+    "$definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Get-AuraUiLauncherPopupLocation'},$true)",
+    "if($null -eq $definition){throw 'Missing launcher popup placement helper'}",
+    "Invoke-Expression $definition.Extent.Text",
+    "$bounds=[Drawing.Rectangle]::new(100,200,1000,700)",
+    "$popup=[Drawing.Size]::new(336,148)",
+    "$default=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(1000,800,48,48)) -PopupSize $popup -Bounds $bounds -Gap 12",
+    "if($default.X -ne 712 -or $default.Y -ne 640){throw 'Default launcher popup placement changed'}",
+    "$nearLeft=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(116,600,48,48)) -PopupSize $popup -Bounds $bounds -Gap 12",
+    "$movedRight=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(146,600,48,48)) -PopupSize $popup -Bounds $bounds -Gap 12",
+    "if($nearLeft.X -ne 116 -or $movedRight.X -ne 146){throw 'Left-edge popup stopped following the launcher'}",
+    "$nearTop=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(500,216,48,48)) -PopupSize $popup -Bounds $bounds -Gap 12",
+    "if($nearTop.X -ne 212 -or $nearTop.Y -ne 276){throw 'Top-edge popup did not flip below the launcher'}",
+    "$highDpiBounds=[Drawing.Rectangle]::new(0,0,2000,1400)",
+    "$highDpi=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(32,800,96,96)) -PopupSize ([Drawing.Size]::new(672,296)) -Bounds $highDpiBounds -Gap 24",
+    "$highDpiMoved=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(72,800,96,96)) -PopupSize ([Drawing.Size]::new(672,296)) -Bounds $highDpiBounds -Gap 24",
+    "if($highDpi.X -ne 32 -or $highDpi.Y -ne 480 -or $highDpiMoved.X -ne 72){throw 'DPI-scaled popup stopped following the launcher'}",
+  ].join("\n");
+  run("powershell.exe", [
+    "-NoProfile",
+    "-EncodedCommand",
+    Buffer.from(launcherPopupRegression, "utf16le").toString("base64"),
+  ]);
+  const launcherTipPositionUpdate = powershellFunction("Update-AuraUiLauncherTipPosition");
+  assert.match(launcherTipPositionUpdate,
+    /Get-AuraUiLauncherPopupLocation[\s\S]{0,180}?\$script:LauncherTip\.Size/,
+    "The hover caption must use the shared live launcher-popup geometry");
   const launcherHintPositionUpdate = powershellFunction("Update-AuraUiLauncherHintPosition");
   assert.match(launcherHintPositionUpdate,
-    /\$script:Launcher\.Location\.X[\s\S]{0,180}?\$script:LauncherHint\.Width[\s\S]{0,180}?\$script:Launcher\.Location\.Y[\s\S]{0,180}?\$script:LauncherHint\.Height/,
+    /\$script:Launcher\.Location\.X[\s\S]{0,180}?\$script:Launcher\.Location\.Y[\s\S]{0,500}?Get-AuraUiLauncherPopupLocation[\s\S]{0,180}?\$script:LauncherHint\.Size/,
     "The launcher guide must derive its position from the current launcher geometry");
   assert.match(launcherHintPositionUpdate,
-    /PointToScreen[\s\S]{0,260}?ClientSize\.Width[\s\S]{0,100}?ClientSize\.Height[\s\S]{0,500}?\$script:LauncherHint\.Location\s*=\s*\$desired/,
+    /PointToScreen[\s\S]{0,260}?ClientSize\.Width[\s\S]{0,100}?ClientSize\.Height[\s\S]{0,500}?Get-AuraUiLauncherPopupLocation/,
     "The launcher guide must clamp its refreshed position to the current Aura client area");
   assert.match(ui,
-    /\$script:Launcher\.add_LocationChanged\(\{\s*Update-AuraUiLauncherHintPosition\s*\}\)/,
-    "Dragging or DPI-moving the launcher must carry its open guide with it");
+    /\$script:Launcher\.add_LocationChanged\(\{\s*Update-AuraUiLauncherHintPosition\s*Update-AuraUiLauncherTipPosition\s*\}\)/,
+    "Dragging or DPI-moving the launcher must carry every open popup with it");
+  const launcherTipShow = powershellFunction("Show-AuraUiLauncherTip");
+  assert.match(launcherTipShow,
+    /\$script:LauncherTip\.ClientSize[\s\S]{0,220}?Update-AuraUiLauncherTipPosition[\s\S]{0,1600}?ShowWindow\(\$script:LauncherTip\.Handle,\s*8\)/,
+    "The hover caption must use the same live positioning path before its first frame");
   const launcherHintShow = powershellFunction("Show-AuraUiLauncherHint");
   assert.match(launcherHintShow,
     /\$script:LauncherHint\s*=\s*\$hint[\s\S]{0,180}?Update-AuraUiLauncherHintPosition[\s\S]{0,220}?ShowWindow\(\$hint\.Handle,\s*8\)/,

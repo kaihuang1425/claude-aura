@@ -2792,6 +2792,7 @@ function Update-AuraUiLauncherPosition {
     if ($script:LauncherLayeredActive) { Update-AuraUiLauncherSurface }
   }
   Update-AuraUiLauncherHintPosition
+  Update-AuraUiLauncherTipPosition
 }
 
 function New-AuraUiLauncherTipBitmap {
@@ -2873,6 +2874,49 @@ function New-AuraUiLauncherTipBitmap {
   }
 }
 
+function Get-AuraUiLauncherPopupLocation {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Anchor,
+    [Parameter(Mandatory = $true)][Drawing.Size]$PopupSize,
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds,
+    [Parameter(Mandatory = $true)][int]$Gap
+  )
+  # Prefer the familiar above/right-aligned placement. Flip at the top or left
+  # edge before clamping so a popup keeps moving with its button instead of
+  # appearing pinned to the window while the launcher moves underneath it.
+  $desiredX = $Anchor.Right - $PopupSize.Width
+  if ($desiredX -lt $Bounds.Left) { $desiredX = $Anchor.Left }
+  $desiredY = $Anchor.Top - $PopupSize.Height - $Gap
+  if ($desiredY -lt $Bounds.Top) { $desiredY = $Anchor.Bottom + $Gap }
+  $maximumX = [Math]::Max($Bounds.Left, $Bounds.Right - $PopupSize.Width)
+  $maximumY = [Math]::Max($Bounds.Top, $Bounds.Bottom - $PopupSize.Height)
+  $desiredX = [Math]::Max($Bounds.Left, [Math]::Min($desiredX, $maximumX))
+  $desiredY = [Math]::Max($Bounds.Top, [Math]::Min($desiredY, $maximumY))
+  return [Drawing.Point]::new([int]$desiredX, [int]$desiredY)
+}
+
+function Update-AuraUiLauncherTipPosition {
+  if ($null -eq $script:LauncherTip -or $script:LauncherTip.IsDisposed) { return }
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  try {
+    $metrics = Get-AuraUiLauncherMetrics
+    $gap = ConvertTo-AuraUiLauncherPixels -Logical 6
+    $anchor = [Drawing.Rectangle]::new(
+      $script:Launcher.Location.X + $metrics.Halo,
+      $script:Launcher.Location.Y + $metrics.Halo,
+      $metrics.Compact,
+      $metrics.Compact)
+    $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
+    $bottomRight = $script:Form.PointToScreen(
+      [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
+    $bounds = [Drawing.Rectangle]::FromLTRB(
+      $topLeft.X, $topLeft.Y, $bottomRight.X, $bottomRight.Y)
+    $script:LauncherTip.Location = Get-AuraUiLauncherPopupLocation `
+      -Anchor $anchor -PopupSize $script:LauncherTip.Size -Bounds $bounds -Gap $gap
+  } catch {}
+}
+
 function Show-AuraUiLauncherTip {
   if ($script:LauncherTipDisabled -or $script:LauncherTipVisible -or $script:LauncherDragging) { return }
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible) { return }
@@ -2889,22 +2933,10 @@ function Show-AuraUiLauncherTip {
       $script:LauncherTip.Text = 'Claude Aura Studio tip'
       $script:LauncherTip.Owner = $script:Form
     }
-    $metrics = Get-AuraUiLauncherMetrics
-    $scale = Get-AuraUiLauncherScale
     $script:LauncherTip.ClientSize = [Drawing.Size]::new($bitmap.Width, $bitmap.Height)
-    # Above the circle, right-aligned to it, clamped inside the Aura window.
-    $circleRight = $script:Launcher.Location.X + $metrics.Halo + $metrics.Compact
-    $desired = [Drawing.Point]::new(
-      $circleRight - $bitmap.Width,
-      $script:Launcher.Location.Y + $metrics.Halo - $bitmap.Height - [int][Math]::Round(6 * $scale))
-    try {
-      $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
-      if ($desired.Y -lt $topLeft.Y) {
-        $desired.Y = $script:Launcher.Location.Y + $metrics.Halo + $metrics.Compact + [int][Math]::Round(6 * $scale)
-      }
-      if ($desired.X -lt $topLeft.X) { $desired.X = $topLeft.X }
-    } catch {}
-    $script:LauncherTip.Location = $desired
+    # Use one live attachment path for the first frame and every later launcher
+    # relocation so the caption cannot be left behind by window or DPI changes.
+    Update-AuraUiLauncherTipPosition
     [AuraLayered]::SetTipStyles($script:LauncherTip.Handle)
     # The classic launcher has no running frame animation, so present its tip
     # fully opaque instead of leaving the initial alpha-zero frame invisible.
@@ -2950,17 +2982,18 @@ function Update-AuraUiLauncherHintPosition {
   try {
     $metrics = Get-AuraUiLauncherMetrics
     $gap = ConvertTo-AuraUiLauncherPixels -Logical 12
-    $desired = [Drawing.Point]::new(
-      $script:Launcher.Location.X + $metrics.Halo + $metrics.Compact - $script:LauncherHint.Width,
-      $script:Launcher.Location.Y + $metrics.Halo - $script:LauncherHint.Height - $gap)
+    $anchor = [Drawing.Rectangle]::new(
+      $script:Launcher.Location.X + $metrics.Halo,
+      $script:Launcher.Location.Y + $metrics.Halo,
+      $metrics.Compact,
+      $metrics.Compact)
     $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
     $bottomRight = $script:Form.PointToScreen(
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
-    $maximumX = [Math]::Max($topLeft.X, $bottomRight.X - $script:LauncherHint.Width)
-    $maximumY = [Math]::Max($topLeft.Y, $bottomRight.Y - $script:LauncherHint.Height)
-    $desired.X = [Math]::Max($topLeft.X, [Math]::Min($desired.X, $maximumX))
-    $desired.Y = [Math]::Max($topLeft.Y, [Math]::Min($desired.Y, $maximumY))
-    $script:LauncherHint.Location = $desired
+    $bounds = [Drawing.Rectangle]::FromLTRB(
+      $topLeft.X, $topLeft.Y, $bottomRight.X, $bottomRight.Y)
+    $script:LauncherHint.Location = Get-AuraUiLauncherPopupLocation `
+      -Anchor $anchor -PopupSize $script:LauncherHint.Size -Bounds $bounds -Gap $gap
   } catch {}
 }
 
@@ -6419,7 +6452,10 @@ public static class AuraLayered {
   })
 
   Read-AuraUiLauncherPosition
-  $script:Launcher.add_LocationChanged({ Update-AuraUiLauncherHintPosition })
+  $script:Launcher.add_LocationChanged({
+    Update-AuraUiLauncherHintPosition
+    Update-AuraUiLauncherTipPosition
+  })
   $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_Shown({ Update-AuraUiLauncherPosition })
