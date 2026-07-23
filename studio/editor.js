@@ -32,6 +32,7 @@
       appIdentity: "App identity",
       appIdentityHelp: "Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.",
       appIdentityPreview: "App identity preview",
+      selectAppIdentityPreview: "Select app identity",
       replaceAppMark: "Replace mark",
       launcherSurface: "Mark background",
       launcherSurfaceHover: "Hover background",
@@ -287,6 +288,12 @@
       branchInterface: "Interface",
       branchBackground: "Background",
       branchWidgets: "Widgets",
+      branchInterfaceDetail: "Surfaces & layout",
+      branchBackgroundDetail: "Canvas & images",
+      branchWidgetsDetail: "Aura controls",
+      branchInterfaceHelp: "Interface tool: select interface regions; images stay click-through.",
+      branchBackgroundHelp: "Background tool: select the theme canvas or images; interface regions stay click-through.",
+      branchWidgetsHelp: "Widgets tool: select Aura-owned controls in their local previews.",
       targetPicker: "Target",
       editingContext: "Editing",
       appliesToContext: "Applies to",
@@ -365,6 +372,7 @@
       appIdentity: "应用标识",
       appIdentityHelp: "更换 Aura、Studio、启动器、任务栏和系统托盘使用的标识图，或调整周边控件的样式。请选择小于 400 KB、96 × 96 px 的静态透明 PNG。",
       appIdentityPreview: "应用标识预览",
+      selectAppIdentityPreview: "选择应用标识",
       replaceAppMark: "更换标识图",
       launcherSurface: "标识背景",
       launcherSurfaceHover: "悬停背景",
@@ -620,6 +628,12 @@
       branchInterface: "界面",
       branchBackground: "背景",
       branchWidgets: "小组件",
+      branchInterfaceDetail: "外观与布局",
+      branchBackgroundDetail: "画布与图片",
+      branchWidgetsDetail: "Aura 控件",
+      branchInterfaceHelp: "界面工具：选择界面区域；图片不会拦截点击。",
+      branchBackgroundHelp: "背景工具：选择主题画布或图片；界面区域不会拦截点击。",
+      branchWidgetsHelp: "小组件工具：在专用预览中选择 Aura 控件。",
       targetPicker: "编辑对象",
       editingContext: "正在编辑",
       appliesToContext: "作用范围",
@@ -698,6 +712,7 @@
       appIdentity: "App 識別",
       appIdentityHelp: "更換 Aura、Studio、啟動器、工作列與系統匣使用的識別圖，或調整周邊控制項的樣式。請選擇小於 400 KB、96 × 96 px 的靜態透明 PNG。",
       appIdentityPreview: "App 識別預覽",
+      selectAppIdentityPreview: "選取 App 識別",
       replaceAppMark: "更換識別圖",
       launcherSurface: "識別背景",
       launcherSurfaceHover: "游標移入背景",
@@ -953,6 +968,12 @@
       branchInterface: "介面",
       branchBackground: "背景",
       branchWidgets: "小工具",
+      branchInterfaceDetail: "外觀與版面",
+      branchBackgroundDetail: "畫布與圖片",
+      branchWidgetsDetail: "Aura 控制項",
+      branchInterfaceHelp: "介面工具：選取介面區域；圖片不會攔截點選。",
+      branchBackgroundHelp: "背景工具：選取主題畫布或圖片；介面區域不會攔截點選。",
+      branchWidgetsHelp: "小工具：在專用預覽中選取 Aura 控制項。",
       targetPicker: "編輯項目",
       editingContext: "正在編輯",
       appliesToContext: "套用範圍",
@@ -1594,6 +1615,7 @@
     const topmostButton = document.getElementById("stage-real-topmost");
     const metadataInputs = [...document.querySelectorAll("[data-editor-metadata]")];
     const branchTabs = [...document.querySelectorAll("[data-editor-branch-target]")];
+    const branchHelp = document.getElementById("editor-branch-help");
     const targetPicker = document.getElementById("editor-target-picker");
     const contextEditing = document.getElementById("editor-context-editing");
     const contextApplies = document.getElementById("editor-context-applies");
@@ -1602,6 +1624,7 @@
     const contextFrameRow = document.getElementById("editor-context-frame-row");
     const documentDetails = document.getElementById("editor-document-details");
     const switchSupportedPreviewButton = document.getElementById("editor-switch-supported-preview");
+    const stageRoot = document.getElementById("editor-stage");
     for (const input of metadataInputs) {
       if (input.dataset.editorMetadata === "label" && input.dataset.editorLocale !== normalizedLocale) {
         input.closest(".editor-field")?.classList.add("advanced-only");
@@ -1839,6 +1862,48 @@
     };
 
     const targetLabel = (target) => tr(CAPABILITY_TARGETS[target]?.labelKey ?? "targetPicker");
+    const branchHelpKey = (branch) => ({
+      interface: "branchInterfaceHelp",
+      background: "branchBackgroundHelp",
+      widgets: "branchWidgetsHelp",
+    })[branch] ?? "branchInterfaceHelp";
+    const stageSelectionTarget = (selection) => selection?.kind === "prompt"
+      ? "interface.new-chat-area"
+      : selection?.kind === "layer" ? "background.layer" : null;
+    const stageSelectionAllowed = (selection) => {
+      if (!selection) return true;
+      const capability = CAPABILITY_BY_ID.get(stageSelectionTarget(selection));
+      return Boolean(capability && capability.branch === inspectorBranch);
+    };
+    const setStageNodeInteractive = (node, interactive) => {
+      if (!node) return;
+      node.tabIndex = interactive ? 0 : -1;
+      node.toggleAttribute("inert", !interactive);
+      if (interactive) node.removeAttribute("aria-hidden");
+      else node.setAttribute("aria-hidden", "true");
+    };
+    const syncStageSelectionMode = () => {
+      if (branchHelp) branchHelp.textContent = tr(branchHelpKey(inspectorBranch));
+      if (!stageRoot) return;
+      stageRoot.dataset.selectionBranch = inspectorBranch;
+      const prompt = stageRoot.querySelector(".stage-prompt");
+      setStageNodeInteractive(prompt, inspectorBranch === "interface" && stageContext === "new-chat");
+      for (const item of stageRoot.querySelectorAll(".stage-layer .stage-item")) {
+        setStageNodeInteractive(item, inspectorBranch === "background");
+      }
+      const palette = stageRoot.querySelector(".stage-layers-panel");
+      if (palette) palette.hidden = inspectorBranch !== "background";
+      if (!stageSelectionAllowed(stageSelection)
+          || (stageSelection && stageSelectionTarget(stageSelection) !== inspectorTarget)) {
+        stageSelection = null;
+      }
+      if (!stageSelection) {
+        for (const chip of stageRoot.querySelectorAll(".stage-chip")) chip.dataset.active = "false";
+        for (const node of stageRoot.querySelectorAll(
+          ".stage-hud-ring, .stage-edge, .stage-corner, .stage-opacity",
+        )) node.hidden = true;
+      }
+    };
     const syncTargetPicker = () => {
       const entries = EDITOR_CAPABILITY_REGISTRY.filter((entry) => entry.branch === inspectorBranch);
       targetPicker.replaceChildren(...entries.map((entry) => {
@@ -1893,13 +1958,18 @@
       targetByBranch[inspectorBranch] = target;
       editor.dataset.inspectorBranch = inspectorBranch;
       editor.dataset.inspectorTarget = inspectorTarget;
+      launcherPreview?.setAttribute(
+        "aria-pressed", String(inspectorTarget === "widgets.app-identity"),
+      );
       for (const tab of branchTabs) {
         const selected = tab.dataset.editorBranchTarget === inspectorBranch;
         tab.setAttribute("aria-pressed", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
         if (selected && focusBranch) tab.focus();
       }
       syncTargetPicker();
       refreshInspectorContext();
+      syncStageSelectionMode();
       if (reveal) requestAnimationFrame(() => {
         const firstSection = editor.querySelector(
           `[data-editor-targets~="${CSS.escape(target)}"]:not([hidden])`,
@@ -1930,6 +2000,18 @@
       reflectStageSelectionForTarget(target);
       renderStage();
     }));
+    branchTabs.forEach((tab, index) => tab.addEventListener("keydown", (event) => {
+      const previous = event.key === "ArrowLeft" || event.key === "ArrowUp";
+      const next = event.key === "ArrowRight" || event.key === "ArrowDown";
+      const boundary = event.key === "Home" || event.key === "End";
+      if (!previous && !next && !boundary) return;
+      event.preventDefault();
+      const nextIndex = event.key === "Home" ? 0
+        : event.key === "End" ? branchTabs.length - 1
+          : (index + (previous ? -1 : 1) + branchTabs.length) % branchTabs.length;
+      branchTabs[nextIndex].focus();
+      branchTabs[nextIndex].click();
+    }));
     targetPicker.addEventListener("change", () => {
       const target = targetPicker.value;
       if (!CAPABILITY_BY_ID.has(target)) {
@@ -1942,6 +2024,13 @@
       setInspectorTarget(target, { reveal: true });
       reflectStageSelectionForTarget(target);
       renderStage();
+    });
+    launcherPreview?.addEventListener("click", () => {
+      if (inspectorBranch !== "widgets") return;
+      stageSelection = null;
+      setInspectorTarget("widgets.app-identity", { reveal: true });
+      syncStageHud();
+      announce(format(tr("stageSelectedAnnounce"), targetLabel("widgets.app-identity")));
     });
 
     const resetStudioViewport = (hash) => {
@@ -2048,7 +2137,6 @@
     // draft's real tokens and artwork with the renderer's framing math and
     // lets users drag or arrow-key items. Local echo is instant; commits go
     // through the same validated bridge actions, queued one at a time.
-    const stageRoot = document.getElementById("editor-stage");
     const stagePanel = stageRoot?.closest(".stage-panel");
     const editorHeader = editor.querySelector(".editor-header");
     const stageViewportInputs = [...document.querySelectorAll('input[name="stage-viewport"]')];
@@ -2443,27 +2531,13 @@
       }
       if (promptContextUnavailable) promptContextUnavailable.hidden = newChat;
       refreshInspectorContext();
+      syncStageSelectionMode();
     };
 
     const renderStageLayersPanel = () => {
       if (!state) return;
       stageLayersHead.textContent = `${tr("stageLayersPanel")} · ${state.layers.length}`;
       stageLayersList.replaceChildren();
-      if (stageContext === "new-chat") {
-        const promptRow = document.createElement("div");
-        promptRow.className = "stage-chip stage-chip-prompt";
-        promptRow.dataset.active = String(stageSelection?.kind === "prompt");
-        const promptSelect = document.createElement("button");
-        promptSelect.type = "button";
-        promptSelect.className = "stage-chip-select";
-        promptSelect.dataset.editorFocus = "stage-chip-prompt";
-        promptSelect.textContent = tr("stagePromptTag");
-        promptSelect.addEventListener("click", () => {
-          selectStageItem({ kind: "prompt" }, { reveal: false });
-        });
-        promptRow.appendChild(promptSelect);
-        stageLayersList.appendChild(promptRow);
-      }
       for (const layer of state.layers) {
         const gated = !stageLayerGate(layer);
         const chip = document.createElement("div");
@@ -2577,9 +2651,10 @@
         ? [stagePromptEl]
         : [stageStripA, stageStripB, stageComposerEl]));
       stageEmptyNote.textContent = tr("stageEmpty");
-      stageEmptyNote.hidden = seen.size > 0;
+      stageEmptyNote.hidden = inspectorBranch !== "background" || seen.size > 0;
       if (stageSelection?.kind === "layer" && !seen.has(stageSelection.id)) stageSelection = null;
       renderStageLayersPanel();
+      syncStageSelectionMode();
       if (focused && !document.activeElement?.dataset?.editorFocus) {
         stageRoot.querySelector(`[data-editor-focus="${focused}"]`)?.focus();
       }
@@ -2587,6 +2662,7 @@
     };
 
     const syncStageHud = () => {
+      if (!stageSelectionAllowed(stageSelection)) stageSelection = null;
       stagePromptEl.setAttribute("aria-pressed", String(stageSelection?.kind === "prompt"));
       for (const [id, entry] of stageLayerNodes) {
         entry.item.setAttribute("aria-pressed",
@@ -2855,11 +2931,12 @@
     };
 
     const selectStageItem = (selection, { reveal = false } = {}) => {
+      if (!stageSelectionAllowed(selection)) return false;
       stageSelection = selection;
       for (const chip of stageLayersPanel.querySelectorAll(".stage-chip")) {
-        chip.dataset.active = chip.classList.contains("stage-chip-prompt")
-          ? String(selection?.kind === "prompt")
-          : String(selection?.kind === "layer" && chip.dataset.layerId === selection.id);
+        chip.dataset.active = String(
+          selection?.kind === "layer" && chip.dataset.layerId === selection.id,
+        );
       }
       if (selection?.kind === "layer") {
         const layer = layerForId(selection.id);
@@ -2877,11 +2954,25 @@
         announce(format(tr("stageSelectedAnnounce"), tr("stagePromptTag")));
       }
       syncStageHud();
+      return true;
     };
 
-    const stageSelectionFromNode = (node) => node.dataset.stageItem === "prompt"
-      ? { kind: "prompt" }
-      : { kind: "layer", id: node.dataset.stageItem };
+    const stageSelectionFromNode = (node) => {
+      const selection = node.dataset.stageItem === "prompt"
+        ? { kind: "prompt" }
+        : { kind: "layer", id: node.dataset.stageItem };
+      return stageSelectionAllowed(selection) ? selection : null;
+    };
+    const selectStageBranchSurface = () => {
+      const target = inspectorBranch === "interface" ? "interface.theme"
+        : inspectorBranch === "background" ? "background.canvas"
+          : "widgets.app-identity";
+      stageSelection = null;
+      setInspectorTarget(target, { reveal: true });
+      syncStageHud();
+      renderStage();
+      announce(format(tr("stageSelectedAnnounce"), targetLabel(target)));
+    };
 
     const stageInputFor = (path) => {
       const cached = stageInputCache.get(path);
@@ -2918,18 +3009,20 @@
       if (event.target.closest?.(".stage-layers-panel, .stage-opacity")) return;
       const handle = event.target.closest?.("[data-stage-handle]");
       const itemNode = event.target.closest?.("[data-stage-item]");
-      if (!handle && !itemNode) {
-        selectStageItem(null);
+      const directSelection = itemNode ? stageSelectionFromNode(itemNode) : null;
+      if (!handle && !directSelection) {
+        event.preventDefault();
+        selectStageBranchSurface();
         return;
       }
       event.preventDefault();
       let selection = stageSelection;
-      if (itemNode) {
-        selection = stageSelectionFromNode(itemNode);
+      if (directSelection) {
+        selection = directSelection;
         selectStageItem(selection, { reveal: true });
         itemNode.focus?.();
       }
-      if (!selection) return;
+      if (!selection || !stageSelectionAllowed(selection)) return;
       if (selection.kind === "prompt") seedNativePromptOverrides();
       const [logicalWidth, logicalHeight] = stageLogicalSize();
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
@@ -3049,7 +3142,7 @@
       const itemNode = event.target.closest?.("[data-stage-item]");
       if (!handle && !itemNode) return;
       const selection = itemNode ? stageSelectionFromNode(itemNode) : stageSelection;
-      if (!selection) return;
+      if (!selection || !stageSelectionAllowed(selection)) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         selectStageItem(selection, { reveal: true });

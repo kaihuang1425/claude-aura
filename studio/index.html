@@ -186,7 +186,7 @@
             <input type="checkbox" id="stage-backdrop" checked disabled hidden aria-hidden="true">
           </div>
           <p id="editor-mode-help" class="sr-only" data-editor-i18n="modeHelp">Light and Dark can use different colors and images.</p>
-          <div id="editor-stage" class="editor-stage" role="group" aria-describedby="stage-privacy" data-editor-i18n-aria-label="stageTitle" aria-label="Live framing stage"></div>
+          <div id="editor-stage" class="editor-stage" role="group" aria-describedby="stage-privacy editor-branch-help" data-editor-i18n-aria-label="stageTitle" aria-label="Live framing stage"></div>
           <div class="stage-capture-actions stage-canvas-actions">
             <button type="button" id="stage-mirror-refresh" class="ghost-button" data-editor-i18n="mirrorRefresh">Refresh capture</button>
             <button type="button" id="stage-open-aura" class="ghost-button" data-editor-i18n="openAuraWindow">Review in Aura ↗</button>
@@ -234,11 +234,45 @@
           <label><input type="radio" name="editor-level" value="simple" checked> <span data-editor-i18n="levelSimple">Quick customize</span></label>
           <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">Advanced</span></label>
         </fieldset>
-        <div class="editor-inspector-nav" role="group" data-editor-i18n-aria-label="inspectorSections" aria-label="Control sections">
-          <button type="button" class="editor-inspector-tab" data-editor-branch-target="interface" aria-pressed="true" data-editor-i18n="branchInterface">Interface</button>
-          <button type="button" class="editor-inspector-tab" data-editor-branch-target="background" aria-pressed="false" data-editor-i18n="branchBackground">Background</button>
-          <button type="button" class="editor-inspector-tab" data-editor-branch-target="widgets" aria-pressed="false" data-editor-i18n="branchWidgets">Widgets</button>
+        <div class="editor-inspector-nav" role="toolbar" aria-orientation="horizontal" data-editor-i18n-aria-label="inspectorSections" aria-label="Theme editor tools">
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="interface" aria-pressed="true">
+            <span class="editor-branch-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M3.75 5.25h16.5v13.5H3.75zM3.75 9h16.5M8 9v9.75"></path>
+              </svg>
+            </span>
+            <span class="editor-branch-copy">
+              <strong data-editor-i18n="branchInterface">Interface</strong>
+              <small data-editor-i18n="branchInterfaceDetail">Surfaces &amp; layout</small>
+            </span>
+          </button>
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="background" aria-pressed="false" tabindex="-1">
+            <span class="editor-branch-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M6 3.75h14.25V18H6zM3.75 7v13.25H17M8.75 14.75l3-3 2.1 2.1 2.4-2.35 2 2"></path>
+              </svg>
+            </span>
+            <span class="editor-branch-copy">
+              <strong data-editor-i18n="branchBackground">Background</strong>
+              <small data-editor-i18n="branchBackgroundDetail">Canvas &amp; images</small>
+            </span>
+          </button>
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="widgets" aria-pressed="false" tabindex="-1">
+            <span class="editor-branch-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <rect x="4" y="4" width="6" height="6" rx="1"></rect>
+                <rect x="14" y="4" width="6" height="6" rx="3"></rect>
+                <rect x="4" y="14" width="6" height="6" rx="3"></rect>
+                <path d="M14 14h6v6h-6z"></path>
+              </svg>
+            </span>
+            <span class="editor-branch-copy">
+              <strong data-editor-i18n="branchWidgets">Widgets</strong>
+              <small data-editor-i18n="branchWidgetsDetail">Aura controls</small>
+            </span>
+          </button>
         </div>
+        <p id="editor-branch-help" class="editor-branch-help" aria-live="polite"></p>
         <label class="editor-target-picker" for="editor-target-picker">
           <span data-editor-i18n="targetPicker">Target</span>
           <select id="editor-target-picker"></select>
@@ -334,11 +368,11 @@
       <section class="editor-section" data-editor-branch="widgets" data-editor-targets="widgets.app-identity" aria-labelledby="editor-app-identity-title">
         <h2 id="editor-app-identity-title" data-editor-i18n="appIdentity">App identity</h2>
         <p class="help" data-editor-i18n="appIdentityHelp">Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.</p>
-        <div id="editor-launcher-preview" class="editor-launcher-preview" data-editor-i18n-aria-label="appIdentityPreview" aria-label="App identity preview">
+        <button type="button" id="editor-launcher-preview" class="editor-launcher-preview" data-editor-i18n-aria-label="selectAppIdentityPreview" aria-label="Select app identity">
           <img id="editor-launcher-mark" alt="" draggable="false">
           <span data-editor-i18n="railSubtitle">Studio</span>
           <i aria-hidden="true"></i>
-        </div>
+        </button>
         <div class="editor-launcher-actions">
           <button type="button" id="editor-launcher-replace" class="ghost-button" data-editor-i18n="replaceAppMark">Replace mark</button>
         </div>

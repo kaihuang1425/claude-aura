@@ -668,8 +668,26 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && !studioEditor.includes("setInspectorPanel"),
     "The superseded Style, Images, Placement, and Checks panel model must be removed");
   assert.match(studioHtml,
-    /data-editor-branch-target="interface"[\s\S]{0,260}?data-editor-branch-target="background"[\s\S]{0,260}?data-editor-branch-target="widgets"/,
+    /data-editor-branch-target="interface"[\s\S]{0,1200}?data-editor-branch-target="background"[\s\S]{0,1200}?data-editor-branch-target="widgets"/,
     "The three object-family branches must stay in their frozen order");
+  assert.match(studioHtml,
+    /class="editor-inspector-nav" role="toolbar" aria-orientation="horizontal"/,
+    "The three branches must behave as one compact editing-tool toolbar");
+  assert.equal((studioHtml.match(/class="editor-branch-glyph"/g) ?? []).length, 3,
+    "Each branch tool must have its own recognizable object-family glyph");
+  for (const value of [
+    'branchInterfaceDetail: "Surfaces & layout"',
+    'branchBackgroundDetail: "Canvas & images"',
+    'branchWidgetsDetail: "Aura controls"',
+    'branchInterfaceDetail: "外观与布局"',
+    'branchBackgroundDetail: "画布与图片"',
+    'branchWidgetsDetail: "Aura 控件"',
+    'branchInterfaceDetail: "外觀與版面"',
+    'branchBackgroundDetail: "畫布與圖片"',
+    'branchWidgetsDetail: "Aura 控制項"',
+  ]) assert(studioEditor.includes(value), `Missing native branch-tool copy: ${value}`);
+  assert.match(studioHtml, /id="editor-branch-help"[^>]+aria-live="polite"/,
+    "The active selection tool must explain what the canvas can select");
   assert(!/class="editor-inspector-tab[^"]*advanced-only[^"]*"[^>]+data-editor-branch-target/.test(studioHtml),
     "No content-family branch may disappear in Quick customize");
   assert.match(studioHtml,
@@ -689,6 +707,16 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     studioHtml.indexOf('data-editor-branch="widgets"'),
     studioHtml.indexOf('data-editor-branch="background"'),
   );
+  assert.match(widgetsMarkup,
+    /<button type="button" id="editor-launcher-preview"[^>]+data-editor-i18n-aria-label="selectAppIdentityPreview"/,
+    "The host-only App identity target must be keyboard-selectable in its truthful local preview");
+  assert(studioEditor.includes('selectAppIdentityPreview: "Select app identity"')
+      && studioEditor.includes('selectAppIdentityPreview: "选择应用标识"')
+      && studioEditor.includes('selectAppIdentityPreview: "選取 App 識別"'),
+  "The local Widget preview selection action must have independent native copy");
+  assert.match(studioEditor,
+    /launcherPreview\?\.addEventListener\("click"[\s\S]{0,180}?inspectorBranch !== "widgets"[\s\S]{0,220}?setInspectorTarget\("widgets\.app-identity"/,
+    "The App identity preview must never route selection outside Widgets");
   assert(!/(?:coming soon|phase 2|quick.?prompt|prompt card)/i.test(widgetsMarkup),
     "Widgets must not advertise unavailable Phase 2 controls");
   assert.match(studioHtml,
@@ -717,6 +745,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Branch changes must restore the remembered target");
   assert(!/(?:stageContext|stageViewport|selectedMode|backgroundScope)\s*=/.test(branchNavigationBlock),
     "Branch changes must preserve preview context, responsive scope, and appearance");
+  assert.match(studioEditor,
+    /branchTabs\.forEach\(\(tab,\s*index\)\s*=>\s*tab\.addEventListener\("keydown"[\s\S]{0,500}?(?:ArrowLeft|ArrowRight)[\s\S]{0,500}?branchTabs\[nextIndex\]\.click\(\)/,
+    "The branch toolbar must support roving arrow-key tool selection");
   assert.match(studioHtml, /class="editor-field advanced-only" for="editor-font-display"/,
     "Display typography must remain an Advanced control");
   assert.match(studioHtml, /class="editor-field advanced-only" for="editor-blur"/,
@@ -1624,7 +1655,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(privacyNotice && !privacyNotice.includes("advanced-only"),
     "The local-capture privacy disclosure must remain visible in Quick customize");
   assert(privacyNotice.includes('id="stage-privacy"')
-      && /id="editor-stage"[^>]+aria-describedby="stage-privacy"/.test(studioHtml),
+      && /id="editor-stage"[^>]+aria-describedby="[^"]*\bstage-privacy\b[^"]*"/.test(studioHtml),
     "The direct-manipulation canvas must be explicitly associated with its privacy disclosure");
   assert(studioHtml.indexOf(privacyNotice) < studioHtml.indexOf('id="editor-stage"'),
     "The local-capture privacy disclosure must precede the primary live canvas");
@@ -1948,6 +1979,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Branch navigation must not use a second hard-coded sticky offset that can cover controls");
   assert.match(inspectorNavRule, /repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
     "Both editor levels must devote one row to the same three branches");
+  assert.match(studioEditorCss,
+    /--branch-interface:\s*#[0-9a-f]{6}[\s\S]{0,120}?--branch-background:\s*#[0-9a-f]{6}[\s\S]{0,120}?--branch-widgets:\s*#[0-9a-f]{6}/i,
+    "The three tools must keep stable, distinct orientation cues across Studio themes");
+  assert.match(studioEditorCss,
+    /\.editor-inspector-tab\[aria-pressed="true"\]\s+\.editor-branch-glyph\s*\{[^}]*background:\s*var\(--branch-tool\)/,
+    "The active tool must have more than a thin text-tab underline");
   assert(!/data-level="advanced"[^{}]*\.editor-inspector-nav/.test(studioEditorCss),
     "Advanced must not replace or reorder the shared three-branch architecture");
   const inspectorHeadRule = studioEditorCss.match(/\.editor-inspector-head\s*\{([^}]*)\}/)?.[1] ?? "";
@@ -1960,6 +1997,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Compact token cards must place labels above their picker and value instead of overflowing fixed columns");
   const stageSelectionBlock = studioEditor.match(
     /const selectStageItem\s*=\s*\([\s\S]*?\n\s*};/)?.[0] ?? "";
+  assert.match(stageSelectionBlock, /if \(!stageSelectionAllowed\(selection\)\) return false;/,
+    "A canvas object from another branch must never retarget the active tool");
   assert.match(stageSelectionBlock,
     /selection\?\.kind === "layer"[\s\S]{0,220}?selectedLayerId = selection\.id[\s\S]{0,500}?setInspectorTarget\("background\.layer"\)/,
     "Selecting artwork must route to Background while preserving its opaque layer ID");
@@ -1977,10 +2016,34 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   const stagePointerBlock = studioEditor.match(
     /stageRoot\.addEventListener\("pointerdown"[\s\S]*?\n\s*}\);/)?.[0] ?? "";
   assert.match(stagePointerBlock,
-    /let selection = stageSelection[\s\S]{0,120}?if \(itemNode\)[\s\S]{0,120}?stageSelectionFromNode\(itemNode\)/,
+    /const directSelection = itemNode \? stageSelectionFromNode\(itemNode\) : null[\s\S]{0,240}?let selection = stageSelection[\s\S]{0,120}?if \(directSelection\)/,
     "Dragging the selection ring must preserve the layer chosen in the palette while direct image clicks may retarget it");
+  assert.match(stagePointerBlock,
+    /if \(!handle && !directSelection\)[\s\S]{0,120}?selectStageBranchSurface\(\)/,
+    "Blank or click-through canvas clicks must select only the active branch's overall target");
   assert.match(stagePointerBlock, /!state \|\| isBlockingAction\(\)/,
     "A structural (index-changing) response must settle before another pointer drag can resolve the selected layer ID to an index; background value patches must not block it");
+  const stageSelectionModeBlock = studioEditor.match(
+    /const syncStageSelectionMode\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
+  assert.match(stageSelectionModeBlock,
+    /dataset\.selectionBranch\s*=\s*inspectorBranch[\s\S]{0,240}?inspectorBranch === "interface"[\s\S]{0,260}?inspectorBranch === "background"/,
+    "The active branch must control both prompt and artwork keyboard hit-testing");
+  assert.match(stageSelectionModeBlock,
+    /palette\.hidden\s*=\s*inspectorBranch !== "background"/,
+    "The image palette must not offer cross-branch selection while Interface or Widgets is active");
+  const stageNodeInteractiveBlock = studioEditor.match(
+    /const setStageNodeInteractive\s*=\s*\([\s\S]*?\n\s*};/)?.[0] ?? "";
+  assert.match(stageNodeInteractiveBlock,
+    /tabIndex\s*=\s*interactive \? 0 : -1[\s\S]{0,120}?toggleAttribute\("inert",\s*!interactive\)[\s\S]{0,180}?aria-hidden/,
+    "Non-matching canvas objects must leave both the pointer path and keyboard/accessibility tree");
+  assert.match(studioEditor,
+    /const selectStageBranchSurface[\s\S]{0,280}?inspectorBranch === "interface" \? "interface\.theme"[\s\S]{0,160}?inspectorBranch === "background" \? "background\.canvas"[\s\S]{0,120}?"widgets\.app-identity"/,
+    "Blank-canvas selection must stay inside the active branch");
+  assert(!studioEditor.includes("stage-chip-prompt"),
+    "The Background image palette must not expose an Interface target");
+  assert.match(studioEditorCss,
+    /\.editor-stage\[data-selection-branch="interface"\]\s+\.stage-layer\s+\.stage-item,[\s\S]{0,320}?\.editor-stage\[data-selection-branch="background"\]\s+\.stage-prompt[\s\S]{0,180}?\{[^}]*pointer-events:\s*none/,
+    "Non-matching visible objects must remain click-through for the active selection tool");
   const stageKeyboardBlock = studioEditor.match(
     /stageRoot\.addEventListener\("keydown"[\s\S]*?\n\s*}\);/)?.[0] ?? "";
   assert.match(stageKeyboardBlock, /!state \|\| isBlockingAction\(\)/,
