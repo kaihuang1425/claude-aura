@@ -48,9 +48,17 @@ test("config writes are atomic, aliases migrate, and theme choice persists", asy
     const initialLabel = (await listThemes({ locale: "zh-CN" }))[0].label;
     const initialPayload = run(process.execPath, ["scripts/theme-cli.mjs", "init", "--config", configPath,
       "--locale", "zh-CN", "--payload"]);
-    assert(initialPayload.includes(`"label":${JSON.stringify(initialLabel)}`));
+    const initialRuntimeSettings = readPayloadSettings(initialPayload);
+    assert.equal(initialRuntimeSettings.theme, "default");
+    assert(!Object.hasOwn(initialRuntimeSettings, "label"),
+      "The renderer payload retained an unused localized diagnostic label");
     new Function(initialPayload);
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "default");
+    const initialShow = JSON.parse(run(process.execPath, [
+      "scripts/theme-cli.mjs", "show", "--config", configPath, "--locale", "zh-CN", "--json",
+    ]));
+    assert.equal(initialShow.theme.label, initialLabel,
+      "Removing the runtime diagnostic label changed localized CLI metadata");
     run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath, "--theme", "study-library"]);
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "study-library");
     run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath, "--appearance", "dark"]);
@@ -95,9 +103,13 @@ test("config writes are atomic, aliases migrate, and theme choice persists", asy
     const localizedLabel = (await listThemes({ locale: "zh-TW" })).find((theme) => theme.name === "korean-idol").label;
     const savedPayload = run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
       "--theme", "korean-idol", "--locale", "zh-TW", "--payload"]);
-    assert(savedPayload.includes(`"label":${JSON.stringify(localizedLabel)}`));
+    assert(!Object.hasOwn(readPayloadSettings(savedPayload), "label"));
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "korean-idol");
     new Function(savedPayload);
+    const localizedShow = JSON.parse(run(process.execPath, [
+      "scripts/theme-cli.mjs", "show", "--config", configPath, "--locale", "zh-TW", "--json",
+    ]));
+    assert.equal(localizedShow.theme.label, localizedLabel);
 
     await writeConfig(configPath, {
       ...DEFAULT_CONFIG,

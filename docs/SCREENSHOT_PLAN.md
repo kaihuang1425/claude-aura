@@ -127,8 +127,8 @@ until it is observed in the actual Aura application.
 In the installed Aura application, cycle all eight built-in themes and inspect
 the real top-left navigation in both Light and Dark. At an expanded desktop
 sidebar, confirm each complete horizontal `Claude` lockup is readable,
-theme-specific, and uncropped. Preserve the defining details: Default's
-aubergine/coral orbital sparkle; Japanese Film Editorial's cinnabar
+theme-specific, and uncropped. Preserve the defining details: Default's cool
+indigo-violet orbital sparkle and cyan orbit; Japanese Film Editorial's cinnabar
 chrysanthemum and serif; Korean Prestige's antique-gold rosette and tailored
 serif; Cartoon Studio's coral radial, rounded lettering, and teal accent; Anime
 Twilight's lavender radial and dusk serif; Study Library's literary book/nib
@@ -148,6 +148,32 @@ pairs plus representative collapsed/native and failure fallback, including at
 least one exact-source lockup and one newly authored lockup. Generated PNGs,
 asset crops, or an offline composite cannot satisfy this check; the all-theme
 wordmark review remains open at HUMAN CHECKPOINT D.
+
+### Permanent themed loading covers
+
+In the installed Aura application, capture the host-owned loading cover for all
+eight permanent themes in Light and Dark during a real cold start or reload:
+16 whole-window states. Each cover must use the theme's launcher mark, effective
+`studioStyle` palette, localized status, and exact quiet cue from
+`RECIPES.md`; it must read as the selected theme before the live document is
+available without imitating Claude's interface.
+
+For representative themes, retain the same outer window through the transition
+from cover to usable live `claude.ai`. Confirm the cover disappears on the
+current DOM/navigation-ready signal even when theme injection is deliberately
+made to fail. Exercise a genuine navigation/process failure and Retry, keeping
+the error text, visible focus, keyboard activation, and successful subsequent
+navigation. Also record Original look using Default, an untouched duplicate
+inheriting its `sourceRecipe`, a user theme without a source recipe using
+Default, a missing mark fallback, Windows high contrast with system colours and
+no decoration, and reduced animation with a visible stationary progress state.
+
+A still image cannot prove reveal timing, retry behavior, animation preference,
+or asset fallback, so pair the captures with the mechanical lifecycle and
+accessibility results, including the fail-open reveal invariant. No offline
+redraw, reconstructed Claude page, Studio
+preview, contact sheet, or image golden can replace these actual Aura states.
+This loading-cover cycle remains part of HUMAN CHECKPOINT D.
 
 ### Live sidebar and composer baseline
 
@@ -488,9 +514,9 @@ Aura evidence is required; a Studio-only widget preview is insufficient.
 
 ### Phase 2 unified editor and responsive surfaces (HUMAN CHECKPOINT F)
 
-This covers WO-20, WO-25, WO-26, and WO-22 after their mechanical gates pass.
-It does not authorize them before WO-16 and does not complete Checkpoint F
-before package work is ready.
+This covers WO-20, WO-25, WO-26, WO-28, and WO-22 after their mechanical gates
+pass. It does not authorize them before WO-16 and does not complete Checkpoint
+F before package work is ready.
 
 For WO-20, start **Edit on window** from Studio and select representative
 registered Interface, Background, and Widgets targets in the actual Aura page.
@@ -534,14 +560,25 @@ and interaction values never interpolate, incompatible endpoints stay `step`
 with a named reason, and navigation/resizing leaves no cross-fade, duplicate,
 or ghosted surface.
 
-For WO-22, export the latest schema-v5 temporary theme and import it into a
+For WO-28, select **Widgets → Loading screen** and customize one temporary
+theme from its inherited permanent profile. Exercise Quick and Advanced,
+Light/Dark, Reset-to-inherited, one optional artwork, one custom mark, progress
+style/motion, Undo/Redo, invalid last-valid fallback, save, restart, and
+Original look. Use **Review in Aura** only after the live page is ready and
+confirm visible Close, keyboard Escape, the eight-second timeout, and immediate
+cleanup on navigation and Studio close. Then record actual cold-start, reload,
+failure, and Retry states in Light/Dark. Confirm high contrast removes custom
+media, reduced animation keeps stationary progress, and injection or asset
+failure never delays revealing usable live `claude.ai`.
+
+For WO-22, export the latest schema-v6 temporary theme and import it into a
 clean profile. Confirm its content-addressed sidebar mark, Interface overrides,
-bounded filters, responsive mode/endpoints, portable greeting style, and
-Instant prompts round-trip byte- and value-correctly. Confirm personal greeting
-names, phrases, shuffle state, wallpaper, launcher position, and every other
-host-owned preference are absent. Tampered checksums, paths, unknown manifest
-versions, unsupported entries, and oversized packages must fail with the named
-reason and leave the installed theme unchanged.
+bounded filters, responsive mode/endpoints, portable greeting style, Instant
+prompts, and loading-screen data/assets round-trip byte- and value-correctly.
+Confirm personal greeting names, phrases, shuffle state, wallpaper, launcher
+position, and every other host-owned preference are absent. Tampered checksums,
+paths, unknown manifest versions, unsupported entries, and oversized packages
+must fail with the named reason and leave the installed theme unchanged.
 
 ### Phase 2 new-chat greeting personalization (HUMAN CHECKPOINT F)
 

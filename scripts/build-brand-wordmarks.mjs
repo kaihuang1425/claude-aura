@@ -31,7 +31,7 @@ const OUTPUT_ROOT = path.join(PROJECT_ROOT, "assets", "theme-art");
 
 const THEMES = Object.freeze([...FROZEN_BUILTIN_THEME_IDS]);
 const SOURCE_SHA256 = Object.freeze({
-  "default": "36a4e9eca00797f06f2c7a2d991d71e47271cf38984e89658ec95cc3263cee78",
+  "default": "96ad41314066cd33d5def46ecc2197c5ab738ddd98a3b8e1ccdd714da866c481",
   "japanese-film-editorial": "f7f5765723242c25280d5fc3e319aaade80fec83240daa031b354215f7294c7f",
   "korean-prestige": "8e926b6e9f1acae0a4db5bdca038418e6aec84e964dafa380dd96dad45d197f3",
   "cartoon-studio": "e78bd1406f7b259bc3354c8cf96b443978a0e3d87dbf30dafbeb5e5085948dc6",

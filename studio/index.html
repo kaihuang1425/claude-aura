@@ -235,11 +235,55 @@
           <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">Advanced</span></label>
         </fieldset>
         <div class="editor-inspector-nav" role="group" data-editor-i18n-aria-label="inspectorSections" aria-label="Control sections">
-          <button type="button" class="editor-inspector-tab" data-editor-panel-target="design" aria-pressed="true" data-editor-i18n="panelDesign">Style</button>
-          <button type="button" class="editor-inspector-tab" data-editor-panel-target="artwork" aria-pressed="false" data-editor-i18n="panelArtwork">Images</button>
-          <button type="button" class="editor-inspector-tab advanced-only" data-editor-panel-target="layout" aria-pressed="false" data-editor-i18n="panelLayout">Placement</button>
-          <button type="button" class="editor-inspector-tab advanced-only" data-editor-panel-target="checks" aria-pressed="false" data-editor-i18n="panelChecks">Checks</button>
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="interface" aria-pressed="true" data-editor-i18n="branchInterface">Interface</button>
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="background" aria-pressed="false" data-editor-i18n="branchBackground">Background</button>
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="widgets" aria-pressed="false" data-editor-i18n="branchWidgets">Widgets</button>
         </div>
+        <label class="editor-target-picker" for="editor-target-picker">
+          <span data-editor-i18n="targetPicker">Target</span>
+          <select id="editor-target-picker"></select>
+        </label>
+        <div class="editor-context-strip" aria-live="polite">
+          <span><b data-editor-i18n="editingContext">Editing</b><output id="editor-context-editing"></output></span>
+          <span><b data-editor-i18n="appliesToContext">Applies to</b><output id="editor-context-applies"></output></span>
+          <span><b data-editor-i18n="sourceContext">Source</b><output id="editor-context-source"></output></span>
+          <span id="editor-context-frame-row"><b data-editor-i18n="editTargetContext">Edit target</b><output id="editor-context-frame"></output></span>
+        </div>
+        <p id="editor-advanced-notice" class="editor-advanced-notice" data-editor-i18n="advancedValuesNotice">This target has additional values in Advanced.</p>
+        <details id="editor-document-details" class="editor-document-details">
+          <summary data-editor-i18n="documentDetails">Document details</summary>
+          <div class="editor-document-details-body">
+            <p class="help" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
+            <div class="editor-control-grid editor-metadata-grid">
+              <label class="editor-field" for="editor-label-en">
+                <span data-editor-i18n="themeNameEn">English name</span>
+                <input id="editor-label-en" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="en" data-editor-field="metadata.labels.en">
+              </label>
+              <label class="editor-field" for="editor-label-zh-cn">
+                <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
+                <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
+              </label>
+              <label class="editor-field" for="editor-label-zh-tw">
+                <span data-editor-i18n="themeNameZhTw">Traditional Chinese (Taiwan) name</span>
+                <input id="editor-label-zh-tw" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-TW" data-editor-field="metadata.labels.zh-TW">
+              </label>
+            </div>
+            <div class="editor-control-grid editor-metadata-grid advanced-only">
+              <label class="editor-field" for="editor-description-en">
+                <span data-editor-i18n="themeDescriptionEn">English description</span>
+                <textarea id="editor-description-en" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="en" data-editor-field="metadata.descriptions.en"></textarea>
+              </label>
+              <label class="editor-field" for="editor-description-zh-cn">
+                <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
+                <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
+              </label>
+              <label class="editor-field" for="editor-description-zh-tw">
+                <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese (Taiwan) description</span>
+                <textarea id="editor-description-zh-tw" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-TW" data-editor-field="metadata.descriptions.zh-TW"></textarea>
+              </label>
+            </div>
+          </div>
+        </details>
       </div>
       <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
       <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
@@ -248,40 +292,8 @@
         <button type="button" id="editor-redo" class="ghost-button" data-editor-i18n="redo">Redo</button>
         <button type="button" id="editor-reset" class="ghost-button" data-editor-i18n="resetChanges">Reset</button>
       </div>
-      <section class="editor-section editor-identity" data-editor-panel="design" aria-labelledby="editor-identity-title">
-        <h2 id="editor-identity-title" data-editor-i18n="themeIdentity">Theme name</h2>
-        <p class="help advanced-only" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
-        <div class="editor-control-grid editor-metadata-grid">
-          <label class="editor-field" for="editor-label-en">
-            <span data-editor-i18n="themeNameEn">English name</span>
-            <input id="editor-label-en" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="en" data-editor-field="metadata.labels.en">
-          </label>
-          <label class="editor-field" for="editor-label-zh-cn">
-            <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
-            <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
-          </label>
-          <label class="editor-field" for="editor-label-zh-tw">
-            <span data-editor-i18n="themeNameZhTw">Traditional Chinese (Taiwan) name</span>
-            <input id="editor-label-zh-tw" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-TW" data-editor-field="metadata.labels.zh-TW">
-          </label>
-        </div>
-        <div class="editor-control-grid editor-metadata-grid advanced-only">
-          <label class="editor-field" for="editor-description-en">
-            <span data-editor-i18n="themeDescriptionEn">English description</span>
-            <textarea id="editor-description-en" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="en" data-editor-field="metadata.descriptions.en"></textarea>
-          </label>
-          <label class="editor-field" for="editor-description-zh-cn">
-            <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
-            <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
-          </label>
-          <label class="editor-field" for="editor-description-zh-tw">
-            <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese (Taiwan) description</span>
-            <textarea id="editor-description-zh-tw" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-TW" data-editor-field="metadata.descriptions.zh-TW"></textarea>
-          </label>
-        </div>
-      </section>
 
-      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-colors-title">
+      <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.theme" aria-labelledby="editor-colors-title">
         <h2 id="editor-colors-title" data-editor-i18n="colorsAndSurfaces">Colors</h2>
         <p class="help" data-editor-i18n="colorsHelp">Use the primary controls for a quick theme, then open a group for the supporting colors.</p>
         <div class="appearance-copy-actions advanced-only">
@@ -291,7 +303,7 @@
         <div id="editor-token-groups" class="editor-token-groups"></div>
       </section>
 
-      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-materials-title">
+      <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.theme" aria-labelledby="editor-materials-title">
         <h2 id="editor-materials-title" data-editor-i18n="typographyAndMaterials">Typography and materials</h2>
         <p class="help" data-editor-i18n="studioStyleHelp">These type, corner, blur, and shadow choices style Aura and Studio together.</p>
         <div class="editor-control-grid">
@@ -319,7 +331,7 @@
         </div>
       </section>
 
-      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-app-identity-title">
+      <section class="editor-section" data-editor-branch="widgets" data-editor-targets="widgets.app-identity" aria-labelledby="editor-app-identity-title">
         <h2 id="editor-app-identity-title" data-editor-i18n="appIdentity">App identity</h2>
         <p class="help" data-editor-i18n="appIdentityHelp">Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.</p>
         <div id="editor-launcher-preview" class="editor-launcher-preview" data-editor-i18n-aria-label="appIdentityPreview" aria-label="App identity preview">
@@ -367,7 +379,7 @@
         </div>
       </section>
 
-      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-background-title">
+      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas" aria-labelledby="editor-background-title">
         <h2 id="editor-background-title" data-editor-i18n="themeBackground">Theme background</h2>
         <fieldset class="editor-inline-fieldset">
           <legend data-editor-i18n="backgroundScope">Background scope</legend>
@@ -377,7 +389,7 @@
         <p id="background-scope-help" class="help"></p>
       </section>
 
-      <section class="editor-section" data-editor-panel="artwork" aria-labelledby="editor-layers-title">
+      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.layer" aria-labelledby="editor-layers-title">
         <div class="editor-section-head">
           <div>
             <h2 id="editor-layers-title" data-editor-i18n="artworkLayers">Images</h2>
@@ -400,7 +412,7 @@
         <div id="editor-layer-list" class="editor-layer-list"></div>
       </section>
 
-      <section class="editor-section editor-prompt-context" data-editor-panel="layout" aria-labelledby="editor-prompt-title">
+      <section class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface.new-chat-area" aria-labelledby="editor-prompt-title">
         <h2 id="editor-prompt-title" data-editor-i18n="promptPlacement">New chat area</h2>
         <p class="help" data-editor-i18n="promptPlacementHelp">Drag it in the preview or use these controls. Light and Dark share this position; Conversation composers never move.</p>
         <p id="editor-prompt-native" class="editor-inherited-note" data-editor-i18n="nativePromptHelp" hidden>Using Claude's current layout. Your first adjustment adopts the measured live size and position.</p>
@@ -429,12 +441,13 @@
         </div>
       </section>
 
-      <section class="editor-section editor-prompt-unavailable" data-editor-panel="layout" aria-labelledby="editor-conversation-layout-title" hidden>
+      <section class="editor-section editor-prompt-unavailable" data-editor-branch="interface" data-editor-targets="interface.new-chat-area" aria-labelledby="editor-conversation-layout-title" hidden>
         <h2 id="editor-conversation-layout-title" data-editor-i18n="conversationLayout">Conversation layout</h2>
         <p class="help" data-editor-i18n="conversationLayoutHelp">Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.</p>
+        <button type="button" id="editor-switch-supported-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
       </section>
 
-      <section class="editor-section editor-guide-section advanced-only" data-editor-panel="layout" aria-labelledby="asset-guide-title">
+      <section class="editor-section editor-guide-section advanced-only" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="asset-guide-title">
         <h2 id="asset-guide-title" data-editor-i18n="assetGuide">Asset and safe-zone guide</h2>
         <p class="editor-guide-notice" data-editor-i18n="guideOnlyNotice">Guide only — this is not a Claude preview. Review the saved theme in the actual Aura window.</p>
         <figure class="asset-guide" aria-describedby="asset-guide-caption">
@@ -475,7 +488,7 @@
         </div>
       </section>
 
-      <section class="editor-section editor-feedback advanced-only" data-editor-panel="checks" aria-labelledby="editor-feedback-title">
+      <section class="editor-section editor-feedback advanced-only" data-editor-global aria-labelledby="editor-feedback-title">
         <h2 id="editor-feedback-title" data-editor-i18n="validationAndBudgets">Validation and budgets</h2>
         <div id="editor-feedback" tabindex="-1"></div>
       </section>

@@ -4,7 +4,9 @@ These eight source marks were created for Claude Aura on 2026-07-22 with the
 built-in image-generation mode. Chroma-key backgrounds were removed locally;
 the transparent source PNGs were then downsampled deterministically by
 `scripts/build-launcher-assets.mjs`. Preview images named in a prompt were used
-only as palette and visual-language references.
+only as palette and visual-language references. On 2026-07-23 the Default
+source received the geometry-preserving palette revision recorded below so its
+identity matches the frozen theme's cool indigo foundation.
 
 The sources in this directory are repository-only production inputs. They are
 excluded from installers and releases. Shipping derivatives live at
@@ -21,6 +23,19 @@ Composition/framing: exactly one centered compact symbol, balanced negative spac
 Color palette: warm parchment #F4DFBB, coral #D66D4B, deep plum #2F2937, tiny warm-white highlight
 Scene/backdrop: perfectly flat solid #00ff00 chroma-key background for local background removal
 Constraints: background must be one uniform color with no shadows, gradients, texture, reflections, floor plane, or lighting variation; crisp separated edges; generous padding; do not use #00ff00 in the symbol; no text, letters, borrowed logos, watermark, border, badge container, rounded-square tile, cast shadow, mockup, 3D extrusion, or extra symbols
+```
+
+Targeted palette revision used for the final source:
+
+```text
+Use case: precise-object-edit
+Asset type: high-resolution transparent Default launcher identity source
+Input image: Image 1 is the approved Default four-point orbital Aura mark.
+Primary request: change only the warm plum, coral, and parchment palette to the frozen Default theme's cool visual language: balanced indigo-violet structure, an ice-lilac inner facet, a luminous violet core, and one clean cyan orbit.
+Composition/framing: preserve the exact silhouette, orbital path, internal facet geometry, highlight, transparent padding, and centered square composition.
+Color palette: cool ink #2A294E, indigo-violet #5C4FB8, luminous violet #7052E2, ice lilac #DDE2FF, cyan #4BC7EE, cool white #FAFCFF.
+Constraints: palette-only revision; no geometry, crop, scale, text, badge, glow, shadow, extra symbol, or background change; retain crisp antialiased transparency and 16–48 px legibility.
+Avoid: warm coral, orange, parchment, brown, magenta-pink, neon-green fringe, or resemblance to another built-in theme.
 ```
 
 ## Japanese Film Editorial

@@ -94,6 +94,40 @@ a drag after a DPI-scaled 6 px movement threshold; release before that threshold
 opens Studio, and right-click opens the host menu. Theme styling never changes
 those host-owned interaction dimensions or semantics.
 
+Host loading cover (WO-18 fixed permanent recipes; not user-schema fields):
+
+- Fill the entire Aura content area with a 32° gradient from the effective
+  `studioStyle.canvas` to `studioStyle.raised`. Use `studioStyle.text` for the
+  localized status, `studioStyle.accent` for the 320×6 progress indicator, and
+  the validated accent/text-on-accent/border combination for Retry.
+- Center the shipped 96×96 launcher mark at 76×76 above the status. Keep it
+  decorative, pointer-inert, and absent in high contrast. The progress segment
+  is 28% of its track and becomes a centered stationary segment when Windows
+  animation is disabled.
+- Draw only the row's fixed quiet cue: the primary line is
+  `studioStyle.accent / 0.13`; the secondary line is the listed colour `/ 0.16`;
+  secondary fills use the listed colour `/ 0.15`. These host-painted cues
+  contain no text, remote resource, page reconstruction, or theme-supplied
+  drawing instruction.
+
+| Theme | Secondary | Fixed loading cue |
+| --- | --- | --- |
+| default | `#4BC7EE` | centred crossing orbital ellipses |
+| japanese-film-editorial | `#B64B32` | left editorial rule, baseline, and registration dot |
+| korean-prestige | `#5A91E6` | centred tailored diamond facet |
+| cartoon-studio | `#EA6047` | offset double ink frame and corner dot |
+| anime-twilight | `#F0B875` | paired dusk arcs and low horizon rule |
+| study-library | `#AA884C` | folio margin plus four ruled baselines |
+| japanese-idol | `#C7B3E6` | one asymmetric ribbon curve and sparkle dot |
+| korean-idol | `#79D7E4` | three offset capsule outlines |
+
+Original look, unknown themes, and user themes without `sourceRecipe` use the
+Default row. Untouched user-theme copies inherit their frozen source row while
+their validated palette overrides still colour the base surface and primary
+accent. High contrast uses Windows system colours with no mark or cue. A
+missing asset or invalid profile falls back without changing the existing
+DOMContentLoaded/NavigationCompleted reveal lifecycle.
+
 In-page wordmarks (all-eight built-in expansion authorized 2026-07-23):
 
 Every built-in emits the same two runtime filenames:
@@ -105,7 +139,7 @@ discovered expanded desktop sidebar.
 
 | Theme | Frozen source direction | Light treatment | Dark treatment |
 | --- | --- | --- | --- |
-| Default | Newly authored editorial `Claude` lockup with Aura's aubergine/coral orbital sparkle language | Deep aubergine serif with warm coral/cream detail | Lifted cream lettering with retained coral identity detail |
+| Default | Newly authored editorial `Claude` lockup with Aura's cool indigo-violet orbital sparkle language | Cool ink serif with violet, ice-lilac, and cyan detail | Lifted ice-lilac lettering with retained violet/cyan identity detail |
 | Japanese Film Editorial | Exact supplied full lockup; preserve its cinnabar chrysanthemum/starburst and serif lettering | Cinnabar and charcoal on paper | Warm cinnabar and paper-ivory on charcoal |
 | Korean Prestige | Newly authored full lockup using the approved antique-gold rosette and tailored editorial serif | Midnight-navy lettering with antique gold | Warm ivory lettering with champagne gold |
 | Cartoon Studio | Newly authored full lockup matching the approved coral radial mark, bold rounded lettering, and restrained teal doodle accent | Dark ink, coral, and teal | Warm cream, coral, and brightened teal |

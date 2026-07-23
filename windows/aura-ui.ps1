@@ -242,6 +242,7 @@ function ConvertTo-AuraUiThemeMetadata {
     studioPreview = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreview')
     studioPreviewFrame = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreviewFrame')
     source = Get-AuraUiPropertyValue -InputObject $Item -Names @('source')
+    sourceRecipe = Get-AuraUiPropertyValue -InputObject $Item -Names @('sourceRecipe')
   }
 }
 
@@ -521,6 +522,7 @@ function Set-AuraUiPayloadState {
   $themeMatch = [regex]::Match($script:Payload, '"theme":"(?<theme>[^"\\]+)"')
   if ($themeMatch.Success) { $script:ActiveThemeName = $themeMatch.Groups['theme'].Value }
   [void](Update-AuraUiLauncherStyle)
+  Update-AuraUiLoadingTheme
   # An identity commit can land after the main window is already visible; refresh
   # the anchored bottom-right position and show the launcher if it is ready.
   Update-AuraUiLauncherPosition
@@ -583,17 +585,386 @@ function Show-AuraUiMessage {
     [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
 }
 
+function Get-AuraUiPermanentThemeIds {
+  return @(
+    'default',
+    'japanese-film-editorial',
+    'korean-prestige',
+    'cartoon-studio',
+    'anime-twilight',
+    'study-library',
+    'japanese-idol',
+    'korean-idol'
+  )
+}
+
+function Get-AuraUiLoadingThemeId {
+  $permanentThemeIds = @(Get-AuraUiPermanentThemeIds)
+  if (-not (Get-AuraUiEnabled)) { return 'default' }
+
+  $editorActive = (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
+  if ($editorActive) {
+    $editorSourceId = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('sourceId')
+    if ($editorSourceId -is [string] -and $permanentThemeIds -ccontains $editorSourceId) {
+      return $editorSourceId
+    }
+  }
+
+  $selectedThemeId = Get-AuraUiSelectedThemeName
+  if ($selectedThemeId -is [string]) {
+    $selectedTheme = Get-AuraUiThemeByName -Name $selectedThemeId
+    if ($permanentThemeIds -ccontains $selectedThemeId -and
+        "$($selectedTheme.source)" -ceq 'builtin') {
+      return $selectedThemeId
+    }
+    $sourceRecipe = Get-AuraUiPropertyValue -InputObject $selectedTheme -Names @('sourceRecipe')
+    if ($sourceRecipe -is [string] -and $permanentThemeIds -ccontains $sourceRecipe) {
+      return $sourceRecipe
+    }
+  }
+  return 'default'
+}
+
+function Get-AuraUiLoadingColorValue {
+  param(
+    [AllowNull()][object]$InputObject,
+    [Parameter(Mandatory = $true)][string]$Property,
+    [Parameter(Mandatory = $true)][string]$Fallback
+  )
+  $value = Get-AuraUiPropertyValue -InputObject $InputObject -Names @($Property)
+  if ($value -is [string] -and $value -cmatch '^#[0-9A-Fa-f]{6}$') {
+    return $value.ToUpperInvariant()
+  }
+  return $Fallback
+}
+
+function Get-AuraUiLoadingProfile {
+  $themeId = Get-AuraUiLoadingThemeId
+  $theme = Get-AuraUiThemeByName -Name $themeId
+  if ($null -eq $theme) { $theme = Get-AuraUiThemeByName -Name 'default'; $themeId = 'default' }
+  $appearance = if (Test-AuraUiDarkChrome) { 'dark' } else { 'light' }
+  $studioStyle = Get-AuraUiPropertyValue -InputObject $theme -Names @('studioStyle')
+  if (Get-AuraUiEnabled) {
+    $permanentThemeIds = @(Get-AuraUiPermanentThemeIds)
+    $selectedTheme = Get-AuraUiThemeByName -Name (Get-AuraUiSelectedThemeName)
+    $selectedSourceRecipe = Get-AuraUiPropertyValue -InputObject $selectedTheme -Names @('sourceRecipe')
+    $selectedHasPermanentProfile = "$($selectedTheme.source)" -ceq 'builtin' -or
+      ($selectedSourceRecipe -is [string] -and $permanentThemeIds -ccontains $selectedSourceRecipe)
+    $editorActive = (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
+    $editorSourceId = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('sourceId')
+    $editorStyle = if ($editorActive) {
+      Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('studioStyle')
+    } else { $null }
+    if ($null -ne $editorStyle -and
+        (($editorSourceId -is [string] -and $permanentThemeIds -ccontains $editorSourceId) -or
+          $selectedHasPermanentProfile)) {
+      $studioStyle = $editorStyle
+    } elseif ($selectedHasPermanentProfile) {
+      $selectedStyle = Get-AuraUiPropertyValue -InputObject $selectedTheme -Names @('studioStyle')
+      if ($null -ne $selectedStyle) { $studioStyle = $selectedStyle }
+    }
+  }
+  $palette = Get-AuraUiPropertyValue -InputObject $studioStyle -Names @($appearance)
+  $secondaryByTheme = @{
+    'default' = '#4BC7EE'
+    'japanese-film-editorial' = '#B64B32'
+    'korean-prestige' = '#5A91E6'
+    'cartoon-studio' = '#EA6047'
+    'anime-twilight' = '#F0B875'
+    'study-library' = '#AA884C'
+    'japanese-idol' = '#C7B3E6'
+    'korean-idol' = '#79D7E4'
+  }
+  $cueByTheme = @{
+    'default' = 'orbit'
+    'japanese-film-editorial' = 'editorial-rule'
+    'korean-prestige' = 'facet'
+    'cartoon-studio' = 'ink-frame'
+    'anime-twilight' = 'horizon'
+    'study-library' = 'folio'
+    'japanese-idol' = 'ribbon'
+    'korean-idol' = 'capsule'
+  }
+
+  if ([System.Windows.Forms.SystemInformation]::HighContrast) {
+    return [PSCustomObject]@{
+      ThemeId = $themeId
+      Appearance = $appearance
+      Cue = 'none'
+      HighContrast = $true
+      Background = [Drawing.SystemColors]::Window
+      Surface = [Drawing.SystemColors]::Control
+      Text = [Drawing.SystemColors]::WindowText
+      Muted = [Drawing.SystemColors]::GrayText
+      Accent = [Drawing.SystemColors]::Highlight
+      AccentSecondary = [Drawing.SystemColors]::Highlight
+      AccentText = [Drawing.SystemColors]::HighlightText
+      Border = [Drawing.SystemColors]::WindowText
+    }
+  }
+
+  $fallback = if ($appearance -ceq 'dark') {
+    @{
+      Background = '#1B1D2C'; Surface = '#282B3E'; Text = '#E9ECF6'; Muted = '#979DB4'
+      Accent = '#BA8BF4'; AccentText = '#0F101F'; Border = '#B2BADC'
+    }
+  } else {
+    @{
+      Background = '#F1F2F9'; Surface = '#FBFCFE'; Text = '#171A31'; Muted = '#5F647C'
+      Accent = '#4721A1'; AccentText = '#FFFFFF'; Border = '#21243B'
+    }
+  }
+  return [PSCustomObject]@{
+    ThemeId = $themeId
+    Appearance = $appearance
+    Cue = "$($cueByTheme[$themeId])"
+    HighContrast = $false
+    Background = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'canvas' -Fallback $fallback.Background))
+    Surface = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'raised' -Fallback $fallback.Surface))
+    Text = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'text' -Fallback $fallback.Text))
+    Muted = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'textMuted' -Fallback $fallback.Muted))
+    Accent = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'accent' -Fallback $fallback.Accent))
+    AccentSecondary = [Drawing.ColorTranslator]::FromHtml("$($secondaryByTheme[$themeId])")
+    AccentText = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'accentText' -Fallback $fallback.AccentText))
+    Border = [Drawing.ColorTranslator]::FromHtml(
+      (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'border' -Fallback $fallback.Border))
+  }
+}
+
+function Test-AuraUiLoadingAnimationEnabled {
+  if ([System.Windows.Forms.SystemInformation]::HighContrast) { return $false }
+  try {
+    $windowMetrics = Get-ItemProperty `
+      -LiteralPath 'HKCU:\Control Panel\Desktop\WindowMetrics' `
+      -Name MinAnimate `
+      -ErrorAction Stop
+    if ("$($windowMetrics.MinAnimate)" -ceq '0') { return $false }
+  } catch {}
+  return $true
+}
+
+function New-AuraUiLoadingMarkBitmap {
+  param([Parameter(Mandatory = $true)][string]$ThemeId)
+  if (@(Get-AuraUiPermanentThemeIds) -cnotcontains $ThemeId) { return $null }
+  $themeArtRootFull = [IO.Path]::GetFullPath($ThemeArtRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
+  $candidate = [IO.Path]::GetFullPath((Join-Path $ThemeArtRoot "$ThemeId\launcher-mark.png"))
+  if (-not $candidate.StartsWith(
+      $themeArtRootFull + [IO.Path]::DirectorySeparatorChar,
+      [StringComparison]::OrdinalIgnoreCase) -or
+      -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+    return $null
+  }
+  $stream = $null
+  $source = $null
+  try {
+    $stream = [IO.File]::Open($candidate, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Image]::FromStream($stream)
+    if ($source.Width -ne 96 -or $source.Height -ne 96) { return $null }
+    return [Drawing.Bitmap]::new($source)
+  } catch {
+    Write-AuraUiLog -Message "Loading-screen identity could not be loaded: $($_.Exception.Message)"
+    return $null
+  } finally {
+    if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
+}
+
+function Paint-AuraUiLoadingPanel {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Graphics]$Graphics,
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds
+  )
+  $profile = $script:LoadingProfile
+  if ($null -eq $profile -or $Bounds.Width -lt 2 -or $Bounds.Height -lt 2) { return }
+  $Graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+  $Graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+  if ($profile.HighContrast) {
+    $Graphics.Clear($profile.Background)
+    return
+  }
+
+  $gradient = [Drawing.Drawing2D.LinearGradientBrush]::new(
+    $Bounds, $profile.Background, $profile.Surface, [float]32)
+  $primaryPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(34, $profile.Accent), [float]1.6)
+  $secondaryPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(42, $profile.AccentSecondary), [float]1.25)
+  $secondaryBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(38, $profile.AccentSecondary))
+  try {
+    $Graphics.FillRectangle($gradient, $Bounds)
+    $width = [float]$Bounds.Width
+    $height = [float]$Bounds.Height
+    $centerX = $width / 2
+    $centerY = $height / 2
+    switch -CaseSensitive ("$($profile.Cue)") {
+      'orbit' {
+        $Graphics.DrawEllipse($primaryPen, $centerX - 218, $centerY - 112, 436, 224)
+        $Graphics.DrawArc($secondaryPen, $centerX - 166, $centerY - 166, 332, 332, 205, 210)
+        break
+      }
+      'editorial-rule' {
+        $ruleX = [float]($width * 0.17)
+        $Graphics.DrawLine($primaryPen, $ruleX, 38, $ruleX, $height - 38)
+        $Graphics.DrawLine($secondaryPen, $ruleX, $height - 74, $width * 0.46, $height - 74)
+        $Graphics.FillEllipse($secondaryBrush, $ruleX - 5, $height - 80, 10, 10)
+        break
+      }
+      'facet' {
+        $points = [Drawing.PointF[]]@(
+          [Drawing.PointF]::new($centerX, $centerY - 206),
+          [Drawing.PointF]::new($centerX + 246, $centerY),
+          [Drawing.PointF]::new($centerX, $centerY + 206),
+          [Drawing.PointF]::new($centerX - 246, $centerY)
+        )
+        $Graphics.DrawPolygon($primaryPen, $points)
+        $Graphics.DrawLine($secondaryPen, $points[0], $points[2])
+        $Graphics.DrawLine($secondaryPen, $points[1], $points[3])
+        break
+      }
+      'ink-frame' {
+        $outer = [Drawing.RectangleF]::new(42, 38, [Math]::Max(1, $width - 104), [Math]::Max(1, $height - 92))
+        $inner = [Drawing.RectangleF]::new(58, 54, [Math]::Max(1, $width - 104), [Math]::Max(1, $height - 92))
+        $Graphics.DrawRectangle($primaryPen, $outer.X, $outer.Y, $outer.Width, $outer.Height)
+        $Graphics.DrawRectangle($secondaryPen, $inner.X, $inner.Y, $inner.Width, $inner.Height)
+        $Graphics.FillEllipse($secondaryBrush, $width - 92, 52, 12, 12)
+        break
+      }
+      'horizon' {
+        $Graphics.DrawArc($primaryPen, $centerX - 264, $centerY - 202, 528, 404, 194, 152)
+        $Graphics.DrawArc($secondaryPen, $centerX - 204, $centerY - 150, 408, 300, 12, 154)
+        $Graphics.DrawLine($secondaryPen, 72, $centerY + 156, $width - 72, $centerY + 156)
+        break
+      }
+      'folio' {
+        for ($line = 0; $line -lt 4; $line++) {
+          $lineY = [float]($height - 116 + ($line * 18))
+          $Graphics.DrawLine($(if ($line -eq 0) { $secondaryPen } else { $primaryPen }),
+            78, $lineY, $width - 78, $lineY)
+        }
+        $Graphics.DrawLine($secondaryPen, 124, 42, 124, $height - 44)
+        break
+      }
+      'ribbon' {
+        $path = [Drawing.Drawing2D.GraphicsPath]::new()
+        try {
+          $path.AddBezier(54, $height * 0.68, $width * 0.24, $height * 0.24,
+            $width * 0.72, $height * 0.86, $width - 54, $height * 0.32)
+          $Graphics.DrawPath($primaryPen, $path)
+          $Graphics.FillEllipse($secondaryBrush, $width * 0.78, $height * 0.24, 10, 10)
+        } finally {
+          $path.Dispose()
+        }
+        break
+      }
+      'capsule' {
+        foreach ($offset in @(0, 18, 36)) {
+          $capsule = [Drawing.RectangleF]::new(
+            58 + $offset, 58 + $offset,
+            [Math]::Max(1, $width - 152), [Math]::Max(1, $height - 152))
+          $capsulePath = New-AuraUiRoundedRectanglePath -Bounds $capsule -Radius 44
+          try {
+            $Graphics.DrawPath($(if ($offset -eq 18) { $secondaryPen } else { $primaryPen }), $capsulePath)
+          } finally {
+            $capsulePath.Dispose()
+          }
+        }
+        break
+      }
+    }
+  } finally {
+    $secondaryBrush.Dispose()
+    $secondaryPen.Dispose()
+    $primaryPen.Dispose()
+    $gradient.Dispose()
+  }
+}
+
+function Set-AuraUiLoadingLayout {
+  if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
+  $centerX = [Math]::Floor($script:LoadingPanel.ClientSize.Width / 2)
+  $clusterTop = [Math]::Max(28, [Math]::Floor(($script:LoadingPanel.ClientSize.Height - 196) / 2))
+  $script:LoadingMark.Location = [Drawing.Point]::new($centerX - 38, $clusterTop)
+  $script:LoadingLabel.Location = [Drawing.Point]::new(
+    [Math]::Max(0, $centerX - [Math]::Floor($script:LoadingLabel.Width / 2)), $clusterTop + 82)
+  $script:LoadingProgress.Location = [Drawing.Point]::new(
+    $centerX - [Math]::Floor($script:LoadingProgress.Width / 2), $clusterTop + 142)
+  $script:RetryButton.Location = [Drawing.Point]::new(
+    $centerX - [Math]::Floor($script:RetryButton.Width / 2), $clusterTop + 132)
+  $indicatorWidth = [Math]::Max(54, [Math]::Floor($script:LoadingProgress.Width * 0.28))
+  $script:LoadingProgressIndicator.Size = [Drawing.Size]::new($indicatorWidth, $script:LoadingProgress.Height)
+  if (-not (Test-AuraUiLoadingAnimationEnabled)) {
+    $script:LoadingProgressIndicator.Left = [Math]::Floor(($script:LoadingProgress.Width - $indicatorWidth) / 2)
+  }
+}
+
+function Update-AuraUiLoadingTheme {
+  if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
+  try {
+    $profile = Get-AuraUiLoadingProfile
+    $script:LoadingProfile = $profile
+    Update-AuraUiWindowChrome `
+      -Dark ([string]::Equals("$($profile.Appearance)", 'dark', [StringComparison]::Ordinal)) `
+      -MainColor $profile.Background
+    $script:LoadingPanel.BackColor = $profile.Background
+    $script:LoadingLabel.ForeColor = $profile.Text
+    $script:LoadingProgress.BackColor = ConvertTo-AuraUiBlendedColor `
+      -From $profile.Surface -To $profile.Border -Amount 0.18
+    $script:LoadingProgressIndicator.BackColor = $profile.Accent
+    $script:RetryButton.FlatAppearance.BorderColor = $profile.Border
+    $script:RetryButton.FlatAppearance.MouseOverBackColor = ConvertTo-AuraUiBlendedColor `
+      -From $profile.Accent -To $profile.AccentText -Amount 0.1
+    $script:RetryButton.FlatAppearance.MouseDownBackColor = ConvertTo-AuraUiBlendedColor `
+      -From $profile.Accent -To $profile.Text -Amount 0.16
+    $script:RetryButton.BackColor = $profile.Accent
+    $script:RetryButton.ForeColor = $profile.AccentText
+    $script:RetryButton.UseVisualStyleBackColor = [bool]$profile.HighContrast
+    $script:LoadingMark.Visible = -not [bool]$profile.HighContrast
+    $nextMark = if ($profile.HighContrast) { $null } else {
+      New-AuraUiLoadingMarkBitmap -ThemeId "$($profile.ThemeId)"
+    }
+    $previousMark = $script:LoadingMark.Image
+    $script:LoadingMark.Image = $nextMark
+    if ($null -ne $previousMark) { $previousMark.Dispose() }
+    if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+      $script:Form.BackColor = $profile.Background
+    }
+    if ($null -ne $script:WebView -and -not $script:WebView.IsDisposed) {
+      $script:WebView.BackColor = $profile.Background
+    }
+    Set-AuraUiLoadingLayout
+    $script:LoadingPanel.Invalidate()
+  } catch {
+    Write-AuraUiLog -Message "Loading-screen theme could not be refreshed: $($_.Exception.Message)"
+  }
+}
+
 function Show-AuraUiLoading {
   param([string]$Message, [bool]$Retry = $false)
+  if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
+  Update-AuraUiLoadingTheme
   $script:LoadingLabel.Text = $Message
+  $script:LoadingProgress.AccessibleName = $Message
   $script:RetryButton.Visible = $Retry
   $script:LoadingProgress.Visible = -not $Retry
+  if ($Retry -or -not (Test-AuraUiLoadingAnimationEnabled)) {
+    if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Stop() }
+  } else {
+    if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Start() }
+  }
   $script:LoadingPanel.Visible = $true
   $script:LoadingPanel.BringToFront()
 }
 
 function Hide-AuraUiLoading {
-  $script:LoadingPanel.Visible = $false
+  if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Stop() }
+  if ($null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed) {
+    $script:LoadingPanel.Visible = $false
+  }
 }
 
 function Get-AuraUiNavigationCompletionDisposition {
@@ -669,6 +1040,58 @@ function Get-AuraUiAppearance {
   return 'system'
 }
 
+function Test-AuraUiDarkChrome {
+  param(
+    [ValidateSet('system', 'light', 'dark')][string]$Appearance = (Get-AuraUiAppearance),
+    [bool]$Enabled = (Get-AuraUiEnabled)
+  )
+  if ($Enabled -and $Appearance -ceq 'dark') { return $true }
+  if ($Enabled -and $Appearance -ceq 'light') { return $false }
+  try {
+    $personalize = Get-ItemProperty `
+      -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' `
+      -Name AppsUseLightTheme `
+      -ErrorAction Stop
+    return ([int]$personalize.AppsUseLightTheme -eq 0)
+  } catch {
+    return $false
+  }
+}
+
+function Update-AuraUiWindowChrome {
+  param(
+    [bool]$Dark = (Test-AuraUiDarkChrome),
+    [AllowNull()][Drawing.Color]$MainColor
+  )
+  if ($null -eq $MainColor -or $MainColor.IsEmpty) {
+    $MainColor = if ($Dark) {
+      [Drawing.ColorTranslator]::FromHtml('#19191D')
+    } else {
+      [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
+    }
+  }
+  $studioColor = if ($Dark) {
+    [Drawing.ColorTranslator]::FromHtml('#19191D')
+  } else {
+    [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
+  }
+  foreach ($entry in @(
+    @{ Tracker = $script:MainIconWindow; Color = $MainColor },
+    @{ Tracker = $script:StudioIconWindow; Color = $studioColor }
+  )) {
+    if ($null -eq $entry.Tracker) { continue }
+    try {
+      $entry.Tracker.SetDarkMode($Dark)
+      $entry.Tracker.SetCaptionColor(
+        [byte]$entry.Color.R,
+        [byte]$entry.Color.G,
+        [byte]$entry.Color.B)
+    } catch {
+      Write-AuraUiLog -Message "Native window chrome could not follow appearance: $($_.Exception.Message)"
+    }
+  }
+}
+
 function Set-AuraUiPreferredColorScheme {
   param(
     [ValidateSet('system', 'light', 'dark')][string]$Appearance = (Get-AuraUiAppearance),
@@ -688,6 +1111,9 @@ function Set-AuraUiPreferredColorScheme {
       $webView.CoreWebView2.Profile.PreferredColorScheme = $scheme
     }
   }
+  $darkChrome = Test-AuraUiDarkChrome -Appearance $Appearance -Enabled $Enabled
+  Update-AuraUiWindowChrome -Dark $darkChrome
+  Update-AuraUiLoadingTheme
 }
 
 function Update-AuraUiTrayAppearance {
@@ -4536,7 +4962,7 @@ function Invoke-AuraUiSetAppearance {
 function Update-AuraUiLocalizedChrome {
   try {
     if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed) {
-      $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
+      $script:StudioForm.AccessibleName = "$($script:UiCopy.studioTitle)"
     }
     if ($null -ne $script:TrayOpenStudioItem -and -not $script:TrayOpenStudioItem.IsDisposed) {
       $script:TrayOpenStudioItem.Text = "$($script:UiCopy.openStudio)"
@@ -5113,6 +5539,14 @@ $script:TrayOpenStudioItem = $null
 $script:TrayAppearanceItem = $null
 $script:TrayOpenDesktopItem = $null
 $script:TrayExitItem = $null
+$script:LoadingPanel = $null
+$script:LoadingMark = $null
+$script:LoadingLabel = $null
+$script:LoadingProgress = $null
+$script:LoadingProgressIndicator = $null
+$script:LoadingAnimationTimer = $null
+$script:LoadingProfile = $null
+$script:RetryButton = $null
 $script:MainIcon = $null
 $script:StudioIcon = $null
 $script:NotificationIcon = $null
@@ -5128,6 +5562,7 @@ $script:DeferredIdentityCandidates = [Collections.Generic.List[object]]::new()
 $script:ShellIdentityIconPath = $null
 $script:JumpListIdentityPath = $null
 $script:EffectiveLauncherIdentity = $null
+$script:MainOpenSignal = $null
 $script:StudioOpenSignal = $null
 $script:Launcher = $null
 $script:LauncherButton = $null
@@ -5233,7 +5668,6 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 public static class AuraWindow {
-  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string className, string windowName);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr handle, int command);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -5255,21 +5689,50 @@ public sealed class AuraDpiChangedEventArgs : EventArgs {
   public int Dpi { get; private set; }
 }
 public sealed class AuraIconWindow : NativeWindow, IDisposable {
+  const int WM_DPICHANGED = 0x02E0;
+  [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr handle, int attribute, ref int value, int size);
+
+  bool darkChrome;
+  int captionColor = -1;
+
   public event EventHandler<AuraDpiChangedEventArgs> DpiChanged;
   public void Attach(IntPtr handle) {
     if (Handle == handle) return;
     if (Handle != IntPtr.Zero) ReleaseHandle();
     AssignHandle(handle);
+    ApplyChrome();
   }
   public void Detach() {
     if (Handle != IntPtr.Zero) ReleaseHandle();
   }
+  void ApplyChrome() {
+    if (Handle == IntPtr.Zero) return;
+    int value = darkChrome ? 1 : 0;
+    if (DwmSetWindowAttribute(Handle, 20, ref value, sizeof(int)) < 0) {
+      DwmSetWindowAttribute(Handle, 19, ref value, sizeof(int));
+    }
+    if (captionColor >= 0) {
+      int color = captionColor;
+      DwmSetWindowAttribute(Handle, 35, ref color, sizeof(int));
+    }
+    int noBorder = unchecked((int)0xFFFFFFFE);
+    DwmSetWindowAttribute(Handle, 34, ref noBorder, sizeof(int));
+  }
+  public void SetDarkMode(bool dark) {
+    darkChrome = dark;
+    ApplyChrome();
+  }
+  public void SetCaptionColor(byte red, byte green, byte blue) {
+    captionColor = red | (green << 8) | (blue << 16);
+    ApplyChrome();
+  }
   protected override void WndProc(ref Message message) {
     base.WndProc(ref message);
-    if (message.Msg == 0x02E0) {
+    if (message.Msg == WM_DPICHANGED) {
       int dpi = unchecked((int)((long)message.WParam & 0xFFFF));
       EventHandler<AuraDpiChangedEventArgs> handler = DpiChanged;
       if (handler != null && dpi > 0) handler(this, new AuraDpiChangedEventArgs(dpi));
+      ApplyChrome();
     }
   }
   public void Dispose() { Detach(); }
@@ -5352,6 +5815,12 @@ public static class AuraLayered {
   # taskbar Jump List to the running window in a later pass.
   try { [void][AuraWindow]::SetCurrentProcessExplicitAppUserModelID('ClaudeAura') } catch {}
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $mainSignalCreatedNew = $false
+  $script:MainOpenSignal = [System.Threading.EventWaitHandle]::new(
+    $false,
+    [System.Threading.EventResetMode]::AutoReset,
+    "Local\ClaudeAura.$sid.OpenMain",
+    [ref]$mainSignalCreatedNew)
   $studioSignalCreatedNew = $false
   $script:StudioOpenSignal = [System.Threading.EventWaitHandle]::new(
     $false,
@@ -5367,11 +5836,7 @@ public static class AuraLayered {
     if ($OpenStudio) {
       [void]$script:StudioOpenSignal.Set()
     } else {
-      $handle = [AuraWindow]::FindWindow($null, 'Claude Aura')
-      if ($handle -ne [IntPtr]::Zero) {
-        [void][AuraWindow]::ShowWindow($handle, 9)
-        [void][AuraWindow]::SetForegroundWindow($handle)
-      }
+      [void]$script:MainOpenSignal.Set()
     }
     return
   }
@@ -5388,6 +5853,7 @@ public static class AuraLayered {
   })
   $script:Form.add_HandleCreated({
     $script:MainIconWindow.Attach($script:Form.Handle)
+    Update-AuraUiWindowChrome
     $dpi = Get-AuraUiWindowDpi -Form $script:Form
     if ($script:ThemeIdentityAssetPath -and
         ($null -eq $script:MainWindowIconPair -or $script:MainWindowIconPair.Dpi -ne $dpi)) {
@@ -5398,10 +5864,16 @@ public static class AuraLayered {
     }
   })
   $script:Form.add_HandleDestroyed({ $script:MainIconWindow.Detach() })
-  $script:Form.Text = 'Claude Aura'
+  $script:Form.Text = ''
+  $script:Form.AccessibleName = 'Claude Aura'
   $script:Form.StartPosition = 'Manual'
   $script:Form.ClientSize = [Drawing.Size]::new(1180, 640)
   $script:Form.MinimumSize = [Drawing.Size]::new(920, 620)
+  $script:Form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
+  $script:Form.ShowIcon = $false
+  $script:Form.ControlBox = $true
+  $script:Form.MinimizeBox = $true
+  $script:Form.MaximizeBox = $true
   $script:Form.add_SizeChanged({ Request-AuraUiMirror })
   $script:Form.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
   $script:Form.Icon = $script:MainIcon
@@ -5426,6 +5898,7 @@ public static class AuraLayered {
   })
   $script:StudioForm.add_HandleCreated({
     $script:StudioIconWindow.Attach($script:StudioForm.Handle)
+    Update-AuraUiWindowChrome
     $dpi = Get-AuraUiWindowDpi -Form $script:StudioForm
     if ($script:ThemeIdentityAssetPath -and
         ($null -eq $script:StudioWindowIconPair -or $script:StudioWindowIconPair.Dpi -ne $dpi)) {
@@ -5436,11 +5909,16 @@ public static class AuraLayered {
     }
   })
   $script:StudioForm.add_HandleDestroyed({ $script:StudioIconWindow.Detach() })
-  $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
+  $script:StudioForm.Text = ''
+  $script:StudioForm.AccessibleName = "$($script:UiCopy.studioTitle)"
   $script:StudioForm.StartPosition = 'Manual'
   $script:StudioForm.ClientSize = [Drawing.Size]::new(1080, 720)
   $script:StudioForm.MinimumSize = [Drawing.Size]::new(760, 560)
   $script:StudioForm.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
+  $script:StudioForm.ShowIcon = $false
+  $script:StudioForm.ControlBox = $true
+  $script:StudioForm.MinimizeBox = $true
+  $script:StudioForm.MaximizeBox = $true
   $script:StudioForm.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
   $script:StudioForm.BackColor = [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
   $script:StudioForm.Icon = $script:StudioIcon
@@ -5504,23 +5982,57 @@ public static class AuraLayered {
 
   $script:LoadingPanel = [System.Windows.Forms.Panel]::new()
   $script:LoadingPanel.Dock = 'Fill'
-  $script:LoadingPanel.BackColor = [Drawing.ColorTranslator]::FromHtml('#F7F3EB')
+  $script:LoadingPanel.BackColor = [Drawing.ColorTranslator]::FromHtml('#F1F2F9')
+  $script:LoadingPanel.add_Paint({
+    param($sender, $eventArgs)
+    Paint-AuraUiLoadingPanel -Graphics $eventArgs.Graphics -Bounds $sender.ClientRectangle
+  })
+  $script:LoadingMark = [System.Windows.Forms.PictureBox]::new()
+  $script:LoadingMark.Size = [Drawing.Size]::new(76, 76)
+  $script:LoadingMark.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+  $script:LoadingMark.BackColor = [Drawing.Color]::Transparent
+  $script:LoadingMark.TabStop = $false
+  $script:LoadingMark.AccessibleRole = [System.Windows.Forms.AccessibleRole]::None
   $script:LoadingLabel = [System.Windows.Forms.Label]::new()
   $script:LoadingLabel.Text = "$($script:UiCopy.openingClaude)"
   $script:LoadingLabel.TextAlign = 'MiddleCenter'
   $script:LoadingLabel.Font = [Drawing.Font]::new('Segoe UI Semibold', 15)
-  $script:LoadingLabel.ForeColor = [Drawing.ColorTranslator]::FromHtml('#332A3B')
+  $script:LoadingLabel.ForeColor = [Drawing.ColorTranslator]::FromHtml('#171A31')
+  $script:LoadingLabel.BackColor = [Drawing.Color]::Transparent
   $script:LoadingLabel.Size = [Drawing.Size]::new(500, 44)
-  $script:LoadingProgress = [System.Windows.Forms.ProgressBar]::new()
-  $script:LoadingProgress.Style = 'Marquee'
-  $script:LoadingProgress.MarqueeAnimationSpeed = 24
-  $script:LoadingProgress.Size = [Drawing.Size]::new(320, 7)
+  $script:LoadingProgress = [System.Windows.Forms.Panel]::new()
+  $script:LoadingProgress.Size = [Drawing.Size]::new(320, 6)
+  $script:LoadingProgress.AccessibleRole = [System.Windows.Forms.AccessibleRole]::ProgressBar
+  $script:LoadingProgress.AccessibleName = "$($script:UiCopy.openingClaude)"
+  $script:LoadingProgress.TabStop = $false
+  $script:LoadingProgressIndicator = [System.Windows.Forms.Panel]::new()
+  $script:LoadingProgressIndicator.Size = [Drawing.Size]::new(90, 6)
+  $script:LoadingProgressIndicator.TabStop = $false
+  $script:LoadingProgress.Controls.Add($script:LoadingProgressIndicator)
+  $script:LoadingAnimationTimer = [System.Windows.Forms.Timer]::new()
+  $script:LoadingAnimationTimer.Interval = 30
+  $script:LoadingAnimationTimer.add_Tick({
+    if ($null -eq $script:LoadingPanel -or -not $script:LoadingPanel.Visible -or
+        $null -eq $script:LoadingProgress -or -not $script:LoadingProgress.Visible) {
+      $script:LoadingAnimationTimer.Stop()
+      return
+    }
+    $dpi = if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+      [Math]::Max(96, [int]$script:Form.DeviceDpi)
+    } else { 96 }
+    $step = [Math]::Max(4, [int][Math]::Round(7 * ($dpi / 96.0)))
+    $nextLeft = $script:LoadingProgressIndicator.Left + $step
+    if ($nextLeft -gt $script:LoadingProgress.Width) {
+      $nextLeft = -$script:LoadingProgressIndicator.Width
+    }
+    $script:LoadingProgressIndicator.Left = $nextLeft
+  })
   $script:RetryButton = [System.Windows.Forms.Button]::new()
   $script:RetryButton.Text = "$($script:UiCopy.retry)"
   $script:RetryButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
   $script:RetryButton.FlatAppearance.BorderSize = 1
-  $script:RetryButton.FlatAppearance.BorderColor = [Drawing.ColorTranslator]::FromHtml('#5B3E73')
-  $script:RetryButton.BackColor = [Drawing.ColorTranslator]::FromHtml('#5B3E73')
+  $script:RetryButton.FlatAppearance.BorderColor = [Drawing.ColorTranslator]::FromHtml('#21243B')
+  $script:RetryButton.BackColor = [Drawing.ColorTranslator]::FromHtml('#4721A1')
   $script:RetryButton.ForeColor = [Drawing.Color]::White
   $script:RetryButton.UseVisualStyleBackColor = $false
   $script:RetryButton.Cursor = [System.Windows.Forms.Cursors]::Hand
@@ -5529,16 +6041,14 @@ public static class AuraLayered {
   $script:RetryButton.TabStop = $true
   $script:RetryButton.Size = [Drawing.Size]::new(96, 38)
   $script:RetryButton.Visible = $false
-  $script:LoadingPanel.Controls.AddRange(@($script:LoadingLabel, $script:LoadingProgress, $script:RetryButton))
-  $script:LoadingPanel.add_Resize({
-    $centerX = [Math]::Floor(($script:LoadingPanel.ClientSize.Width - $script:LoadingLabel.Width) / 2)
-    $centerY = [Math]::Floor(($script:LoadingPanel.ClientSize.Height - 90) / 2)
-    $script:LoadingLabel.Location = [Drawing.Point]::new([Math]::Max(0, $centerX), [Math]::Max(20, $centerY))
-    $script:LoadingProgress.Location = [Drawing.Point]::new(
-      [Math]::Floor(($script:LoadingPanel.ClientSize.Width - $script:LoadingProgress.Width) / 2), $centerY + 52)
-    $script:RetryButton.Location = [Drawing.Point]::new(
-      [Math]::Floor(($script:LoadingPanel.ClientSize.Width - $script:RetryButton.Width) / 2), $centerY + 54)
-  })
+  $script:LoadingPanel.Controls.AddRange(@(
+    $script:LoadingMark,
+    $script:LoadingLabel,
+    $script:LoadingProgress,
+    $script:RetryButton
+  ))
+  $script:LoadingPanel.add_Resize({ Set-AuraUiLoadingLayout })
+  Update-AuraUiLoadingTheme
 
   $content = [System.Windows.Forms.Panel]::new()
   $content.Dock = 'Fill'
@@ -5875,6 +6385,9 @@ public static class AuraLayered {
       }
     }
     try {
+      if ($null -ne $script:MainOpenSignal -and $script:MainOpenSignal.WaitOne(0)) {
+        Show-AuraUiMain
+      }
       if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
         Show-AuraUiStudio
       }
@@ -6221,6 +6734,15 @@ public static class AuraLayered {
     Restore-AuraUiStudioPreviewState
     $script:Closing = $true
     $timer.Stop()
+    if ($script:LoadingAnimationTimer) {
+      $script:LoadingAnimationTimer.Stop()
+      $script:LoadingAnimationTimer.Dispose()
+      $script:LoadingAnimationTimer = $null
+    }
+    if ($script:LoadingMark -and $script:LoadingMark.Image) {
+      $script:LoadingMark.Image.Dispose()
+      $script:LoadingMark.Image = $null
+    }
     if ($script:TrayIcon) {
       $script:TrayIcon.Visible = $false
       $script:TrayIcon.Dispose()
@@ -6270,6 +6792,23 @@ public static class AuraLayered {
   if ($null -ne $script:StudioOpenSignal) {
     try { $script:StudioOpenSignal.Dispose() } catch {}
     $script:StudioOpenSignal = $null
+  }
+  if ($null -ne $script:MainOpenSignal) {
+    try { $script:MainOpenSignal.Dispose() } catch {}
+    $script:MainOpenSignal = $null
+  }
+  if ($null -ne $script:LoadingAnimationTimer) {
+    try {
+      $script:LoadingAnimationTimer.Stop()
+      $script:LoadingAnimationTimer.Dispose()
+    } catch {}
+    $script:LoadingAnimationTimer = $null
+  }
+  if ($null -ne $script:LoadingMark -and $null -ne $script:LoadingMark.Image) {
+    try {
+      $script:LoadingMark.Image.Dispose()
+      $script:LoadingMark.Image = $null
+    } catch {}
   }
   foreach ($tracker in @($script:MainIconWindow, $script:StudioIconWindow, $script:LauncherDpiWindow)) {
     if ($null -ne $tracker) { try { $tracker.Dispose() } catch {} }

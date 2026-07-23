@@ -65,8 +65,15 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   assert.match(defaultBundle.payload, /dataset\.claudeAuraContext/);
   assert.match(defaultBundle.payload, /data-claude-aura-prompt/);
   assert.match(defaultBundle.payload, /data-claude-aura-sidebar/);
-  assert(defaultBundle.payload.includes("html.claude-aura [data-claude-aura-sidebar] svg{color:inherit !important}"),
-    "Compiled themes must keep sidebar icons on the same semantic foreground as their labels");
+  assert.match(defaultBundle.payload, /data-aura-role/);
+  assert(defaultBundle.css.includes('[data-aura-role="sidebar-primary"]'),
+    "Compiled themes must project the fixed primary-action recipe only through its runtime role");
+  assert(defaultBundle.css.includes('[data-aura-role="composer-shell"]'),
+    "Compiled themes must project composer material only through its runtime role");
+  assert(!defaultBundle.css.includes('.input-box') && !defaultBundle.css.includes('[data-testid="composer"]'),
+    "Composer replacement rules must not target unrelated editors through broad host selectors");
+  assert(!/\[data-claude-aura-sidebar\]\s+:is\([^{}]*(?:button|a\[href\])/.test(defaultBundle.css),
+    "Sidebar state styling must use discovered subroles rather than every descendant control");
   assert.match(defaultBundle.payload, /textarea:not\(\[readonly\]\)/);
   assert(!/placeholder|location\.pathname|New chat|Write a message/.test(rendererSource),
     "Context discovery must not depend on localized wording, placeholders, or URL routes");
@@ -128,47 +135,55 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   assert.match(koreanIdolBundle.css,
     /\[data-claude-aura-brand-host="ready"\]\s*>\s*\[data-claude-aura-brand-image\][^{]*\{[^}]*visibility:\s*visible/s,
     "Only a decoded ready-state wordmark may become visible");
+  assert.match(koreanIdolBundle.css,
+    /\[data-claude-aura-brand-image\][^{]*\{[^}]*color:\s*hsl\(var\(--aura-sidebar-text-primary\)\)[^}]*background-color:\s*currentColor[^}]*mask-image:\s*var\(--aura-brand-mask\)/s,
+    "The full wordmark silhouette must be painted from the actual sidebar-label token");
+  assert.match(koreanIdolBundle.css,
+    /\[data-claude-aura-brand-loader\][^{]*\{[^}]*display:\s*none!important/s,
+    "The decoded source image must remain an inert, non-visual mask loader");
 
   for (const locale of ["en", "zh-CN", "zh-TW"]) {
-    for (const theme of await listThemes({ locale })) {
-      const bundle = await buildPayload({
-        config: { ...DEFAULT_CONFIG, theme: theme.name },
-        locale,
-      });
-      // Budgets: the chrome (CSS + code + metadata) stays under 65 KB so theme
-      // switching remains instant; embedded decorative artwork has its own cap.
-      const artBytes = (bundle.settings.artLayers ?? [])
-        .reduce((total, layer) => total + Buffer.byteLength(layer.dataUrl, "utf8"), 0)
-        + (bundle.settings.artDataUrl ? Buffer.byteLength(bundle.settings.artDataUrl, "utf8") : 0)
-        + (bundle.settings.brandWordmark
-          ? Buffer.byteLength(bundle.settings.brandWordmark.lightDataUrl, "utf8")
-            + Buffer.byteLength(bundle.settings.brandWordmark.darkDataUrl, "utf8")
-          : 0);
-      const payloadBytes = Buffer.byteLength(bundle.payload, "utf8");
-      assert(payloadBytes - artBytes < 65_000,
-        `${locale}/${theme.name} chrome payload exceeds the 65 KB switching budget`);
-      assert(artBytes < 1_400_000,
-        `${locale}/${theme.name} embedded artwork exceeds the 1.4 MB decorative budget`);
-      const embeddedArtworkCount = bundle.payload.match(/data:image\/(?:svg\+xml|webp|png|avif);base64/g)?.length ?? 0;
-      const expectedArtwork = (theme.artworkLayers ? theme.artworkLayers.length : (theme.artwork ? 1 : 0)) + 2;
-      assert.equal(embeddedArtworkCount, expectedArtwork, `${locale}/${theme.name} did not embed exactly its active artwork`);
-      assert(bundle.settings.brandWordmark,
-        `${locale}/${theme.name} did not compile its built-in wordmark channel`);
-      const registeredWordmark = BUILTIN_BRAND_WORDMARK_ASSETS[theme.name];
-      assert(bundle.brandWordmark.light.path.endsWith(path.normalize(registeredWordmark.light))
+    for (const appearance of ["light", "dark", "system"]) {
+      for (const theme of await listThemes({ locale })) {
+        const bundle = await buildPayload({
+          config: { ...DEFAULT_CONFIG, theme: theme.name, appearance },
+          locale,
+        });
+        // WO-18 preserves at least 3 KB of repair headroom under the permanent
+        // 65 KB invariant across the complete locale/appearance matrix.
+        const artBytes = (bundle.settings.artLayers ?? [])
+          .reduce((total, layer) => total + Buffer.byteLength(layer.dataUrl, "utf8"), 0)
+          + (bundle.settings.artDataUrl ? Buffer.byteLength(bundle.settings.artDataUrl, "utf8") : 0)
+          + (bundle.settings.brandWordmark
+            ? Buffer.byteLength(bundle.settings.brandWordmark.lightDataUrl, "utf8")
+              + Buffer.byteLength(bundle.settings.brandWordmark.darkDataUrl, "utf8")
+            : 0);
+        const payloadBytes = Buffer.byteLength(bundle.payload, "utf8");
+        assert(payloadBytes - artBytes <= 62_000,
+          `${locale}/${appearance}/${theme.name} exceeds the 62 KB WO-18 reserve ceiling`);
+        assert(artBytes < 1_400_000,
+          `${locale}/${appearance}/${theme.name} embedded artwork exceeds the 1.4 MB decorative budget`);
+        const embeddedArtworkCount = bundle.payload.match(/data:image\/(?:svg\+xml|webp|png|avif);base64/g)?.length ?? 0;
+        const expectedArtwork = (theme.artworkLayers ? theme.artworkLayers.length : (theme.artwork ? 1 : 0)) + 2;
+        assert.equal(embeddedArtworkCount, expectedArtwork, `${locale}/${theme.name} did not embed exactly its active artwork`);
+        assert(bundle.settings.brandWordmark,
+          `${locale}/${theme.name} did not compile its built-in wordmark channel`);
+        const registeredWordmark = BUILTIN_BRAND_WORDMARK_ASSETS[theme.name];
+        assert(bundle.brandWordmark.light.path.endsWith(path.normalize(registeredWordmark.light))
           && bundle.brandWordmark.dark.path.endsWith(path.normalize(registeredWordmark.dark)),
-      `${locale}/${theme.name} resolved a wordmark outside its registered built-in pair`);
-      assert.deepEqual(
-        [bundle.settings.brandWordmark.minWidth, bundle.settings.brandWordmark.width],
-        [registeredWordmark.minWidth, registeredWordmark.width],
-        `${locale}/${theme.name} compiled the wrong wordmark width range`,
-      );
-      if (theme.artwork) assert(bundle.artwork.path.endsWith(path.basename(theme.artwork.path)));
-      if (theme.artworkLayers) {
-        assert.equal(bundle.settings.artLayers?.length, theme.artworkLayers.length,
-          `${locale}/${theme.name} did not resolve every artwork layer`);
-        assert.equal(bundle.settings.artDataUrl, null,
-          `${locale}/${theme.name} must not duplicate layered artwork in the legacy slot`);
+          `${locale}/${theme.name} resolved a wordmark outside its registered built-in pair`);
+        assert.deepEqual(
+          [bundle.settings.brandWordmark.minWidth, bundle.settings.brandWordmark.width],
+          [registeredWordmark.minWidth, registeredWordmark.width],
+          `${locale}/${theme.name} compiled the wrong wordmark width range`,
+        );
+        if (theme.artwork) assert(bundle.artwork.path.endsWith(path.basename(theme.artwork.path)));
+        if (theme.artworkLayers) {
+          assert.equal(bundle.settings.artLayers?.length, theme.artworkLayers.length,
+            `${locale}/${theme.name} did not resolve every artwork layer`);
+          assert.equal(bundle.settings.artDataUrl, null,
+            `${locale}/${theme.name} must not duplicate layered artwork in the legacy slot`);
+        }
       }
     }
   }
@@ -410,17 +425,24 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   }
 
   let mediaDark = false;
+  let forcedColorsActive = false;
   const mediaListeners = new Set();
+  const forcedColorListeners = new Set();
   const mediaQuery = {
     get matches() { return mediaDark; },
     addEventListener(type, listener) { if (type === "change") mediaListeners.add(listener); },
     removeEventListener(type, listener) { if (type === "change") mediaListeners.delete(listener); },
   };
+  const forcedColorQuery = {
+    get matches() { return forcedColorsActive; },
+    addEventListener(type, listener) { if (type === "change") forcedColorListeners.add(listener); },
+    removeEventListener(type, listener) { if (type === "change") forcedColorListeners.delete(listener); },
+  };
   const windowListeners = new Map();
   const window = {
     innerWidth: 1440,
     innerHeight: 900,
-    matchMedia: () => mediaQuery,
+    matchMedia: (query) => query === "(forced-colors: active)" ? forcedColorQuery : mediaQuery,
     getComputedStyle: (element) => ({
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
@@ -467,13 +489,20 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(brandImages().length, 1,
     "A small native brand target inside a wide, collision-free header row must receive one wordmark");
-  const failedLightImage = brandImages()[0];
-  assert.equal(failedLightImage.parentElement, first.row,
+  const failedLightMark = brandImages()[0];
+  const failedLightImage = failedLightMark.children[0];
+  assert.equal(failedLightMark.parentElement, first.row,
     "The overlay must use the wide header row instead of stretching the small native brand link");
   assert.equal(failedLightImage.src, bundle.settings.brandWordmark.lightDataUrl);
   assert.equal(failedLightImage.alt, "");
   assert.equal(failedLightImage["aria-hidden"], "true");
   assert.equal(failedLightImage.draggable, false);
+  assert.equal(failedLightMark["aria-hidden"], "true");
+  assert.equal(
+    failedLightMark.style.getPropertyValue("--aura-brand-mask"),
+    `url("${bundle.settings.brandWordmark.lightDataUrl}")`,
+    "The visible Light lockup must use the decoded asset only as an alpha mask",
+  );
   assert.equal(first.row["data-claude-aura-brand-host"], undefined,
     "The host must not hide its native logo while the Light wordmark is pending");
   assert.equal(first.host["data-claude-aura-brand-native"], undefined);
@@ -492,7 +521,8 @@ test("built-in wordmark swaps only after decode and fails back to the native log
 
   window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(brandImages().length, 1, "A later ensure may retry after a transient decode failure");
-  const lightImage = brandImages()[0];
+  const lightMark = brandImages()[0];
+  const lightImage = lightMark.children[0];
   lightImage.naturalWidth = 344;
   lightImage.onload();
   await Promise.resolve();
@@ -516,10 +546,11 @@ test("built-in wordmark swaps only after decode and fails back to the native log
 
   first.search.rect = { ...first.search.rect, left: 164, right: 188 };
   window.__CLAUDE_AURA_STATE__.ensure();
-  assert.equal(lightImage.isConnected, false,
+  assert.equal(lightMark.isConnected, false,
     "Changing available header width must retire the stale wordmark geometry");
-  const resizedLightImage = brandImages()[0];
-  assert.equal(resizedLightImage.style.getPropertyValue("width"), "144px",
+  const resizedLightMark = brandImages()[0];
+  const resizedLightImage = resizedLightMark.children[0];
+  assert.equal(resizedLightMark.style.getPropertyValue("width"), "144px",
     "The replacement wordmark did not track the newly available header width");
   resizedLightImage.naturalWidth = 344;
   resizedLightImage.onload();
@@ -532,10 +563,16 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(first.row["data-claude-aura-brand-host"], undefined,
     "Changing appearance must reveal the native logo while the replacement changes");
   assert.equal(first.host["data-claude-aura-brand-native"], undefined);
-  assert.equal(lightImage.isConnected, false);
+  assert.equal(resizedLightMark.isConnected, false);
   assert.equal(brandImages().length, 1);
-  const darkImage = brandImages()[0];
+  const darkMark = brandImages()[0];
+  const darkImage = darkMark.children[0];
   assert.equal(darkImage.src, bundle.settings.brandWordmark.darkDataUrl);
+  assert.equal(
+    darkMark.style.getPropertyValue("--aura-brand-mask"),
+    `url("${bundle.settings.brandWordmark.darkDataUrl}")`,
+    "The Dark asset must also be monochrome-painted from the sidebar label token",
+  );
   darkImage.naturalWidth = 344;
   darkImage.onload();
   darkImage.resolveDecode();
@@ -569,6 +606,7 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(intervals.size, 0);
   assert.equal(timeouts.size, 0);
   assert.equal(mediaListeners.size, 0);
+  assert.equal(forcedColorListeners.size, 0);
 });
 
 test("renderer switching keeps one lifecycle and clean ensures avoid root rewrites", async () => {
@@ -630,6 +668,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       this.parentElement = null;
       this.textContent = "";
       this.innerHTML = "";
+      this.rect = { left: 0, top: 0, right: 20, bottom: 20, width: 20, height: 20 };
     }
 
     get isConnected() {
@@ -663,20 +702,81 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       return candidate === this || this.children.some((child) => child.contains(candidate));
     }
 
+    getBoundingClientRect() {
+      return { ...this.rect };
+    }
+
     setAttribute(name, value) {
       this[name] = String(value);
+    }
+
+    getAttribute(name) {
+      return this[name] ?? null;
+    }
+
+    hasAttribute(name) {
+      return Object.hasOwn(this, name);
     }
 
     removeAttribute(name) {
       delete this[name];
     }
 
-    querySelector() {
+    matches(selector) {
+      return selector.split(",").some((part) => {
+        const simple = part.trim();
+        if (simple === "nav") return this.tagName === "NAV";
+        if (simple === "aside") return this.tagName === "ASIDE";
+        if (simple === "section") return this.tagName === "SECTION";
+        if (simple === "ul") return this.tagName === "UL";
+        if (simple === "ol") return this.tagName === "OL";
+        if (simple === "button") return this.tagName === "BUTTON";
+        if (simple === "select") return this.tagName === "SELECT";
+        if (simple === "a[href]") return this.tagName === "A" && Boolean(this.href);
+        if (simple === "textarea:not([readonly])") {
+          return this.tagName === "TEXTAREA" && !this.hasAttribute("readonly");
+        }
+        if (simple === '.ProseMirror[contenteditable="true"]') {
+          return this.classList.contains("ProseMirror") && this.contenteditable === "true";
+        }
+        if (simple === '[role="textbox"][contenteditable="true"]') {
+          return this.role === "textbox" && this.contenteditable === "true";
+        }
+        if (simple === '[role="button"]') return this.role === "button";
+        if (simple === '[role="link"]') return this.role === "link";
+        if (simple === '[role="menuitem"]') return this.role === "menuitem";
+        if (simple === '[role="list"]') return this.role === "list";
+        if (simple === '[role="group"]') return this.role === "group";
+        if (simple === '[role="navigation"]') return this.role === "navigation";
+        if (simple === '[role="toolbar"]') return this.role === "toolbar";
+        if (simple === '[aria-haspopup="menu"]') return this["aria-haspopup"] === "menu";
+        if (simple === '[data-state="checked"]') return this["data-state"] === "checked";
+        if (simple === '[data-state="unchecked"]') return this["data-state"] === "unchecked";
+        if (simple === '[data-testid="new-chat"]') return this["data-testid"] === "new-chat";
+        if (simple === '[data-testid="new-chat-button"]') return this["data-testid"] === "new-chat-button";
+        if (simple === 'a[href="/new"]') return this.tagName === "A" && this.href === "/new";
+        if (simple === 'a[href^="/new?"]') return this.tagName === "A" && this.href?.startsWith("/new?");
+        if (simple === 'a[href$="/new"]') return this.tagName === "A" && this.href?.endsWith("/new");
+        return false;
+      });
+    }
+
+    closest(selector) {
+      for (let node = this; node; node = node.parentElement) {
+        if (node.matches(selector)) return node;
+      }
       return null;
     }
 
-    querySelectorAll() {
-      return [];
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] ?? null;
+    }
+
+    querySelectorAll(selector) {
+      return this.children.flatMap((child) => [
+        ...(child.matches(selector) ? [child] : []),
+        ...child.querySelectorAll(selector),
+      ]);
     }
   }
 
@@ -689,19 +789,24 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   document.documentElement.appendChild(document.head);
   document.documentElement.appendChild(document.body);
   const sidebar = new FakeElement("nav");
-  sidebar.getBoundingClientRect = () => ({ left: 0, top: 0, right: 48, bottom: 900, width: 48, height: 900 });
+  let sidebarWidth = 48;
+  sidebar.getBoundingClientRect = () => ({
+    left: 0, top: 0, right: sidebarWidth, bottom: 900, width: sidebarWidth, height: 900,
+  });
   document.body.appendChild(sidebar);
   const main = new FakeElement("main");
   let mainRect = { left: 250, top: 0, right: 1440, bottom: 900, width: 1190, height: 900 };
   main.getBoundingClientRect = () => ({ ...mainRect });
   document.body.appendChild(main);
   document.querySelector = (selector) => selector === "main" ? main : null;
+  let sidebarCandidates = [sidebar];
+  let mainCandidates = [main];
   const walk = (element) => [element, ...element.children.flatMap(walk)];
   document.querySelectorAll = (selector) => {
-    if (selector === 'main,[role="main"]') return [main];
-    if (selector.includes(".dframe-sidebar") || selector.includes("aside")) return [sidebar];
+    if (selector === 'main,[role="main"]') return mainCandidates;
+    if (selector.includes("aside") || selector.includes('[role="navigation"]')) return sidebarCandidates;
     const markers = [...selector.matchAll(/\[([^\]=]+)(?:=[^\]]+)?\]/g)].map((match) => match[1]);
-    if (markers.some((name) => name.startsWith("data-claude-aura-"))) {
+    if (markers.some((name) => name.startsWith("data-claude-aura-") || name === "data-aura-role")) {
       return walk(document.documentElement).filter((element) => markers.some((name) => Object.hasOwn(element, name)));
     }
     return [];
@@ -744,18 +849,25 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   }
 
   let mediaDark = false;
+  let forcedColorsActive = false;
   const mediaListeners = new Set();
+  const forcedColorListeners = new Set();
   const mediaQuery = {
     get matches() { return mediaDark; },
     addEventListener(type, listener) { if (type === "change") mediaListeners.add(listener); },
     removeEventListener(type, listener) { if (type === "change") mediaListeners.delete(listener); },
+  };
+  const forcedColorQuery = {
+    get matches() { return forcedColorsActive; },
+    addEventListener(type, listener) { if (type === "change") forcedColorListeners.add(listener); },
+    removeEventListener(type, listener) { if (type === "change") forcedColorListeners.delete(listener); },
   };
   const windowListeners = new Map();
   const navigationListeners = new Set();
   const window = {
     innerWidth: 1440,
     innerHeight: 900,
-    matchMedia: () => mediaQuery,
+    matchMedia: (query) => query === "(forced-colors: active)" ? forcedColorQuery : mediaQuery,
     getComputedStyle: (element) => ({
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
@@ -792,9 +904,10 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     assert.equal(document.documentElement.dataset.claudeAuraAppearance, "system");
     assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, "light");
     assert.equal(document.documentElement.dataset.claudeAuraContext, "other");
-    assert.equal(sidebar["data-claude-aura-sidebar"], "true",
-      `${theme.name} did not mark the valid collapsed navigation rail`);
+    assert.equal(sidebar["data-claude-aura-sidebar"], undefined,
+      `${theme.name} styled the collapsed navigation rail instead of leaving it native`);
     assert.equal(mediaListeners.size, 1, `${theme.name} left duplicate appearance listeners`);
+    assert.equal(forcedColorListeners.size, 1, `${theme.name} left duplicate forced-colors listeners`);
     assert.equal(intervals.size, 1, `${theme.name} left duplicate renderer timers`);
     assert.equal(observers.size, 1, `${theme.name} left duplicate mutation observers`);
     const backdrop = document.getElementById("claude-aura-backdrop");
@@ -821,6 +934,75 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     }
   }
 
+  const sidebarSection = new FakeElement("section");
+  sidebarSection.role = "group";
+  sidebarSection.rect = { left: 8, top: 64, right: 272, bottom: 760, width: 264, height: 696 };
+  const sidebarList = new FakeElement("div");
+  sidebarList.role = "list";
+  sidebarList.rect = { left: 8, top: 130, right: 272, bottom: 720, width: 264, height: 590 };
+  const primaryAction = new FakeElement("a");
+  primaryAction.href = "/new";
+  primaryAction.tabIndex = 0;
+  primaryAction.rect = { left: 16, top: 76, right: 264, bottom: 120, width: 248, height: 44 };
+  const ordinaryRow = new FakeElement("a");
+  ordinaryRow.href = "/chat/one";
+  ordinaryRow.tabIndex = 0;
+  ordinaryRow.rect = { left: 16, top: 146, right: 264, bottom: 186, width: 248, height: 40 };
+  const currentRow = new FakeElement("a");
+  currentRow.href = "/chat/two";
+  currentRow.tabIndex = 0;
+  currentRow.setAttribute("aria-current", "page");
+  currentRow.rect = { left: 16, top: 194, right: 264, bottom: 234, width: 248, height: 40 };
+  const footerControl = new FakeElement("button");
+  footerControl.tabIndex = 0;
+  footerControl.setAttribute("aria-haspopup", "menu");
+  footerControl.rect = { left: 16, top: 826, right: 264, bottom: 870, width: 248, height: 44 };
+  sidebarList.appendChild(ordinaryRow);
+  sidebarList.appendChild(currentRow);
+  sidebarSection.appendChild(sidebarList);
+  sidebar.appendChild(primaryAction);
+  sidebar.appendChild(sidebarSection);
+  sidebar.appendChild(footerControl);
+  sidebarWidth = 280;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(sidebar["data-claude-aura-sidebar"], "expanded");
+  assert.equal(primaryAction["data-aura-role"], "sidebar-primary");
+  assert.equal(ordinaryRow["data-aura-role"], "sidebar-row");
+  assert.equal(currentRow["data-aura-role"], "sidebar-row");
+  assert.equal(sidebarList["data-aura-role"], "sidebar-list");
+  assert.equal(sidebarSection["data-aura-role"], "sidebar-section");
+  assert.equal(footerControl["data-aura-role"], "sidebar-footer");
+  assert.equal(currentRow["aria-current"], "page",
+    "Runtime role discovery must preserve Claude's current-row state");
+  assert.deepEqual([primaryAction.tabIndex, ordinaryRow.tabIndex, currentRow.tabIndex, footerControl.tabIndex],
+    [0, 0, 0, 0], "Runtime role discovery must preserve keyboard order");
+
+  const independentSidebar = new FakeElement("nav");
+  independentSidebar.rect = { left: 0, top: 0, right: 276, bottom: 900, width: 276, height: 900 };
+  document.body.appendChild(independentSidebar);
+  sidebarCandidates = [sidebar, independentSidebar];
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(sidebar["data-claude-aura-sidebar"], undefined,
+    "Two independent left rails must fail open");
+  assert.equal(primaryAction["data-aura-role"], undefined,
+    "Ambiguous sidebar discovery must clear every prior subrole");
+
+  independentSidebar.remove();
+  const nestedSidebarCandidate = new FakeElement("nav");
+  nestedSidebarCandidate.rect = { left: 0, top: 0, right: 280, bottom: 900, width: 280, height: 900 };
+  sidebar.appendChild(nestedSidebarCandidate);
+  sidebarCandidates = [sidebar, nestedSidebarCandidate];
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(sidebar["data-claude-aura-sidebar"], "expanded",
+    "Nested candidates representing one rail must collapse to their outer owner");
+  nestedSidebarCandidate.remove();
+  sidebarCandidates = [sidebar];
+  sidebarWidth = 48;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(sidebar["data-claude-aura-sidebar"], undefined);
+  assert.equal(primaryAction["data-aura-role"], undefined,
+    "Collapsing the sidebar must restore its native control presentation");
+
   const reinjectKorean = new Function(
     "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
     koreanPayload,
@@ -835,32 +1017,70 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   const editor = new FakeElement("textarea");
   const firstControl = new FakeElement("button");
   const secondControl = new FakeElement("button");
+  const toggleControl = new FakeElement("button");
+  const toolbar = new FakeElement("div");
+  toolbar.setAttribute("role", "toolbar");
+  toolbar.rect = { left: 430, top: 356, right: 1030, bottom: 396, width: 600, height: 40 };
+  firstControl.tabIndex = 0;
+  firstControl.setAttribute("aria-label", "Attach");
+  firstControl.rect = { left: 440, top: 356, right: 480, bottom: 396, width: 40, height: 40 };
+  secondControl.tabIndex = 0;
+  secondControl.setAttribute("aria-label", "Model");
+  secondControl.rect = { left: 490, top: 356, right: 610, bottom: 396, width: 120, height: 40 };
+  toggleControl.tabIndex = 0;
+  toggleControl.setAttribute("role", "switch");
+  toggleControl.setAttribute("aria-checked", "false");
+  toggleControl.rect = { left: 620, top: 356, right: 664, bottom: 396, width: 44, height: 40 };
+  const popup = new FakeElement("div");
+  popup.setAttribute("role", "dialog");
+  const popupControl = new FakeElement("button");
+  popupControl.tabIndex = 0;
+  popupControl.rect = { left: 700, top: 356, right: 780, bottom: 396, width: 80, height: 40 };
+  popup.appendChild(popupControl);
+  toolbar.appendChild(firstControl);
+  toolbar.appendChild(secondControl);
+  toolbar.appendChild(toggleControl);
   composer.appendChild(editor);
-  composer.appendChild(firstControl);
-  composer.appendChild(secondControl);
+  composer.appendChild(toolbar);
+  composer.appendChild(popup);
   const promptRoot = new FakeElement("div");
   promptRoot.appendChild(composer);
   main.appendChild(promptRoot);
   let composerEditors = [editor];
   let hasConversationMessage = false;
   let composerBaseTop = 300;
-  editor.getBoundingClientRect = () => ({ left: 430, top: composerBaseTop + 12, right: 930, bottom: composerBaseTop + 52, width: 500, height: 40 });
-  composer.getBoundingClientRect = () => ({ left: 430, top: composerBaseTop, right: 1030, bottom: composerBaseTop + 100, width: 600, height: 100 });
+  let editorHeight = 40;
+  let composerHeight = 100;
+  editor.getBoundingClientRect = () => ({
+    left: 430,
+    top: composerBaseTop + 12,
+    right: 930,
+    bottom: composerBaseTop + 12 + editorHeight,
+    width: 500,
+    height: editorHeight,
+  });
+  composer.getBoundingClientRect = () => ({
+    left: 430,
+    top: composerBaseTop,
+    right: 1030,
+    bottom: composerBaseTop + composerHeight,
+    width: 600,
+    height: composerHeight,
+  });
   promptRoot.getBoundingClientRect = () => {
     const width = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-width")) || 600;
     const x = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-x")) || 0;
     const y = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-y")) || 0;
     const left = mainRect.left + (mainRect.width / 2) - (width / 2) + x;
-    return { left, top: composerBaseTop + y, right: left + width, bottom: composerBaseTop + y + 120, width, height: 120 };
+    const height = composerHeight + 20;
+    return { left, top: composerBaseTop + y, right: left + width, bottom: composerBaseTop + y + height, width, height };
   };
-  composer.querySelectorAll = (selector) => selector === 'button,[role="button"],select'
-    ? [firstControl, secondControl]
-    : [];
-  promptRoot.querySelectorAll = (selector) => selector === 'button,[role="button"],select'
-    ? [firstControl, secondControl]
-    : [];
-  main.querySelectorAll = (selector) => selector.includes("textarea:not([readonly])") ? composerEditors : [];
-  main.querySelector = () => hasConversationMessage ? new FakeElement("article") : null;
+  main.querySelectorAll = (selector) => selector.includes("textarea:not([readonly])")
+    ? composerEditors
+    : FakeElement.prototype.querySelectorAll.call(main, selector);
+  main.querySelector = (selector) => selector.includes('[data-testid="user-message"]')
+    ? (hasConversationMessage ? new FakeElement("article") : null)
+    : FakeElement.prototype.querySelector.call(main, selector);
 
   const nativeLayoutBundle = await buildPayload({
     config: { ...DEFAULT_CONFIG, theme: "japanese-film-editorial" },
@@ -872,14 +1092,93 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   );
   injectNativeLayout(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
   assert.equal(document.documentElement.dataset.claudeAuraContext, "new-chat");
+  assert.equal(main["data-claude-aura-main-canvas"], "true");
   assert.equal(promptRoot["data-claude-aura-prompt"], "new-chat",
     "A native new-chat composer must remain measurable before Studio authors a layout");
+  assert.equal(composer["data-aura-role"], "composer-shell");
+  assert.equal(editor["data-aura-role"], "composer-editor");
+  assert.equal(toolbar["data-aura-role"], "composer-toolbar");
+  assert.equal(firstControl["data-aura-role"], "control-icon");
+  assert.equal(secondControl["data-aura-role"], "control-pill");
+  assert.equal(toggleControl["data-aura-role"], "control-toggle");
+  assert.equal(popupControl["data-aura-role"], undefined,
+    "Controls owned by a dialog inside the composer must retain native presentation");
+  assert.deepEqual(
+    [
+      firstControl.tabIndex,
+      firstControl["aria-label"],
+      secondControl.tabIndex,
+      secondControl["aria-label"],
+      toggleControl.tabIndex,
+      toggleControl.role,
+      toggleControl["aria-checked"],
+    ],
+    [0, "Attach", 0, "Model", 0, "switch", "false"],
+    "Composer role discovery must not change names, states, or keyboard order",
+  );
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "",
     "Measuring a native new-chat composer must not author its width");
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-x"), "",
     "Measuring a native new-chat composer must not author its horizontal position");
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-y"), "",
     "Measuring a native new-chat composer must not author its vertical position");
+
+  toolbar.remove();
+  popup.remove();
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(composer["data-aura-role"], "composer-shell",
+    "A composer with optional controls absent must retain its shell role");
+  assert.equal(editor["data-aura-role"], "composer-editor");
+  toolbar.appendChild(firstControl);
+  toolbar.appendChild(secondControl);
+  toolbar.appendChild(toggleControl);
+  composer.appendChild(toolbar);
+  composer.appendChild(popup);
+  editorHeight = 132;
+  composerHeight = 192;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(composer["data-aura-role"], "composer-shell",
+    "Long input or attachment growth must not drop the composer shell role");
+  assert.equal(editor["data-aura-role"], "composer-editor");
+  assert.equal(firstControl["data-aura-role"], "control-icon");
+  editorHeight = 40;
+  composerHeight = 100;
+  window.__CLAUDE_AURA_STATE__.ensure();
+
+  const independentMain = new FakeElement("main");
+  independentMain.rect = { left: 300, top: 0, right: 1440, bottom: 900, width: 1140, height: 900 };
+  document.body.appendChild(independentMain);
+  mainCandidates = [main, independentMain];
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(main["data-claude-aura-main-canvas"], undefined,
+    "Two independent main regions must fail open");
+  assert.equal(composer["data-aura-role"], undefined,
+    "Ambiguous main discovery must clear prior composer roles");
+  assert.equal(promptRoot["data-claude-aura-prompt"], undefined);
+  assert.equal(document.documentElement.dataset.claudeAuraContext, "other");
+  independentMain.remove();
+  mainCandidates = [main];
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(composer["data-aura-role"], "composer-shell",
+    "Composer roles must recover after main-region ambiguity clears");
+
+  sidebarWidth = 280;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(primaryAction["data-aura-role"], "sidebar-primary");
+  forcedColorsActive = true;
+  for (const listener of forcedColorListeners) listener({ matches: true });
+  assert.equal(sidebar["data-claude-aura-sidebar"], undefined);
+  assert.equal(primaryAction["data-aura-role"], undefined);
+  assert.equal(main["data-claude-aura-main-canvas"], undefined);
+  assert.equal(composer["data-aura-role"], undefined);
+  assert.equal(promptRoot["data-claude-aura-prompt"], undefined);
+  assert.equal(document.documentElement.dataset.claudeAuraContext, "other",
+    "Forced colors must leave native chrome unmarked and fail open");
+  forcedColorsActive = false;
+  for (const listener of forcedColorListeners) listener({ matches: false });
+  assert.equal(primaryAction["data-aura-role"], "sidebar-primary");
+  assert.equal(composer["data-aura-role"], "composer-shell");
+  assert.equal(promptRoot["data-claude-aura-prompt"], "new-chat");
 
   reinjectKorean(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
   window.__CLAUDE_AURA_STATE__.ensure();
@@ -929,6 +1228,13 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(document.documentElement.dataset.claudeAuraContext, "conversation");
   assert.equal(promptRoot["data-claude-aura-prompt"], undefined);
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "");
+  assert.equal(composer["data-aura-role"], "composer-shell",
+    "Conversation context must keep native composer material without repositioning it");
+  assert.equal(editor["data-aura-role"], "composer-editor");
+  assert.equal(toolbar["data-aura-role"], "composer-toolbar");
+  assert.equal(firstControl["data-aura-role"], "control-icon");
+  assert.equal(composer.style.getPropertyValue("position"), "");
+  assert.equal(composer.style.getPropertyValue("transform"), "");
   assert.equal(heroLayer.dataset.artContext, "conversation");
   assert.deepEqual(koreanLayers.map((layer) => layer.style.getPropertyValue("display")), ["", "none", "none", "none"],
     "Korean Idol light conversation must retain only its atmosphere and hide the portrait");
@@ -953,6 +1259,10 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(document.documentElement.dataset.claudeAuraContext, "other");
   assert.equal(promptRoot["data-claude-aura-prompt"], undefined);
+  assert.equal(composer["data-aura-role"], undefined,
+    "Ambiguous composer discovery must clear every semantic chrome role");
+  assert.equal(editor["data-aura-role"], undefined);
+  assert.equal(firstControl["data-aura-role"], undefined);
   assert.equal(heroLayer.style.getPropertyValue("display"), "none",
     "An ambiguous page must hide Korean Idol's hero rather than cover unknown content");
   mediaDark = true;
@@ -968,6 +1278,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(document.documentElement.dataset.claudeAuraContext, "other",
     "A bottom-anchored message-free composer must fail closed instead of moving");
+  assert.equal(composer["data-aura-role"], undefined,
+    "A bottom-anchored ambiguous composer must retain native presentation");
 
   // Exercise Studio's schema-v2 gates as one atomic scene. Reinjecting or
   // switching mode/context/viewport must reuse one backdrop and reveal only
@@ -1219,6 +1531,14 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(document.documentElement.style.setCalls, writesAfterSwitch, "Clean ensures rewrote root image values");
 
   assert.equal(window.__CLAUDE_AURA_STATE__.cleanup(), true);
+  assert.equal(sidebar["data-claude-aura-sidebar"], undefined);
+  assert.equal(primaryAction["data-aura-role"], undefined);
+  assert.equal(main["data-claude-aura-main-canvas"], undefined);
+  assert.equal(
+    walk(document.documentElement).filter((element) => Object.hasOwn(element, "data-aura-role")).length,
+    0,
+    "Cleanup must remove every live semantic chrome role",
+  );
   assert.equal(intervals.size, 0);
   assert.equal(timeouts.size, 0);
   assert.equal(observers.size, 0);
@@ -1229,6 +1549,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(document.documentElement.dataset.claudeAuraEffectiveMode, undefined);
   assert.equal(document.documentElement.dataset.claudeAuraContext, undefined);
   assert.equal(mediaListeners.size, 0);
+  assert.equal(forcedColorListeners.size, 0);
   assert.equal([...windowListeners.values()].reduce((total, listeners) => total + listeners.size, 0), 0);
   assert.equal(navigationListeners.size, 0);
   assert.equal(window.__CLAUDE_AURA_STATE__, undefined);

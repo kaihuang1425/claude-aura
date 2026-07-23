@@ -687,8 +687,11 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
         }));
         assert.equal(studioResult.state.tokens.light.sidebarAlpha, sidebarAlpha,
           "A light-label sidebar edit did not update the editable theme");
-        assert(studioResult.payload.includes("html.claude-aura [data-claude-aura-sidebar] svg{color:inherit !important}"),
-          "A light-label editor draft did not auto-apply its sidebar foreground to SVG logos and icons");
+        assert(studioResult.payload.includes(
+          'html.claude-aura [data-aura-role=\\"sidebar-row\\"]{color:hsl(var(--aura-sidebar-text-primary)) !important',
+        ), "A light-label editor draft did not apply its foreground through the discovered sidebar-row role");
+        assert(!studioResult.payload.includes("[data-claude-aura-sidebar] svg"),
+          "A light-label editor draft broadly restyled native SVG logos or unrelated icons");
       }
       studioResult = await studioRequest(mutationRequest(studioResult, "discard-theme-edit"));
       assert.equal(studioResult.state.active, false);
@@ -937,8 +940,11 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     }));
     assert.equal(studioResult.state.tokens.light.sidebarAlpha, editedSidebarAlpha,
       "A valid sidebar edit did not update the editable theme");
-    assert(studioResult.payload.includes("html.claude-aura [data-claude-aura-sidebar] svg{color:inherit !important}"),
-      "A valid editor draft did not auto-apply sidebar label foreground to its icons");
+    assert(studioResult.payload.includes(
+      'html.claude-aura [data-aura-role=\\"sidebar-row\\"]{color:hsl(var(--aura-sidebar-text-primary)) !important',
+    ), "A valid editor draft did not apply sidebar foreground through its discovered row role");
+    assert(!studioResult.payload.includes("[data-claude-aura-sidebar] svg"),
+      "A valid editor draft broadly restyled native SVG logos or unrelated icons");
     const validDraftStudioStyle = structuredClone(studioResult.state.studioStyle);
     const restartedDraft = JSON.parse(run(process.execPath, [
       cliPath, "studio-state", "--config", studioConfigPath,

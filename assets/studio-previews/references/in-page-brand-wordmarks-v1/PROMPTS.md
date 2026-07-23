@@ -10,6 +10,8 @@ Editorial and Japanese Idol sources are deterministic derivatives of their
 supplied source-kit lockups. Korean Idol is the previously approved supplied
 raster. The other five sources were authored with the built-in image generator
 and then chroma-keyed, cropped, and resized by the deterministic local builder.
+On 2026-07-23 the Default source received the geometry-preserving palette
+revision recorded below so it matches the frozen cool indigo theme.
 
 ## Default
 
@@ -28,6 +30,20 @@ Scene/backdrop: perfectly flat solid #00ff00 chroma-key background for backgroun
 Text (verbatim): “Claude”
 Constraints: exact spelling; no other text; crisp isolated silhouette; generous padding; do not use #00ff00 anywhere in the logo; no cast shadow, no contact shadow, no reflection, no mockup, no watermark.
 Avoid: square badge layout, app icon framing, extra letters, slogans, tiny illegible details, photographic scene.
+```
+
+Targeted palette revision used for the final source:
+
+```text
+Use case: precise-object-edit
+Asset type: normalized horizontal Default in-page wordmark source
+Input image: Image 1 is the approved Default horizontal Claude lockup.
+Primary request: change only the warm aubergine, coral, and cream palette to the Default theme's cool indigo-violet, ice-lilac, and cyan language while keeping the exact word Claude and the existing orbital Aura mark.
+Composition/framing: preserve the exact letters, serif geometry, mark silhouette, orbit, spacing, alignment, transparent canvas, and crop.
+Color palette: cool ink #2A294E for the lettering, indigo-violet #5C4FB8 for the mark, luminous violet #7052E2 for the core, ice lilac #DDE2FF for the inner facet, cyan #4BC7EE for the orbit, and cool white #FAFCFF for the highlight.
+Text (verbatim): "Claude"
+Constraints: palette-only revision; keep the exact spelling once and only once; no letter, geometry, spacing, scale, crop, shadow, glow, texture, or background change.
+Avoid: warm coral, orange, parchment, brown, magenta-pink, slogans, extra letters, and details that disappear at sidebar size.
 ```
 
 ## Korean Prestige

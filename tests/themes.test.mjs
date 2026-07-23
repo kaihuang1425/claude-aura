@@ -307,58 +307,98 @@ test("every theme provides complete semantic roles and a distinct component prof
   assert.equal(new Set(profiles).size, THEME_IDS.length, "Every theme must have a distinct typography/shape/effects profile");
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
   const variants = await fs.readFile(path.join(PROJECT_ROOT, "assets", "theme-variants.css"), "utf8");
-  const interactiveSelector = 'html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
-  const broadLinkSelector = 'html.claude-aura :is(button, [role="button"], a, [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
-  assert(baseCss.includes(`${interactiveSelector} {`), "Shared interactive typography rule is missing");
-  const controlSelector = 'html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"])';
-  const controlStart = baseCss.indexOf(`${controlSelector},`);
-  assert(controlStart >= 0, "Shared semantic-control rule is missing");
-  const controlBody = baseCss.slice(controlStart, baseCss.indexOf("}", controlStart));
-  assert.match(controlBody, /border-radius:\s*var\(--aura-control-radius\)/);
-  for (const state of [":not([disabled]):not([aria-disabled=\"true\"]):hover", ":not([disabled]):not([aria-disabled=\"true\"]):active", ":is([disabled], [aria-disabled=\"true\"])"]) {
-    assert(baseCss.includes(`${controlSelector}${state}`), `Shared semantic controls lack ${state} styling`);
-    assert(!baseCss.includes(`${broadLinkSelector}${state}`), `Bare prose links must not receive ${state} control styling`);
+  const roleSelectors = [
+    '[data-aura-role="sidebar-primary"]',
+    '[data-aura-role="sidebar-row"]',
+    '[data-aura-role="sidebar-section"]',
+    '[data-aura-role="sidebar-list"]',
+    '[data-aura-role="sidebar-footer"]',
+    '[data-aura-role="composer-shell"]',
+    '[data-aura-role="composer-editor"]',
+    '[data-aura-role="composer-toolbar"]',
+    '[data-aura-role^="control-"]',
+  ];
+  for (const selector of roleSelectors) {
+    assert(baseCss.includes(`html.claude-aura ${selector}`),
+      `Fixed native-chrome role ${selector} has no baseline recipe`);
   }
+  const primarySelector = 'html.claude-aura [data-aura-role="sidebar-primary"]';
+  const rowSelector = 'html.claude-aura [data-aura-role="sidebar-row"]';
+  const composerSelector = 'html.claude-aura [data-aura-role="composer-shell"]';
+  const editorSelector = 'html.claude-aura [data-aura-role="composer-editor"]';
+  const nativeControlSelector = 'html.claude-aura [data-aura-role^="control-"]';
+  const ruleBody = (selector) => {
+    const start = baseCss.indexOf(`${selector} {`);
+    assert(start >= 0, `${selector} is missing`);
+    return baseCss.slice(start, baseCss.indexOf("}", start));
+  };
+  assert.match(ruleBody(primarySelector), /background:[\s\S]*--aura-accent-primary/);
+  assert.match(ruleBody(primarySelector), /--aura-text-on-accent/);
+  assert(baseCss.includes(`${primarySelector}:not([disabled]):not([aria-disabled="true"]):hover`));
+  assert(baseCss.includes(`${primarySelector}:not([disabled]):not([aria-disabled="true"]):active`));
+  assert(baseCss.includes(`${rowSelector}:not([disabled]):not([aria-disabled="true"]):hover`));
+  assert(baseCss.includes(`${rowSelector}:not([disabled]):not([aria-disabled="true"]):active`));
+  assert.match(baseCss, /\[data-aura-role="sidebar-row"\]:is\(\s*\[aria-current\]:not\(\[aria-current="false"\]\),\s*\[aria-selected="true"\],\s*\[data-state="active"\]/s,
+    "Current sidebar rows must use native state attributes");
+  assert.match(ruleBody(composerSelector), /--aura-composer-background/);
+  assert.match(ruleBody(composerSelector), /--aura-shadow-elevated/);
+  assert(baseCss.includes(`${composerSelector}:focus-within`),
+    "Composer focus must be carried by its discovered outer shell");
+  assert.match(ruleBody(editorSelector), /background:\s*transparent\s*!important/);
+  assert.match(ruleBody(editorSelector), /box-shadow:\s*none\s*!important/);
+  for (const state of [
+    ':not([disabled]):not([aria-disabled="true"]):hover',
+    ':not([disabled]):not([aria-disabled="true"]):active',
+    ':is([aria-pressed="true"], [aria-checked="true"], [data-state="checked"], [data-state="active"])',
+    ':is([disabled], [aria-disabled="true"])',
+  ]) {
+    assert(baseCss.includes(`${nativeControlSelector}${state}`),
+      `Role-scoped composer controls lack ${state} styling`);
+  }
+  assert(!baseCss.includes('.input-box') && !baseCss.includes('[data-testid="composer"]')
+      && !baseCss.includes('[data-testid="chat-input"]'),
+    "Composer material must not target unrelated editors through broad host selectors");
+  assert(!/\[data-claude-aura-sidebar\]\s+:is\([^{}]*(?:button|a\[href\])/.test(baseCss),
+    "Sidebar states must not style every descendant control");
+  assert(!baseCss.includes('html.claude-aura :is(button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"])'),
+    "Page buttons, dialog controls, and unrelated widgets must retain native presentation");
   assert.match(baseCss, /:is\(hr, \[role="separator"\]\)/);
-  for (const status of ["info", "success", "warning", "loading"]) assert(baseCss.includes(`[data-status="${status}"]`), `${status} status styling is missing`);
-  assert.match(baseCss, /\[role="progressbar"\]/);
-  assert.match(baseCss, /\[data-settings-panel\]/);
-  assert.match(baseCss, /\[data-testid\*="workspace"\]/);
-  assert.match(baseCss, /\[data-testid\*="quick-action"\]/);
   assert(!/:is\([^{}]*(?:button|\[role="button"\])[^{}]*\)\s+:is\(svg, \[data-icon\]\)\s*\{[^}]*\b(?:background|box-shadow|border-radius|transform)\s*:/s.test(`${baseCss}\n${variants}`),
     "Aura must not draw boxes, shadows, or transforms around Claude's nested icons");
   assert(baseCss.includes("[data-claude-aura-sidebar]"), "Live sidebar styling must use the semantic Aura marker");
-  const sidebarIconStart = baseCss.indexOf("html.claude-aura [data-claude-aura-sidebar] svg {");
-  assert(sidebarIconStart >= 0, "The live sidebar must bind its icons and native SVG logo to the label foreground");
-  const sidebarIconBody = baseCss.slice(sidebarIconStart, baseCss.indexOf("}", sidebarIconStart));
-  assert.match(sidebarIconBody, /color:\s*inherit\s*!important/,
-    "Live sidebar icons and native SVG logo must inherit their exact computed foreground");
-  assert(!/\b(?:fill|stroke)\s*:/.test(sidebarIconBody),
-    "Sidebar foreground synchronization must not overwrite Claude's native icon paint");
-  assert(!/\bfilter\s*:/.test(sidebarIconBody),
-    "Sidebar foreground synchronization must preserve the approved native brand treatment");
   assert(!baseCss.includes(".dframe-sidebar"), "Live sidebar styling must not depend on Claude's unstable class name");
   assert(!variants.includes(".dframe-sidebar"), "Theme variants must use the semantic sidebar marker");
-  const hoverStart = baseCss.indexOf(`${controlSelector}:not([disabled]):not([aria-disabled="true"]):hover`);
-  const hoverBody = baseCss.slice(hoverStart, baseCss.indexOf("}", hoverStart));
-  assert(hoverStart >= 0 && /background:\s*hsl\(var\(--aura-hover-surface\)/.test(hoverBody));
-  assert.match(hoverBody, /color:\s*hsl\(var\(--aura-text-primary\)\)/);
-  assert(!/border-color:[^;]*--aura-accent-primary/.test(hoverBody));
-  assert.match(hoverBody, /transform:\s*none/);
-  const selectedStart = baseCss.indexOf('html.claude-aura :is(button, a[href], [role="button"]');
-  assert(selectedStart >= 0, "Selected states must be scoped to interactive elements");
-  assert(!/html\.claude-aura\s+:is\(\[aria-current/.test(baseCss), "Bare state wrappers must not receive selected styling");
+  assert(!/html\.claude-aura\s+:is\(\[aria-current/.test(baseCss),
+    "Bare state wrappers must not receive selected styling");
   const focusStart = baseCss.indexOf("html.claude-aura :focus-visible");
-  assert(focusStart > selectedStart,
-    "Visible focus styling must follow hover/selected/active styling");
+  assert(focusStart > baseCss.indexOf(nativeControlSelector),
+    "Visible focus styling must follow role-scoped interaction states");
   const focusBody = baseCss.slice(focusStart, baseCss.indexOf("}", focusStart));
   assert.match(focusBody, /outline:\s*1px solid hsl\(var\(--aura-focus-ring\) \/ 0\.72\)/,
     "Focus styling must use the softened one-pixel ring");
   assert.match(focusBody, /box-shadow:\s*0 0 0 4px hsl\(var\(--aura-focus-ring\) \/ 0\.14\)/,
     "Focus styling must retain a low-alpha halo");
+  assert.match(baseCss, /@media \(forced-colors: active\)/);
+  assert.match(baseCss, /claude-aura-reduce-motion/);
+  const expectedSheen = {
+    default: "0.08",
+    "japanese-film-editorial": "0",
+    "korean-prestige": "0.14",
+    "cartoon-studio": "0",
+    "anime-twilight": "0.22",
+    "study-library": "0",
+    "japanese-idol": "0.18",
+    "korean-idol": "0.32",
+  };
   for (const id of THEME_IDS) {
-    assert(variants.includes(`data-claude-aura-theme="${id}"] { --aura-state-shadow:`),
+    const recipe = variants.match(new RegExp(
+      `html\\.claude-aura\\[data-claude-aura-theme="${id}"\\]\\s*\\{([^}]*)--aura-primary-sheen:\\s*([^;]+);([^}]*)\\}`,
+      "s",
+    ));
+    assert(recipe && recipe[0].includes("--aura-state-shadow:"),
       `${id} lacks its restrained state shadow`);
+    assert.equal(recipe[2].trim(), expectedSheen[id],
+      `${id} does not preserve its authorized primary-action sheen`);
   }
   const exactArtworkSelector = 'html.claude-aura:is([data-claude-aura-theme="cartoon-studio"], [data-claude-aura-theme="anime-twilight"], [data-claude-aura-theme="study-library"]) #claude-aura-backdrop .claude-aura-theme-art-layer';
   assert(variants.includes(`${exactArtworkSelector} {\n  animation: none;\n}`),

@@ -283,11 +283,30 @@
       levelSimple: "Quick customize",
       levelAdvanced: "Advanced",
       inspectorTitle: "Edit theme",
-      inspectorSections: "Editor sections",
-      panelDesign: "Style",
-      panelArtwork: "Images",
-      panelLayout: "Placement",
-      panelChecks: "Checks",
+      inspectorSections: "Theme editor branches",
+      branchInterface: "Interface",
+      branchBackground: "Background",
+      branchWidgets: "Widgets",
+      targetPicker: "Target",
+      editingContext: "Editing",
+      appliesToContext: "Applies to",
+      sourceContext: "Source",
+      editTargetContext: "Edit target",
+      documentDetails: "Document details",
+      targetInterfaceTheme: "Overall interface",
+      targetNewChatArea: "New chat area",
+      targetBackgroundCanvas: "Theme canvas",
+      targetBackgroundLayer: "Images",
+      targetAppIdentity: "App identity",
+      themeOriginalSource: "Theme original",
+      customizedSource: "Customized",
+      allModesScope: "Light and Dark",
+      allPagesScope: "All pages",
+      frameStandard: "Standard",
+      frameWide: "Wide",
+      customFrameUses: "Custom preview uses {0}",
+      switchPreview: "Switch preview",
+      advancedValuesNotice: "This target has additional values in Advanced.",
       reviewStates: "Review states",
       matrixTitle: "Every state at a glance",
       matrixHint: "Select a state to edit it.",
@@ -597,11 +616,30 @@
       levelSimple: "快速自定义",
       levelAdvanced: "高级",
       inspectorTitle: "编辑主题",
-      inspectorSections: "编辑分区",
-      panelDesign: "样式",
-      panelArtwork: "图片",
-      panelLayout: "位置",
-      panelChecks: "检查",
+      inspectorSections: "主题编辑分区",
+      branchInterface: "界面",
+      branchBackground: "背景",
+      branchWidgets: "小组件",
+      targetPicker: "编辑对象",
+      editingContext: "正在编辑",
+      appliesToContext: "作用范围",
+      sourceContext: "来源",
+      editTargetContext: "编辑尺寸",
+      documentDetails: "文档信息",
+      targetInterfaceTheme: "整体界面",
+      targetNewChatArea: "新对话区域",
+      targetBackgroundCanvas: "主题画布",
+      targetBackgroundLayer: "图片",
+      targetAppIdentity: "应用标识",
+      themeOriginalSource: "主题原始设置",
+      customizedSource: "已自定义",
+      allModesScope: "浅色和深色",
+      allPagesScope: "所有页面",
+      frameStandard: "标准",
+      frameWide: "宽屏",
+      customFrameUses: "自定义预览使用“{0}”设置",
+      switchPreview: "切换预览",
+      advancedValuesNotice: "此对象在“高级”模式中还有更多设置。",
       reviewStates: "检查不同状态",
       matrixTitle: "全部状态一览",
       matrixHint: "点击某个状态即可编辑。",
@@ -911,11 +949,30 @@
       levelSimple: "快速自訂",
       levelAdvanced: "進階",
       inspectorTitle: "編輯主題",
-      inspectorSections: "編輯區段",
-      panelDesign: "樣式",
-      panelArtwork: "圖片",
-      panelLayout: "位置",
-      panelChecks: "檢查",
+      inspectorSections: "主題編輯分區",
+      branchInterface: "介面",
+      branchBackground: "背景",
+      branchWidgets: "小工具",
+      targetPicker: "編輯項目",
+      editingContext: "正在編輯",
+      appliesToContext: "套用範圍",
+      sourceContext: "來源",
+      editTargetContext: "編輯尺寸",
+      documentDetails: "文件資訊",
+      targetInterfaceTheme: "整體介面",
+      targetNewChatArea: "新對話區域",
+      targetBackgroundCanvas: "主題畫布",
+      targetBackgroundLayer: "圖片",
+      targetAppIdentity: "App 識別",
+      themeOriginalSource: "主題原始設定",
+      customizedSource: "已自訂",
+      allModesScope: "淺色與深色",
+      allPagesScope: "所有頁面",
+      frameStandard: "標準",
+      frameWide: "寬螢幕",
+      customFrameUses: "自訂預覽使用「{0}」設定",
+      switchPreview: "切換預覽",
+      advancedValuesNotice: "此項目在「進階」模式中還有其他設定。",
       reviewStates: "檢查不同狀態",
       matrixTitle: "所有狀態一覽",
       matrixHint: "點選某個狀態即可編輯。",
@@ -1110,6 +1167,101 @@
   const formatBytes = (value) => value >= 1_000_000
     ? `${(value / 1_000_000).toFixed(2)} MB`
     : `${Math.max(0, Math.round(value / 1000))} KB`;
+
+  const CAPABILITY_BRANCHES = Object.freeze(["interface", "background", "widgets"]);
+  const CAPABILITY_VIEWS = Object.freeze(["new-chat", "conversation"]);
+  const CAPABILITY_AXES = Object.freeze(["appearance", "view", "frame"]);
+  const CAPABILITY_CAPTURE_GEOMETRY = Object.freeze([
+    "none", "full-canvas", "new-chat-area", "artwork-layer", "local-preview",
+  ]);
+  const CAPABILITY_SELECTION_BEHAVIOR = Object.freeze([
+    "picker", "stage-prompt", "stage-layer",
+  ]);
+  const CAPABILITY_TARGETS = Object.freeze({
+    "interface.theme": Object.freeze({ branch: "interface", labelKey: "targetInterfaceTheme" }),
+    "interface.new-chat-area": Object.freeze({ branch: "interface", labelKey: "targetNewChatArea" }),
+    "background.canvas": Object.freeze({ branch: "background", labelKey: "targetBackgroundCanvas" }),
+    "background.layer": Object.freeze({ branch: "background", labelKey: "targetBackgroundLayer" }),
+    "widgets.app-identity": Object.freeze({ branch: "widgets", labelKey: "targetAppIdentity" }),
+  });
+
+  function normalizeCapabilityRegistry(value) {
+    if (!Array.isArray(value) || value.length !== Object.keys(CAPABILITY_TARGETS).length) return null;
+    const normalized = [];
+    const ids = new Set();
+    for (const entry of value) {
+      if (!exactShape(entry, [
+        "id", "branch", "views", "axes", "captureGeometry", "selectionBehavior",
+      ]) || !Object.hasOwn(CAPABILITY_TARGETS, entry.id)
+          || CAPABILITY_TARGETS[entry.id].branch !== entry.branch
+          || !CAPABILITY_BRANCHES.includes(entry.branch)
+          || !Array.isArray(entry.views) || !entry.views.length
+          || !Array.isArray(entry.axes)
+          || !CAPABILITY_CAPTURE_GEOMETRY.includes(entry.captureGeometry)
+          || !CAPABILITY_SELECTION_BEHAVIOR.includes(entry.selectionBehavior)
+          || ids.has(entry.id)) return null;
+      if (entry.views.some((view) => !CAPABILITY_VIEWS.includes(view))
+          || new Set(entry.views).size !== entry.views.length
+          || entry.axes.some((axis) => !CAPABILITY_AXES.includes(axis))
+          || new Set(entry.axes).size !== entry.axes.length) return null;
+      ids.add(entry.id);
+      normalized.push(Object.freeze({
+        id: entry.id,
+        branch: entry.branch,
+        views: Object.freeze([...entry.views]),
+        axes: Object.freeze([...entry.axes]),
+        captureGeometry: entry.captureGeometry,
+        selectionBehavior: entry.selectionBehavior,
+      }));
+    }
+    if (Object.keys(CAPABILITY_TARGETS).some((id) => !ids.has(id))) return null;
+    return Object.freeze(normalized);
+  }
+
+  const EDITOR_CAPABILITY_REGISTRY = normalizeCapabilityRegistry([
+    {
+      id: "interface.theme",
+      branch: "interface",
+      views: ["new-chat", "conversation"],
+      axes: ["appearance"],
+      captureGeometry: "none",
+      selectionBehavior: "picker",
+    },
+    {
+      id: "interface.new-chat-area",
+      branch: "interface",
+      views: ["new-chat"],
+      axes: ["frame"],
+      captureGeometry: "new-chat-area",
+      selectionBehavior: "stage-prompt",
+    },
+    {
+      id: "background.canvas",
+      branch: "background",
+      views: ["new-chat", "conversation"],
+      axes: ["appearance", "view"],
+      captureGeometry: "full-canvas",
+      selectionBehavior: "picker",
+    },
+    {
+      id: "background.layer",
+      branch: "background",
+      views: ["new-chat", "conversation"],
+      axes: ["appearance", "view", "frame"],
+      captureGeometry: "artwork-layer",
+      selectionBehavior: "stage-layer",
+    },
+    {
+      id: "widgets.app-identity",
+      branch: "widgets",
+      views: ["new-chat", "conversation"],
+      axes: [],
+      captureGeometry: "local-preview",
+      selectionBehavior: "picker",
+    },
+  ]);
+  if (!EDITOR_CAPABILITY_REGISTRY) throw new Error("Invalid Aura editor capability registry");
+  const CAPABILITY_BY_ID = new Map(EDITOR_CAPABILITY_REGISTRY.map((entry) => [entry.id, entry]));
 
   function normalizePreviewUrl(value) {
     if (value === null) return null;
@@ -1441,7 +1593,15 @@
     const backButton = document.getElementById("editor-back");
     const topmostButton = document.getElementById("stage-real-topmost");
     const metadataInputs = [...document.querySelectorAll("[data-editor-metadata]")];
-    const inspectorTabs = [...document.querySelectorAll("[data-editor-panel-target]")];
+    const branchTabs = [...document.querySelectorAll("[data-editor-branch-target]")];
+    const targetPicker = document.getElementById("editor-target-picker");
+    const contextEditing = document.getElementById("editor-context-editing");
+    const contextApplies = document.getElementById("editor-context-applies");
+    const contextSource = document.getElementById("editor-context-source");
+    const contextFrame = document.getElementById("editor-context-frame");
+    const contextFrameRow = document.getElementById("editor-context-frame-row");
+    const documentDetails = document.getElementById("editor-document-details");
+    const switchSupportedPreviewButton = document.getElementById("editor-switch-supported-preview");
     for (const input of metadataInputs) {
       if (input.dataset.editorMetadata === "label" && input.dataset.editorLocale !== normalizedLocale) {
         input.closest(".editor-field")?.classList.add("advanced-only");
@@ -1451,7 +1611,18 @@
     let selectedMode = "light";
     let selectedLayerId = null;
     let renderedLayerSignature = null;
-    let inspectorPanel = "design";
+    let inspectorBranch = "interface";
+    let inspectorTarget = "interface.theme";
+    const targetByBranch = {
+      interface: "interface.theme",
+      background: "background.canvas",
+      widgets: "widgets.app-identity",
+    };
+    let stageViewport = "normal";
+    let stageContext = "new-chat";
+    let stageSelection = null;
+    let stagePreviewSize = [...STAGE_SIZES.normal];
+    let previewSizeIntent = null;
     let pendingAction = null;
     let returnTheme = "default";
     let confirmCallback = null;
@@ -1481,6 +1652,7 @@
       const locallyDirty = hasUnsavedEdits();
       dirtyPill.textContent = locallyDirty ? tr("unsavedState") : tr("savedState");
       dirtyPill.dataset.state = locallyDirty ? "dirty" : "saved";
+      refreshInspectorContext();
     };
 
     const announce = (message, tone = "ok") => {
@@ -1666,17 +1838,72 @@
       else navEditor.removeAttribute("aria-current");
     };
 
-    const setInspectorPanel = (panel, { focus = false, reveal = false } = {}) => {
-      if (!["design", "artwork", "layout", "checks"].includes(panel)) return false;
-      inspectorPanel = panel;
-      editor.dataset.inspectorPanel = panel;
-      for (const tab of inspectorTabs) {
-        const selected = tab.dataset.editorPanelTarget === panel;
+    const targetLabel = (target) => tr(CAPABILITY_TARGETS[target]?.labelKey ?? "targetPicker");
+    const syncTargetPicker = () => {
+      const entries = EDITOR_CAPABILITY_REGISTRY.filter((entry) => entry.branch === inspectorBranch);
+      targetPicker.replaceChildren(...entries.map((entry) => {
+        const option = document.createElement("option");
+        option.value = entry.id;
+        option.textContent = targetLabel(entry.id);
+        return option;
+      }));
+      targetPicker.value = inspectorTarget;
+    };
+    const layerScopeLabel = (layer) => {
+      if (!layer) return tr("allPagesScope");
+      const appearance = layer.appearance === "all" ? tr("allModesScope")
+        : tr(layer.appearance === "dark" ? "appearanceDark" : "appearanceLight");
+      const page = layer.context === "all" ? tr("allPagesScope")
+        : tr(layer.context === "conversation" ? "contextConversation" : "contextNewChat");
+      const frame = layer.viewport === "all"
+        ? `${tr("frameStandard")} + ${tr("frameWide")}`
+        : tr(layer.viewport === "wide" ? "frameWide" : "frameStandard");
+      return `${appearance} · ${page} · ${frame}`;
+    };
+    const refreshInspectorContext = () => {
+      const capability = CAPABILITY_BY_ID.get(inspectorTarget);
+      if (!capability) return;
+      const selectedLayer = state?.layers?.find((layer) => layer.id === selectedLayerId) ?? null;
+      contextEditing.textContent = inspectorTarget === "background.layer" && selectedLayer
+        ? format(tr("layerNumber"), selectedLayer.index + 1)
+        : targetLabel(inspectorTarget);
+      contextApplies.textContent = inspectorTarget === "interface.theme"
+        ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
+        : inspectorTarget === "interface.new-chat-area"
+          ? `${tr("contextNewChat")} · ${tr(stageViewport === "wide" ? "frameWide" : "frameStandard")}`
+          : inspectorTarget === "background.layer"
+            ? layerScopeLabel(selectedLayer)
+            : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
+      contextSource.textContent = state && hasUnsavedEdits()
+        ? tr("customizedSource") : tr("themeOriginalSource");
+      contextFrameRow.hidden = !capability.axes.includes("frame");
+      const frameLabel = tr(stageViewport === "wide" ? "frameWide" : "frameStandard");
+      const preset = Object.values(STAGE_SIZES).some(
+        ([width, height]) => width === stagePreviewSize[0] && height === stagePreviewSize[1],
+      );
+      contextFrame.textContent = preset ? frameLabel : format(tr("customFrameUses"), frameLabel);
+      const available = capability.views.includes(stageContext);
+      editor.dataset.targetAvailable = String(available);
+    };
+    const setInspectorTarget = (target, { focusBranch = false, reveal = false } = {}) => {
+      const capability = CAPABILITY_BY_ID.get(target);
+      if (!capability) return false;
+      inspectorTarget = target;
+      inspectorBranch = capability.branch;
+      targetByBranch[inspectorBranch] = target;
+      editor.dataset.inspectorBranch = inspectorBranch;
+      editor.dataset.inspectorTarget = inspectorTarget;
+      for (const tab of branchTabs) {
+        const selected = tab.dataset.editorBranchTarget === inspectorBranch;
         tab.setAttribute("aria-pressed", String(selected));
-        if (selected && focus) tab.focus();
+        if (selected && focusBranch) tab.focus();
       }
+      syncTargetPicker();
+      refreshInspectorContext();
       if (reveal) requestAnimationFrame(() => {
-        const firstSection = editor.querySelector(`[data-editor-panel="${panel}"]:not([hidden])`);
+        const firstSection = editor.querySelector(
+          `[data-editor-targets~="${CSS.escape(target)}"]:not([hidden])`,
+        );
         if (!firstSection || !editorControls || !inspectorHead) return;
         const visibleTop = inspectorHead.getBoundingClientRect().bottom + 12;
         const sectionTop = firstSection.getBoundingClientRect().top;
@@ -1684,16 +1911,38 @@
       });
       return true;
     };
-    setInspectorPanel(inspectorPanel);
-    inspectorTabs.forEach((tab) => tab.addEventListener("click", () => {
-      const panel = tab.dataset.editorPanelTarget;
-      if ((stageSelection?.kind === "prompt" && panel !== "layout")
-          || (stageSelection?.kind === "layer" && panel === "design")) {
+    setInspectorTarget(inspectorTarget);
+    const reflectStageSelectionForTarget = (target) => {
+      if (target === "interface.new-chat-area") {
+        stageSelection = { kind: "prompt" };
+      } else if (target === "background.layer" && selectedLayerId) {
+        stageSelection = { kind: "layer", id: selectedLayerId };
+      } else {
         stageSelection = null;
-        syncStageHud();
       }
-      setInspectorPanel(panel, { reveal: true });
+      syncStageHud();
+    };
+    branchTabs.forEach((tab) => tab.addEventListener("click", () => {
+      const branch = tab.dataset.editorBranchTarget;
+      const target = targetByBranch[branch];
+      if (!target) return;
+      setInspectorTarget(target, { reveal: true });
+      reflectStageSelectionForTarget(target);
+      renderStage();
     }));
+    targetPicker.addEventListener("change", () => {
+      const target = targetPicker.value;
+      if (!CAPABILITY_BY_ID.has(target)) {
+        syncTargetPicker();
+        return;
+      }
+      if (target === "background.layer" && !selectedLayerId) {
+        selectedLayerId = state?.layers?.[0]?.id ?? null;
+      }
+      setInspectorTarget(target, { reveal: true });
+      reflectStageSelectionForTarget(target);
+      renderStage();
+    });
 
     const resetStudioViewport = (hash) => {
       try {
@@ -1737,7 +1986,11 @@
       stageHiddenLayers.clear();
       stageLayersUserToggled = false;
       setStageLayersCollapsed(true);
-      setInspectorPanel("design");
+      targetByBranch.interface = "interface.theme";
+      targetByBranch.background = "background.canvas";
+      targetByBranch.widgets = "widgets.app-identity";
+      setInspectorTarget("interface.theme");
+      documentDetails.open = false;
       stageMirror = null;
       stageLiveMirror = null;
       stageMirrorCache.clear();
@@ -1801,10 +2054,7 @@
     const stageViewportInputs = [...document.querySelectorAll('input[name="stage-viewport"]')];
     const stageContextInputs = [...document.querySelectorAll('input[name="stage-context"]')];
     const stageZonesInput = document.getElementById("stage-zones");
-    let stageViewport = "normal";
-    let stageContext = "new-chat";
     let stageDrag = null;
-    let stageSelection = null;
     let stageKeyTimer = null;
     const stageKeyPaths = new Set();
     let stageMirror = null;
@@ -1812,10 +2062,8 @@
     const stageMirrorCache = new Map();
     let stageMirrorCacheBasis = null;
     let stageContextTouched = false;
-    let stagePreviewSize = [...STAGE_SIZES.normal];
     let previewResizeTimer = null;
     let previewSizeEditing = false;
-    let previewSizeIntent = null;
     let previewRequestSerial = 0;
     let previewExpectedRequest = null;
     // Drag pointermove is coalesced into one animation frame so a 120 Hz
@@ -2194,6 +2442,7 @@
         promptContextSection.inert = !newChat;
       }
       if (promptContextUnavailable) promptContextUnavailable.hidden = newChat;
+      refreshInspectorContext();
     };
 
     const renderStageLayersPanel = () => {
@@ -2330,7 +2579,6 @@
       stageEmptyNote.textContent = tr("stageEmpty");
       stageEmptyNote.hidden = seen.size > 0;
       if (stageSelection?.kind === "layer" && !seen.has(stageSelection.id)) stageSelection = null;
-      if (stageSelection?.kind === "prompt" && stageContext !== "new-chat") stageSelection = null;
       renderStageLayersPanel();
       if (focused && !document.activeElement?.dataset?.editorFocus) {
         stageRoot.querySelector(`[data-editor-focus="${focused}"]`)?.focus();
@@ -2622,10 +2870,10 @@
           if (card) card.open = true;
         }
         syncSelectedLayerCards();
-        setInspectorPanel("artwork");
+        setInspectorTarget("background.layer");
         announce(format(tr("stageSelectedAnnounce"), format(tr("layerNumber"), layer.index + 1)));
       } else if (selection?.kind === "prompt") {
-        setInspectorPanel("layout");
+        setInspectorTarget("interface.new-chat-area");
         announce(format(tr("stageSelectedAnnounce"), tr("stagePromptTag")));
       }
       syncStageHud();
@@ -2965,6 +3213,14 @@
       renderStage();
       announce(format(tr("stageContextSelected"), stageContextLabel()));
     }));
+    switchSupportedPreviewButton?.addEventListener("click", () => {
+      stageContextTouched = true;
+      stageContext = "new-chat";
+      for (const input of stageContextInputs) input.checked = input.value === stageContext;
+      selectStageMirror();
+      renderStage();
+      announce(format(tr("stageContextSelected"), stageContextLabel()));
+    });
     stageZonesInput?.addEventListener("change", () => {
       stageRoot.dataset.zones = String(stageZonesInput.checked);
     });
@@ -2982,11 +3238,8 @@
       editor.dataset.level = input.value;
       if (input.value === "simple") {
         for (const details of tokenGroups.querySelectorAll(".quick-essential")) details.open = true;
-        if (stageSelection?.kind === "layer") setInspectorPanel("artwork");
-        else if (stageSelection?.kind === "prompt") setInspectorPanel("layout");
-        else if (!["design", "artwork"].includes(inspectorPanel)) setInspectorPanel("design");
-      } else if (stageSelection?.kind === "layer") setInspectorPanel("artwork");
-      else if (stageSelection?.kind === "prompt") setInspectorPanel("layout");
+      }
+      setInspectorTarget(inspectorTarget);
       renderStage();
     }));
     for (const [id, size] of [["stage-real-full", "full"]]) {
@@ -3713,11 +3966,15 @@
         empty.className = "editor-layer-empty";
         empty.textContent = tr("noLayers");
         layerList.appendChild(empty);
+        refreshInspectorContext();
         return;
       }
       if (!layerForId(selectedLayerId)) selectedLayerId = state.layers[0].id;
       const signature = layerRenderSignature();
-      if (signature === renderedLayerSignature && layerList.querySelector(".layer-card")) return;
+      if (signature === renderedLayerSignature && layerList.querySelector(".layer-card")) {
+        refreshInspectorContext();
+        return;
+      }
       renderedLayerSignature = signature;
       layerList.replaceChildren();
       for (const layer of state.layers) {
@@ -3890,6 +4147,7 @@
         card.append(cardSummary, body);
         layerList.appendChild(card);
       }
+      refreshInspectorContext();
       if (focusKey) requestAnimationFrame(() => layerList.querySelector(`[data-editor-focus="${focusKey}"]`)?.focus());
     };
 
@@ -3901,11 +4159,14 @@
           input.checked = input.value === "advanced";
         }
       }
-      const panel = direct?.closest("[data-editor-panel]")?.dataset.editorPanel
-        ?? (field.startsWith("budget.") ? "checks"
-          : field.startsWith("layers[") ? "artwork"
-            : field.startsWith("shared.prompt.") ? "layout" : "design");
-      setInspectorPanel(panel);
+      const target = field.startsWith("launcher.") ? "widgets.app-identity"
+        : field.startsWith("layers[") || field.startsWith("budget.layer") ? "background.layer"
+          : field === "shared.backgroundScope" ? "background.canvas"
+            : field.startsWith("shared.prompt.") ? "interface.new-chat-area"
+              : "interface.theme";
+      setInspectorTarget(target);
+      if (field.startsWith("metadata.") || field.startsWith("labels.")
+          || field.startsWith("descriptions.")) documentDetails.open = true;
       return direct;
     };
 
@@ -3945,7 +4206,7 @@
             input.checked = input.value === "advanced";
           }
         }
-        setInspectorPanel("design");
+        setInspectorTarget("interface.theme");
         renderStage();
         target?.closest("details")?.setAttribute("open", "");
         focusBelowInspector(target);
@@ -3953,7 +4214,7 @@
       }
       const layer = /^layers\[(layer-[a-f0-9]{32}|\d+)]$/.exec(field);
       if (layer) {
-        setInspectorPanel("artwork");
+        setInspectorTarget("background.layer");
         const card = layer[1].startsWith("layer-")
           ? layerList.querySelector(`[data-layer-id="${CSS.escape(layer[1])}"]`)
           : layerList.querySelector(`[data-editor-layer="${layer[1]}"]`);
@@ -4518,8 +4779,15 @@
       isActive: () => Boolean(state),
       normalizeEditorState,
       normalizeStudioStyle,
+      capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
     });
   }
 
-  window.CLAUDE_AURA_EDITOR = Object.freeze({ createController, normalizeEditorState, normalizeStudioStyle });
+  window.CLAUDE_AURA_EDITOR = Object.freeze({
+    createController,
+    normalizeEditorState,
+    normalizeStudioStyle,
+    normalizeCapabilityRegistry,
+    capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
+  });
 })();

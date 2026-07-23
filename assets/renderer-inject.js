@@ -11,6 +11,7 @@
   const artCssValue = settings.artDataUrl ? `url(${JSON.stringify(settings.artDataUrl)})` : "none";
   const appearance = settings.appearance || "system";
   const media = appearance === "system" ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
+  const forcedColors = window.matchMedia?.("(forced-colors: active)") ?? null;
   const mode = () => appearance === "system" ? (media?.matches ? "dark" : "light") : appearance;
   const viewport = () => {
     const screenWide = window.screen?.availWidth > 0 && window.screen?.availHeight > 0
@@ -21,10 +22,17 @@
   const SIDEBAR_MARKER = "data-claude-aura-sidebar";
   const MAIN_MARKER = "data-claude-aura-main-canvas";
   const PROMPT_MARKER = "data-claude-aura-prompt";
+  const RM = "data-aura-role";
+  const R = Object.freeze([
+    "sidebar-primary", "sidebar-row", "sidebar-section", "sidebar-list", "sidebar-footer",
+    "composer-shell", "composer-editor", "composer-toolbar",
+    "control-icon", "control-pill", "control-toggle",
+  ]);
   const BH = "data-claude-aura-brand-host";
   const BF = "data-claude-aura-brand-flow";
   const BN = "data-claude-aura-brand-native";
   const BI = "data-claude-aura-brand-image";
+  const BL = "data-claude-aura-brand-loader";
   const MESSAGE_SELECTOR = [
     '[data-testid="user-message"]',
     '[data-testid="assistant-message"]',
@@ -57,27 +65,111 @@
   };
 
   const clearMarkedElements = () => {
-    for (const element of document.querySelectorAll?.(`[${SIDEBAR_MARKER}],[${MAIN_MARKER}],[${PROMPT_MARKER}]`) ?? []) {
+    for (const element of document.querySelectorAll?.(
+      `[${SIDEBAR_MARKER}],[${MAIN_MARKER}],[${PROMPT_MARKER}],[${RM}]`,
+    ) ?? []) {
       element.removeAttribute(SIDEBAR_MARKER);
       element.removeAttribute(MAIN_MARKER);
       element.removeAttribute(PROMPT_MARKER);
+      element.removeAttribute(RM);
       element.style.removeProperty("--aura-prompt-width");
       element.style.removeProperty("--aura-prompt-x");
       element.style.removeProperty("--aura-prompt-y");
     }
   };
 
+  const unique = (elements, inner = false) => {
+    const candidates = [...new Set(elements)].filter((element) => visibleRect(element));
+    const matches = candidates.filter(
+      (element) => !candidates.some((other) => other !== element
+        && (inner ? element.contains?.(other) : other.contains?.(element))),
+    );
+    return matches.length === 1 ? matches[0] : null;
+  };
+
+  const mr = (element, role) => element?.isConnected && R.includes(role)
+    && element.setAttribute(RM, role);
+
   const discoverSidebar = () => {
     const candidates = [...(document.querySelectorAll?.(
-      '.dframe-sidebar,aside,[role="navigation"],nav,[data-testid*="sidebar" i]',
-    ) ?? [])].map((element) => ({ element, rect: visibleRect(element) }))
-      .filter(({ rect }) => rect
+      'aside,[role="navigation"],nav,[data-testid="sidebar"]',
+    ) ?? [])].filter((element) => {
+      const rect = visibleRect(element);
+      return rect
         && rect.left <= Math.max(32, window.innerWidth * 0.04)
         && rect.right > 0
         && rect.width >= 40 && rect.width <= Math.min(440, window.innerWidth * 0.46)
-        && rect.height >= window.innerHeight * 0.5)
-      .sort((left, right) => (right.rect.width * right.rect.height) - (left.rect.width * left.rect.height));
-    return candidates[0]?.element ?? null;
+        && rect.height >= window.innerHeight * 0.5;
+    });
+    const sidebar = unique(candidates);
+    const rect = visibleRect(sidebar);
+    return rect && rect.width >= 208 ? sidebar : null;
+  };
+
+  const modalAncestor = (element, boundary) => {
+    for (let node = element?.parentElement; node && node !== boundary; node = node.parentElement) {
+      const tag = String(node.tagName || node.nodeName || "").toLowerCase();
+      const role = node.getAttribute?.("role");
+      if (tag === "dialog" || ["dialog", "menu", "listbox", "tooltip"].includes(role)) return node;
+    }
+    return null;
+  };
+
+  const interactiveElements = (rootElement) => {
+    const candidates = [...(rootElement?.querySelectorAll?.(
+      'a[href],button,select,[role="button"],[role="link"],[role="menuitem"]',
+    ) ?? [])].filter((element) => visibleRect(element) && !modalAncestor(element, rootElement));
+    return candidates.filter(
+      (element) => !candidates.some((other) => other !== element && other.contains?.(element)),
+    );
+  };
+
+  const discoverSidebarRoles = (sidebar) => {
+    const side = visibleRect(sidebar);
+    if (!side) return;
+    const interactive = interactiveElements(sidebar);
+    const primary = unique(
+      [...(sidebar.querySelectorAll?.(
+        '[data-testid="new-chat"],[data-testid="new-chat-button"],a[href="/new"],a[href^="/new?"],a[href$="/new"]',
+      ) ?? [])].filter((element) => {
+        const control = interactive.find((candidate) => candidate === element || candidate.contains?.(element));
+        const rect = visibleRect(control);
+        return rect && rect.top <= side.top + Math.min(240, side.height * 0.3)
+          && rect.width >= Math.min(132, side.width * 0.5);
+      }).map((element) => interactive.find(
+        (candidate) => candidate === element || candidate.contains?.(element),
+      )).filter(Boolean),
+    );
+    mr(primary, R[0]);
+
+    const footerCandidates = interactive.filter((element) => {
+      const rect = visibleRect(element);
+      if (!rect || rect.top < side.bottom - Math.max(180, side.height * 0.24)) return false;
+      const role = element.getAttribute?.("role");
+      return element.matches?.(
+        '[data-testid="account-menu"],[data-testid="profile-menu"],[aria-haspopup="menu"]',
+      ) || role === "menuitem";
+    });
+    const footer = unique(footerCandidates);
+    mr(footer, R[4]);
+
+    const rows = interactive.filter((element) => {
+      if (element === primary || element === footer) return false;
+      const rect = visibleRect(element);
+      if (!rect || rect.height < 24 || rect.height > 84 || rect.width < Math.min(112, side.width * 0.42)) return false;
+      return element.matches?.('a[href],[role="link"],[role="menuitem"]')
+        || Boolean(element.closest?.('[role="list"],ul,ol,[role="navigation"],nav'));
+    });
+    for (const row of rows) mr(row, R[1]);
+
+    for (const list of sidebar.querySelectorAll?.('[role="list"],ul,ol') ?? []) {
+      const rect = visibleRect(list);
+      if (rect && rows.some((row) => list.contains?.(row))) mr(list, R[3]);
+    }
+    for (const section of sidebar.querySelectorAll?.('[role="group"],section') ?? []) {
+      const rect = visibleRect(section);
+      if (rect && rows.some((row) => section.contains?.(row))) mr(section, R[2]);
+    }
   };
 
   const clearBrand = () => {
@@ -167,16 +259,21 @@
         && bb.offset === t.offset && bb.width === t.width
         && bb.image?.isConnected) return;
     clearBrand();
+    const mark = document.createElement("span");
     const im = document.createElement("img");
     const token = ++bt;
+    const source = settings.b[am === "dark" ? 1 : 0];
+    mark.setAttribute("aria-hidden", "true");
+    mark.setAttribute(BI, `${settings.version}:${settings.digest}`);
+    mark.style.setProperty("inset-inline-start", `${t.offset}px`);
+    mark.style.setProperty("width", `${t.width}px`);
+    mark.style.setProperty("--aura-brand-mask", `url("${source}")`);
     im.alt = "";
     im.draggable = false;
     im.decoding = "async";
     im.setAttribute("aria-hidden", "true");
-    im.setAttribute(BI, `${settings.version}:${settings.digest}`);
-    im.style.setProperty("inset-inline-start", `${t.offset}px`);
-    im.style.setProperty("width", `${t.width}px`);
-    bb = { ...t, image: im, mode: am, token, ready: false };
+    im.setAttribute(BL, "");
+    bb = { ...t, image: mark, loader: im, mode: am, token, ready: false };
     const fail = () => {
       if (bb?.token === token) clearBrand();
     };
@@ -184,7 +281,7 @@
     im.onload = () => {
       const decoded = typeof im.decode === "function" ? im.decode() : Promise.resolve();
       Promise.resolve(decoded).then(() => {
-        if (bb?.token !== token || !im.isConnected || !t.host.isConnected
+        if (bb?.token !== token || !mark.isConnected || !im.isConnected || !t.host.isConnected
             || !im.naturalWidth || mode() !== am
             || findBrand(sidebar)?.native?.[0] !== t.native[0]) return fail();
         if ((window.getComputedStyle?.(t.host)?.position || "static") === "static") {
@@ -195,38 +292,129 @@
         bb.ready = true;
       }, fail);
     };
-    t.host.appendChild(im);
-    im.src = settings.b[am === "dark" ? 1 : 0];
+    mark.appendChild(im);
+    t.host.appendChild(mark);
+    im.src = source;
+  };
+
+  const discoverMain = () => {
+    const candidates = [...(document.querySelectorAll?.('main,[role="main"]') ?? [])]
+      .filter((element) => {
+        const rect = visibleRect(element);
+        return rect && rect.width >= 480 && rect.height >= 400
+          && rect.right >= window.innerWidth - 32
+          && rect.bottom > Math.min(window.innerHeight, 480);
+      });
+    return unique(candidates);
+  };
+
+  const composerShellFor = (editor, main) => {
+    const editorRect = visibleRect(editor);
+    if (!editorRect) return null;
+    let fallback = null;
+    for (let node = editor.parentElement, depth = 0;
+      node && node !== main && depth < 12;
+      node = node.parentElement, depth += 1) {
+      const rect = visibleRect(node);
+      if (!rect || rect.width < Math.max(280, editorRect.width * 0.75)
+          || rect.height < editorRect.height + 18 || rect.height > 560) continue;
+      fallback ??= node;
+      const controls = [...(node.querySelectorAll?.(CONTROL_SELECTOR) ?? [])]
+        .filter((control) => visibleRect(control) && !modalAncestor(control, node));
+      if (controls.length) return node;
+    }
+    return fallback;
+  };
+
+  const composerGroupFor = (shell, main) => {
+    const shellRect = visibleRect(shell);
+    const mainRect = visibleRect(main);
+    if (!shellRect || !mainRect) return null;
+    let group = null;
+    for (let node = shell.parentElement, depth = 0;
+      node && node !== main && depth < 8;
+      node = node.parentElement, depth += 1) {
+      const rect = visibleRect(node);
+      if (!rect || rect.width < shellRect.width * 0.9
+          || rect.height > Math.min(560, shellRect.height + 260)
+          || node.querySelector?.(MESSAGE_SELECTOR)) continue;
+      const editors = [...(node.querySelectorAll?.(EDITOR_SELECTOR) ?? [])]
+        .filter((element) => visibleRect(element));
+      if (editors.length === 1) group = node;
+    }
+    return group;
+  };
+
+  const commonToolbar = (controls, editor, shell) => {
+    const explicit = unique(
+      [...(shell.querySelectorAll?.('[role="toolbar"]') ?? [])].filter((element) => visibleRect(element)),
+    );
+    if (explicit) return explicit;
+    if (controls.length < 2) return null;
+    for (let node = controls[0].parentElement, depth = 0;
+      node && node !== shell && depth < 6;
+      node = node.parentElement, depth += 1) {
+      const rect = visibleRect(node);
+      if (rect && rect.height <= 96 && !node.contains?.(editor)
+          && controls.every((control) => node.contains?.(control))) return node;
+    }
+    return null;
+  };
+
+  const classifyComposerControls = (shell, editor) => {
+    const controls = interactiveElements(shell).filter(
+      (control) => !editor.contains?.(control) && !control.contains?.(editor),
+    );
+    for (const control of controls) {
+      const rect = visibleRect(control);
+      if (!rect) continue;
+      const role = control.getAttribute?.("role");
+      const toggle = role === "switch" || control.hasAttribute?.("aria-checked")
+        || control.matches?.('[data-state="checked"],[data-state="unchecked"]');
+      if (toggle) mr(control, R[10]);
+      else if (String(control.tagName || control.nodeName || "").toLowerCase() === "select"
+          || rect.width >= rect.height * 1.75) mr(control, R[9]);
+      else if (rect.width <= rect.height * 1.55) mr(control, R[8]);
+    }
+    return controls;
   };
 
   const discoverComposer = () => {
-    const roots = new Map();
-    const canvases = [...(document.querySelectorAll?.('main,[role="main"]') ?? [])]
-      .filter((element) => visibleRect(element));
-    for (const canvas of canvases) {
-      for (const editor of canvas.querySelectorAll(EDITOR_SELECTOR)) {
-        let candidate = editor;
-        let prompt = null;
-        let promptRect = null;
-        for (let depth = 0; candidate && candidate !== canvas && depth < 12; depth += 1, candidate = candidate.parentElement) {
-          const rect = visibleRect(candidate);
-          if (!rect || rect.width < 280 || rect.height < 72 || rect.height > 300) continue;
-          if (candidate.querySelectorAll(CONTROL_SELECTOR).length < 2) continue;
-          prompt = candidate;
-          promptRect = rect;
-        }
-        if (prompt) roots.set(prompt, { prompt, main: canvas, rect: promptRect });
-      }
+    const main = discoverMain();
+    if (!main) return { context: "other", main: null };
+    const editors = [...(main.querySelectorAll?.(EDITOR_SELECTOR) ?? [])]
+      .filter((editor) => visibleRect(editor) && !modalAncestor(editor, main));
+    const editor = unique(editors, true);
+    if (!editor) return { context: "other", main };
+    const shell = composerShellFor(editor, main);
+    if (!shell) return { context: "other", main };
+    if (main.querySelector?.(MESSAGE_SELECTOR)) {
+      const controls = classifyComposerControls(shell, editor);
+      return {
+        context: "conversation",
+        main,
+        prompt: null,
+        shell,
+        editor,
+        toolbar: commonToolbar(controls, editor, shell),
+      };
     }
-    if (roots.size !== 1) return { context: "other", main: canvases.length === 1 ? canvases[0] : null, prompt: null };
-    const found = [...roots.values()][0];
-    const mainRect = visibleRect(found.main);
-    const promptRect = visibleRect(found.prompt);
-    if (!mainRect || !promptRect) return { context: "other", main: found.main, prompt: null };
-    if (found.main.querySelector(MESSAGE_SELECTOR)) return { ...found, context: "conversation" };
-    const bottomGap = mainRect.bottom - promptRect.bottom;
-    const threshold = Math.max(56, mainRect.height * 0.08);
-    return { ...found, context: bottomGap >= threshold ? "new-chat" : "other" };
+    const group = composerGroupFor(shell, main) ?? shell.parentElement;
+    const mainRect = visibleRect(main);
+    const groupRect = visibleRect(group);
+    if (!mainRect || !groupRect || group === main) return { context: "other", main };
+    const context = mainRect.bottom - groupRect.bottom >= Math.max(56, mainRect.height * 0.08)
+      ? "new-chat" : "other";
+    if (context === "other") return { context, main };
+    const controls = classifyComposerControls(shell, editor);
+    return {
+      context,
+      main,
+      prompt: context === "new-chat" ? group : null,
+      shell,
+      editor,
+      toolbar: commonToolbar(controls, editor, shell),
+    };
   };
 
   const clearPromptLayout = () => {
@@ -312,15 +500,28 @@
   };
 
   const syncSemanticLayout = () => {
+    clearMarkedElements();
+    if (forcedColors?.matches) {
+      currentContext = "other";
+      root.dataset.claudeAuraContext = currentContext;
+      root.style.removeProperty("--aura-main-start");
+      clearBrand();
+      applyArtworkContext(currentContext);
+      return;
+    }
+    const sidebar = discoverSidebar();
+    if (sidebar) {
+      sidebar.setAttribute(SIDEBAR_MARKER, "expanded");
+      discoverSidebarRoles(sidebar);
+    }
+    syncBrand(sidebar);
     const found = discoverComposer();
     currentContext = found.context;
     root.dataset.claudeAuraContext = currentContext;
-    for (const marked of document.querySelectorAll?.(`[${SIDEBAR_MARKER}]`) ?? []) marked.removeAttribute(SIDEBAR_MARKER);
-    const sidebar = discoverSidebar();
-    sidebar?.setAttribute(SIDEBAR_MARKER, "true");
-    syncBrand(sidebar);
-    for (const marked of document.querySelectorAll?.(`[${MAIN_MARKER}]`) ?? []) marked.removeAttribute(MAIN_MARKER);
     found.main?.setAttribute(MAIN_MARKER, "true");
+    mr(found.shell, R[5]);
+    mr(found.editor, R[6]);
+    mr(found.toolbar, R[7]);
     if (found.main) {
       const value = `${Math.round(found.main.getBoundingClientRect().left)}px`;
       if (root.style.getPropertyValue("--aura-main-start") !== value) root.style.setProperty("--aura-main-start", value);
@@ -342,11 +543,14 @@
 
   const onModeChange = () => {
     if (document.documentElement) document.documentElement.dataset.claudeAuraEffectiveMode = mode();
-    applyArtworkContext(currentContext);
-    syncBrand(discoverSidebar());
+    syncSemanticLayout();
   };
   media?.addEventListener?.("change", onModeChange);
-  const stopModeListener = () => media?.removeEventListener?.("change", onModeChange);
+  forcedColors?.addEventListener?.("change", onModeChange);
+  const stopModeListener = () => {
+    media?.removeEventListener?.("change", onModeChange);
+    forcedColors?.removeEventListener?.("change", onModeChange);
+  };
 
   const ensure = () => {
     if (!document.documentElement || window.__CLAUDE_AURA_DISABLED__) return;

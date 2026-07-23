@@ -76,6 +76,70 @@ export function renderStudioRecipeOverrides(theme) {
   return declarations.length ? `:root {\n${declarations.join("\n")}\n}` : "";
 }
 
+const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
+  ["settings", "_a"],
+  ["visibleRect", "_b"],
+  ["currentContext", "_c"],
+  ["onContextSignal", "_d"],
+  ["candidates", "_e"],
+  ["mainRect", "_f"],
+  ["controls", "_g"],
+  ["classifyComposerControls", "_h"],
+  ["clearPromptLayout", "_i"],
+  ["interactiveElements", "_j"],
+  ["applyArtworkContext", "_k"],
+  ["syncSemanticLayout", "_l"],
+  ["modalAncestor", "_m"],
+  ["imageOpacityValue", "_n"],
+  ["authoredTranslate", "_o"],
+  ["forcedColors", "_p"],
+  ["imageScaleValue", "_q"],
+  ["commonToolbar", "_r"],
+  ["imageCssValue", "_s"],
+  ["artCssValue", "_t"],
+  ["composerShellFor", "_u"],
+  ["composerGroupFor", "_v"],
+  ["discoverSidebarRoles", "_w"],
+  ["discoverComposer", "_x"],
+  ["discoverSidebar", "_y"],
+  ["discoverMain", "_z"],
+  ["onModeChange", "_A"],
+  ["rootNeedsRepair", "_B"],
+  ["scheduleEnsure", "_C"],
+  ["observeTargets", "_D"],
+  ["styleDirty", "_E"],
+  ["rootDirty", "_F"],
+  ["artBindings", "_G"],
+  ["addLayerDiv", "_H"],
+  ["frameImage", "_I"],
+  ["contextKey", "_J"],
+  ["backdropOwner", "_K"],
+  ["observedHead", "_L"],
+  ["observedBody", "_M"],
+  ["observedStyle", "_N"],
+  ["observedBackdrop", "_O"],
+  ["PROMPT_MARKER", "_P"],
+  ["SIDEBAR_MARKER", "_Q"],
+  ["MAIN_MARKER", "_R"],
+  ["MESSAGE_SELECTOR", "_S"],
+  ["EDITOR_SELECTOR", "_T"],
+  ["CONTROL_SELECTOR", "_U"],
+  ["BACKDROP_ID", "_V"],
+  ["STYLE_ID", "_W"],
+  ["STATE_KEY", "_X"],
+]);
+
+export function compactRendererIdentifiers(source) {
+  if (typeof source !== "string") throw new TypeError("Renderer template must be a string");
+  return RENDERER_IDENTIFIER_ALIASES.reduce(
+    (result, [identifier, alias]) => result.replace(
+      new RegExp(`\\b${identifier}\\b`, "g"),
+      alias,
+    ),
+    source,
+  );
+}
+
 export function filterThemeVariantCss(source, themeId, variantId = themeId, includeBrandWordmark = true) {
   const filteredSource = includeBrandWordmark
     ? source
@@ -153,8 +217,8 @@ export async function compileTheme({
   const imageZoom = finiteNumber(config.imageZoom, "imageZoom", 1, 2);
   const studioPreviewCrops = validateStudioPreviewCrops(config.studioPreviewCrops ?? {});
   const variableCss = [
-    renderMode(":root, :root:not([data-claude-aura-effective-mode=\"dark\"]):is(.lightTheme,.light,[data-mode=\"light\"]), :root:not([data-claude-aura-effective-mode=\"dark\"]) :is(.lightTheme,.light,[data-mode=\"light\"]), :root[data-claude-aura-appearance][data-claude-aura-effective-mode=\"light\"]", theme.light),
-    renderMode(":root:not([data-claude-aura-effective-mode=\"light\"]):is(.darkTheme,.dark,[data-mode=\"dark\"]), :root:not([data-claude-aura-effective-mode=\"light\"]) :is(.darkTheme,.dark,[data-mode=\"dark\"]), :root[data-claude-aura-appearance][data-claude-aura-effective-mode=\"dark\"]", theme.dark),
+    renderMode(':root:not([data-claude-aura-effective-mode="dark"])', theme.light),
+    renderMode(':root[data-claude-aura-effective-mode="dark"]', theme.dark),
     renderThemePrimitives(theme),
   ].join("\n\n");
   const css = `${variableCss}\n\n${baseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
@@ -247,11 +311,14 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
   if (!compiled || typeof compiled.css !== "string" || !isPlainObject(compiled.settings)) {
     throw new Error("A compiled theme is required to build a renderer payload");
   }
-  const template = (await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8"))
+  const template = compactRendererIdentifiers(
+    await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8"),
+  )
     .replace(/^[ \t]+/gm, "")
     .replace(/\r?\n/g, "");
   const runtimeSettings = { ...compiled.settings };
   for (const diagnosticKey of [
+    "label",
     "requestedTheme",
     "fallbackFrom",
     "customThemeUnavailable",
