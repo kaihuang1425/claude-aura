@@ -562,10 +562,10 @@ test("theme-cli qa audits every registered layer without generating images", asy
           "f318ad08013dd500351997d4dfb57706c338ff4d58ce3448d050b4ccccb607ba",
           "Korean Idol Light must keep the approved full-color demo lockup",
         );
-        assert.equal(
+        assert.notEqual(
           themeStatus.brandWordmarkAssets.dark.sha256,
           themeStatus.brandWordmarkAssets.light.sha256,
-          "Korean Idol Dark must share the approved full-color demo lockup",
+          "Korean Idol Dark must use its clean appearance-specific derivative",
         );
       } else {
         assert.notEqual(

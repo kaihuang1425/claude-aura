@@ -49,10 +49,10 @@ const SOURCE_PROFILE = Object.freeze({
   "anime-twilight": Object.freeze({ mode: "dark", tone: "light" }),
   "study-library": Object.freeze({ mode: "light", tone: "dark" }),
   "japanese-idol": Object.freeze({ mode: "light", tone: "dark" }),
-  // The approved Korean Idol lockup already carries its own light outline,
-  // violet depth, pink hearts, and white sparkle highlights. Re-toning it for
-  // Dark mode washes out that authored contrast instead of improving it.
-  "korean-idol": Object.freeze({ mode: "light", tone: "dark", preserveBoth: true }),
+  // Korean Idol's approved source is authored for a light surface. Its Dark
+  // derivative keeps the lettering and motifs but removes the source's white
+  // extraction matte before applying the recipe's pale-violet treatment.
+  "korean-idol": Object.freeze({ mode: "light", tone: "dark", cleanDarkMatte: true }),
 });
 
 function sha256(bytes) {
@@ -120,6 +120,67 @@ function adaptForLight(source, target) {
       pixels[offset + 2] = blue;
     }
     pixels[offset + 3] = alpha;
+  }
+  return pixels;
+}
+
+function adaptKoreanIdolForDark(model, target) {
+  const { width, height, pixels: source } = model;
+  const base = new Uint8Array(width * height);
+  const core = new Uint8Array(width * height);
+
+  for (let index = 0; index < base.length; index += 1) {
+    const offset = index * 4;
+    const alpha = source[offset + 3];
+    if (alpha === 0) continue;
+    const red = source[offset];
+    const green = source[offset + 1];
+    const blue = source[offset + 2];
+    const brightness = luma(red, green, blue);
+    const saturation = Math.max(red, green, blue) - Math.min(red, green, blue);
+    const neutralWhiteMatte = brightness > 185 && saturation < 72;
+    if (neutralWhiteMatte) continue;
+    base[index] = 1;
+    if (alpha >= 72 && (saturation >= 45 || brightness < 150)) core[index] = 1;
+  }
+
+  const pixels = Buffer.alloc(source.length);
+  for (let index = 0; index < base.length; index += 1) {
+    if (base[index] === 0) continue;
+    const x = index % width;
+    const y = Math.floor(index / width);
+    let touchesCore = false;
+    for (let yOffset = -1; yOffset <= 1 && !touchesCore; yOffset += 1) {
+      for (let xOffset = -1; xOffset <= 1; xOffset += 1) {
+        const candidateX = x + xOffset;
+        const candidateY = y + yOffset;
+        if (candidateX < 0 || candidateY < 0
+            || candidateX >= width || candidateY >= height) continue;
+        if (core[(candidateY * width) + candidateX] === 1) {
+          touchesCore = true;
+          break;
+        }
+      }
+    }
+    if (!touchesCore) continue;
+
+    const offset = index * 4;
+    const red = source[offset];
+    const green = source[offset + 1];
+    const blue = source[offset + 2];
+    const brightness = luma(red, green, blue);
+    const saturation = Math.max(red, green, blue) - Math.min(red, green, blue);
+    const amount = saturation < 45
+      ? 0
+      : brightness < 128
+        ? 0.65
+        : brightness < 174
+          ? 0.35
+          : 0.18;
+    pixels[offset] = blend(red, target[0], amount);
+    pixels[offset + 1] = blend(green, target[1], amount);
+    pixels[offset + 2] = blend(blue, target[2], amount);
+    pixels[offset + 3] = source[offset + 3];
   }
   return pixels;
 }
@@ -255,19 +316,20 @@ export async function buildBrandWordmarks({
     if (!registeredTheme) throw new Error(`${theme} is missing from the built-in theme registry`);
     const sourceProfile = SOURCE_PROFILE[theme];
     const render = (appearance) => {
-      if (sourceProfile.preserveBoth) return sourceBytes;
       const ink = hslRgb(registeredTheme[appearance].semantic["--aura-sidebar-text-primary"])
         .map((channel) => Math.round(channel * 255));
       const tone = luma(...ink) >= 128 ? "light" : "dark";
       if (sourceProfile.mode === appearance && sourceProfile.tone === tone) return sourceBytes;
-      const pixels = tone === "light"
-        ? adaptForDark(model.pixels, ink)
-        : adaptForLight(model.pixels, ink);
+      const pixels = sourceProfile.cleanDarkMatte && appearance === "dark"
+        ? adaptKoreanIdolForDark(model, ink)
+        : tone === "light"
+          ? adaptForDark(model.pixels, ink)
+          : adaptForLight(model.pixels, ink);
       return encodePng(WIDTH, HEIGHT, pixels);
     };
     const lightBytes = render("light");
     const darkBytes = render("dark");
-    if (!sourceProfile.preserveBoth && lightBytes.equals(darkBytes)) {
+    if (lightBytes.equals(darkBytes)) {
       throw new Error(`${theme} Light and Dark wordmarks must differ`);
     }
 

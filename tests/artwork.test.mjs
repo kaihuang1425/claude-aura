@@ -128,6 +128,7 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
     );
     const pairDigests = [];
     const pairAlphaDigests = [];
+    const pairImages = [];
     for (const appearance of ["light", "dark"]) {
       const assetPath = registered[appearance];
       const absolutePath = path.join(PROJECT_ROOT, assetPath);
@@ -158,6 +159,7 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
       }
       pairDigests.push(digest);
       pairAlphaDigests.push(crypto.createHash("sha256").update(alpha).digest("hex"));
+      pairImages.push(image);
       allWordmarkDigests.push(digest);
       beforeBuildDigests.set(assetPath, digest);
       assert(stat.isFile() && stat.size > 0 && stat.size < 400_000,
@@ -177,6 +179,8 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
           `${themeId} ${appearance} wordmark stayed light beside dark sidebar labels`);
       }
     }
+    assert.equal(new Set(pairDigests).size, 2,
+      `${themeId} must retain distinct Light and Dark wordmark assets`);
     if (themeId === "korean-idol") {
       const approvedSource = await fs.readFile(path.join(
         PROJECT_ROOT,
@@ -187,17 +191,64 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
         "korean-idol.png",
       ));
       const approvedDigest = crypto.createHash("sha256").update(approvedSource).digest("hex");
-      assert.deepEqual(pairDigests, [approvedDigest, approvedDigest],
-        "Korean Idol must preserve its approved full-color demo lockup in both appearances");
+      assert.equal(pairDigests[0], approvedDigest,
+        "Korean Idol Light must preserve its approved full-color demo lockup");
+      assert.notEqual(pairDigests[1], approvedDigest,
+        "Korean Idol Dark must remove the Light source's white extraction matte");
+
+      const [lightImage, darkImage] = pairImages;
+      let lightVisiblePixels = 0;
+      let darkVisiblePixels = 0;
+      let sourceCorePixels = 0;
+      let retainedCorePixels = 0;
+      let pixelsOutsideSource = 0;
+      let retainedSourceWhiteMattePixels = 0;
+      for (let index = 0; index < lightImage.width * lightImage.height; index += 1) {
+        const offset = index * 4;
+        const lightAlpha = lightImage.pixels[offset + 3];
+        const darkAlpha = darkImage.pixels[offset + 3];
+        if (lightAlpha > 0) lightVisiblePixels += 1;
+        if (darkAlpha > 0) darkVisiblePixels += 1;
+        if (darkAlpha > 0 && lightAlpha === 0) pixelsOutsideSource += 1;
+
+        const lightRed = lightImage.pixels[offset];
+        const lightGreen = lightImage.pixels[offset + 1];
+        const lightBlue = lightImage.pixels[offset + 2];
+        const lightBrightness = (lightRed * 0.2126)
+          + (lightGreen * 0.7152)
+          + (lightBlue * 0.0722);
+        const lightSaturation = Math.max(lightRed, lightGreen, lightBlue)
+          - Math.min(lightRed, lightGreen, lightBlue);
+        const sourceCore = lightAlpha >= 72
+          && (lightSaturation >= 45 || lightBrightness < 150)
+          && !(lightBrightness > 185 && lightSaturation < 72);
+        if (sourceCore) {
+          sourceCorePixels += 1;
+          if (darkAlpha > 0) retainedCorePixels += 1;
+        }
+        if (lightAlpha > 0 && lightBrightness > 185 && lightSaturation < 72
+            && darkAlpha > 0) {
+          retainedSourceWhiteMattePixels += 1;
+        }
+      }
+      assert.equal(retainedCorePixels, sourceCorePixels,
+        "Korean Idol Dark must retain every coloured lettering and motif core pixel");
+      assert.equal(pixelsOutsideSource, 0,
+        "Korean Idol Dark cleanup must not redraw pixels outside the approved source");
+      assert(darkVisiblePixels / lightVisiblePixels > 0.32
+          && darkVisiblePixels / lightVisiblePixels < 0.42,
+        "Korean Idol Dark must remove the white matte without erasing its coloured lockup");
+      assert.equal(retainedSourceWhiteMattePixels, 0,
+        "Korean Idol Dark must remove every neutral-white pixel from the Light extraction matte");
+      assert.notEqual(pairAlphaDigests[0], pairAlphaDigests[1],
+        "Korean Idol Dark must use a cleaned alpha silhouette");
     } else {
-      assert.equal(new Set(pairDigests).size, 2,
-        `${themeId} must retain distinct Light and Dark wordmark assets`);
+      assert.equal(new Set(pairAlphaDigests).size, 1,
+        `${themeId} Light and Dark must preserve the exact same lockup silhouette`);
     }
-    assert.equal(new Set(pairAlphaDigests).size, 1,
-      `${themeId} Light and Dark must preserve the exact same lockup silhouette`);
   }
-  assert.equal(new Set(allWordmarkDigests).size, (THEME_IDS.length * 2) - 1,
-    "Only Korean Idol may intentionally share its approved full-color wordmark across appearances");
+  assert.equal(new Set(allWordmarkDigests).size, THEME_IDS.length * 2,
+    "Every built-in appearance wordmark must remain a distinct themed derivative");
 
   await buildBrandWordmarks();
   for (const [assetPath, expectedDigest] of beforeBuildDigests) {

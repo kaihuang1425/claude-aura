@@ -122,10 +122,10 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
     ["light", "light", "dark", "dark"]);
   assert.match(koreanIdolBundle.settings.brandWordmark?.lightDataUrl ?? "", /^data:image\/png;base64,/);
   assert.match(koreanIdolBundle.settings.brandWordmark?.darkDataUrl ?? "", /^data:image\/png;base64,/);
-  assert.equal(
+  assert.notEqual(
     koreanIdolBundle.settings.brandWordmark.lightDataUrl,
     koreanIdolBundle.settings.brandWordmark.darkDataUrl,
-    "Korean Idol must compile its approved full-color demo wordmark unchanged in both appearances",
+    "Korean Idol Dark must compile a clean appearance-specific derivative",
   );
   assert.equal(koreanIdolBundle.settings.brandWordmark.minWidth, 136);
   assert.equal(koreanIdolBundle.settings.brandWordmark.width, 160);
