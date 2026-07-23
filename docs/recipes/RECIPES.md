@@ -16,11 +16,11 @@ Applied by WO-02 (final values; supersede any older numbers below):
 - Light appearance keeps the four previously dark-railed themes visibly light
   while retaining their identity colour. Exact sidebar
   background/text/muted/selected values are: Japanese Film Editorial
-  `38 20% 84%` / `210 9% 14%` / `210 6% 38%` / `12 28% 69%`; Korean
-  Prestige `216 24% 84%` / `220 32% 14%` / `218 12% 38%` /
+  `38 20% 84%` / `210 9% 14%` / `210 6% 37%` / `12 28% 69%`; Korean
+  Prestige `216 24% 84%` / `220 32% 14%` / `218 12% 37%` /
   `216 32% 71%`; Anime Twilight `228 22% 90%` / `232 34% 18%` /
   `230 12% 42%` / `248 24% 80%`; Study Library `44 28% 90%` /
-  `70 10% 17%` / `70 6% 40%` / `139 16% 78%`. Dark appearance keeps its
+  `70 10% 17%` / `70 6% 39%` / `139 16% 78%`. Dark appearance keeps its
   existing rail recipes.
 - Light primary-action fills use the softened accent values Korean Prestige
   `216 44% 45%` and Anime Twilight `258 38% 49%`. Every other theme and Dark
@@ -41,7 +41,7 @@ Live native-chrome baseline (WO-18; fixed recipes, not user-schema fields):
   new-chat group owns width/translation.
 - Primary sidebar action: `accent-primary` base with `text-on-accent`; optional
   `accent-secondary` sheen at the theme-specific alpha below. Hover adds
-  `hover-surface / 0.18`; press adds `text-primary / 0.08` inset. Use the
+  `hover-surface / 0.10`; press adds `text-primary / 0.08` inset. Use the
   existing control radius and state shadow.
 - Ordinary/current rows: transparent rest; `sidebar-selected / 0.42` hover,
   `/ 0.58` press, `/ 0.68` current; `border-subtle / 0.12`; current icons use

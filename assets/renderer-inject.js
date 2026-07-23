@@ -23,6 +23,8 @@
   const MAIN_MARKER = "data-claude-aura-main-canvas";
   const PROMPT_MARKER = "data-claude-aura-prompt";
   const RM = "data-aura-role";
+  const FM = "data-aura-f";
+  const PM = "data-aura-bg";
   const R = Object.freeze([
     "sidebar-primary", "sidebar-row", "sidebar-section", "sidebar-list", "sidebar-footer",
     "composer-shell", "composer-editor", "composer-toolbar",
@@ -47,7 +49,7 @@
     '.ProseMirror[contenteditable="true"]',
     '[role="textbox"][contenteditable="true"]',
   ].join(",");
-  const CONTROL_SELECTOR = 'button,[role="button"],select';
+  const CONTROL_SELECTOR = 'button,[role="button"],[role="switch"],[role="combobox"],select';
   let observeTargets = () => {};
   let styleDirty = true;
   let rootDirty = true;
@@ -64,14 +66,16 @@
     return computed.display === "none" || computed.visibility === "hidden" ? null : rect;
   };
 
-  const clearMarkedElements = () => {
+  const clearMarks = () => {
     for (const element of document.querySelectorAll?.(
-      `[${SIDEBAR_MARKER}],[${MAIN_MARKER}],[${PROMPT_MARKER}],[${RM}]`,
+      `[${SIDEBAR_MARKER}],[${MAIN_MARKER}],[${PROMPT_MARKER}],[${RM}],[${FM}],[${PM}]`,
     ) ?? []) {
       element.removeAttribute(SIDEBAR_MARKER);
       element.removeAttribute(MAIN_MARKER);
       element.removeAttribute(PROMPT_MARKER);
       element.removeAttribute(RM);
+      element.removeAttribute(FM);
+      element.removeAttribute(PM);
       element.style.removeProperty("--aura-prompt-width");
       element.style.removeProperty("--aura-prompt-x");
       element.style.removeProperty("--aura-prompt-y");
@@ -87,8 +91,48 @@
     return matches.length === 1 ? matches[0] : null;
   };
 
-  const mr = (element, role) => element?.isConnected && R.includes(role)
-    && element.setAttribute(RM, role);
+  const mr = (e, r) => {
+    if (!e?.isConnected || !R.includes(r)) return;
+    e.setAttribute(RM, r);
+    if (![R[0], R[1], R[4], R[8], R[9], R[10]].includes(r)) return;
+    const a = [];
+    const v = visibleRect(e);
+    const f = (n) => {
+      const t = String(n.tagName || n.nodeName || "").toUpperCase();
+      if (n.getAttribute?.("aria-hidden") === "true"
+          || ["SVG", "TITLE", "CODE", "SAMP"].includes(t)
+          || ["status", "alert"].includes(n.getAttribute?.("role"))
+          || n.hasAttribute?.("aria-live")) return;
+      const q = visibleRect(n);
+      const s = window.getComputedStyle?.(n);
+      const b = s?.backgroundColor;
+      const p = (s?.backgroundImage && s.backgroundImage !== "none")
+        || (b && b !== "transparent"
+          && !/(?:,\s*0(?:\.0+)?|\/\s*0(?:\.0+)?)\)$/.test(b));
+      if (a.length && n !== e && p && q && v
+          && q.width < v.width * 0.9 && q.height < v.height * 0.9) return;
+      let o = false;
+      const g = () => {
+        if (o) return;
+        if (q?.width > 3 && q.height > 7 && (n.children?.length || !p)) {
+          a.push(n);
+          o = true;
+        }
+      };
+      const children = n.childNodes ?? n.children ?? [];
+      for (const c of children) {
+        if (c.nodeType === 3) {
+          if (c.textContent?.trim()) g();
+        } else f(c);
+      }
+      if (!children.length && n.textContent?.trim()) g();
+    };
+    f(e);
+    const l = a[0];
+    if (!l) return;
+    for (let i = 0; i < a.length; i += 1) a[i].setAttribute(FM, i ? "s" : "p");
+    for (let n = l; n && n !== e; n = n.parentElement) n.setAttribute(PM, "");
+  };
 
   const discoverSidebar = () => {
     const candidates = [...(document.querySelectorAll?.(
@@ -117,7 +161,7 @@
 
   const interactiveElements = (rootElement) => {
     const candidates = [...(rootElement?.querySelectorAll?.(
-      'a[href],button,select,[role="button"],[role="link"],[role="menuitem"]',
+      `${CONTROL_SELECTOR},a[href],[role="link"],[role="menuitem"]`,
     ) ?? [])].filter((element) => visibleRect(element) && !modalAncestor(element, rootElement));
     return candidates.filter(
       (element) => !candidates.some((other) => other !== element && other.contains?.(element)),
@@ -379,11 +423,12 @@
       if (!rect) continue;
       const role = control.getAttribute?.("role");
       const toggle = role === "switch" || control.hasAttribute?.("aria-checked")
+        || control.hasAttribute?.("aria-pressed")
         || control.matches?.('[data-state="checked"],[data-state="unchecked"]');
       if (toggle) mr(control, R[10]);
       else if (String(control.tagName || control.nodeName || "").toLowerCase() === "select"
-          || rect.width >= rect.height * 1.75) mr(control, R[9]);
-      else if (rect.width <= rect.height * 1.55) mr(control, R[8]);
+          || rect.width > rect.height * 1.55) mr(control, R[9]);
+      else mr(control, R[8]);
     }
     return controls;
   };
@@ -438,7 +483,6 @@
   const applyPromptLayout = (prompt, main) => {
     clearPromptLayout();
     if (!prompt || !main) return;
-    /* Mark native prompts for mirror geometry without authoring layout. */
     prompt.setAttribute(PROMPT_MARKER, "new-chat");
     const layout = settings.n;
     if (!layout) return;
@@ -509,7 +553,7 @@
   };
 
   const syncSemanticLayout = () => {
-    clearMarkedElements();
+    clearMarks();
     if (forcedColors?.matches) {
       currentContext = "other";
       root.dataset.claudeAuraContext = currentContext;
@@ -556,7 +600,7 @@
   };
   media?.addEventListener?.("change", onModeChange);
   forcedColors?.addEventListener?.("change", onModeChange);
-  const stopModeListener = () => {
+  const stopMode = () => {
     media?.removeEventListener?.("change", onModeChange);
     forcedColors?.removeEventListener?.("change", onModeChange);
   };
@@ -684,10 +728,10 @@
     state?.observer?.disconnect();
     if (state?.timer) clearInterval(state.timer);
     if (state?.scheduled) clearTimeout(state.scheduled);
-    stopModeListener();
-    stopContextListeners();
+    stopMode();
+    stopContext();
     clearBrand();
-    clearMarkedElements();
+    clearMarks();
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BACKDROP_ID)?.remove();
     const html = document.documentElement;
@@ -732,7 +776,7 @@
   window.addEventListener("resize", onContextSignal, { passive: true });
   document.addEventListener?.("fullscreenchange", onContextSignal);
   window.navigation?.addEventListener?.("currententrychange", onContextSignal);
-  const stopContextListeners = () => {
+  const stopContext = () => {
     window.removeEventListener("popstate", onContextSignal);
     window.removeEventListener("resize", onContextSignal);
     document.removeEventListener?.("fullscreenchange", onContextSignal);
@@ -814,10 +858,10 @@
     observer,
     timer,
     scheduled,
-    stopModeListener,
-    stopContextListeners,
+    stopModeListener: stopMode,
+    stopContextListeners: stopContext,
     clearBrandWordmark: clearBrand,
-    clearMarkedElements,
+    clearMarkedElements: clearMarks,
     version: settings.version,
     theme: settings.theme,
     digest: settings.digest,

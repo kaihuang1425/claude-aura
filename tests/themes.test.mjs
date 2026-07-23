@@ -325,6 +325,7 @@ test("every theme provides complete semantic roles and a distinct component prof
   const sidebarRootSelector = 'html.claude-aura [data-claude-aura-sidebar]';
   const primarySelector = 'html.claude-aura [data-aura-role="sidebar-primary"]';
   const rowSelector = 'html.claude-aura [data-aura-role="sidebar-row"]';
+  const footerSelector = 'html.claude-aura [data-aura-role="sidebar-footer"]';
   const composerSelector = 'html.claude-aura [data-aura-role="composer-shell"]';
   const editorSelector = 'html.claude-aura [data-aura-role="composer-editor"]';
   const nativeControlSelector = 'html.claude-aura [data-aura-role^="control-"]';
@@ -341,22 +342,49 @@ test("every theme provides complete semantic roles and a distinct component prof
     "Claude's sidebar pictograms must follow the live sidebar label token");
   assert.match(ruleBody(primarySelector), /background:[\s\S]*--aura-accent-primary/);
   assert.match(ruleBody(primarySelector), /--aura-text-on-accent/);
+  assert.match(ruleBody(primarySelector), /--aura-role-fg:\s*var\(--aura-text-on-accent\)/);
+  assert.match(ruleBody(primarySelector), /--aura-role-fg-2:\s*var\(--aura-text-on-accent\)/);
+  assert.match(ruleBody(rowSelector), /--aura-role-fg:\s*var\(--aura-sidebar-text-primary\)/);
+  assert.match(ruleBody(rowSelector), /--aura-role-fg-2:\s*var\(--aura-sidebar-text-muted\)/);
+  assert.match(ruleBody(footerSelector), /--aura-role-fg:\s*var\(--aura-sidebar-text-primary\)/);
+  assert.match(ruleBody(footerSelector), /--aura-role-fg-2:\s*var\(--aura-sidebar-text-muted\)/);
+  assert.match(ruleBody(nativeControlSelector), /--aura-role-fg:\s*var\(--aura-text-primary\)/);
+  assert.match(ruleBody(nativeControlSelector), /--aura-role-fg-2:\s*var\(--aura-text-secondary\)/);
   assert.match(
     baseCss,
-    /\[data-aura-role="sidebar-primary"\]\s*>\s*:first-child\s*>\s*:first-child,\s*html\.claude-aura\s+\[data-aura-role="sidebar-primary"\]\s*>\s*:first-child\s*>\s*:first-child \*\s*\{[^}]*--aura-text-on-accent/s,
-    "The primary action's leading icon subtree must use the same foreground token as its label",
+    /\[data-aura-f="p"\]\s*\{[^}]*color:\s*hsl\(var\(--aura-role-fg\)\)\s*!important/s,
+    "The discovered primary label must paint from its role's current foreground",
   );
-  assert.match(
-    baseCss,
-    /:is\(\s*\[data-aura-role="sidebar-row"\],\s*\[data-aura-role="sidebar-footer"\]\s*\)\s*>\s*:first-child\s*>\s*:first-child,[\s\S]*?:is\(\s*\[data-aura-role="sidebar-row"\],\s*\[data-aura-role="sidebar-footer"\]\s*\)\s*>\s*:first-child\s*>\s*:first-child \*\s*\{[^}]*--aura-sidebar-text-primary/s,
-    "Sidebar row and footer leading icon subtrees must use the same foreground token as their labels",
-  );
+  assert.match(baseCss,
+    /\[data-aura-f="s"\]\s*\{[^}]*color:\s*hsl\(var\(--aura-role-fg-2\)\)\s*!important/s,
+    "Secondary labels must retain hierarchy through a separately paired foreground");
+  assert.match(baseCss,
+    /\[data-aura-bg\]\s*\{[^}]*background-color:\s*transparent\s*!important/s,
+    "Only the discovered label paint chain may clear a native inner surface");
+  assert(!baseCss.match(/\[data-aura-role(?:\^)?="(?:sidebar-primary|control-[^"]+)"\][^{}]*\*\s*\{[^}]*background:/s),
+    "Role styling must not erase every nested background, badge, or painted icon");
+  assert(!baseCss.includes('[data-aura-role^="sidebar-"] > :first-child'),
+    "Leading-icon fallback must not leak into section or list roles without a paired foreground");
   assert(!baseCss.includes('[data-claude-aura-sidebar] svg'),
     "Sidebar icon correction must remain role-scoped instead of recoloring every native SVG");
   assert(baseCss.includes(`${primarySelector}:not([disabled]):not([aria-disabled="true"]):hover`));
   assert(baseCss.includes(`${primarySelector}:not([disabled]):not([aria-disabled="true"]):active`));
-  assert(baseCss.includes(`${rowSelector}:not([disabled]):not([aria-disabled="true"]):hover`));
-  assert(baseCss.includes(`${rowSelector}:not([disabled]):not([aria-disabled="true"]):active`));
+  assert(baseCss.includes(`${rowSelector}:where(:not([disabled]):not([aria-disabled="true"])):hover`));
+  assert(baseCss.includes(`${rowSelector}:where(:not([disabled]):not([aria-disabled="true"])):active`));
+  assert.match(
+    ruleBody(`${rowSelector}:where(:not([disabled]):not([aria-disabled="true"])):hover`),
+    /--aura-role-fg-2:\s*var\(--aura-sidebar-text-primary\)/,
+    "Hovered row secondary labels must move to the foreground paired with their darker surface",
+  );
+  assert.match(
+    ruleBody(`${rowSelector}:where(:not([disabled]):not([aria-disabled="true"])):active`),
+    /--aura-role-fg-2:\s*var\(--aura-sidebar-text-primary\)/,
+    "Pressed row secondary labels must move to the foreground paired with their darker surface",
+  );
+  assert(baseCss.includes(
+    "linear-gradient(hsl(var(--aura-hover-surface) / 0.10), hsl(var(--aura-hover-surface) / 0.10))",
+  ),
+    "Primary hover must retain readable text-on-accent contrast across every Light/Dark recipe");
   assert.match(baseCss, /\[data-aura-role="sidebar-row"\]:is\(\s*\[aria-current\]:not\(\[aria-current="false"\]\),\s*\[aria-selected="true"\],\s*\[data-state="active"\]/s,
     "Current sidebar rows must use native state attributes");
   assert.match(ruleBody(composerSelector), /--aura-composer-background/);
@@ -366,14 +394,25 @@ test("every theme provides complete semantic roles and a distinct component prof
   assert.match(ruleBody(editorSelector), /background:\s*transparent\s*!important/);
   assert.match(ruleBody(editorSelector), /box-shadow:\s*none\s*!important/);
   for (const state of [
-    ':not([disabled]):not([aria-disabled="true"]):hover',
-    ':not([disabled]):not([aria-disabled="true"]):active',
+    ':where(:not([disabled]):not([aria-disabled="true"])):hover',
+    ':where(:not([disabled]):not([aria-disabled="true"])):active',
     ':is([aria-pressed="true"], [aria-checked="true"], [data-state="checked"], [data-state="active"])',
     ':is([disabled], [aria-disabled="true"])',
   ]) {
     assert(baseCss.includes(`${nativeControlSelector}${state}`),
       `Role-scoped composer controls lack ${state} styling`);
   }
+  assert.match(baseCss,
+    /\[data-aura-role\^="control-"\]:is\(\[aria-pressed="true"[^}]+\{[^}]*--aura-role-fg:\s*var\(--aura-text-on-accent\)[^}]*background:\s*hsl\(var\(--aura-accent-primary\)\)\s*!important/s,
+    "Selected composer controls must keep one paired accent foreground and background");
+  assert.match(baseCss,
+    /\[data-aura-role\^="control-"\]:is\(\[aria-pressed="true"[^}]+\{[^}]*--aura-role-fg-2:\s*var\(--aura-text-on-accent\)/s,
+    "Selected composer controls must promote secondary labels onto the accent foreground");
+  assert(
+    baseCss.indexOf(`${nativeControlSelector}:is([aria-pressed="true"]`)
+      > baseCss.indexOf(`${nativeControlSelector}:where(:not([disabled]):not([aria-disabled="true"])):hover`),
+    "Equal-specificity selected control states must follow hover so selected backgrounds are not downgraded",
+  );
   assert(!baseCss.includes('.input-box') && !baseCss.includes('[data-testid="composer"]')
       && !baseCss.includes('[data-testid="chat-input"]'),
     "Composer material must not target unrelated editors through broad host selectors");
@@ -452,6 +491,7 @@ test("all theme text, focus colours, and accents clear contrast guardrails", asy
         ["accent", "--aura-accent-primary", "--aura-background-primary", 3],
         ["on-accent", "--aura-text-on-accent", "--aura-accent-primary", 4.5],
         ["sidebar", "--aura-sidebar-text-primary", "--aura-sidebar-background", 7],
+        ["sidebar-muted", "--aura-sidebar-text-muted", "--aura-sidebar-background", 4.5],
         ["hover", "--aura-text-primary", "--aura-hover-surface", 4.5],
         ["selected", "--aura-text-primary", "--aura-selected-surface", 4.5],
         ["sidebar-selected", "--aura-sidebar-text-primary", "--aura-sidebar-selected", 4.5],
@@ -477,12 +517,92 @@ test("all theme text, focus colours, and accents clear contrast guardrails", asy
   assert.equal(failures.length, 0, failures.join("\n"));
 });
 
+test("all live chrome labels remain readable on their effective state backgrounds", async () => {
+  const blend = (foreground, background, alpha) => foreground.map(
+    (channel, index) => (channel * alpha) + (background[index] * (1 - alpha)),
+  );
+  const rgbLuminance = (rgb) => rgb
+    .map((channel) => channel <= 0.03928
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const rgbContrast = (foreground, background) => {
+    const values = [rgbLuminance(foreground), rgbLuminance(background)].sort((left, right) => right - left);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  };
+  const primarySheen = {
+    default: 0.08,
+    "japanese-film-editorial": 0,
+    "korean-prestige": 0.14,
+    "cartoon-studio": 0,
+    "anime-twilight": 0.22,
+    "study-library": 0,
+    "japanese-idol": 0.18,
+    "korean-idol": 0.32,
+  };
+  const failures = [];
+  for (const theme of await listThemes()) {
+    for (const mode of ["light", "dark"]) {
+      const tokens = theme[mode].semantic;
+      const rgb = (token) => hslToRgb(tokens[token]);
+      const check = (label, foreground, background, minimum = 4.5) => {
+        const ratio = rgbContrast(foreground, background);
+        if (ratio < minimum) {
+          failures.push(`${theme.name}/${mode}: ${label} contrast ${ratio.toFixed(2)} is below ${minimum}:1`);
+        }
+      };
+      const sidebar = rgb("--aura-sidebar-background");
+      const composer = rgb("--aura-composer-background");
+      const sidebarText = rgb("--aura-sidebar-text-primary");
+      const mutedSidebarText = rgb("--aura-sidebar-text-muted");
+      const text = rgb("--aura-text-primary");
+      const secondaryText = rgb("--aura-text-secondary");
+      const onAccent = rgb("--aura-text-on-accent");
+      const accent = rgb("--aura-accent-primary");
+
+      check("sidebar rest", sidebarText, sidebar, 7);
+      check("sidebar muted rest", mutedSidebarText, sidebar);
+      for (const [label, alpha] of [["row hover", 0.42], ["row press", 0.58], ["row current", 0.68]]) {
+        check(label, sidebarText, blend(rgb("--aura-sidebar-selected"), sidebar, alpha));
+        check(`${label} secondary`, sidebarText, blend(rgb("--aura-sidebar-selected"), sidebar, alpha));
+      }
+      const footer = blend(rgb("--aura-elevated-surface"), sidebar, 0.28);
+      check("footer label", sidebarText, footer);
+      check("footer secondary label", mutedSidebarText, footer);
+
+      check("control rest", text, blend(rgb("--aura-elevated-surface"), composer, 0.28));
+      check("control rest secondary", secondaryText,
+        blend(rgb("--aura-elevated-surface"), composer, 0.28));
+      check("control hover", text, blend(rgb("--aura-hover-surface"), composer, 0.42));
+      check("control hover secondary", secondaryText, blend(rgb("--aura-hover-surface"), composer, 0.42));
+      check("control press", text, blend(rgb("--aura-selected-surface"), composer, 0.58));
+      check("control press secondary", secondaryText,
+        blend(rgb("--aura-selected-surface"), composer, 0.58));
+      check("control selected", onAccent, accent);
+      check("control disabled", rgb("--aura-text-disabled"),
+        blend(rgb("--aura-disabled-surface"), composer, 0.66), 3);
+
+      for (let step = 0; step <= 20; step += 1) {
+        const sheen = blend(
+          rgb("--aura-accent-secondary"),
+          accent,
+          primarySheen[theme.name] * (step / 20),
+        );
+        check(`primary rest sheen ${step}`, onAccent, sheen);
+        check(`primary hover sheen ${step}`, onAccent,
+          blend(rgb("--aura-hover-surface"), sheen, 0.10));
+      }
+    }
+  }
+  assert.equal(failures.length, 0, failures.join("\n"));
+});
+
 test("the four mixed-mode themes keep a true Light sidebar palette", async () => {
   const expected = {
-    "japanese-film-editorial": ["38 20% 84%", "210 9% 14%", "210 6% 38%", "12 28% 69%"],
-    "korean-prestige": ["216 24% 84%", "220 32% 14%", "218 12% 38%", "216 32% 71%"],
+    "japanese-film-editorial": ["38 20% 84%", "210 9% 14%", "210 6% 37%", "12 28% 69%"],
+    "korean-prestige": ["216 24% 84%", "220 32% 14%", "218 12% 37%", "216 32% 71%"],
     "anime-twilight": ["228 22% 90%", "232 34% 18%", "230 12% 42%", "248 24% 80%"],
-    "study-library": ["44 28% 90%", "70 10% 17%", "70 6% 40%", "139 16% 78%"],
+    "study-library": ["44 28% 90%", "70 10% 17%", "70 6% 39%", "139 16% 78%"],
   };
   const themes = new Map((await listThemes()).map((theme) => [theme.name, theme]));
   for (const [themeId, values] of Object.entries(expected)) {

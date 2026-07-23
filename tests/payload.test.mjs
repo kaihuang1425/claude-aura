@@ -753,6 +753,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
           return this.role === "textbox" && this.contenteditable === "true";
         }
         if (simple === '[role="button"]') return this.role === "button";
+        if (simple === '[role="switch"]') return this.role === "switch";
+        if (simple === '[role="combobox"]') return this.role === "combobox";
         if (simple === '[role="link"]') return this.role === "link";
         if (simple === '[role="menuitem"]') return this.role === "menuitem";
         if (simple === '[role="list"]') return this.role === "list";
@@ -816,7 +818,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     if (selector === 'main,[role="main"]') return mainCandidates;
     if (selector.includes("aside") || selector.includes('[role="navigation"]')) return sidebarCandidates;
     const markers = [...selector.matchAll(/\[([^\]=]+)(?:=[^\]]+)?\]/g)].map((match) => match[1]);
-    if (markers.some((name) => name.startsWith("data-claude-aura-") || name === "data-aura-role")) {
+    if (markers.some((name) => name.startsWith("data-claude-aura-") || name.startsWith("data-aura-"))) {
       return walk(document.documentElement).filter((element) => markers.some((name) => Object.hasOwn(element, name)));
     }
     return [];
@@ -882,6 +884,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
       translate: "none",
+      backgroundColor: element.style.getPropertyValue("background-color") || "rgba(0, 0, 0, 0)",
+      backgroundImage: element.style.getPropertyValue("background-image") || "none",
     }),
     addEventListener: (type, listener) => {
       const listeners = windowListeners.get(type) ?? new Set();
@@ -951,9 +955,35 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   sidebarList.role = "list";
   sidebarList.rect = { left: 8, top: 130, right: 272, bottom: 720, width: 264, height: 590 };
   const primaryAction = new FakeElement("a");
+  const primarySurface = new FakeElement("div");
+  const primaryIcon = new FakeElement("svg");
+  const primaryIconTitle = new FakeElement("title");
+  primaryIconTitle.textContent = "Create";
+  primaryIcon.appendChild(primaryIconTitle);
+  const hiddenPrimaryLabel = new FakeElement("span");
+  hiddenPrimaryLabel.textContent = "Create a new chat";
+  hiddenPrimaryLabel.rect = { left: 0, top: 0, right: 1, bottom: 1, width: 1, height: 1 };
+  const primaryShortcut = new FakeElement("kbd");
+  const paintedShortcut = new FakeElement("kbd");
+  primarySurface.textContent = "New chat";
+  primaryShortcut.textContent = "Ctrl+Shift+O";
+  paintedShortcut.textContent = "⌘K";
+  paintedShortcut.style.setProperty("background-color", "rgb(20, 20, 24)");
   primaryAction.href = "/new";
   primaryAction.tabIndex = 0;
   primaryAction.rect = { left: 16, top: 76, right: 264, bottom: 120, width: 248, height: 44 };
+  primarySurface.appendChild(primaryIcon);
+  primarySurface.appendChild(hiddenPrimaryLabel);
+  primarySurface.appendChild(primaryShortcut);
+  primarySurface.appendChild(paintedShortcut);
+  primarySurface.childNodes = [
+    primaryIcon,
+    hiddenPrimaryLabel,
+    { nodeType: 3, textContent: "New chat" },
+    primaryShortcut,
+    paintedShortcut,
+  ];
+  primaryAction.appendChild(primarySurface);
   const ordinaryRow = new FakeElement("a");
   ordinaryRow.href = "/chat/one";
   ordinaryRow.tabIndex = 0;
@@ -984,6 +1014,22 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(footerControl["data-aura-role"], "sidebar-footer");
   assert.equal(currentRow["aria-current"], "page",
     "Runtime role discovery must preserve Claude's current-row state");
+  assert.equal(primarySurface.textContent, "New chat",
+    "Runtime role discovery must preserve the nested primary-action label");
+  assert.equal(primarySurface["data-aura-f"], "p",
+    "Runtime role discovery must mark the primary label that shares Aura's state foreground");
+  assert.equal(primarySurface["data-aura-bg"], "",
+    "Runtime role discovery must mark only the primary label's native paint chain");
+  assert.equal(primaryIcon["data-aura-f"], undefined,
+    "A leading titled icon must not displace the visible primary label");
+  assert.equal(hiddenPrimaryLabel["data-aura-f"], undefined,
+    "A clipped accessibility label must not displace the visible primary label");
+  assert.equal(primaryShortcut["data-aura-f"], "s",
+    "Runtime role discovery must pair a visible secondary shortcut label");
+  assert.equal(primaryShortcut["data-aura-bg"], undefined,
+    "Runtime role discovery must preserve the shortcut's own optional material");
+  assert.equal(paintedShortcut["data-aura-f"], undefined,
+    "A self-painted shortcut must retain its native foreground/background pair");
   assert.deepEqual([primaryAction.tabIndex, ordinaryRow.tabIndex, currentRow.tabIndex, footerControl.tabIndex],
     [0, 0, 0, 0], "Runtime role discovery must preserve keyboard order");
 
@@ -996,6 +1042,10 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     "Two independent left rails must fail open");
   assert.equal(primaryAction["data-aura-role"], undefined,
     "Ambiguous sidebar discovery must clear every prior subrole");
+  assert.equal(primarySurface["data-aura-bg"], undefined,
+    "Ambiguous sidebar discovery must also clear the paired label paint marker");
+  assert.equal(primarySurface["data-aura-f"], undefined,
+    "Ambiguous sidebar discovery must also clear the paired label foreground marker");
 
   independentSidebar.remove();
   const nestedSidebarCandidate = new FakeElement("nav");
@@ -1027,6 +1077,11 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   const editor = new FakeElement("textarea");
   const firstControl = new FakeElement("button");
   const secondControl = new FakeElement("button");
+  const modelBadge = new FakeElement("span");
+  const modelExtra = new FakeElement("span");
+  const modelHint = new FakeElement("span");
+  const compactPill = new FakeElement("button");
+  const pressedControl = new FakeElement("button");
   const toggleControl = new FakeElement("button");
   const toolbar = new FakeElement("div");
   toolbar.setAttribute("role", "toolbar");
@@ -1037,6 +1092,33 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   secondControl.tabIndex = 0;
   secondControl.setAttribute("aria-label", "Model");
   secondControl.rect = { left: 490, top: 356, right: 610, bottom: 396, width: 120, height: 40 };
+  modelExtra.textContent = "Extra";
+  modelBadge.style.setProperty("background-color", "rgb(32, 34, 42)");
+  modelBadge.appendChild(modelExtra);
+  modelHint.textContent = "Beta";
+  secondControl.appendChild(modelBadge);
+  secondControl.appendChild(modelHint);
+  secondControl.textContent = "Sonnet 5";
+  secondControl.childNodes = [
+    { nodeType: 3, textContent: "Sonnet 5" },
+    modelBadge,
+    modelHint,
+  ];
+  compactPill.tabIndex = 0;
+  compactPill.setAttribute("aria-label", "Plan");
+  compactPill.rect = { left: 612, top: 356, right: 676, bottom: 396, width: 64, height: 40 };
+  const compactPillLabel = new FakeElement("span");
+  compactPillLabel.textContent = "Plan";
+  compactPill.appendChild(compactPillLabel);
+  pressedControl.tabIndex = 0;
+  pressedControl.setAttribute("aria-label", "Plan");
+  pressedControl.setAttribute("aria-pressed", "false");
+  pressedControl.rect = { left: 678, top: 356, right: 742, bottom: 396, width: 64, height: 40 };
+  const pressedSurface = new FakeElement("span");
+  const pressedLabel = new FakeElement("span");
+  pressedLabel.textContent = "Plan";
+  pressedSurface.appendChild(pressedLabel);
+  pressedControl.appendChild(pressedSurface);
   toggleControl.tabIndex = 0;
   toggleControl.setAttribute("role", "switch");
   toggleControl.setAttribute("aria-checked", "false");
@@ -1049,6 +1131,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   popup.appendChild(popupControl);
   toolbar.appendChild(firstControl);
   toolbar.appendChild(secondControl);
+  toolbar.appendChild(compactPill);
+  toolbar.appendChild(pressedControl);
   toolbar.appendChild(toggleControl);
   composer.appendChild(editor);
   composer.appendChild(toolbar);
@@ -1110,6 +1194,21 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(toolbar["data-aura-role"], "composer-toolbar");
   assert.equal(firstControl["data-aura-role"], "control-icon");
   assert.equal(secondControl["data-aura-role"], "control-pill");
+  assert.equal(compactPill["data-aura-role"], "control-pill",
+    "A compact Plan-like control in the former aspect-ratio gap must remain styled");
+  assert.equal(pressedControl["data-aura-role"], "control-toggle",
+    "A native aria-pressed control must retain toggle-state styling");
+  assert.equal(secondControl["data-aura-f"], "p",
+    "Direct control text must remain primary in DOM order");
+  assert.equal(modelBadge["data-aura-f"], undefined);
+  assert.equal(modelExtra["data-aura-f"], undefined,
+    "A nested self-painted model badge must retain its native foreground/background pair");
+  assert.equal(modelHint["data-aura-f"], "s",
+    "An unpainted secondary model label must keep a separately paired foreground");
+  assert.equal(pressedLabel["data-aura-f"], "p",
+    "An aria-pressed Plan label must follow its selected or hover foreground");
+  assert.equal(pressedSurface["data-aura-bg"], "",
+    "An aria-pressed Plan paint wrapper must not cover Aura's paired state background");
   assert.equal(toggleControl["data-aura-role"], "control-toggle");
   assert.equal(popupControl["data-aura-role"], undefined,
     "Controls owned by a dialog inside the composer must retain native presentation");
@@ -1119,12 +1218,18 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       firstControl["aria-label"],
       secondControl.tabIndex,
       secondControl["aria-label"],
+      compactPill.tabIndex,
+      compactPill["aria-label"],
+      compactPillLabel.textContent,
+      pressedControl.tabIndex,
+      pressedControl["aria-pressed"],
+      pressedLabel.textContent,
       toggleControl.tabIndex,
       toggleControl.role,
       toggleControl["aria-checked"],
     ],
-    [0, "Attach", 0, "Model", 0, "switch", "false"],
-    "Composer role discovery must not change names, states, or keyboard order",
+    [0, "Attach", 0, "Model", 0, "Plan", "Plan", 0, "false", "Plan", 0, "switch", "false"],
+    "Composer role discovery must not change nested labels, names, states, or keyboard order",
   );
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "",
     "Measuring a native new-chat composer must not author its width");
@@ -1141,6 +1246,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(editor["data-aura-role"], "composer-editor");
   toolbar.appendChild(firstControl);
   toolbar.appendChild(secondControl);
+  toolbar.appendChild(compactPill);
+  toolbar.appendChild(pressedControl);
   toolbar.appendChild(toggleControl);
   composer.appendChild(toolbar);
   composer.appendChild(popup);
@@ -1263,7 +1370,9 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   secondComposer.appendChild(new FakeElement("button"));
   secondComposer.getBoundingClientRect = () => ({ left: 430, top: 460, right: 1030, bottom: 580, width: 600, height: 120 });
   secondEditor.getBoundingClientRect = () => ({ left: 450, top: 472, right: 950, bottom: 512, width: 500, height: 40 });
-  secondComposer.querySelectorAll = (selector) => selector === 'button,[role="button"],select' ? secondComposer.children.slice(1) : [];
+  secondComposer.querySelectorAll = (selector) => selector === 'button,[role="button"],[role="switch"],[role="combobox"],select'
+    ? secondComposer.children.slice(1)
+    : [];
   main.appendChild(secondComposer);
   composerEditors = [editor, secondEditor];
   window.__CLAUDE_AURA_STATE__.ensure();
@@ -1548,6 +1657,16 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     walk(document.documentElement).filter((element) => Object.hasOwn(element, "data-aura-role")).length,
     0,
     "Cleanup must remove every live semantic chrome role",
+  );
+  assert.equal(
+    walk(document.documentElement).filter((element) => Object.hasOwn(element, "data-aura-bg")).length,
+    0,
+    "Cleanup must remove every paired label paint marker",
+  );
+  assert.equal(
+    walk(document.documentElement).filter((element) => Object.hasOwn(element, "data-aura-f")).length,
+    0,
+    "Cleanup must remove every paired label foreground marker",
   );
   assert.equal(intervals.size, 0);
   assert.equal(timeouts.size, 0);

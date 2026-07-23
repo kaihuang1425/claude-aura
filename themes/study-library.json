@@ -39,7 +39,7 @@
       "--aura-background-secondary": "42 34% 87%",
       "--aura-sidebar-background": "44 28% 90%",
       "--aura-sidebar-text-primary": "70 10% 17%",
-      "--aura-sidebar-text-muted": "70 6% 40%",
+      "--aura-sidebar-text-muted": "70 6% 39%",
       "--aura-sidebar-selected": "139 16% 78%",
       "--aura-panel-background": "45 48% 96%",
       "--aura-elevated-surface": "46 60% 98%",
