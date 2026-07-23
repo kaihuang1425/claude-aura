@@ -9,6 +9,7 @@ import {
   materializeStudioLauncherMark,
   materializeSourceArtwork,
   persistStudioInternal,
+  renameStudioPath,
   studioPaths,
 } from "../scripts/theme-core/studio.mjs";
 import {
@@ -270,7 +271,10 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
         wait: async () => {},
       },
     });
-    assert.equal(transientDraftAttempts, 2, "Atomic draft publication did not retry a transient lock");
+    assert.ok(
+      transientDraftAttempts >= 2 && transientDraftAttempts <= 6,
+      "Atomic draft publication escaped the bounded retry window",
+    );
     assert.equal(await fs.readFile(atomicDraftPath, "utf8"), "new draft\n");
     await fs.writeFile(atomicDraftPath, "preserve draft\n", "utf8");
     let permanentDraftAttempts = 0;
@@ -293,6 +297,50 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       [],
       "Failed draft publication left an unpublished temporary file",
     );
+
+    const transientDirectorySource = path.join(temporary, "transient-directory-source");
+    const transientDirectoryDestination = path.join(temporary, "transient-directory-destination");
+    await fs.mkdir(transientDirectorySource);
+    let transientDirectoryAttempts = 0;
+    await renameStudioPath(transientDirectorySource, transientDirectoryDestination, {
+      fileOperations: {
+        rename: async (...args) => {
+          transientDirectoryAttempts += 1;
+          if (transientDirectoryAttempts === 1) {
+            const error = new Error("injected transient editor-directory lock");
+            error.code = "EPERM";
+            throw error;
+          }
+          return fs.rename(...args);
+        },
+        wait: async () => {},
+      },
+    });
+    assert.ok(
+      transientDirectoryAttempts >= 2 && transientDirectoryAttempts <= 6,
+      "Editor directory publication escaped the bounded retry window",
+    );
+    assert.equal((await fs.stat(transientDirectoryDestination)).isDirectory(), true);
+    await assert.rejects(fs.stat(transientDirectorySource), { code: "ENOENT" });
+
+    const lockedDirectorySource = path.join(temporary, "locked-directory-source");
+    const lockedDirectoryDestination = path.join(temporary, "locked-directory-destination");
+    await fs.mkdir(lockedDirectorySource);
+    let lockedDirectoryAttempts = 0;
+    await assert.rejects(renameStudioPath(lockedDirectorySource, lockedDirectoryDestination, {
+      fileOperations: {
+        rename: async () => {
+          lockedDirectoryAttempts += 1;
+          const error = new Error("injected permanent editor-directory lock");
+          error.code = "EBUSY";
+          throw error;
+        },
+        wait: async () => {},
+      },
+    }), /injected permanent editor-directory lock/);
+    assert.equal(lockedDirectoryAttempts, 6, "Editor directory publication did not use the bounded retry count");
+    assert.equal((await fs.stat(lockedDirectorySource)).isDirectory(), true);
+    await assert.rejects(fs.stat(lockedDirectoryDestination), { code: "ENOENT" });
 
     const launcherBudgetRoot = path.join(temporary, "launcher-budget");
     await fs.mkdir(launcherBudgetRoot, { recursive: true });

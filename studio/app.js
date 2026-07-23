@@ -295,6 +295,10 @@
 
   const params = new URLSearchParams(window.location.search);
   const rawLocale = params.get("locale") || navigator.language || "en";
+  const requestedView = params.get("view");
+  const requestedViewHash = ["themes", "background", "create", "settings"].includes(requestedView)
+    ? `#${requestedView}`
+    : "";
   const locale = /^zh[-_](?:tw|hk|mo|hant)/i.test(rawLocale) ? "zh-TW"
     : /^zh/i.test(rawLocale) ? "zh-CN" : "en";
   const t = (key) => STRINGS[locale][key] ?? STRINGS.en[key] ?? key;
@@ -1531,9 +1535,10 @@
       if (activateRailLink(link, { updateHistory: true })) event.preventDefault();
     });
   }
-  const initialRailLink = railLinks.find((link) => link.hash === window.location.hash && !link.hidden)
+  const initialDestination = requestedViewHash || window.location.hash;
+  const initialRailLink = railLinks.find((link) => link.hash === initialDestination && !link.hidden)
     ?? railLinks.find((link) => link.hash === "#themes");
-  activateRailLink(initialRailLink, { smooth: false });
+  activateRailLink(initialRailLink, { updateHistory: Boolean(requestedViewHash), smooth: false });
 
   setStatus(t("statusReady"));
   reflect();

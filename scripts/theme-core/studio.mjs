@@ -331,6 +331,23 @@ export function studioFileOperations(overrides = null) {
   };
 }
 
+export async function renameStudioPath(source, destination, { fileOperations = fs } = {}) {
+  const files = studioFileOperations(fileOperations);
+  const wait = typeof files.wait === "function"
+    ? files.wait
+    : (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await files.rename(source, destination);
+      return;
+    } catch (error) {
+      if (!WINDOWS_TRANSIENT_FILESYSTEM_CODES.includes(error.code)
+          || attempt >= WINDOWS_FILESYSTEM_RETRY_DELAYS_MS.length) throw error;
+      await wait(WINDOWS_FILESYSTEM_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
+
 export async function pathKind(candidate, fileOperations = fs) {
   try {
     return await (fileOperations.lstat ?? fs.lstat)(candidate);
@@ -1303,7 +1320,7 @@ export async function replaceActiveStudio(paths, build) {
   await assertStudioActivePaths(paths);
   const backup = path.join(paths.root, `.active-backup-${studioHex()}`);
   const hadActive = Boolean(await pathKind(paths.active));
-  if (hadActive) await fs.rename(paths.active, backup);
+  if (hadActive) await renameStudioPath(paths.active, backup);
   try {
     await fs.mkdir(paths.artwork, { recursive: true });
     const result = await build();
@@ -1311,7 +1328,7 @@ export async function replaceActiveStudio(paths, build) {
     return result;
   } catch (error) {
     await fs.rm(paths.active, { recursive: true, force: true }).catch(() => {});
-    if (hadActive) await fs.rename(backup, paths.active).catch(() => {});
+    if (hadActive) await renameStudioPath(backup, paths.active).catch(() => {});
     throw error;
   }
 }
@@ -2016,11 +2033,11 @@ export async function saveThemeEdit(context) {
       if (!isPathWithin(userRoot, realDestination) || path.dirname(realDestination) !== userRoot) {
         throw new Error("Installed theme destination escaped the user themes folder");
       }
-      await fs.rename(destination, backup);
+      await renameStudioPath(destination, backup);
       movedExisting = true;
     }
     await callStudioFault(context, "after-backup");
-    await fs.rename(stageDirectory, destination);
+    await renameStudioPath(stageDirectory, destination);
     installed = true;
     await callStudioFault(context, "after-install");
     await writeConfig(context.configPath, nextConfig);
@@ -2156,7 +2173,7 @@ export async function clearStudioActive(editorRoot) {
   const paths = studioPaths(editorRoot);
   if (!(await pathKind(paths.active))) return;
   const discarded = path.join(paths.root, `.discarded-${studioHex()}`);
-  await fs.rename(paths.active, discarded);
+  await renameStudioPath(paths.active, discarded);
   await fs.rm(discarded, { recursive: true, force: true });
   if (await pathKind(paths.previewActive)) {
     await fs.rm(paths.previewActive, { recursive: true, force: true });
@@ -2203,7 +2220,7 @@ export async function deleteUserTheme(context) {
     throw new Error("Theme deletion target is unsafe");
   }
   const tombstone = path.join(userRoot, `.delete-${context.theme}-${studioHex()}`);
-  await fs.rename(destination, tombstone);
+  await renameStudioPath(destination, tombstone);
   await fs.rm(tombstone, { recursive: true, force: true }).catch(() => {});
   const state = active ? await canonicalStudioState(active, context.editorRoot) : { active: false };
   return {

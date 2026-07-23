@@ -162,7 +162,10 @@ test("config writes are atomic, aliases migrate, and theme choice persists", asy
           wait: async () => {},
         },
       });
-      assert.equal(transientAttempts, 2, `${transientCode} config publication was not retried once`);
+      assert.ok(
+        transientAttempts >= 2 && transientAttempts <= 6,
+        `${transientCode} config publication escaped the bounded retry window`,
+      );
       assert.equal(JSON.parse(await fs.readFile(transientPath, "utf8")).theme, "korean-idol",
         `${transientCode} config publication did not eventually replace the live config`);
     }

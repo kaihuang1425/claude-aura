@@ -781,8 +781,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditor, /dataset\.stageHandle = "scale"/,
     "Selection chrome must include keyboard-focusable resize handles");
   assert.match(ui,
-    /function Show-AuraUiMain[\s\S]{0,420}?\.Activate\(\)[\s\S]{0,120}?\.BringToFront\(\)/,
-    "The open-aura action must restore and foreground the main Aura window");
+    /function Show-AuraUiMain[\s\S]{0,260}?WindowState -eq \[System\.Windows\.Forms\.FormWindowState\]::Minimized\)[\s\S]{0,260}?AuraWindow\]::ShowWindow\(\$script:Form\.Handle,\s*9\)[\s\S]{0,260}?\.Activate\(\)[\s\S]{0,120}?\.BringToFront\(\)[\s\S]{0,220}?AuraWindow\]::SetForegroundWindow\(\$script:Form\.Handle\)/,
+    "The open-aura action must natively restore and foreground the main Aura window");
   assert.match(ui,
     /(?:\$script:StudioMessageTypes\s+-cnotcontains\s+\$message\.type|\$message\.type\s+-cnotin\s+\$script:StudioMessageTypes)/i,
     "Studio message actions must be checked case-sensitively against the allowlist");
@@ -3411,8 +3411,11 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\*\s*\{[^}]*transition:\s*none !important/,
     "The welcome guide must inherit Studio's reduced-motion treatment");
   assert.match(studioApp,
-    /const initialRailLink = railLinks\.find\(\(link\) => link\.hash === window\.location\.hash[\s\S]{0,180}?activateRailLink\(initialRailLink, \{ smooth: false \}\)/,
-    "A locale reload must restore both the Settings scroll target and its aria-current rail state");
+    /const requestedView = params\.get\("view"\);\s*const requestedViewHash = \["themes", "background", "create", "settings"\]\.includes\(requestedView\)[\s\S]{0,120}?#\$\{requestedView\}/,
+    "Studio must allowlist a host-owned reload view instead of trusting a fragment");
+  assert.match(studioApp,
+    /const initialDestination = requestedViewHash \|\| window\.location\.hash;[\s\S]{0,220}?activateRailLink\(initialRailLink, \{ updateHistory: Boolean\(requestedViewHash\), smooth: false \}\)/,
+    "A locale reload must restore Settings without giving the browser a root-scrolling fragment");
 
   assert.match(ui, /\$StudioPreferencesPath\s*=\s*Join-Path \$DataRoot 'studio-preferences\.json'/,
     "Studio preferences must stay in a separate device-local host file");
@@ -3433,7 +3436,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   assert.match(ui, /\$script:TrayOpenStudioItem\.add_Click\(\{ Show-AuraUiStudio \}\)/,
     "The tray entry must not impersonate the Aura launcher introduction path");
   assert.match(ui,
-    /function Invoke-AuraUiSetLocale[\s\S]{0,550}?StudioEditorState[\s\S]{0,120}?active[\s\S]{0,260}?throw[\s\S]{0,1600}?Get-AuraUiStudioUrl -PreserveFragment/,
+    /function Invoke-AuraUiSetLocale[\s\S]{0,550}?StudioEditorState[\s\S]{0,120}?active[\s\S]{0,260}?throw[\s\S]{0,1600}?Get-AuraUiStudioUrl -PreserveView/,
     "A locale change must preserve an active draft and the current ordinary Settings destination");
   assert.match(ui,
     /function Invoke-AuraUiSetLocale[\s\S]{0,1300}?Write-AuraUiStudioPreferences[\s\S]{0,300}?\$script:Locale = \$Locale[\s\S]{0,120}?Get-AuraUiCopy/,
@@ -3494,9 +3497,9 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
       "$script:Locale='zh-CN'",
       "$script:StudioWebView=[pscustomobject]@{Source=[Uri]'https://aura.studio/index.html?locale=en#settings'}",
       "if((Get-AuraUiStudioUrl) -cne 'https://aura.studio/index.html?locale=zh-CN'){throw 'Studio URL did not use the exact host locale'}",
-      "if((Get-AuraUiStudioUrl -PreserveFragment) -cne 'https://aura.studio/index.html?locale=zh-CN#settings'){throw 'Locale reload did not preserve Settings'}",
+      "if((Get-AuraUiStudioUrl -PreserveView) -cne 'https://aura.studio/index.html?locale=zh-CN&view=settings'){throw 'Locale reload did not preserve Settings without a root fragment'}",
       "$script:StudioWebView.Source=[Uri]'https://aura.studio/index.html?locale=en#editor'",
-      "if((Get-AuraUiStudioUrl -PreserveFragment) -ne 'https://aura.studio/index.html?locale=zh-CN'){throw 'Studio URL preserved a non-ordinary fragment'}",
+      "if((Get-AuraUiStudioUrl -PreserveView) -ne 'https://aura.studio/index.html?locale=zh-CN'){throw 'Studio URL preserved a non-ordinary view'}",
       "$script:Locale='ja'",
       "Assert-Rejected { Get-AuraUiStudioUrl } 'an unsupported navigation locale'",
     ].join("\n");

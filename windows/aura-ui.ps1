@@ -162,18 +162,19 @@ function Write-AuraUiStudioPreferences {
 }
 
 function Get-AuraUiStudioUrl {
-  param([switch]$PreserveFragment)
+  param([switch]$PreserveView)
   if ($script:Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
     throw 'Aura Studio cannot navigate with an invalid locale.'
   }
   $url = 'https://aura.studio/index.html?locale={0}' -f [Uri]::EscapeDataString($script:Locale)
-  if (-not $PreserveFragment -or $null -eq $script:StudioWebView) { return $url }
+  if (-not $PreserveView -or $null -eq $script:StudioWebView) { return $url }
   try {
     $source = [Uri]$script:StudioWebView.Source
     if ($source.Scheme -ceq 'https' -and $source.Host -ceq 'aura.studio' -and
         $source.AbsolutePath -ceq '/index.html' -and
         $source.Fragment -cin @('#themes', '#background', '#create', '#settings')) {
-      return $url + $source.Fragment.ToLowerInvariant()
+      $view = $source.Fragment.TrimStart('#').ToLowerInvariant()
+      return $url + '&view=' + [Uri]::EscapeDataString($view)
     }
   } catch {}
   return $url
@@ -3879,10 +3880,17 @@ function Show-AuraUiMain {
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
   if (-not $script:Form.Visible) { $script:Form.Show() }
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
-    $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    if ('AuraWindow' -as [type] -and $script:Form.IsHandleCreated) {
+      [void][AuraWindow]::ShowWindow($script:Form.Handle, 9)
+    } else {
+      $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    }
   }
   $script:Form.Activate()
   $script:Form.BringToFront()
+  if ('AuraWindow' -as [type] -and $script:Form.IsHandleCreated) {
+    [void][AuraWindow]::SetForegroundWindow($script:Form.Handle)
+  }
 }
 
 function Show-AuraUiMainForPreview {
@@ -4602,7 +4610,7 @@ function Invoke-AuraUiSetLocale {
     Set-AuraUiConfig -Options @()
     if ($null -ne $script:StudioWebView -and $null -ne $script:StudioWebView.CoreWebView2) {
       $script:StudioReady = $false
-      $script:StudioWebView.CoreWebView2.Navigate((Get-AuraUiStudioUrl -PreserveFragment))
+      $script:StudioWebView.CoreWebView2.Navigate((Get-AuraUiStudioUrl -PreserveView))
     }
   } catch {
     $failure = $_
