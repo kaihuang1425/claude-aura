@@ -161,6 +161,31 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   }
   assert.match(ui, /\$script:Form\.AccessibleName\s*=\s*'Claude Aura'/,
     "Hiding the painted title must not remove Aura's accessible window name");
+  const exitRequest = powershellFunction("Request-AuraUiExit");
+  assert.match(exitRequest,
+    /\$script:ExitRequested\s*=\s*\$true[\s\S]{0,180}?\$script:Form\.Close\(\)/,
+    "Explicit Exit must be marked before closing the main form");
+  assert.match(ui,
+    /\$script:TrayExitItem\.add_Click\(\{\s*Request-AuraUiExit\s*\}\)/,
+    "The tray Exit command must still close the complete application");
+  assert(powershellFunction("Fail-AuraUiStartup").includes("Request-AuraUiExit")
+      && powershellFunction("Stop-AuraUiAfterIdentityFailure").includes("Request-AuraUiExit"),
+    "Fatal startup and identity failures must bypass hide-on-close preservation");
+  const mainClosingStart = ui.indexOf("$script:Form.add_FormClosing({");
+  const mainClosingEnd = ui.indexOf("[System.Windows.Forms.Application]::Run($script:Form)", mainClosingStart);
+  const mainClosing = ui.slice(mainClosingStart, mainClosingEnd);
+  const preserveStudioIndex = mainClosing.indexOf("$eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing");
+  const teardownIndex = mainClosing.indexOf("$script:Closing = $true");
+  assert(mainClosingStart >= 0 && mainClosingEnd > mainClosingStart
+      && preserveStudioIndex >= 0 && teardownIndex > preserveStudioIndex,
+  "The visible-Studio preservation branch must run before application teardown");
+  assert(mainClosing.includes("-not $script:ExitRequested")
+      && mainClosing.includes("$script:StudioForm.Visible")
+      && mainClosing.includes("$eventArgs.Cancel = $true")
+      && mainClosing.includes("$sender.Hide()")
+      && mainClosing.includes("Update-AuraUiLauncherPosition")
+      && mainClosing.indexOf("return", preserveStudioIndex) < teardownIndex,
+  "Closing Aura while Studio is visible must hide only Aura and leave Studio running");
   // The Aura launcher is a separate owned overlay window, not chrome inside the
   // Claude content. It floats over the WebView (top-level windows escape the
   // windowed-WebView2 airspace limit), reserves no layout space, never reflows
@@ -2575,6 +2600,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && launcherStyleResolver.includes("-Names @('launcherStyle')")
       && launcherStyleResolver.includes("$raw = $draftLauncher"),
     "The active last-valid editor draft must drive launcher material before Save");
+  assert(launcherStyleResolver.includes("$studioStyle = if ($editorActive)")
+      && launcherStyleResolver.includes("-Names @('studioStyle')")
+      && launcherStyleResolver.includes("Resolve-AuraUiLauncherModeMaterial")
+      && launcherStyleResolver.includes("Test-AuraUiDarkChrome"),
+    "Launcher appearance must resolve from the active last-valid Studio palette");
   assert(!launcherStyleResolver.includes("editorMatches"),
     "Draft launcher styling must not depend on the persisted selected theme id");
   assert.match(launcherStyleResolver,
@@ -2585,6 +2615,47 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && launcherStyleResolver.includes("$style.source = if ($editorLocalMark)")
       && launcherStyleResolver.includes("'editor'"),
   "A replaced draft mark must resolve only through its validated digest-owned editor preview");
+  const launcherModeResolver = powershellFunction("Resolve-AuraUiLauncherModeMaterial");
+  assert(launcherModeResolver.includes("$authoredDark -eq $Dark")
+      && launcherModeResolver.includes("$palette = Get-AuraUiPropertyValue")
+      && launcherModeResolver.includes("surface = Get-AuraUiPropertyValue -InputObject $palette -Names @('surface')")
+      && launcherModeResolver.includes("surfaceHover = Get-AuraUiPropertyValue -InputObject $palette -Names @('raised')")
+      && launcherModeResolver.includes("foreground = Get-AuraUiPropertyValue -InputObject $palette -Names @('text')")
+      && launcherModeResolver.includes("border = Get-AuraUiPropertyValue -InputObject $palette -Names @('border')"),
+    "Only an opposite-polarity launcher may derive its surface, hover, text, and border from the mode palette");
+  assert(launcherModeResolver.includes(
+    "accent = Get-AuraUiPropertyValue -InputObject $Raw -Names @('accent')",
+  ),
+    "Appearance adaptation must retain the authored launcher accent");
+  const launcherModeRegression = [
+    "$ErrorActionPreference='Stop'",
+    "Add-Type -AssemblyName System.Drawing",
+    powershellFunction("Get-AuraUiPropertyValue"),
+    launcherModeResolver,
+    "$rawDark=[pscustomobject]@{asset='assets/theme-art/korean-idol/launcher-mark.png';surface='#241D43';surfaceHover='#33275C';foreground='#F7F6FF';accent='#79D7E4';border='#8F78DF';radius=16;borderWidth=1}",
+    "$darkPalette=[pscustomobject]@{surface='#25213F';raised='#2E2A4C';text='#EDECF9';border='#BFBAE3'}",
+    "$lightPalette=[pscustomobject]@{surface='#F7F7FD';raised='#FAFAFF';text='#241F3D';border='#2E2848'}",
+    "$studio=[pscustomobject]@{light=$lightPalette;dark=$darkPalette}",
+    "$nativeDark=Resolve-AuraUiLauncherModeMaterial -Raw $rawDark -StudioStyle $studio -Dark $true",
+    "if(-not [object]::ReferenceEquals($nativeDark,$rawDark)){throw 'Dark-authored launcher changed in Dark mode'}",
+    "$light=Resolve-AuraUiLauncherModeMaterial -Raw $rawDark -StudioStyle $studio -Dark $false",
+    "if($light.surface -cne '#F7F7FD' -or $light.surfaceHover -cne '#FAFAFF' -or $light.foreground -cne '#241F3D' -or $light.border -cne '#2E2848'){throw 'Dark-authored launcher did not adopt the Light palette'}",
+    "if($light.asset -cne $rawDark.asset -or $light.accent -cne $rawDark.accent -or $light.radius -ne 16 -or $light.borderWidth -ne 1){throw 'Light adaptation changed launcher identity'}",
+    "$rawLight=[pscustomobject]@{asset='assets/theme-art/japanese-idol/launcher-mark.png';surface='#FFF5F1';surfaceHover='#FFE5EB';foreground='#3B2930';accent='#DA6F8D';border='#C7B3E6';radius=20;borderWidth=1}",
+    "$idolStudio=[pscustomobject]@{light=[pscustomobject]@{surface='#FDF8F7';raised='#FEFBFA';text='#38242B';border='#462B35'};dark=[pscustomobject]@{surface='#38242C';raised='#432D37';text='#F7ECE8';border='#DEBAC1'}}",
+    "$nativeLight=Resolve-AuraUiLauncherModeMaterial -Raw $rawLight -StudioStyle $idolStudio -Dark $false",
+    "if(-not [object]::ReferenceEquals($nativeLight,$rawLight)){throw 'Light-authored launcher changed in Light mode'}",
+    "$dark=Resolve-AuraUiLauncherModeMaterial -Raw $rawLight -StudioStyle $idolStudio -Dark $true",
+    "if($dark.surface -cne '#38242C' -or $dark.surfaceHover -cne '#432D37' -or $dark.foreground -cne '#F7ECE8' -or $dark.border -cne '#DEBAC1'){throw 'Light-authored launcher did not adopt the Dark palette'}",
+    "$invalid=[pscustomobject]@{light=[pscustomobject]@{surface='#F7F7FD';raised='#FAFAFF';text='#241F3D';border='invalid'}}",
+    "$fallback=Resolve-AuraUiLauncherModeMaterial -Raw $rawDark -StudioStyle $invalid -Dark $false",
+    "if(-not [object]::ReferenceEquals($fallback,$rawDark)){throw 'Malformed palette partially changed the launcher'}",
+  ].join("\n");
+  run("powershell.exe", [
+    "-NoProfile",
+    "-EncodedCommand",
+    Buffer.from(launcherModeRegression, "utf16le").toString("base64"),
+  ]);
 
   const identityCandidateBuilder = powershellFunction("New-AuraUiIdentityCandidate");
   assert.match(identityCandidateBuilder,
@@ -2703,8 +2774,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       `Incomplete rollback shutdown must immediately hide ${hiddenSurface}`);
   }
   assert.match(identityFailureStop,
-    /BeginInvoke\(\$closeAction\)[\s\S]{0,180}?catch\s*\{[\s\S]{0,100}?\$script:Form\.Close\(\)/,
-    "Incomplete rollback shutdown must close on the UI queue with a direct fallback");
+    /\$closeAction\s*=\s*\[Action\]\s*\{\s*Request-AuraUiExit\s*\}[\s\S]{0,120}?BeginInvoke\(\$closeAction\)[\s\S]{0,180}?catch\s*\{\s*try\s*\{\s*Request-AuraUiExit/,
+    "Incomplete rollback shutdown must request explicit exit on the UI queue with a direct fallback");
 
   const studioStateSender = powershellFunction("Send-AuraUiStudioState");
   assert.match(studioStateSender,

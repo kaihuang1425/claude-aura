@@ -556,11 +556,24 @@ test("theme-cli qa audits every registered layer without generating images", asy
         assert.equal(wordmark.nativeFallback, true,
           `${themeId} ${appearance} audit lost the safe native-logo fallback`);
       }
-      assert.notEqual(
-        themeStatus.brandWordmarkAssets.light.sha256,
-        themeStatus.brandWordmarkAssets.dark.sha256,
-        `${themeId} Light and Dark audit entries must identify distinct assets`,
-      );
+      if (themeId === "korean-idol") {
+        assert.equal(
+          themeStatus.brandWordmarkAssets.light.sha256,
+          "f318ad08013dd500351997d4dfb57706c338ff4d58ce3448d050b4ccccb607ba",
+          "Korean Idol Light must keep the approved full-color demo lockup",
+        );
+        assert.equal(
+          themeStatus.brandWordmarkAssets.dark.sha256,
+          themeStatus.brandWordmarkAssets.light.sha256,
+          "Korean Idol Dark must share the approved full-color demo lockup",
+        );
+      } else {
+        assert.notEqual(
+          themeStatus.brandWordmarkAssets.light.sha256,
+          themeStatus.brandWordmarkAssets.dark.sha256,
+          `${themeId} Light and Dark audit entries must identify distinct assets`,
+        );
+      }
       assert.equal(themeStatus.budgets.pass, true);
       assert.deepEqual(themeStatus.payloads.map((payload) => payload.mode), ["light", "dark"]);
       for (const payload of themeStatus.payloads) {

@@ -49,7 +49,10 @@ const SOURCE_PROFILE = Object.freeze({
   "anime-twilight": Object.freeze({ mode: "dark", tone: "light" }),
   "study-library": Object.freeze({ mode: "light", tone: "dark" }),
   "japanese-idol": Object.freeze({ mode: "light", tone: "dark" }),
-  "korean-idol": Object.freeze({ mode: "light", tone: "dark" }),
+  // The approved Korean Idol lockup already carries its own light outline,
+  // violet depth, pink hearts, and white sparkle highlights. Re-toning it for
+  // Dark mode washes out that authored contrast instead of improving it.
+  "korean-idol": Object.freeze({ mode: "light", tone: "dark", preserveBoth: true }),
 });
 
 function sha256(bytes) {
@@ -252,6 +255,7 @@ export async function buildBrandWordmarks({
     if (!registeredTheme) throw new Error(`${theme} is missing from the built-in theme registry`);
     const sourceProfile = SOURCE_PROFILE[theme];
     const render = (appearance) => {
+      if (sourceProfile.preserveBoth) return sourceBytes;
       const ink = hslRgb(registeredTheme[appearance].semantic["--aura-sidebar-text-primary"])
         .map((channel) => Math.round(channel * 255));
       const tone = luma(...ink) >= 128 ? "light" : "dark";
@@ -263,7 +267,9 @@ export async function buildBrandWordmarks({
     };
     const lightBytes = render("light");
     const darkBytes = render("dark");
-    if (lightBytes.equals(darkBytes)) throw new Error(`${theme} Light and Dark wordmarks must differ`);
+    if (!sourceProfile.preserveBoth && lightBytes.equals(darkBytes)) {
+      throw new Error(`${theme} Light and Dark wordmarks must differ`);
+    }
 
     const outputDirectory = path.join(outputRoot, theme);
     const lightPath = path.join(outputDirectory, "brand-wordmark-light.png");

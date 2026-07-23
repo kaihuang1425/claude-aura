@@ -40,23 +40,29 @@ import {
 export function payloadBudget(payload, settings) {
   if (typeof payload !== "string") throw new Error("Renderer payload must be a string");
   if (!isPlainObject(settings)) throw new Error("Renderer settings must be an object");
-  const artworkUrls = new Set();
-  if (typeof settings.artDataUrl === "string" && settings.artDataUrl) artworkUrls.add(settings.artDataUrl);
+  // Count payload occurrences rather than unique strings. Two settings may
+  // intentionally reference the same approved asset (for example one lockup
+  // shared by Light and Dark), but both serialized copies are still artwork
+  // bytes and must not be misclassified as renderer chrome.
+  const artworkUrls = [];
+  if (typeof settings.artDataUrl === "string" && settings.artDataUrl) artworkUrls.push(settings.artDataUrl);
   if (settings.brandWordmark) {
     for (const key of ["lightDataUrl", "darkDataUrl"]) {
       if (typeof settings.brandWordmark[key] === "string" && settings.brandWordmark[key]) {
-        artworkUrls.add(settings.brandWordmark[key]);
+        artworkUrls.push(settings.brandWordmark[key]);
       }
     }
   }
   for (const layer of settings.artLayers ?? []) {
-    if (typeof layer?.dataUrl === "string" && layer.dataUrl) artworkUrls.add(layer.dataUrl);
+    if (typeof layer?.dataUrl === "string" && layer.dataUrl) artworkUrls.push(layer.dataUrl);
   }
-  const payloadDataUrls = new Set(artworkUrls);
-  if (typeof settings.imageDataUrl === "string" && settings.imageDataUrl) payloadDataUrls.add(settings.imageDataUrl);
-  const embeddedArtworkBytes = [...artworkUrls]
+  const payloadDataUrls = [...artworkUrls];
+  if (typeof settings.imageDataUrl === "string" && settings.imageDataUrl) {
+    payloadDataUrls.push(settings.imageDataUrl);
+  }
+  const embeddedArtworkBytes = artworkUrls
     .reduce((total, dataUrl) => total + Buffer.byteLength(dataUrl, "utf8"), 0);
-  const embeddedDataBytes = [...payloadDataUrls]
+  const embeddedDataBytes = payloadDataUrls
     .reduce((total, dataUrl) => total + Buffer.byteLength(dataUrl, "utf8"), 0);
   const payloadBytes = Buffer.byteLength(payload, "utf8");
   const chromeBytes = Math.max(0, payloadBytes - embeddedDataBytes);

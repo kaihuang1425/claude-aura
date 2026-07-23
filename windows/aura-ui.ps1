@@ -585,6 +585,13 @@ function Show-AuraUiMessage {
     [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
 }
 
+function Request-AuraUiExit {
+  $script:ExitRequested = $true
+  if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+    $script:Form.Close()
+  }
+}
+
 function Get-AuraUiPermanentThemeIds {
   return @(
     'default',
@@ -1024,7 +1031,7 @@ function Fail-AuraUiStartup {
     "$($script:UiCopy.startupMessage)" +
     [Environment]::NewLine + [Environment]::NewLine + "$($script:UiCopy.technicalDetails)" +
     [Environment]::NewLine + $LogPath)
-  $script:Form.Close()
+  Request-AuraUiExit
 }
 
 function Get-AuraUiEnabled {
@@ -1143,6 +1150,51 @@ function Get-AuraUiLauncherDefaultStyle {
   }
 }
 
+function Resolve-AuraUiLauncherModeMaterial {
+  param(
+    [Parameter(Mandatory = $true)][object]$Raw,
+    [AllowNull()][object]$StudioStyle,
+    [Parameter(Mandatory = $true)][bool]$Dark
+  )
+  $authoredSurface = Get-AuraUiPropertyValue -InputObject $Raw -Names @('surface')
+  if ($authoredSurface -isnot [string] -or $authoredSurface -cnotmatch '^#[0-9A-Fa-f]{6}$') {
+    return $Raw
+  }
+  try {
+    $authoredDark = [Drawing.ColorTranslator]::FromHtml($authoredSurface).GetBrightness() -lt 0.5
+  } catch {
+    return $Raw
+  }
+  # Preserve each recipe's authored launcher material in its native appearance.
+  # Only its complementary appearance comes from the validated Studio palette,
+  # so Light/Dark changes the surface without flattening the mark or identity.
+  if ($authoredDark -eq $Dark) { return $Raw }
+  $mode = if ($Dark) { 'dark' } else { 'light' }
+  $palette = Get-AuraUiPropertyValue -InputObject $StudioStyle -Names @($mode)
+  if ($null -eq $palette) { return $Raw }
+  $mapped = [ordered]@{
+    surface = Get-AuraUiPropertyValue -InputObject $palette -Names @('surface')
+    surfaceHover = Get-AuraUiPropertyValue -InputObject $palette -Names @('raised')
+    foreground = Get-AuraUiPropertyValue -InputObject $palette -Names @('text')
+    border = Get-AuraUiPropertyValue -InputObject $palette -Names @('border')
+  }
+  foreach ($value in $mapped.Values) {
+    if ($value -isnot [string] -or $value -cnotmatch '^#[0-9A-Fa-f]{6}$') {
+      return $Raw
+    }
+  }
+  return [PSCustomObject][ordered]@{
+    asset = Get-AuraUiPropertyValue -InputObject $Raw -Names @('asset')
+    surface = "$($mapped.surface)".ToUpperInvariant()
+    surfaceHover = "$($mapped.surfaceHover)".ToUpperInvariant()
+    foreground = "$($mapped.foreground)".ToUpperInvariant()
+    accent = Get-AuraUiPropertyValue -InputObject $Raw -Names @('accent')
+    border = "$($mapped.border)".ToUpperInvariant()
+    radius = Get-AuraUiPropertyValue -InputObject $Raw -Names @('radius')
+    borderWidth = Get-AuraUiPropertyValue -InputObject $Raw -Names @('borderWidth')
+  }
+}
+
 function Get-AuraUiLauncherStyle {
   $fallback = Get-AuraUiLauncherDefaultStyle
   $enabled = Get-AuraUiEnabled
@@ -1177,6 +1229,13 @@ function Get-AuraUiLauncherStyle {
     if ($null -ne $draftLauncher) { $raw = $draftLauncher }
   }
   if ($null -eq $raw) { $raw = $fallback }
+  $studioStyle = if ($editorActive) {
+    Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('studioStyle')
+  } elseif ($null -ne $theme) {
+    Get-AuraUiPropertyValue -InputObject $theme -Names @('studioStyle')
+  } else { $null }
+  $raw = Resolve-AuraUiLauncherModeMaterial -Raw $raw -StudioStyle $studioStyle `
+    -Dark (Test-AuraUiDarkChrome)
   $style = [ordered]@{}
   foreach ($key in @('surface', 'surfaceHover', 'foreground', 'accent', 'border')) {
     $candidate = Get-AuraUiPropertyValue -InputObject $raw -Names @($key)
@@ -2506,11 +2565,11 @@ function Stop-AuraUiAfterIdentityFailure {
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
   try {
     $closeAction = [Action]{
-      if ($null -ne $script:Form -and -not $script:Form.IsDisposed) { $script:Form.Close() }
+      Request-AuraUiExit
     }
     [void]$script:Form.BeginInvoke($closeAction)
   } catch {
-    try { $script:Form.Close() } catch {}
+    try { Request-AuraUiExit } catch {}
   }
 }
 
@@ -5603,6 +5662,7 @@ $script:LauncherHintShown = $false
 $script:JumpListRegistered = $false
 $script:JumpListRegistrationDue = [DateTime]::MinValue
 $script:Closing = $false
+$script:ExitRequested = $false
 $mutex = $null
 $ownsMutex = $false
 $startupOperationLock = $null
@@ -5975,7 +6035,7 @@ public static class AuraLayered {
       Show-AuraUiMessage -Title "$($script:UiCopy.desktopNotFoundTitle)" -Icon Information -Message "$($script:UiCopy.desktopNotFoundMessage)"
     }
   })
-  $script:TrayExitItem.add_Click({ $script:Form.Close() })
+  $script:TrayExitItem.add_Click({ Request-AuraUiExit })
   $script:TrayIcon = [System.Windows.Forms.NotifyIcon]::new()
   $script:TrayIcon.Text = 'Claude Aura'
   $script:TrayIcon.Icon = $script:NotificationIcon
@@ -6735,6 +6795,16 @@ public static class AuraLayered {
     } catch { Fail-AuraUiStartup -Exception $_.Exception }
   })
   $script:Form.add_FormClosing({
+    param($sender, $eventArgs)
+    if (-not $script:Closing -and -not $script:ExitRequested -and
+        $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing -and
+        $null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed -and
+        $script:StudioForm.Visible) {
+      $eventArgs.Cancel = $true
+      $sender.Hide()
+      Update-AuraUiLauncherPosition
+      return
+    }
     Restore-AuraUiStudioPreviewState
     $script:Closing = $true
     $timer.Stop()

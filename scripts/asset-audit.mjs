@@ -28,6 +28,7 @@ const BRAND_MARK_LIMIT = 100_000;
 const LAUNCHER_ASSET_PATTERN = /^assets\/theme-art\/[a-z][a-z0-9-]{1,39}\/launcher-mark\.png$/;
 const BRAND_MARK_ASSET_PATTERN = /^assets\/theme-art\/([a-z][a-z0-9-]{1,39})\/brand-mark\.svg$/;
 const BRAND_WORDMARK_ASSET_PATTERN = /^assets\/theme-art\/([a-z][a-z0-9-]{1,39})\/brand-wordmark-(light|dark)\.png$/;
+const KOREAN_IDOL_APPROVED_WORDMARK_SHA256 = "f318ad08013dd500351997d4dfb57706c338ff4d58ce3448d050b4ccccb607ba";
 const LAUNCHER_ICON_SIZES = Object.freeze([16, 20, 24, 32, 40, 48, 64, 128, 256]);
 const STUDIO_PREVIEW_PATTERN = /^assets\/studio-previews\/masters\/([a-z][a-z0-9-]{1,39})\.png$/;
 
@@ -374,7 +375,10 @@ async function resolveBrandWordmarkAssets(theme) {
       nativeFallback: true,
     };
   }
-  if (resolved.light.sha256 === resolved.dark.sha256) {
+  const approvedSharedKoreanIdol = theme.name === "korean-idol"
+    && resolved.light.sha256 === KOREAN_IDOL_APPROVED_WORDMARK_SHA256
+    && resolved.dark.sha256 === KOREAN_IDOL_APPROVED_WORDMARK_SHA256;
+  if (resolved.light.sha256 === resolved.dark.sha256 && !approvedSharedKoreanIdol) {
     throw new Error(`Brand wordmark light and dark assets must be distinct: ${theme.name}`);
   }
   return {

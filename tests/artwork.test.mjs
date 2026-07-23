@@ -177,13 +177,27 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
           `${themeId} ${appearance} wordmark stayed light beside dark sidebar labels`);
       }
     }
-    assert.equal(new Set(pairDigests).size, 2,
-      `${themeId} must retain distinct Light and Dark wordmark assets`);
+    if (themeId === "korean-idol") {
+      const approvedSource = await fs.readFile(path.join(
+        PROJECT_ROOT,
+        "assets",
+        "studio-previews",
+        "references",
+        "in-page-brand-wordmarks-v1",
+        "korean-idol.png",
+      ));
+      const approvedDigest = crypto.createHash("sha256").update(approvedSource).digest("hex");
+      assert.deepEqual(pairDigests, [approvedDigest, approvedDigest],
+        "Korean Idol must preserve its approved full-color demo lockup in both appearances");
+    } else {
+      assert.equal(new Set(pairDigests).size, 2,
+        `${themeId} must retain distinct Light and Dark wordmark assets`);
+    }
     assert.equal(new Set(pairAlphaDigests).size, 1,
       `${themeId} Light and Dark must preserve the exact same lockup silhouette`);
   }
-  assert.equal(new Set(allWordmarkDigests).size, THEME_IDS.length * 2,
-    "Every built-in appearance wordmark must remain a distinct themed derivative");
+  assert.equal(new Set(allWordmarkDigests).size, (THEME_IDS.length * 2) - 1,
+    "Only Korean Idol may intentionally share its approved full-color wordmark across appearances");
 
   await buildBrandWordmarks();
   for (const [assetPath, expectedDigest] of beforeBuildDigests) {
