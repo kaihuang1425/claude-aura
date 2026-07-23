@@ -23,8 +23,8 @@ html.claude-aura:is([data-claude-aura-theme="japanese-idol"], [data-claude-aura-
 /* Shared in-page brand wordmark. */
 html.claude-aura [data-claude-aura-brand-flow="true"]{position:relative!important}
 html.claude-aura [data-claude-aura-brand-native="true"]{opacity:0!important;animation:none!important}
-html.claude-aura [data-claude-aura-brand-image]{position:absolute;display:block;inset-inline-start:0;top:50%;width:160px;aspect-ratio:86/31;transform:translateY(-50%);pointer-events:none!important;visibility:hidden}
-html.claude-aura [data-claude-aura-brand-loader]{display:block!important;width:100%!important;height:100%!important;object-fit:contain!important;object-position:center!important;pointer-events:none!important}
+html.claude-aura [data-claude-aura-brand-image]{position:absolute;display:block;inset-inline-start:0;top:50%;width:160px;aspect-ratio:86/31;transform:translateY(-50%);color:hsl(var(--aura-sidebar-text-primary));background-color:currentColor!important;-webkit-mask-image:var(--aura-brand-mask);mask-image:var(--aura-brand-mask);-webkit-mask-position:center;mask-position:center;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain;pointer-events:none!important;visibility:hidden}
+html.claude-aura [data-claude-aura-brand-loader]{display:none!important}
 html.claude-aura [data-claude-aura-brand-host="ready"]>[data-claude-aura-brand-image]{visibility:visible}
 @media (forced-colors:active),(prefers-contrast:more){
   html.claude-aura [data-claude-aura-brand-image]{display:none!important}

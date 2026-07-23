@@ -138,8 +138,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /DwmSetWindowAttribute\(Handle,\s*20[\s\S]{0,180}?DwmSetWindowAttribute\(Handle,\s*19/,
     "System caption controls must follow Light, Dark, and system appearance");
   assert.match(ui,
-    /DwmSetWindowAttribute\(Handle,\s*35[\s\S]{0,220}?DwmSetWindowAttribute\(Handle,\s*34/,
-    "The retained native caption must blend with Aura's surface and suppress only the outer border");
+    /captionColor\s*>=\s*0[\s\S]{0,160}?DwmSetWindowAttribute\(Handle,\s*35/,
+    "The retained native caption must use Aura's readable theme-aware color");
+  assert.match(ui,
+    /DwmSetWindowAttribute\(Handle,\s*34/,
+    "The retained native caption must suppress only the outer border");
   assert.match(ui,
     /\$script:Form\.FormBorderStyle\s*=\s*\[System\.Windows\.Forms\.FormBorderStyle\]::Sizable/,
     "The Aura window must keep its native resizable frame");
@@ -189,9 +192,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /function New-AuraUiLauncherRegion[\s\S]{0,700}?\$metrics\.Halo,\s*\$metrics\.Halo,\s*\$metrics\.Compact,\s*\$metrics\.Compact/,
     "The classic fallback region must clip the same halo-inset circle the layered surface paints");
-  // The launcher composites through UpdateLayeredWindow so its circular edge
-  // antialiases and its shadow/hover growth live in a transparent halo; the
-  // 1-bit region path must survive as an automatic fallback, never the default.
+  assert.match(ui, /\$script:LauncherLayeredActive\s*=\s*\$false/,
+    "The launcher must default to the proven circular region path without an opaque halo tile");
+  // Keep the layered implementation available for later validation, but never
+  // make its unverified transparent halo the running default.
   assert.match(ui, /UpdateLayeredWindow/,
     "The launcher must present per-pixel alpha frames, not only a 1-bit region");
   assert.match(ui, /function Update-AuraUiLauncherSurface[\s\S]{0,400}?LauncherLayeredActive/,
@@ -205,6 +209,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   // below enforces separately.
   assert.match(ui, /function Show-AuraUiLauncherTip[\s\S]{0,3200}?ShowWindow\(\$script:LauncherTip\.Handle,\s*8\)/,
     "The hover tip must appear via SW_SHOWNA without stealing activation");
+  assert.match(ui,
+    /function Show-AuraUiLauncherTip[\s\S]{0,3200}?\$tipInitialAlpha\s*=\s*if\s*\(\$script:LauncherLayeredActive\)\s*\{\s*\[byte\]0\s*\}\s*else\s*\{\s*\[byte\]255\s*\}[\s\S]{0,500}?Apply\(\$script:LauncherTip\.Handle,\s*\$bitmap,\s*\$tipInitialAlpha\)/,
+    "The classic circular launcher must present its hover tip fully opaque instead of waiting on the disabled layered fade");
+  assert.match(ui,
+    /\$script:LauncherTipAlpha\s*=\s*\[int\]\$tipInitialAlpha[\s\S]{0,300}?if\s*\(\$script:LauncherLayeredActive[\s\S]{0,180}?\$script:LauncherAnimTimer\.Start\(\)/,
+    "Only the layered launcher may defer tooltip visibility to the animation timer");
   assert.match(ui, /launcherTipTitle/,
     "The hover tip must carry the localized Aura Studio caption");
   // The launch hint is a real-control card: closable for the session, or

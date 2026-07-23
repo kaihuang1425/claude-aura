@@ -13,6 +13,18 @@ Applied by WO-02 (final values; supersede any older numbers below):
   0.52/0.50, korean-prestige 0.58/0.55 (validator floor is now 0.35).
 - Paper themes keep blurred fuller veils: japanese-film-editorial 0.82/0.80,
   cartoon-studio 0.86/0.82, study-library 0.86/0.84, default 0.90/0.84.
+- Light appearance keeps the four previously dark-railed themes visibly light
+  while retaining their identity colour. Exact sidebar
+  background/text/muted/selected values are: Japanese Film Editorial
+  `38 20% 84%` / `210 9% 14%` / `210 6% 38%` / `12 28% 69%`; Korean
+  Prestige `216 24% 84%` / `220 32% 14%` / `218 12% 38%` /
+  `216 32% 71%`; Anime Twilight `228 22% 90%` / `232 34% 18%` /
+  `230 12% 42%` / `248 24% 80%`; Study Library `44 28% 90%` /
+  `70 10% 17%` / `70 6% 40%` / `139 16% 78%`. Dark appearance keeps its
+  existing rail recipes.
+- Light primary-action fills use the softened accent values Korean Prestige
+  `216 44% 45%` and Anime Twilight `258 38% 49%`. Every other theme and Dark
+  appearance keep their regular accent fill.
 
 Shared rules:
 - Focus ring: accent, 3px, always visible — never softened.

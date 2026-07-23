@@ -44,7 +44,7 @@
       },
       "swatches": ["#F2E8D5", "#252725", "#394563", "#B64B32"],
       "preview": {
-        "chrome": "#171A19",
+        "chrome": "#DED8CE",
         "background": "#EEE2CC",
         "surface": "#F8F0E1",
         "accent": "#B64B32",
@@ -118,7 +118,7 @@
       },
       "swatches": ["#071426", "#152840", "#AAB5C7", "#4D84D8"],
       "preview": {
-        "chrome": "#050C18",
+        "chrome": "#CCD4E0",
         "background": "#08172B",
         "surface": "#14233A",
         "accent": "#5A91E6",
@@ -251,7 +251,7 @@
       },
       "swatches": ["#111A49", "#393A85", "#9CE5EC", "#F0B875"],
       "preview": {
-        "chrome": "#0A102E",
+        "chrome": "#E0E2EB",
         "background": "#141C50",
         "surface": "#293063",
         "accent": "#A98FE8",
@@ -286,7 +286,7 @@
       },
       "swatches": ["#F4EEDC", "#1F523F", "#74343B", "#AA884C"],
       "preview": {
-        "chrome": "#25251F",
+        "chrome": "#EDE9DE",
         "background": "#EEE6D2",
         "surface": "#FAF5E8",
         "accent": "#2D614B",

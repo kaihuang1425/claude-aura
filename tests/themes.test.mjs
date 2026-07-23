@@ -322,6 +322,7 @@ test("every theme provides complete semantic roles and a distinct component prof
     assert(baseCss.includes(`html.claude-aura ${selector}`),
       `Fixed native-chrome role ${selector} has no baseline recipe`);
   }
+  const sidebarRootSelector = 'html.claude-aura [data-claude-aura-sidebar]';
   const primarySelector = 'html.claude-aura [data-aura-role="sidebar-primary"]';
   const rowSelector = 'html.claude-aura [data-aura-role="sidebar-row"]';
   const composerSelector = 'html.claude-aura [data-aura-role="composer-shell"]';
@@ -332,8 +333,26 @@ test("every theme provides complete semantic roles and a distinct component prof
     assert(start >= 0, `${selector} is missing`);
     return baseCss.slice(start, baseCss.indexOf("}", start));
   };
+  assert.match(ruleBody(sidebarRootSelector),
+    /--text-100:\s*var\(--aura-sidebar-text-primary\)\s*!important/,
+    "Claude's icon-font foreground token must follow the live sidebar label token");
+  assert.match(ruleBody(sidebarRootSelector),
+    /--pictogram-100:\s*var\(--aura-sidebar-text-primary\)\s*!important/,
+    "Claude's sidebar pictograms must follow the live sidebar label token");
   assert.match(ruleBody(primarySelector), /background:[\s\S]*--aura-accent-primary/);
   assert.match(ruleBody(primarySelector), /--aura-text-on-accent/);
+  assert.match(
+    baseCss,
+    /\[data-aura-role="sidebar-primary"\]\s*>\s*:first-child\s*>\s*:first-child,\s*html\.claude-aura\s+\[data-aura-role="sidebar-primary"\]\s*>\s*:first-child\s*>\s*:first-child \*\s*\{[^}]*--aura-text-on-accent/s,
+    "The primary action's leading icon subtree must use the same foreground token as its label",
+  );
+  assert.match(
+    baseCss,
+    /:is\(\s*\[data-aura-role="sidebar-row"\],\s*\[data-aura-role="sidebar-footer"\]\s*\)\s*>\s*:first-child\s*>\s*:first-child,[\s\S]*?:is\(\s*\[data-aura-role="sidebar-row"\],\s*\[data-aura-role="sidebar-footer"\]\s*\)\s*>\s*:first-child\s*>\s*:first-child \*\s*\{[^}]*--aura-sidebar-text-primary/s,
+    "Sidebar row and footer leading icon subtrees must use the same foreground token as their labels",
+  );
+  assert(!baseCss.includes('[data-claude-aura-sidebar] svg'),
+    "Sidebar icon correction must remain role-scoped instead of recoloring every native SVG");
   assert(baseCss.includes(`${primarySelector}:not([disabled]):not([aria-disabled="true"]):hover`));
   assert(baseCss.includes(`${primarySelector}:not([disabled]):not([aria-disabled="true"]):active`));
   assert(baseCss.includes(`${rowSelector}:not([disabled]):not([aria-disabled="true"]):hover`));
@@ -456,6 +475,35 @@ test("all theme text, focus colours, and accents clear contrast guardrails", asy
     }
   }
   assert.equal(failures.length, 0, failures.join("\n"));
+});
+
+test("the four mixed-mode themes keep a true Light sidebar palette", async () => {
+  const expected = {
+    "japanese-film-editorial": ["38 20% 84%", "210 9% 14%", "210 6% 38%", "12 28% 69%"],
+    "korean-prestige": ["216 24% 84%", "220 32% 14%", "218 12% 38%", "216 32% 71%"],
+    "anime-twilight": ["228 22% 90%", "232 34% 18%", "230 12% 42%", "248 24% 80%"],
+    "study-library": ["44 28% 90%", "70 10% 17%", "70 6% 40%", "139 16% 78%"],
+  };
+  const themes = new Map((await listThemes()).map((theme) => [theme.name, theme]));
+  for (const [themeId, values] of Object.entries(expected)) {
+    const semantic = themes.get(themeId)?.light.semantic;
+    assert(semantic, `${themeId} is missing`);
+    assert.deepEqual([
+      semantic["--aura-sidebar-background"],
+      semantic["--aura-sidebar-text-primary"],
+      semantic["--aura-sidebar-text-muted"],
+      semantic["--aura-sidebar-selected"],
+    ], values, `${themeId} regressed to a dark Light-appearance rail`);
+  }
+  assert.equal(themes.get("korean-prestige").light.semantic["--aura-accent-primary"], "216 44% 45%");
+  assert.equal(themes.get("anime-twilight").light.semantic["--aura-accent-primary"], "258 38% 49%");
+  for (const themeId of ["korean-prestige", "anime-twilight"]) {
+    const semantic = themes.get(themeId).light.semantic;
+    assert(
+      contrast(semantic["--aura-text-on-accent"], semantic["--aura-accent-primary"]) >= 4.5,
+      `${themeId} softened Light primary action lost text contrast`,
+    );
+  }
 });
 
 test("theme metadata localizes independently for English, Simplified Chinese, and Traditional Chinese", async () => {

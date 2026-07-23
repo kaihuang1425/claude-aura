@@ -2847,7 +2847,10 @@ function Show-AuraUiLauncherTip {
     } catch {}
     $script:LauncherTip.Location = $desired
     [AuraLayered]::SetTipStyles($script:LauncherTip.Handle)
-    if (-not [AuraLayered]::Apply($script:LauncherTip.Handle, $bitmap, 0)) {
+    # The classic launcher has no running frame animation, so present its tip
+    # fully opaque instead of leaving the initial alpha-zero frame invisible.
+    $tipInitialAlpha = if ($script:LauncherLayeredActive) { [byte]0 } else { [byte]255 }
+    if (-not [AuraLayered]::Apply($script:LauncherTip.Handle, $bitmap, $tipInitialAlpha)) {
       $script:LauncherTipDisabled = $true
       $bitmap.Dispose()
       return
@@ -2855,11 +2858,12 @@ function Show-AuraUiLauncherTip {
     if ($null -ne $script:LauncherTipBitmap) { try { $script:LauncherTipBitmap.Dispose() } catch {} }
     $script:LauncherTipBitmap = $bitmap
     $bitmap = $null
-    $script:LauncherTipAlpha = 0
+    $script:LauncherTipAlpha = [int]$tipInitialAlpha
     $script:LauncherTipVisible = $true
     # SW_SHOWNA: visible without stealing activation from Claude's composer.
     [void][AuraWindow]::ShowWindow($script:LauncherTip.Handle, 8)
-    if ($null -ne $script:LauncherAnimTimer -and -not $script:LauncherAnimTimer.Enabled) {
+    if ($script:LauncherLayeredActive -and $null -ne $script:LauncherAnimTimer -and
+        -not $script:LauncherAnimTimer.Enabled) {
       $script:LauncherAnimTimer.Start()
     }
   } catch {
@@ -5585,7 +5589,7 @@ $script:LauncherHaloSize = 10
 $script:LauncherSafeGap = 16
 $script:LauncherRightGap = 16
 $script:LauncherBottomGap = 16
-$script:LauncherLayeredActive = $true
+$script:LauncherLayeredActive = $false
 $script:LauncherAnimTimer = $null
 $script:LauncherAnimValue = 0.0
 $script:LauncherTip = $null

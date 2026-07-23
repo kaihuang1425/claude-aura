@@ -679,17 +679,19 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
           "Cartoon Studio's fixed card recipe masked an explicit shadow edit");
       }
       if (builtInThemeId === "japanese-film-editorial") {
-        assert(luminance(sourceCompiled.theme.light.semantic["--aura-sidebar-text-primary"]) > 0.5,
-          "The editor regression fixture no longer has light sidebar labels");
+        assert(luminance(sourceCompiled.theme.light.semantic["--aura-sidebar-background"]) > 0.5,
+          "The editor regression fixture no longer has a light sidebar");
+        assert(luminance(sourceCompiled.theme.light.semantic["--aura-sidebar-text-primary"]) < 0.5,
+          "The editor regression fixture no longer has dark labels on its light sidebar");
         const sidebarAlpha = studioResult.state.tokens.light.sidebarAlpha === 0.91 ? 0.9 : 0.91;
         studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
           mode: "light", token: "sidebarAlpha", value: sidebarAlpha,
         }));
         assert.equal(studioResult.state.tokens.light.sidebarAlpha, sidebarAlpha,
-          "A light-label sidebar edit did not update the editable theme");
+          "A light-sidebar edit did not update the editable theme");
         assert(studioResult.payload.includes(
           'html.claude-aura [data-aura-role=\\"sidebar-row\\"]{color:hsl(var(--aura-sidebar-text-primary)) !important',
-        ), "A light-label editor draft did not apply its foreground through the discovered sidebar-row role");
+        ), "A light-sidebar editor draft did not apply its foreground through the discovered sidebar-row role");
         assert(!studioResult.payload.includes("[data-claude-aura-sidebar] svg"),
           "A light-label editor draft broadly restyled native SVG logos or unrelated icons");
       }

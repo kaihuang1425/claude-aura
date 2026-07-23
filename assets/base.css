@@ -156,6 +156,14 @@ html.claude-aura [data-mode="light"] {
 }
 
 html.claude-aura [data-claude-aura-sidebar] {
+  --text-000: var(--aura-sidebar-text-primary) !important;
+  --text-100: var(--aura-sidebar-text-primary) !important;
+  --text-200: var(--aura-sidebar-text-muted) !important;
+  --text-300: var(--aura-sidebar-text-muted) !important;
+  --text-400: var(--aura-sidebar-text-muted) !important;
+  --pictogram-100: var(--aura-sidebar-text-primary) !important;
+  --pictogram-200: var(--aura-sidebar-text-muted) !important;
+  --pictogram-300: var(--aura-sidebar-text-muted) !important;
   color: hsl(var(--aura-sidebar-text-primary)) !important;
   background-color: hsl(var(--aura-sidebar-background) / var(--aura-sidebar-alpha)) !important;
   border-color: hsl(var(--aura-border-subtle) / 0.2) !important;
@@ -242,6 +250,11 @@ html.claude-aura [data-aura-role="sidebar-primary"] {
   box-shadow: var(--aura-state-shadow);
 }
 
+html.claude-aura [data-aura-role="sidebar-primary"] > :first-child > :first-child,
+html.claude-aura [data-aura-role="sidebar-primary"] > :first-child > :first-child * {
+  color: hsl(var(--aura-text-on-accent)) !important;
+}
+
 html.claude-aura [data-aura-role="sidebar-primary"]:not([disabled]):not([aria-disabled="true"]):hover {
   background:
     linear-gradient(hsl(var(--aura-hover-surface) / 0.18), hsl(var(--aura-hover-surface) / 0.18)),
@@ -291,6 +304,17 @@ html.claude-aura [data-aura-role="sidebar-footer"] {
   color: hsl(var(--aura-sidebar-text-primary)) !important;
   background: hsl(var(--aura-elevated-surface) / 0.28) !important;
   border-radius: var(--aura-control-radius);
+}
+
+html.claude-aura :is(
+  [data-aura-role="sidebar-row"],
+  [data-aura-role="sidebar-footer"]
+) > :first-child > :first-child,
+html.claude-aura :is(
+  [data-aura-role="sidebar-row"],
+  [data-aura-role="sidebar-footer"]
+) > :first-child > :first-child * {
+  color: hsl(var(--aura-sidebar-text-primary)) !important;
 }
 
 html.claude-aura [data-aura-role="composer-shell"] {
