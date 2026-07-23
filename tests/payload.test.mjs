@@ -426,6 +426,7 @@ test("built-in wordmark swaps only after decode and fails back to the native log
 
   let mediaDark = false;
   let forcedColorsActive = false;
+  let brandLabelColor = "rgb(34, 33, 65)";
   const mediaListeners = new Set();
   const forcedColorListeners = new Set();
   const mediaQuery = {
@@ -447,6 +448,7 @@ test("built-in wordmark swaps only after decode and fails back to the native log
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
       translate: "none",
+      color: brandLabelColor,
     }),
     addEventListener(type, listener) {
       const listeners = windowListeners.get(type) ?? new Set();
@@ -558,6 +560,7 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   await Promise.resolve();
   await Promise.resolve();
 
+  brandLabelColor = "rgb(242, 239, 255)";
   mediaDark = true;
   for (const listener of mediaListeners) listener({ matches: true });
   assert.equal(first.row["data-claude-aura-brand-host"], undefined,
@@ -581,6 +584,13 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(first.row["data-claude-aura-brand-host"], "ready");
   assert(first.search.isConnected && first.toggle.isConnected,
     "Dark replacement must preserve the same header controls");
+
+  brandLabelColor = "rgb(34, 33, 65)";
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(darkMark.isConnected, false,
+    "The selected wordmark asset must follow the live label color, not only appearance mode");
+  assert.equal(brandImages()[0].children[0].src, bundle.settings.brandWordmark.lightDataUrl,
+    "A dark sidebar label must select the authored Light wordmark even in Dark appearance");
 
   sidebarWidth = 48;
   window.__CLAUDE_AURA_STATE__.ensure();

@@ -243,17 +243,27 @@
     };
   };
 
+  const brandAssetMode = (target) => {
+    const channels = window.getComputedStyle?.(target.native[0])?.color
+      ?.match(/\d+(?:\.\d+)?/g);
+    if (!channels || channels.length < 3) return mode();
+    const brightness = Number(channels[0]) * 299
+      + Number(channels[1]) * 587
+      + Number(channels[2]) * 114;
+    return brightness >= 160000 ? "dark" : "light";
+  };
+
   const syncBrand = (sidebar) => {
     if (!Array.isArray(settings.b) || settings.b.length < 2) {
       if (bb) clearBrand();
       return;
     }
     const t = findBrand(sidebar);
-    const am = mode();
     if (!t) {
       if (bb) clearBrand();
       return;
     }
+    const am = brandAssetMode(t);
     if (bb?.host === t.host && bb.native?.[0] === t.native[0]
         && bb.mode === am
         && bb.offset === t.offset && bb.width === t.width
@@ -281,7 +291,7 @@
       const decoded = typeof im.decode === "function" ? im.decode() : Promise.resolve();
       Promise.resolve(decoded).then(() => {
         if (bb?.token !== token || !mark.isConnected || !im.isConnected || !t.host.isConnected
-            || !im.naturalWidth || mode() !== am
+            || !im.naturalWidth || brandAssetMode(t) !== am
             || findBrand(sidebar)?.native?.[0] !== t.native[0]) return fail();
         if ((window.getComputedStyle?.(t.host)?.position || "static") === "static") {
           t.host.setAttribute(BF, "true");
