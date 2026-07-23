@@ -6,19 +6,23 @@ import { pathToFileURL } from "node:url";
 import zlib from "node:zlib";
 import { PROJECT_ROOT } from "./theme-core.mjs";
 
-const SIZE = 96;
-const SUPERSAMPLE = 4;
-
-const THEMES = Object.freeze({
-  default: { ray: "#F4DFBB", alternate: "#F4DFBB", core: "#D66D4B", center: "#FFF5E2", rotation: 0, rayWidth: 5.5 },
-  "japanese-film-editorial": { ray: "#252725", alternate: "#6F6252", core: "#B64B32", center: "#F2E8D5", rotation: 22.5, rayWidth: 5 },
-  "korean-prestige": { ray: "#EDF3FA", alternate: "#AAB5C7", core: "#5A91E6", center: "#071426", rotation: 0, rayWidth: 4.5 },
-  "cartoon-studio": { ray: "#302820", alternate: "#248C88", core: "#EA6047", center: "#FFF6E7", rotation: 0, rayWidth: 6.5 },
-  "anime-twilight": { ray: "#9CE5EC", alternate: "#A98FE8", core: "#F0B875", center: "#111A49", rotation: 22.5, rayWidth: 4.5 },
-  "study-library": { ray: "#1F523F", alternate: "#AA884C", core: "#74343B", center: "#F4EEDC", rotation: 0, rayWidth: 5 },
-  "japanese-idol": { ray: "#C7B3E6", alternate: "#EF879A", core: "#DA6F8D", center: "#FFF5F1", rotation: 22.5, rayWidth: 5.5 },
-  "korean-idol": { ray: "#79D7E4", alternate: "#C6B7F2", core: "#8F78DF", center: "#F7F6FF", rotation: 0, rayWidth: 5 },
-});
+const MARK_SIZE = 96;
+const SAFE_AREA_RATIO = 72 / 96;
+const ICON_SIZES = Object.freeze([16, 20, 24, 32, 40, 48, 64, 128, 256]);
+const THEMES = Object.freeze([
+  "default",
+  "japanese-film-editorial",
+  "korean-prestige",
+  "cartoon-studio",
+  "anime-twilight",
+  "study-library",
+  "japanese-idol",
+  "korean-idol",
+]);
+const DEFAULT_SOURCE_ROOT = path.join(
+  PROJECT_ROOT, "assets", "studio-previews", "references", "launcher-marks-v2");
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const TRANSIENT_WRITE_ERRORS = new Set(["EACCES", "EBUSY", "EPERM", "UNKNOWN"]);
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
   let value = index;
@@ -32,75 +36,174 @@ function crc32(bytes) {
   return (value ^ 0xffffffff) >>> 0;
 }
 
-function color(value) {
-  const packed = Number.parseInt(value.slice(1), 16);
-  return [(packed >>> 16) & 255, (packed >>> 8) & 255, packed & 255, 255];
-}
-
-function insideLine(shape, x, y) {
-  const dx = shape.x2 - shape.x1;
-  const dy = shape.y2 - shape.y1;
-  const lengthSquared = dx * dx + dy * dy;
-  const amount = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1,
-    ((x - shape.x1) * dx + (y - shape.y1) * dy) / lengthSquared));
-  const nearestX = shape.x1 + amount * dx;
-  const nearestY = shape.y1 + amount * dy;
-  return (x - nearestX) ** 2 + (y - nearestY) ** 2 <= (shape.width / 2) ** 2;
-}
-
-function shapesFor(spec) {
-  const center = SIZE / 2;
-  const shapes = [];
-  for (let index = 0; index < 8; index += 1) {
-    const angle = ((-90 + spec.rotation + index * 45) * Math.PI) / 180;
-    const inner = index % 2 === 0 ? 24 : 25;
-    const outer = index % 2 === 0 ? 40 : 37;
-    shapes.push({
-      type: "line",
-      x1: center + Math.cos(angle) * inner,
-      y1: center + Math.sin(angle) * inner,
-      x2: center + Math.cos(angle) * outer,
-      y2: center + Math.sin(angle) * outer,
-      width: spec.rayWidth,
-      color: color(index % 2 === 0 ? spec.ray : spec.alternate),
-    });
+export async function writeGeneratedFile(filePath, bytes) {
+  try {
+    const current = await fs.readFile(filePath);
+    if (current.equals(bytes)) return false;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
   }
-  shapes.push({ type: "circle", x: center, y: center, radius: 14, color: color(spec.core) });
-  shapes.push({ type: "circle", x: center, y: center, radius: 5.25, color: color(spec.center) });
-  return shapes;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await fs.writeFile(filePath, bytes);
+      return true;
+    } catch (error) {
+      const retry = TRANSIENT_WRITE_ERRORS.has(error?.code) && attempt < 3;
+      if (!retry) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 40 * (2 ** attempt)));
+    }
+  }
+  return false;
 }
 
-function covers(shape, x, y) {
-  if (shape.type === "line") return insideLine(shape, x, y);
-  return (x - shape.x) ** 2 + (y - shape.y) ** 2 <= shape.radius ** 2;
+function paeth(left, up, upperLeft) {
+  const estimate = left + up - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const upDistance = Math.abs(estimate - up);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left;
+  return upDistance <= upperLeftDistance ? up : upperLeft;
 }
 
-function rasterize(spec) {
-  const shapes = shapesFor(spec);
-  const pixels = Buffer.alloc(SIZE * SIZE * 4);
-  const sampleCount = SUPERSAMPLE * SUPERSAMPLE;
-  for (let pixelY = 0; pixelY < SIZE; pixelY += 1) {
-    for (let pixelX = 0; pixelX < SIZE; pixelX += 1) {
-      const channels = [0, 0, 0];
-      let coveredSamples = 0;
-      for (let sampleY = 0; sampleY < SUPERSAMPLE; sampleY += 1) {
-        for (let sampleX = 0; sampleX < SUPERSAMPLE; sampleX += 1) {
-          const x = pixelX + (sampleX + 0.5) / SUPERSAMPLE;
-          const y = pixelY + (sampleY + 0.5) / SUPERSAMPLE;
-          let sample = null;
-          for (const shape of shapes) if (covers(shape, x, y)) sample = shape.color;
-          if (sample) {
-            coveredSamples += 1;
-            for (let channel = 0; channel < 3; channel += 1) channels[channel] += sample[channel];
-          }
-        }
+export function decodePng(bytes, label) {
+  if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    throw new Error(`${label} is not a PNG image`);
+  }
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  let interlace = 0;
+  const imageData = [];
+  for (let offset = PNG_SIGNATURE.length; offset + 12 <= bytes.length;) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    const start = offset + 8;
+    const end = start + length;
+    if (end + 4 > bytes.length) throw new Error(`${label} contains a truncated ${type} chunk`);
+    if (type === "IHDR") {
+      width = bytes.readUInt32BE(start);
+      height = bytes.readUInt32BE(start + 4);
+      bitDepth = bytes[start + 8];
+      colorType = bytes[start + 9];
+      if (bytes[start + 10] !== 0 || bytes[start + 11] !== 0) {
+        throw new Error(`${label} uses unsupported PNG compression or filtering`);
       }
-      const offset = (pixelY * SIZE + pixelX) * 4;
-      if (coveredSamples) {
-        for (let channel = 0; channel < 3; channel += 1) {
-          pixels[offset + channel] = Math.round(channels[channel] / coveredSamples);
-        }
-        pixels[offset + 3] = Math.round(255 * coveredSamples / sampleCount);
+      interlace = bytes[start + 12];
+    } else if (type === "IDAT") {
+      imageData.push(bytes.subarray(start, end));
+    } else if (type === "IEND") {
+      break;
+    }
+    offset = end + 4;
+  }
+  if (!width || !height || bitDepth !== 8 || ![2, 6].includes(colorType) || interlace !== 0 || imageData.length === 0) {
+    throw new Error(`${label} must be a non-interlaced 8-bit RGB or RGBA PNG`);
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const stride = width * channels;
+  const inflated = zlib.inflateSync(Buffer.concat(imageData));
+  if (inflated.length !== height * (stride + 1)) throw new Error(`${label} has an invalid scanline length`);
+  const decoded = Buffer.alloc(width * height * channels);
+  for (let y = 0; y < height; y += 1) {
+    const sourceOffset = y * (stride + 1);
+    const filter = inflated[sourceOffset];
+    const targetOffset = y * stride;
+    if (filter > 4) throw new Error(`${label} uses an unsupported PNG row filter`);
+    for (let x = 0; x < stride; x += 1) {
+      const raw = inflated[sourceOffset + 1 + x];
+      const left = x >= channels ? decoded[targetOffset + x - channels] : 0;
+      const up = y > 0 ? decoded[targetOffset + x - stride] : 0;
+      const upperLeft = y > 0 && x >= channels ? decoded[targetOffset + x - stride - channels] : 0;
+      let value = raw;
+      if (filter === 1) value += left;
+      else if (filter === 2) value += up;
+      else if (filter === 3) value += Math.floor((left + up) / 2);
+      else if (filter === 4) value += paeth(left, up, upperLeft);
+      decoded[targetOffset + x] = value & 255;
+    }
+  }
+  if (channels === 4) return { width, height, pixels: decoded };
+  const pixels = Buffer.alloc(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    pixels[pixel * 4] = decoded[pixel * 3];
+    pixels[(pixel * 4) + 1] = decoded[(pixel * 3) + 1];
+    pixels[(pixel * 4) + 2] = decoded[(pixel * 3) + 2];
+    pixels[(pixel * 4) + 3] = 255;
+  }
+  return { width, height, pixels };
+}
+
+function sinc(value) {
+  if (Math.abs(value) < 1e-8) return 1;
+  const angle = Math.PI * value;
+  return Math.sin(angle) / angle;
+}
+
+function lanczos(value, radius = 3) {
+  const distance = Math.abs(value);
+  return distance < radius ? sinc(value) * sinc(value / radius) : 0;
+}
+
+function contributions(sourceSize, targetSize) {
+  const scale = sourceSize / targetSize;
+  const support = 3 * Math.max(1, scale);
+  return Array.from({ length: targetSize }, (_, target) => {
+    const center = (target + 0.5) * scale - 0.5;
+    const start = Math.max(0, Math.ceil(center - support));
+    const end = Math.min(sourceSize - 1, Math.floor(center + support));
+    const weights = [];
+    let total = 0;
+    for (let source = start; source <= end; source += 1) {
+      const weight = lanczos((source - center) / Math.max(1, scale));
+      if (weight === 0) continue;
+      weights.push([source, weight]);
+      total += weight;
+    }
+    if (Math.abs(total) < 1e-12) return [[Math.max(0, Math.min(sourceSize - 1, Math.round(center))), 1]];
+    return weights.map(([source, weight]) => [source, weight / total]);
+  });
+}
+
+export function resizeRgba(model, width, height) {
+  const horizontalWeights = contributions(model.width, width);
+  const verticalWeights = contributions(model.height, height);
+  const horizontal = new Float64Array(width * model.height * 4);
+  for (let y = 0; y < model.height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const target = (y * width + x) * 4;
+      for (const [sourceX, weight] of horizontalWeights[x]) {
+        const source = (y * model.width + sourceX) * 4;
+        const alpha = model.pixels[source + 3] / 255;
+        horizontal[target] += model.pixels[source] * alpha * weight;
+        horizontal[target + 1] += model.pixels[source + 1] * alpha * weight;
+        horizontal[target + 2] += model.pixels[source + 2] * alpha * weight;
+        horizontal[target + 3] += alpha * weight;
+      }
+    }
+  }
+  const pixels = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const target = (y * width + x) * 4;
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let alpha = 0;
+      for (const [sourceY, weight] of verticalWeights[y]) {
+        const source = (sourceY * width + x) * 4;
+        red += horizontal[source] * weight;
+        green += horizontal[source + 1] * weight;
+        blue += horizontal[source + 2] * weight;
+        alpha += horizontal[source + 3] * weight;
+      }
+      const boundedAlpha = Math.max(0, Math.min(1, alpha));
+      pixels[target + 3] = Math.round(boundedAlpha * 255);
+      if (boundedAlpha > 1 / 255) {
+        pixels[target] = Math.round(Math.max(0, Math.min(255, red / boundedAlpha)));
+        pixels[target + 1] = Math.round(Math.max(0, Math.min(255, green / boundedAlpha)));
+        pixels[target + 2] = Math.round(Math.max(0, Math.min(255, blue / boundedAlpha)));
       }
     }
   }
@@ -117,42 +220,184 @@ function pngChunk(type, data) {
   return result;
 }
 
-function encodePng(pixels) {
+export function encodePng(width, height, pixels) {
   const header = Buffer.alloc(13);
-  header.writeUInt32BE(SIZE, 0);
-  header.writeUInt32BE(SIZE, 4);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
   header[8] = 8;
   header[9] = 6;
-  const rows = Buffer.alloc(SIZE * (SIZE * 4 + 1));
-  for (let y = 0; y < SIZE; y += 1) {
-    const rowOffset = y * (SIZE * 4 + 1);
+  const stride = width * 4;
+  const rows = Buffer.alloc(height * (stride + 1));
+  for (let y = 0; y < height; y += 1) {
+    const rowOffset = y * (stride + 1);
     rows[rowOffset] = 0;
-    pixels.copy(rows, rowOffset + 1, y * SIZE * 4, (y + 1) * SIZE * 4);
+    pixels.copy(rows, rowOffset + 1, y * stride, (y + 1) * stride);
   }
   return Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    PNG_SIGNATURE,
     pngChunk("IHDR", header),
     pngChunk("IDAT", zlib.deflateSync(rows, { level: 9 })),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
 }
 
+function encodeDib(size, pixels) {
+  const xorBytes = size * size * 4;
+  const maskStride = Math.ceil(size / 32) * 4;
+  const header = Buffer.alloc(40);
+  header.writeUInt32LE(40, 0);
+  header.writeInt32LE(size, 4);
+  header.writeInt32LE(size * 2, 8);
+  header.writeUInt16LE(1, 12);
+  header.writeUInt16LE(32, 14);
+  header.writeUInt32LE(xorBytes, 20);
+  const xor = Buffer.alloc(xorBytes);
+  const mask = Buffer.alloc(maskStride * size);
+  for (let targetY = 0; targetY < size; targetY += 1) {
+    const sourceY = size - targetY - 1;
+    for (let x = 0; x < size; x += 1) {
+      const source = (sourceY * size + x) * 4;
+      const target = (targetY * size + x) * 4;
+      xor[target] = pixels[source + 2];
+      xor[target + 1] = pixels[source + 1];
+      xor[target + 2] = pixels[source];
+      xor[target + 3] = pixels[source + 3];
+      if (pixels[source + 3] === 0) mask[targetY * maskStride + Math.floor(x / 8)] |= 0x80 >>> (x % 8);
+    }
+  }
+  return Buffer.concat([header, xor, mask]);
+}
+
+function encodeIco(frames) {
+  const directory = Buffer.alloc(6 + frames.length * 16);
+  directory.writeUInt16LE(0, 0);
+  directory.writeUInt16LE(1, 2);
+  directory.writeUInt16LE(frames.length, 4);
+  let offset = directory.length;
+  frames.forEach((frame, index) => {
+    const entry = 6 + index * 16;
+    directory[entry] = frame.size === 256 ? 0 : frame.size;
+    directory[entry + 1] = frame.size === 256 ? 0 : frame.size;
+    directory[entry + 2] = 0;
+    directory[entry + 3] = 0;
+    directory.writeUInt16LE(1, entry + 4);
+    directory.writeUInt16LE(32, entry + 6);
+    directory.writeUInt32LE(frame.bytes.length, entry + 8);
+    directory.writeUInt32LE(offset, entry + 12);
+    offset += frame.bytes.length;
+  });
+  return Buffer.concat([directory, ...frames.map((frame) => frame.bytes)]);
+}
+
+function visibleBounds(model) {
+  let left = model.width;
+  let top = model.height;
+  let right = -1;
+  let bottom = -1;
+  let visiblePixels = 0;
+  for (let y = 0; y < model.height; y += 1) {
+    for (let x = 0; x < model.width; x += 1) {
+      if (model.pixels[(y * model.width + x) * 4 + 3] < 8) continue;
+      visiblePixels += 1;
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x);
+      bottom = Math.max(bottom, y);
+    }
+  }
+  if (!visiblePixels) throw new Error("Launcher mark source has no visible pixels");
+  return { left, top, right, bottom, width: right - left + 1, height: bottom - top + 1, visiblePixels };
+}
+
+function cropModel(model, bounds) {
+  const margin = Math.max(2, Math.round(Math.max(bounds.width, bounds.height) * 0.008));
+  const left = Math.max(0, bounds.left - margin);
+  const top = Math.max(0, bounds.top - margin);
+  const right = Math.min(model.width - 1, bounds.right + margin);
+  const bottom = Math.min(model.height - 1, bounds.bottom + margin);
+  const width = right - left + 1;
+  const height = bottom - top + 1;
+  const pixels = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    model.pixels.copy(
+      pixels,
+      y * width * 4,
+      ((top + y) * model.width + left) * 4,
+      ((top + y) * model.width + left + width) * 4,
+    );
+  }
+  return { width, height, pixels };
+}
+
+function fitMark(model, size) {
+  const bounds = visibleBounds(model);
+  if (bounds.left === 0 || bounds.top === 0 || bounds.right === model.width - 1 || bounds.bottom === model.height - 1) {
+    throw new Error("Launcher mark source touches its canvas edge");
+  }
+  const cropped = cropModel(model, bounds);
+  const maximum = Math.max(1, Math.floor(size * SAFE_AREA_RATIO));
+  const scale = Math.min(maximum / cropped.width, maximum / cropped.height);
+  const width = Math.max(1, Math.round(cropped.width * scale));
+  const height = Math.max(1, Math.round(cropped.height * scale));
+  const resized = resizeRgba(cropped, width, height);
+  const pixels = Buffer.alloc(size * size * 4);
+  const left = Math.floor((size - width) / 2);
+  const top = Math.floor((size - height) / 2);
+  for (let y = 0; y < height; y += 1) {
+    resized.copy(pixels, ((top + y) * size + left) * 4, y * width * 4, (y + 1) * width * 4);
+  }
+  return pixels;
+}
+
 export async function buildLauncherAssets({
   outputRoot = path.join(PROJECT_ROOT, "assets", "theme-art"),
+  sourceRoot = DEFAULT_SOURCE_ROOT,
 } = {}) {
   const results = [];
-  for (const [theme, spec] of Object.entries(THEMES)) {
-    const outputPath = path.join(outputRoot, theme, "launcher-mark.png");
-    const bytes = encodePng(rasterize(spec));
-    await fs.mkdir(path.dirname(outputPath), { recursive: true });
-    await fs.writeFile(outputPath, bytes);
+  for (const theme of THEMES) {
+    const sourcePath = path.join(sourceRoot, `${theme}.png`);
+    const sourceBytes = await fs.readFile(sourcePath);
+    const model = decodePng(sourceBytes, `Launcher mark source for ${theme}`);
+    if (model.width < 512 || model.height < 512) {
+      throw new Error(`Launcher mark source for ${theme} must be at least 512px per side`);
+    }
+    const bounds = visibleBounds(model);
+    if (bounds.left === 0 || bounds.top === 0 || bounds.right === model.width - 1 || bounds.bottom === model.height - 1) {
+      throw new Error(`Launcher mark source for ${theme} touches its canvas edge`);
+    }
+    const outputDirectory = path.join(outputRoot, theme);
+    const outputPath = path.join(outputDirectory, "launcher-mark.png");
+    const iconOutputPath = path.join(outputDirectory, "launcher-mark.ico");
+    const markPixels = fitMark(model, MARK_SIZE);
+    const silhouette = Buffer.alloc(markPixels.length / 4);
+    for (let pixel = 0; pixel < silhouette.length; pixel += 1) silhouette[pixel] = markPixels[pixel * 4 + 3];
+    const bytes = encodePng(MARK_SIZE, MARK_SIZE, markPixels);
+    const iconFrames = ICON_SIZES.map((size) => {
+      const pixels = fitMark(model, size);
+      return { size, bytes: size === 256 ? encodePng(size, size, pixels) : encodeDib(size, pixels) };
+    });
+    const iconBytes = encodeIco(iconFrames);
+    await fs.mkdir(outputDirectory, { recursive: true });
+    await Promise.all([
+      writeGeneratedFile(outputPath, bytes),
+      writeGeneratedFile(iconOutputPath, iconBytes),
+    ]);
     results.push({
       theme,
+      sourcePath,
+      sourceWidth: model.width,
+      sourceHeight: model.height,
+      visibleBounds: bounds,
       outputPath,
-      width: SIZE,
-      height: SIZE,
+      width: MARK_SIZE,
+      height: MARK_SIZE,
       bytes: bytes.length,
       sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+      silhouetteSha256: crypto.createHash("sha256").update(silhouette).digest("hex"),
+      iconOutputPath,
+      iconSizes: [...ICON_SIZES],
+      iconBytes: iconBytes.length,
+      iconSha256: crypto.createHash("sha256").update(iconBytes).digest("hex"),
     });
   }
   return results;

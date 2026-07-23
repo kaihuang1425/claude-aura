@@ -21,6 +21,10 @@
   const SIDEBAR_MARKER = "data-claude-aura-sidebar";
   const MAIN_MARKER = "data-claude-aura-main-canvas";
   const PROMPT_MARKER = "data-claude-aura-prompt";
+  const BH = "data-claude-aura-brand-host";
+  const BF = "data-claude-aura-brand-flow";
+  const BN = "data-claude-aura-brand-native";
+  const BI = "data-claude-aura-brand-image";
   const MESSAGE_SELECTOR = [
     '[data-testid="user-message"]',
     '[data-testid="assistant-message"]',
@@ -41,6 +45,8 @@
   let rootDirty = true;
   let currentContext = "other";
   let artBindings = [];
+  let bb = null;
+  let bt = 0;
 
   const visibleRect = (element) => {
     if (!element?.isConnected) return null;
@@ -72,6 +78,125 @@
         && rect.height >= window.innerHeight * 0.5)
       .sort((left, right) => (right.rect.width * right.rect.height) - (left.rect.width * left.rect.height));
     return candidates[0]?.element ?? null;
+  };
+
+  const clearBrand = () => {
+    bt += 1;
+    if (bb?.image) {
+      bb.image.onload = null;
+      bb.image.onerror = null;
+      bb.image.remove();
+    }
+    bb?.host?.removeAttribute(BH);
+    bb?.host?.removeAttribute(BF);
+    for (const element of bb?.native ?? []) element.removeAttribute(BN);
+    for (const image of document.querySelectorAll?.(`[${BI}]`) ?? []) image.remove();
+    for (const host of document.querySelectorAll?.(`[${BH}]`) ?? []) host.removeAttribute(BH);
+    for (const host of document.querySelectorAll?.(`[${BF}]`) ?? []) host.removeAttribute(BF);
+    for (const native of document.querySelectorAll?.(`[${BN}]`) ?? []) native.removeAttribute(BN);
+    bb = null;
+  };
+
+  const findBrand = (sidebar) => {
+    if (!Array.isArray(settings.b) || settings.b.length < 2) return null;
+    const side = visibleRect(sidebar);
+    if (!side || side.width < 208) return null;
+    const sel = [
+      ".claude-logo",
+      '[data-cds="ClaudeLogo"]',
+      '[data-testid="claude-logo"]',
+      '[data-testid="claude-starburst"]',
+      '[data-testid*="claude"][data-testid*="logo"]',
+      '[class*="claude"][class*="logo"]',
+      '[aria-label="Claude" i]',
+    ].join(",");
+    const found = new Set(sidebar.querySelectorAll?.(sel) ?? []);
+    for (const element of sidebar.querySelectorAll?.("a[href],span") ?? []) {
+      if (element.textContent?.trim() === "Claude") found.add(element);
+    }
+    const inside = (r) => r && r.top >= side.top - 2 && r.top <= side.top + 96
+      && r.left >= side.left - 2 && r.right <= side.right + 2;
+    const brands = new Set();
+    for (const c of found) {
+      const b = c.closest?.("a[href]") ?? c;
+      if (inside(visibleRect(b))) brands.add(b);
+    }
+    if (brands.size !== 1) return null;
+    const brand = [...brands][0];
+    const br = visibleRect(brand);
+    const min = Number(settings.b[2]) || 136;
+    const width = Number(settings.b[3]) || 160;
+    let host = null;
+    let hr = null;
+    for (let p = brand.parentElement, d = 0; p && p !== sidebar && d < 4; p = p.parentElement, d += 1) {
+      const r = visibleRect(p);
+      if (inside(r) && r.width >= width && r.height >= 32 && r.height <= 96) {
+        host = p;
+        hr = r;
+        break;
+      }
+    }
+    if (!host) return null;
+    const controls = [...(host.querySelectorAll?.(CONTROL_SELECTOR) ?? [])]
+      .filter((control) => !brand.contains(control))
+      .map(visibleRect)
+      .filter((r) => r && r.left > br.left);
+    const space = Math.min(hr.right, ...controls.map((r) => r.left)) - br.left - 8;
+    if (space < min) return null;
+    return {
+      host,
+      native: [brand],
+      offset: br.left - hr.left,
+      width: Math.min(width, space),
+    };
+  };
+
+  const syncBrand = (sidebar) => {
+    if (!Array.isArray(settings.b) || settings.b.length < 2) {
+      if (bb) clearBrand();
+      return;
+    }
+    const t = findBrand(sidebar);
+    const am = mode();
+    if (!t) {
+      if (bb) clearBrand();
+      return;
+    }
+    if (bb?.host === t.host && bb.native?.[0] === t.native[0]
+        && bb.mode === am
+        && bb.offset === t.offset && bb.width === t.width
+        && bb.image?.isConnected) return;
+    clearBrand();
+    const im = document.createElement("img");
+    const token = ++bt;
+    im.alt = "";
+    im.draggable = false;
+    im.decoding = "async";
+    im.setAttribute("aria-hidden", "true");
+    im.setAttribute(BI, `${settings.version}:${settings.digest}`);
+    im.style.setProperty("inset-inline-start", `${t.offset}px`);
+    im.style.setProperty("width", `${t.width}px`);
+    bb = { ...t, image: im, mode: am, token, ready: false };
+    const fail = () => {
+      if (bb?.token === token) clearBrand();
+    };
+    im.onerror = fail;
+    im.onload = () => {
+      const decoded = typeof im.decode === "function" ? im.decode() : Promise.resolve();
+      Promise.resolve(decoded).then(() => {
+        if (bb?.token !== token || !im.isConnected || !t.host.isConnected
+            || !im.naturalWidth || mode() !== am
+            || findBrand(sidebar)?.native?.[0] !== t.native[0]) return fail();
+        if ((window.getComputedStyle?.(t.host)?.position || "static") === "static") {
+          t.host.setAttribute(BF, "true");
+        }
+        t.host.setAttribute(BH, "ready");
+        for (const element of t.native) element.setAttribute(BN, "true");
+        bb.ready = true;
+      }, fail);
+    };
+    t.host.appendChild(im);
+    im.src = settings.b[am === "dark" ? 1 : 0];
   };
 
   const discoverComposer = () => {
@@ -115,8 +240,11 @@
 
   const applyPromptLayout = (prompt, main) => {
     clearPromptLayout();
+    if (!prompt || !main) return;
+    /* Mark native prompts for mirror geometry without authoring layout. */
+    prompt.setAttribute(PROMPT_MARKER, "new-chat");
     const layout = settings.n;
-    if (!layout || !prompt || !main) return;
+    if (!layout) return;
     const mainRect = visibleRect(main);
     if (!mainRect) return;
     const bounds = {
@@ -132,7 +260,6 @@
     if (authoredTranslate && !["none", "0px", "0px 0px"].includes(authoredTranslate)) return;
     const inset = 16;
     const width = Math.min(bounds.width - (inset * 2), Math.max(280, bounds.width * layout[0]));
-    prompt.setAttribute(PROMPT_MARKER, "new-chat");
     prompt.style.setProperty("--aura-prompt-width", `${Math.round(width * 100) / 100}px`);
     prompt.style.setProperty("--aura-prompt-x", "0px");
     prompt.style.setProperty("--aura-prompt-y", "0px");
@@ -189,7 +316,9 @@
     currentContext = found.context;
     root.dataset.claudeAuraContext = currentContext;
     for (const marked of document.querySelectorAll?.(`[${SIDEBAR_MARKER}]`) ?? []) marked.removeAttribute(SIDEBAR_MARKER);
-    discoverSidebar()?.setAttribute(SIDEBAR_MARKER, "true");
+    const sidebar = discoverSidebar();
+    sidebar?.setAttribute(SIDEBAR_MARKER, "true");
+    syncBrand(sidebar);
     for (const marked of document.querySelectorAll?.(`[${MAIN_MARKER}]`) ?? []) marked.removeAttribute(MAIN_MARKER);
     found.main?.setAttribute(MAIN_MARKER, "true");
     if (found.main) {
@@ -205,6 +334,7 @@
   previous?.observer?.disconnect();
   previous?.stopModeListener?.();
   previous?.stopContextListeners?.();
+  previous?.clearBrandWordmark?.();
   previous?.clearMarkedElements?.();
   if (previous?.timer) clearInterval(previous.timer);
   if (previous?.scheduled) clearTimeout(previous.scheduled);
@@ -213,6 +343,7 @@
   const onModeChange = () => {
     if (document.documentElement) document.documentElement.dataset.claudeAuraEffectiveMode = mode();
     applyArtworkContext(currentContext);
+    syncBrand(discoverSidebar());
   };
   media?.addEventListener?.("change", onModeChange);
   const stopModeListener = () => media?.removeEventListener?.("change", onModeChange);
@@ -342,6 +473,7 @@
     if (state?.scheduled) clearTimeout(state.scheduled);
     stopModeListener();
     stopContextListeners();
+    clearBrand();
     clearMarkedElements();
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BACKDROP_ID)?.remove();
@@ -471,6 +603,7 @@
     scheduled,
     stopModeListener,
     stopContextListeners,
+    clearBrandWordmark: clearBrand,
     clearMarkedElements,
     version: settings.version,
     theme: settings.theme,

@@ -5,6 +5,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { AURA_VERSION, PROJECT_ROOT } from "./theme-core.mjs";
 import { buildAuraIcon } from "./build-aura-icon.mjs";
+import { buildBrandWordmarks } from "./build-brand-wordmarks.mjs";
 import { buildLauncherAssets } from "./build-launcher-assets.mjs";
 
 const RELEASE_ROOT_FILES = new Set([
@@ -14,6 +15,8 @@ const RELEASE_ROOT_FILES = new Set([
   "LICENSE",
   "NOTICE.md",
   "README.md",
+  "README.zh-CN.md",
+  "README.zh-TW.md",
   "SECURITY.md",
   "THIRD_PARTY_NOTICES.md",
   "Uninstall Claude Aura.cmd",
@@ -53,13 +56,99 @@ const RETIRED_RELEASE_DIRECTORIES = new Set([
 const SOURCE_ONLY_RELEASE_DIRECTORIES = new Set([
   "assets/studio-previews/references",
 ]);
+const REQUIRED_THEME_DESCRIPTOR_FILES = new Set([
+  "registry.json",
+  "default.json",
+  "japanese-film-editorial.json",
+  "korean-prestige.json",
+  "cartoon-studio.json",
+  "anime-twilight.json",
+  "study-library.json",
+  "japanese-idol.json",
+  "korean-idol.json",
+  "midnight.json",
+  "ember.json",
+  "forest.json",
+  "sakura.json",
+].map((name) => `themes/${name}`));
+const REQUIRED_APP_SURFACE_FILES = new Set([
+  "assets/base.css",
+  "assets/brand/aura-mark.svg",
+  "assets/brand/claude-aura.ico",
+  "assets/renderer-inject.js",
+  "assets/theme-variants.css",
+  "macos/common.sh",
+  "macos/install.sh",
+  "macos/launchers/Claude Aura - Restore.command",
+  "macos/launchers/Claude Aura - Switch Theme.command",
+  "macos/launchers/Claude Aura.command",
+  "macos/restore.sh",
+  "macos/start.sh",
+  "macos/switch-theme.sh",
+  "macos/verify.sh",
+  "scripts/convert-theme-assets.mjs",
+  "scripts/injector.mjs",
+  "scripts/state-cli.mjs",
+  "scripts/theme-cli.mjs",
+  "scripts/theme-core.mjs",
+  "scripts/theme-core/artwork.mjs",
+  "scripts/theme-core/compile.mjs",
+  "scripts/theme-core/constants.mjs",
+  "scripts/theme-core/registry.mjs",
+  "scripts/theme-core/studio.mjs",
+  "scripts/theme-core/validation.mjs",
+  "scripts/webview-cli.mjs",
+  "studio/app.js",
+  "studio/editor.css",
+  "studio/editor.js",
+  "studio/generated-themes.js",
+  "studio/index.html",
+  "studio/styles.css",
+  "tests/run-tests.mjs",
+  "vendor/webview2/LICENSE.txt",
+  "vendor/webview2/Microsoft.Web.WebView2.Core.dll",
+  "vendor/webview2/Microsoft.Web.WebView2.WinForms.dll",
+  "vendor/webview2/NOTICE.txt",
+  "vendor/webview2/runtimes/arm64/WebView2Loader.dll",
+  "vendor/webview2/runtimes/x64/WebView2Loader.dll",
+  "vendor/webview2/runtimes/x86/WebView2Loader.dll",
+  "vendor/webview2/WebView2Loader.dll",
+  "windows/aura-ui.ps1",
+  "windows/common.ps1",
+  "windows/install.ps1",
+  "windows/restore.ps1",
+  "windows/start.ps1",
+  "windows/switch-theme.ps1",
+  "windows/ui-copy.json",
+  "windows/uninstall.ps1",
+  "windows/verify.ps1",
+]);
 const REQUIRED_RELEASE_FILES = new Set([
+  ...RELEASE_ROOT_FILES,
+  ...RELEASE_DOCUMENT_FILES,
+  ...REQUIRED_THEME_DESCRIPTOR_FILES,
+  ...REQUIRED_APP_SURFACE_FILES,
   "scripts/asset-audit.mjs",
+  "scripts/build-brand-wordmarks.mjs",
   "scripts/build-launcher-assets.mjs",
   ...[
     "default", "japanese-film-editorial", "korean-prestige", "cartoon-studio",
     "anime-twilight", "study-library", "japanese-idol", "korean-idol",
   ].map((theme) => `assets/theme-art/${theme}/launcher-mark.png`),
+  ...[
+    "default", "japanese-film-editorial", "korean-prestige", "cartoon-studio",
+    "anime-twilight", "study-library", "japanese-idol", "korean-idol",
+  ].map((theme) => `assets/theme-art/${theme}/launcher-mark.ico`),
+  ...[
+    "japanese-film-editorial", "korean-prestige", "japanese-idol",
+  ].map((theme) => `assets/theme-art/${theme}/brand-mark.svg`),
+  ...[
+    "default", "japanese-film-editorial", "korean-prestige", "cartoon-studio",
+    "anime-twilight", "study-library", "japanese-idol", "korean-idol",
+  ].flatMap((theme) => [
+    `assets/theme-art/${theme}/brand-wordmark-light.png`,
+    `assets/theme-art/${theme}/brand-wordmark-dark.png`,
+  ]),
   ...[
     "japanese-film-editorial", "korean-prestige", "cartoon-studio",
     "anime-twilight", "study-library", "japanese-idol", "korean-idol",
@@ -207,6 +296,7 @@ function makeZip(entries) {
 
 await buildAuraIcon();
 await buildLauncherAssets();
+await buildBrandWordmarks();
 const outputDirectory = path.join(PROJECT_ROOT, "release");
 await fs.mkdir(outputDirectory, { recursive: true });
 const files = (await collect(PROJECT_ROOT)).sort((a, b) => a.archivePath.localeCompare(b.archivePath));

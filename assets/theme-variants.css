@@ -20,6 +20,17 @@ html.claude-aura:is([data-claude-aura-theme="japanese-idol"], [data-claude-aura-
   backdrop-filter: none !important;
 }
 
+/* Shared in-page brand wordmark. */
+html.claude-aura [data-claude-aura-brand-flow="true"]{position:relative!important}
+html.claude-aura [data-claude-aura-brand-native="true"]{opacity:0!important;animation:none!important}
+html.claude-aura [data-claude-aura-brand-image]{position:absolute;inset-inline-start:0;top:50%;width:160px;height:auto;transform:translateY(-50%);pointer-events:none!important;visibility:hidden}
+html.claude-aura [data-claude-aura-brand-host="ready"]>[data-claude-aura-brand-image]{visibility:visible}
+@media (forced-colors:active),(prefers-contrast:more){
+  html.claude-aura [data-claude-aura-brand-image]{display:none!important}
+  html.claude-aura [data-claude-aura-brand-native="true"]{opacity:1!important}
+}
+/* End shared in-page brand wordmark. */
+
 /* Japanese Film Editorial: paper, ink, editorial rules, compact geometry. */
 html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] .dframe-content,
 html.claude-aura[data-claude-aura-theme="japanese-film-editorial"] .dframe-main {
@@ -101,7 +112,7 @@ html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(input, textarea, s
 
 html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(article, [data-card], [data-testid*="card"]) {
   border: 2px solid hsl(var(--aura-border-emphasis) / 0.74) !important;
-  box-shadow: 4px 5px 0 hsl(var(--aura-border-emphasis) / 0.14) !important;
+  box-shadow: var(--aura-variant-card-shadow, 4px 5px 0 hsl(var(--aura-border-emphasis) / 0.14)) !important;
 }
 
 html.claude-aura[data-claude-aura-theme="cartoon-studio"] :is(article, [data-card], [data-testid*="card"]):nth-of-type(3n+1) {
@@ -172,7 +183,7 @@ html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(.input-box, [data-t
 }
 
 html.claude-aura[data-claude-aura-theme="japanese-idol"] :is(button, [role="button"], [role="tab"]) {
-  border-radius: 999px;
+  border-radius: var(--aura-variant-control-radius, 999px);
 }
 
 html.claude-aura[data-claude-aura-theme="japanese-idol"] :is([role="separator"], hr) {

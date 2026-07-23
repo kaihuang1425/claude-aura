@@ -39,6 +39,49 @@ window.CLAUDE_AURA_THEMES = {
       "radius": 16,
       "borderWidth": 1
     },
+    "studioStyle": {
+      "light": {
+        "canvas": "#F1F2F9",
+        "sidebar": "#E4E6F1",
+        "surface": "#F1F2F9",
+        "raised": "#FBFCFE",
+        "text": "#171A31",
+        "textSecondary": "#3A3E5A",
+        "textMuted": "#5F647C",
+        "sidebarText": "#171A31",
+        "sidebarTextMuted": "#5F647C",
+        "accent": "#4721A1",
+        "accentText": "#FFFFFF",
+        "border": "#21243B",
+        "focus": "#4721A1",
+        "surfaceAlpha": 0.92,
+        "sidebarAlpha": 0.9
+      },
+      "dark": {
+        "canvas": "#1B1D2C",
+        "sidebar": "#0E0F1A",
+        "surface": "#242638",
+        "raised": "#282B3E",
+        "text": "#E9ECF6",
+        "textSecondary": "#BEC5DA",
+        "textMuted": "#979DB4",
+        "sidebarText": "#E9ECF6",
+        "sidebarTextMuted": "#979DB4",
+        "accent": "#BA8BF4",
+        "accentText": "#0F101F",
+        "border": "#B2BADC",
+        "focus": "#BA8BF4",
+        "surfaceAlpha": 0.87,
+        "sidebarAlpha": 0.84
+      },
+      "shared": {
+        "fontUi": "system-sans",
+        "fontDisplay": "editorial-serif",
+        "radius": 18,
+        "blur": 20,
+        "shadow": "soft"
+      }
+    },
     "studioPreview": null,
     "studioPreviewFrame": null,
     "newChatLayout": null,
@@ -498,6 +541,49 @@ window.CLAUDE_AURA_THEMES = {
       "border": "#8E7B62",
       "radius": 12,
       "borderWidth": 1
+    },
+    "studioStyle": {
+      "light": {
+        "canvas": "#F6F2EA",
+        "sidebar": "#1E2124",
+        "surface": "#F9F6F1",
+        "raised": "#FCFBF8",
+        "text": "#202427",
+        "textSecondary": "#444A50",
+        "textMuted": "#656B72",
+        "sidebarText": "#F1EDE4",
+        "sidebarTextMuted": "#BDB6A8",
+        "accent": "#8F3A28",
+        "accentText": "#FCFBF8",
+        "border": "#2A2E32",
+        "focus": "#8F3A28",
+        "surfaceAlpha": 0.82,
+        "sidebarAlpha": 0.94
+      },
+      "dark": {
+        "canvas": "#1C1F22",
+        "sidebar": "#101214",
+        "surface": "#202427",
+        "raised": "#2A2E32",
+        "text": "#F2EDE3",
+        "textSecondary": "#CEC6B6",
+        "textMuted": "#AAA192",
+        "sidebarText": "#F2EDE3",
+        "sidebarTextMuted": "#BBB2A0",
+        "accent": "#EA8262",
+        "accentText": "#14171A",
+        "border": "#D2CBBC",
+        "focus": "#EA8262",
+        "surfaceAlpha": 0.8,
+        "sidebarAlpha": 0.92
+      },
+      "shared": {
+        "fontUi": "humanist-sans",
+        "fontDisplay": "system-sans",
+        "radius": 4,
+        "blur": 10,
+        "shadow": "soft"
+      }
     },
     "studioPreview": "assets/studio-previews/masters/japanese-film-editorial.png",
     "studioPreviewFrame": {
@@ -1022,6 +1108,49 @@ window.CLAUDE_AURA_THEMES = {
       "radius": 14,
       "borderWidth": 1
     },
+    "studioStyle": {
+      "light": {
+        "canvas": "#EBEFF4",
+        "sidebar": "#152237",
+        "surface": "#F2F4F8",
+        "raised": "#FCFCFD",
+        "text": "#18202F",
+        "textSecondary": "#384357",
+        "textMuted": "#5E6878",
+        "sidebarText": "#EAEFF5",
+        "sidebarTextMuted": "#A5B0C0",
+        "accent": "#245399",
+        "accentText": "#FFFFFF",
+        "border": "#232E3E",
+        "focus": "#245399",
+        "surfaceAlpha": 0.58,
+        "sidebarAlpha": 0.88
+      },
+      "dark": {
+        "canvas": "#0E1725",
+        "sidebar": "#070D18",
+        "surface": "#131E2F",
+        "raised": "#1C283B",
+        "text": "#EAEFF5",
+        "textSecondary": "#BBC5D3",
+        "textMuted": "#919BAC",
+        "sidebarText": "#EAEFF5",
+        "sidebarTextMuted": "#9EAABD",
+        "accent": "#81ADEF",
+        "accentText": "#080F1C",
+        "border": "#AFBFD4",
+        "focus": "#81ADEF",
+        "surfaceAlpha": 0.55,
+        "sidebarAlpha": 0.86
+      },
+      "shared": {
+        "fontUi": "system-sans",
+        "fontDisplay": "system-sans",
+        "radius": 12,
+        "blur": 24,
+        "shadow": "soft"
+      }
+    },
     "studioPreview": "assets/studio-previews/masters/korean-prestige.png",
     "studioPreviewFrame": {
       "x": 82.34,
@@ -1545,6 +1674,49 @@ window.CLAUDE_AURA_THEMES = {
       "radius": 18,
       "borderWidth": 2
     },
+    "studioStyle": {
+      "light": {
+        "canvas": "#FAF5EA",
+        "sidebar": "#F6F1E4",
+        "surface": "#FCF9F3",
+        "raised": "#FFFDFA",
+        "text": "#2C1F17",
+        "textSecondary": "#534437",
+        "textMuted": "#72655A",
+        "sidebarText": "#2C1F17",
+        "sidebarTextMuted": "#72655A",
+        "accent": "#1A706B",
+        "accentText": "#FFFFFF",
+        "border": "#3B2C21",
+        "focus": "#1A706B",
+        "surfaceAlpha": 0.86,
+        "sidebarAlpha": 0.92
+      },
+      "dark": {
+        "canvas": "#1C2B2C",
+        "sidebar": "#0F191A",
+        "surface": "#233334",
+        "raised": "#3C332A",
+        "text": "#F9F3E7",
+        "textSecondary": "#D8CDB6",
+        "textMuted": "#B1A591",
+        "sidebarText": "#F9F3E7",
+        "sidebarTextMuted": "#B1A591",
+        "accent": "#68D9C8",
+        "accentText": "#0E1A1B",
+        "border": "#DED3BA",
+        "focus": "#68D9C8",
+        "surfaceAlpha": 0.82,
+        "sidebarAlpha": 0.88
+      },
+      "shared": {
+        "fontUi": "rounded-sans",
+        "fontDisplay": "system-sans",
+        "radius": 20,
+        "blur": 8,
+        "shadow": "soft"
+      }
+    },
     "studioPreview": "assets/studio-previews/masters/cartoon-studio.png",
     "studioPreviewFrame": {
       "x": 92.79,
@@ -2050,6 +2222,49 @@ window.CLAUDE_AURA_THEMES = {
       "radius": 18,
       "borderWidth": 1
     },
+    "studioStyle": {
+      "light": {
+        "canvas": "#E9EBF7",
+        "sidebar": "#202546",
+        "surface": "#F0F2FA",
+        "raised": "#F7F8FD",
+        "text": "#1A1E38",
+        "textSecondary": "#3A405F",
+        "textMuted": "#5E637D",
+        "sidebarText": "#E7ECF8",
+        "sidebarTextMuted": "#A5AECA",
+        "accent": "#522F9D",
+        "accentText": "#FFFFFF",
+        "border": "#272C49",
+        "focus": "#522F9D",
+        "surfaceAlpha": 0.52,
+        "sidebarAlpha": 0.84
+      },
+      "dark": {
+        "canvas": "#131735",
+        "sidebar": "#090C20",
+        "surface": "#1A1E42",
+        "raised": "#23264D",
+        "text": "#E7ECF8",
+        "textSecondary": "#BBC3DD",
+        "textMuted": "#929BB9",
+        "sidebarText": "#E7ECF8",
+        "sidebarTextMuted": "#929BB9",
+        "accent": "#B494F0",
+        "accentText": "#0A0D24",
+        "border": "#B7BEE1",
+        "focus": "#B494F0",
+        "surfaceAlpha": 0.5,
+        "sidebarAlpha": 0.8
+      },
+      "shared": {
+        "fontUi": "system-sans",
+        "fontDisplay": "system-sans",
+        "radius": 16,
+        "blur": 22,
+        "shadow": "soft"
+      }
+    },
     "studioPreview": "assets/studio-previews/masters/anime-twilight.png",
     "studioPreviewFrame": {
       "x": 96.1,
@@ -2525,6 +2740,49 @@ window.CLAUDE_AURA_THEMES = {
       "border": "#1F523F",
       "radius": 10,
       "borderWidth": 1
+    },
+    "studioStyle": {
+      "light": {
+        "canvas": "#F5F1E5",
+        "sidebar": "#223929",
+        "surface": "#FAF7F0",
+        "raised": "#FDFCF7",
+        "text": "#292A22",
+        "textSecondary": "#4E5044",
+        "textMuted": "#6F7265",
+        "sidebarText": "#F5F1E5",
+        "sidebarTextMuted": "#BEB6A2",
+        "accent": "#2D6244",
+        "accentText": "#FBF9F4",
+        "border": "#37392D",
+        "focus": "#2D6244",
+        "surfaceAlpha": 0.86,
+        "sidebarAlpha": 0.92
+      },
+      "dark": {
+        "canvas": "#1B281E",
+        "sidebar": "#0D1610",
+        "surface": "#252D25",
+        "raised": "#36332B",
+        "text": "#F1ECDF",
+        "textSecondary": "#D0C8B4",
+        "textMuted": "#A9A18E",
+        "sidebarText": "#F1ECDF",
+        "sidebarTextMuted": "#A9A18E",
+        "accent": "#85D1A5",
+        "accentText": "#0D1710",
+        "border": "#D1C8B3",
+        "focus": "#85D1A5",
+        "surfaceAlpha": 0.84,
+        "sidebarAlpha": 0.9
+      },
+      "shared": {
+        "fontUi": "system-sans",
+        "fontDisplay": "system-sans",
+        "radius": 7,
+        "blur": 6,
+        "shadow": "soft"
+      }
     },
     "studioPreview": "assets/studio-previews/masters/study-library.png",
     "studioPreviewFrame": {
@@ -3023,6 +3281,49 @@ window.CLAUDE_AURA_THEMES = {
       "border": "#C7B3E6",
       "radius": 20,
       "borderWidth": 1
+    },
+    "studioStyle": {
+      "light": {
+        "canvas": "#FBF1EF",
+        "sidebar": "#F9EEEB",
+        "surface": "#FDF8F7",
+        "raised": "#FEFBFA",
+        "text": "#38242B",
+        "textSecondary": "#5D414B",
+        "textMuted": "#7E636D",
+        "sidebarText": "#38242B",
+        "sidebarTextMuted": "#7E636D",
+        "accent": "#AE2951",
+        "accentText": "#FFFFFF",
+        "border": "#462B35",
+        "focus": "#AE2951",
+        "surfaceAlpha": 0.72,
+        "sidebarAlpha": 0.88
+      },
+      "dark": {
+        "canvas": "#2C1B22",
+        "sidebar": "#1A0F13",
+        "surface": "#38242C",
+        "raised": "#432D37",
+        "text": "#F7ECE8",
+        "textSecondary": "#DBC1BD",
+        "textMuted": "#B69796",
+        "sidebarText": "#F7ECE8",
+        "sidebarTextMuted": "#B69796",
+        "accent": "#F28DA8",
+        "accentText": "#1E1015",
+        "border": "#DEBAC1",
+        "focus": "#F28DA8",
+        "surfaceAlpha": 0.76,
+        "sidebarAlpha": 0.9
+      },
+      "shared": {
+        "fontUi": "system-sans",
+        "fontDisplay": "system-sans",
+        "radius": 20,
+        "blur": 18,
+        "shadow": "soft"
+      }
     },
     "studioPreview": "assets/studio-previews/masters/japanese-idol.png",
     "studioPreviewFrame": {
@@ -3553,6 +3854,49 @@ window.CLAUDE_AURA_THEMES = {
       "border": "#8F78DF",
       "radius": 16,
       "borderWidth": 1
+    },
+    "studioStyle": {
+      "light": {
+        "canvas": "#F4F3FC",
+        "sidebar": "#F0EFFB",
+        "surface": "#F7F7FD",
+        "raised": "#FAFAFF",
+        "text": "#241F3D",
+        "textSecondary": "#413C62",
+        "textMuted": "#635F81",
+        "sidebarText": "#241F3D",
+        "sidebarTextMuted": "#635F81",
+        "accent": "#4E2AB2",
+        "accentText": "#FFFFFF",
+        "border": "#2E2848",
+        "focus": "#4E2AB2",
+        "surfaceAlpha": 0.52,
+        "sidebarAlpha": 0.88
+      },
+      "dark": {
+        "canvas": "#1D1933",
+        "sidebar": "#0F0C1D",
+        "surface": "#25213F",
+        "raised": "#2E2A4C",
+        "text": "#EDECF9",
+        "textSecondary": "#C2BFDE",
+        "textMuted": "#9794B8",
+        "sidebarText": "#EDECF9",
+        "sidebarTextMuted": "#9794B8",
+        "accent": "#AF92F2",
+        "accentText": "#110D21",
+        "border": "#BFBAE3",
+        "focus": "#AF92F2",
+        "surfaceAlpha": 0.55,
+        "sidebarAlpha": 0.84
+      },
+      "shared": {
+        "fontUi": "system-sans",
+        "fontDisplay": "system-sans",
+        "radius": 16,
+        "blur": 26,
+        "shadow": "soft"
+      }
     },
     "studioPreview": "assets/studio-previews/masters/korean-idol.png",
     "studioPreviewFrame": {

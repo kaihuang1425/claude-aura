@@ -19,7 +19,7 @@ swatches, preview colors, and artwork slots.
 | `assets/base.css` | Shared runtime styling driven by semantic variables |
 | `assets/theme-variants.css` | Centralized component-level differentiation selected by the stable root theme attribute |
 | `assets/renderer-inject.js` | Reversible in-page installation and cleanup of the compiled theme payload |
-| `windows/aura-ui.ps1` | Localized, persistent, keyboard-accessible theme gallery for the Windows companion |
+| `windows/aura-ui.ps1` | Windows host for the live Claude WebView, Aura Studio bridge, launcher, app identity, and native persistence |
 | `scripts/build-studio-themes.mjs` | Generates Aura Studio's theme-card metadata from `listThemes()` |
 
 The compiler applies the selected ID through
@@ -91,7 +91,7 @@ Rules enforced by the registry validator:
   is allowed) and uses an approved SVG, PNG, WebP, or AVIF extension.
 
 A theme may declare either a single `artwork` slot or an `artworkLayers` array
-of one to four layers. Each layer supports `path`, `position`, `size`,
+of one to eight layers. Each layer supports `path`, `position`, `size`,
 `mobile` (`reduce`, `hide`, or `keep`), `opacity` (0–1), and `mask`
 (`soft-right` for the right-anchored edge fade, or `none`). Layers are embedded
 as data URLs only for the active theme and render as inert, pointer-safe
@@ -131,17 +131,35 @@ Top-level fields are:
 Use reliable system-font fallbacks. Claude Aura has no runtime font CDN and
 does not bundle third-party font files.
 
-### Floating launcher
+### App identity and floating launcher
 
 `launcher` is optional. Omitting it inherits the complete Default design. When
 present, it accepts only `asset`, `surface`, `surfaceHover`, `foreground`,
 `accent`, `border`, `radius`, and `borderWidth`. Permanent themes use
-`assets/theme-art/<id>/launcher-mark.png`; standalone user kits may use only a
-kit-local `launcher-mark.png`. Marks are static transparent 96×96 PNGs below
-400 KB. Foreground must clear 4.5:1 contrast against both surfaces, radius is
-8–24, and border width is 1–3. The theme controls appearance only: Aura retains
-the 48 px click target, localized hover label, dedicated drag grip, safe edge
-gap, keyboard name, and Default fallback.
+`assets/theme-art/<id>/launcher-mark.png` plus the matching
+`launcher-mark.ico`; standalone user kits may use only a kit-local
+`launcher-mark.png`. Custom marks are static transparent 96×96 PNGs below 400
+KB and count toward the kit's 1.4 MB source-art total. They are host identity
+assets, not renderer-embedded artwork, so their encoded bytes do not count
+toward the separate 1.4 MB renderer-art budget. The Windows host derives a
+content-addressed ICO in Aura-owned data.
+Foreground must clear 4.5:1 contrast against both surfaces, radius is 8–24,
+and border width is 1–3. The theme controls appearance only: Aura retains the
+permanent circular 48 px target, whole-button DPI-scaled 6 px drag threshold,
+click-to-open action, right-click menu, safe edge gap, keyboard name, installed
+shortcut ownership, and Default fallback. Hover may change the validated
+material but never expands the window. Original look restores the Default
+identity everywhere.
+
+Each built-in identity begins with a distinct authored transparent 1254×1254
+source under
+`assets/studio-previews/references/launcher-marks-v2/<id>.png`. The
+deterministic builder produces the shipped 96×96 PNG and a nine-frame ICO at
+16, 20, 24, 32, 40, 48, 64, 128, and 256 px. Those source images and recorded
+prompts are repository-only and excluded from releases. The active built-in
+identity is shared by the main and Studio windows, taskbar, notification area,
+floating launcher, Studio rail, and the exact four Aura/Studio Desktop and
+Start shortcuts.
 
 ## Semantic tokens
 
@@ -247,8 +265,9 @@ not image bytes. The compatibility command
 360 fallbacks under `assets/theme-art/<id>/card-preview.webp`, but current cards
 use the masters. Unassigned alternates belong under
 `assets/studio-previews/references/` and are excluded from releases and
-installed copies. User themes must provide their own distributable selector
-artwork.
+installed copies. This source-only area also contains the authored built-in
+launcher sources and prompt record; only their derived runtime PNG/ICO files
+ship. User themes must provide their own distributable selector artwork.
 
 ## Contrast and accessibility
 

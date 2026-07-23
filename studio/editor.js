@@ -10,31 +10,64 @@
       undo: "Undo",
       redo: "Redo",
       resetChanges: "Reset",
-      editAppearance: "Colors for",
+      backToThemes: "Back to themes",
+      themeIdentity: "Theme name",
+      themeIdentityHelp: "Name the theme for each language you want to support.",
+      themeNameEn: "English name",
+      themeNameZhCn: "Simplified Chinese name",
+      themeNameZhTw: "Traditional Chinese (Taiwan) name",
+      themeDescriptionEn: "English description",
+      themeDescriptionZhCn: "Simplified Chinese description",
+      themeDescriptionZhTw: "Traditional Chinese (Taiwan) description",
+      editAppearance: "Theme mode",
       lightMode: "Light",
       darkMode: "Dark",
-      copyLightToDark: "Copy Light to Dark",
-      copyDarkToLight: "Copy Dark to Light",
-      modeHelp: "Each appearance keeps its own colors and overlay levels.",
-      colorsAndSurfaces: "Colors and surfaces",
-      colorsHelp: "Use the primary controls for a quick theme, then open a group for supporting colors.",
-      typographyAndMaterials: "Typography and materials",
+      copyLightToDark: "Copy Light colors to Dark",
+      copyDarkToLight: "Copy Dark colors to Light",
+      modeHelp: "Light and Dark can use different colors and images.",
+      colorsAndSurfaces: "Colors",
+      colorsHelp: "Choose essential colors in Quick customize. Advanced also includes supporting colors and exact values.",
+      typographyAndMaterials: "Type and effects",
+      studioStyleHelp: "These type, corner, blur, and shadow choices style Aura and Studio together.",
+      appIdentity: "App identity",
+      appIdentityHelp: "Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.",
+      appIdentityPreview: "App identity preview",
+      replaceAppMark: "Replace mark",
+      launcherSurface: "Mark background",
+      launcherSurfaceHover: "Hover background",
+      launcherForeground: "Label and grip",
+      launcherAccent: "Identity accent",
+      launcherBorder: "Identity border",
+      launcherRadius: "Identity roundness",
+      launcherBorderWidth: "Border width",
       interfaceFont: "Interface font",
-      displayFont: "Display font",
+      displayFont: "Heading font",
       cornerRadius: "Corner radius",
-      surfaceBlur: "Surface blur",
-      softShadow: "Soft shadow",
+      themeOriginal: "Theme original",
+      inheritedRadiusHelp: "Theme original. Moving this control creates one shared corner radius.",
+      surfaceBlur: "Panel blur",
+      softShadow: "Shadow",
       themeBackground: "Theme background",
-      backgroundScope: "Background scope",
-      contentCanvas: "Content canvas",
-      fullWindow: "Full window",
+      backgroundScope: "Background area",
+      contentCanvas: "Main area only",
+      fullWindow: "Entire window",
       contentScopeHelp: "Artwork begins after the live sidebar.",
       fullScopeHelp: "Artwork continues behind the live sidebar, which uses the selected translucent overlay.",
-      artworkLayers: "Artwork layers",
+      artworkLayers: "Images",
       layersHelp: "Add up to eight pointer-inert images. Each layer can target an appearance, page context, and window size.",
       addLayer: "Add layer",
-      promptPlacement: "New-chat prompt placement",
-      promptPlacementHelp: "Move only the new-chat prompt block. Conversation composers never move.",
+      addArtwork: "Add image…",
+      artworkRoleChoice: "Image type",
+      artworkVisibilityHelp: "Show in theme changes Aura. Hide in the preview is temporary.",
+      layerPlacementShared: "This image shares one position across {0}. Open Advanced to limit its appearance or page, or add a separate image.",
+      layerPlacementSpecific: "This position changes only {0}.",
+      appearanceBoth: "Light and Dark",
+      contextBoth: "New chat and Conversation",
+      promptPlacement: "New chat area",
+      promptPlacementHelp: "Drag it in the preview or use these controls. Light and Dark share this position; Conversation composers never move.",
+      nativePromptHelp: "Using Claude's current layout. Your first adjustment adopts the measured live size and position.",
+      conversationLayout: "Conversation layout",
+      conversationLayoutHelp: "Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.",
       promptWidth: "Width",
       horizontalOffset: "Horizontal offset",
       verticalOffset: "Vertical offset",
@@ -63,57 +96,64 @@
       builtInTheme: "Built-in",
       customTheme: "Custom",
       editorTitleFor: "Edit {0}",
-      editorSummary: "Draft changes apply to the actual Aura window after host validation.",
+      editorSummary: "Valid draft changes apply to Aura and Studio immediately.",
       savedState: "Saved",
       unsavedState: "Unsaved changes",
-      validState: "Valid draft applied",
-      invalidState: "Last valid draft remains active",
+      validState: "Preview up to date",
+      invalidState: "Preview uses the last valid settings",
       editorReady: "Theme editor ready.",
       editorBusy: "Applying editor change…",
       editorStateRejected: "The editor received invalid state. Close Studio and try again.",
       editorActionFailed: "The change was not applied. Review the highlighted setting and try again.",
+      launcherMarkImported: "App mark replaced.",
+      launcherMarkFailed: "The app mark could not be replaced. Choose a static, transparent 96 × 96 PNG smaller than 400 KB.",
+      launcherMarkApplyFailed: "The app mark is in your draft, but Windows could not update it everywhere. Try again or restart Aura.",
       saveBlocked: "Fix the validation issues before saving.",
       copiedModes: "Appearance colors copied.",
       copiedPrompt: "Prompt copied.",
       copyPromptFailed: "The prompt could not be copied. Select the text and copy it manually.",
       promptBuilt: "Prompt built locally.",
-      layerLimit: "A theme can contain up to eight artwork layers.",
-      noLayers: "No artwork layers yet. Add an image when the theme needs decoration.",
-      layerNumber: "Layer {0}",
+      layerLimit: "A theme can contain up to eight images.",
+      noLayers: "No images yet. Add one when the theme needs it.",
+      layerNumber: "Image {0}",
+      layerName: "{0} {1}",
       layerSummary: "{0} · {1} · {2}",
-      replaceImage: "Replace image",
-      moveUp: "Move up",
-      moveDown: "Move down",
-      removeLayer: "Remove",
-      layerRole: "Role",
+      replaceImage: "Replace",
+      moveUp: "Send backward",
+      moveDown: "Bring forward",
+      removeLayer: "Remove from theme",
+      layerRole: "Image type",
       roleBackground: "Background",
-      roleHero: "Hero",
-      roleCorner: "Corner",
+      roleHero: "Main subject",
+      roleCorner: "Corner graphic",
       roleDecoration: "Decoration",
-      appearanceUse: "Appearance",
-      appearanceAll: "Light and Dark",
+      appearanceUse: "Theme mode",
+      appearanceAll: "Both modes",
       appearanceLight: "Light only",
       appearanceDark: "Dark only",
-      contextUse: "Page context",
+      contextUse: "Page",
+      previewPage: "Preview page",
       contextAll: "All pages",
       contextNewChat: "New chat only",
       contextConversation: "Conversation only",
       viewportUse: "Window size",
-      viewportAll: "Normal and wide",
-      viewportNormal: "Normal only",
-      viewportWide: "Wide/fullscreen only",
-      layerVisible: "Visible",
+      viewportAll: "All sizes",
+      viewportNormal: "Standard only",
+      viewportWide: "Wide only",
+      layerVisible: "Show in theme",
+      layerInspectorTitle: "Selected image",
+      exactValue: "Exact value",
       layerOpacity: "Opacity",
-      layerMask: "Edge mask",
+      layerMask: "Edge fade",
       maskNone: "None",
-      maskSoftRight: "Soft right edge",
-      mobileBehavior: "Small-window behavior",
-      mobileKeep: "Keep",
+      maskSoftRight: "Fade right edge",
+      mobileBehavior: "Small windows",
+      mobileKeep: "Keep size",
       mobileReduce: "Reduce",
       mobileHide: "Hide",
-      normalPreset: "Normal-window framing",
-      widePreset: "Wide/fullscreen framing",
-      anchor: "Anchor",
+      normalPreset: "Position for: Standard",
+      widePreset: "Position for: Wide",
+      anchor: "Pin to",
       anchorTopLeft: "Top left",
       anchorTop: "Top",
       anchorTopRight: "Top right",
@@ -123,34 +163,34 @@
       anchorBottomLeft: "Bottom left",
       anchorBottom: "Bottom",
       anchorBottomRight: "Bottom right",
-      focalX: "Focal point X",
-      focalY: "Focal point Y",
-      positionX: "Position X",
-      positionY: "Position Y",
-      scale: "Scale",
+      focalX: "Image focus: horizontal",
+      focalY: "Image focus: vertical",
+      positionX: "Horizontal offset",
+      positionY: "Vertical offset",
+      scale: "Size",
       imageBytes: "{0} of 400 KB",
       noImagePreview: "Image",
-      groupCanvas: "Canvas",
+      groupCanvas: "Page background",
       groupSidebar: "Sidebar",
-      groupSurface: "Surface",
+      groupSurface: "Panels",
       groupText: "Text",
       groupAccent: "Accent",
-      groupBorder: "Border",
-      canvasColor: "Canvas",
+      groupBorder: "Borders",
+      canvasColor: "Page background",
       sidebarColor: "Sidebar",
-      surfaceColor: "Surface",
-      textColor: "Primary text",
+      surfaceColor: "Panels",
+      textColor: "Text",
       accentColor: "Accent",
-      borderColor: "Border",
-      surfaceAlpha: "Content overlay",
-      sidebarAlpha: "Sidebar overlay",
+      borderColor: "Borders",
+      surfaceAlpha: "Panel opacity",
+      sidebarAlpha: "Sidebar opacity",
       fontSystemSans: "System sans",
       fontHumanistSans: "Humanist sans",
       fontRoundedSans: "Rounded sans",
       fontEditorialSerif: "Editorial serif",
       shadowNone: "None",
       shadowSoft: "Soft",
-      shadowElevated: "Elevated",
+      shadowElevated: "Strong",
       confirmResetTitle: "Reset all draft changes?",
       confirmResetBody: "This discards every change from the current edit session and restores the saved theme. The reset cannot be undone.",
       confirmResetAction: "Reset changes",
@@ -162,6 +202,16 @@
       confirmDeleteAction: "Delete theme",
       feedbackValid: "All checks pass",
       feedbackInvalid: "Some checks need attention",
+      quickFeedbackValid: "Ready to save · contrast and size checks pass.",
+      quickFeedbackInvalid: "Needs attention · {0}",
+      studioLastValid: "Studio is showing the last valid colors until this issue is fixed.",
+      quickFeedbackFix: "Open the highlighted setting and adjust it before saving.",
+      validationColorFix: "A color combination does not have enough contrast. Adjust the highlighted color.",
+      validationBudgetFix: "Theme artwork is over its size limit. Replace or remove the highlighted image.",
+      validationArtworkFix: "An artwork setting needs attention. Open the highlighted layer and adjust it.",
+      validationMetadataFix: "A theme name or description needs attention. Complete the highlighted field.",
+      validationIdentityFix: "Adjust the App identity colors so the label remains readable.",
+      validationGenericFix: "One setting needs attention. Open the highlighted control and adjust it.",
       contrastCheck: "{0} contrast",
       contrastCanvasText: "Canvas and text",
       contrastSurfaceText: "Surface and text",
@@ -177,7 +227,7 @@
       budgetValue: "{0} / {1}",
       checkPass: "Pass",
       checkFail: "Needs attention",
-      validationIssue: "Check {0}.",
+      validationIssue: "Review {0} and adjust the highlighted setting.",
       firstIssue: "Go to first issue",
       slotBackground: "Background",
       slotHero: "Hero",
@@ -188,56 +238,74 @@
       slotCard3: "Card 3",
       slotBrandMark: "Brand mark",
       slotLauncherMark: "App + launcher mark",
-      stageTitle: "Live framing stage",
-      stageNotice: "The stage uses your draft's real colors and artwork, but it is not a Claude preview. Confirm in the actual Aura window.",
-      stageSize: "Framing set",
-      stageNormal: "Launch window",
-      stageWide: "Wide/fullscreen",
-      stageRealLabel: "See it in the real window",
+      stageTitle: "Live preview",
+      stageEvidence: "Placement aid · not a Claude preview or acceptance evidence",
+      stageNotice: "When available, the canvas uses a private capture of the actual Aura window with editable Aura artwork over it. Otherwise it shows the placement guide. It is not a Claude preview or acceptance evidence.",
+      stageSize: "Preview size",
+      stageNormal: "Standard",
+      stageWide: "Wide",
+      stageRealLabel: "Aura window",
       stageRealLaunch: "Launch size",
       stageRealWide: "Wide (≥1440)",
       stageRealFull: "Maximized",
-      stageRealHelp: "Every valid draft change is already applied to the actual Aura window on live claude.ai. These buttons bring that window forward at a preset or custom size — you can also resize it freely. Launch size uses the Launch framing set; Wide and Maximized use the Wide/fullscreen set.",
-      stageRealShown: "Aura window brought forward — the current draft is live there.",
+      stageRealHelp: "Every valid draft already applies to the actual Aura window on live claude.ai. Preview-size changes leave Studio in front; use Review in Aura only when you want to interact with the separate live window.",
+      stageRealShown: "Aura preview size updated. Studio remains in front.",
       stageTopmost: "Keep on top",
       topmostOn: "The Aura window now stays on top.",
       topmostOff: "The Aura window no longer stays on top.",
-      customWidth: "Width (px)",
-      customHeight: "Height (px)",
-      applySize: "Apply size",
-      mirrorTitle: "Real window mirror",
-      mirrorPrivacy: "The mirror is a scaled capture of your actual Aura window — including any conversation content. It stays on this device and is never saved to disk.",
-      mirrorEmpty: "No capture yet. Open the Aura window, then refresh.",
+      customWidth: "Width",
+      customHeight: "Height",
+      sizeUpdatesLive: "px · updates live",
+      mirrorTitle: "Live capture",
+      mirrorPrivacy: "May show conversation content. The capture stays in this device's memory and is never saved.",
+      mirrorEmpty: "Waiting for the actual Aura window.",
       mirrorRefresh: "Refresh",
-      mirrorCaption: "Actual Aura window · {0}×{1}",
+      mirrorCaption: "Live Aura · {2} · {0}×{1}",
+      mirrorCaptionCached: "Captured {2} · {0}×{1}",
+      mirrorUnavailable: "No {0} capture yet.",
       mirrorAlt: "Scaled capture of the actual Aura window",
+      openAuraWindow: "Review in Aura ↗",
+      previewSizeHelp: "Dimensions update automatically. Standard is used below 1440 px; Wide is used from 1440 px.",
       stageBackdropToggle: "Drag on the live capture",
       stageBackdropReady: "Live capture enabled — the stage now overlays the real window, and artwork appears while you drag it.",
-      stageLayersPanel: "Layers",
-      stageContextMismatch: "The live capture is on the other page context — this view stays schematic until the Aura window matches.",
-      stageEyeToggle: "Show on stage while editing",
+      stageLayersPanel: "Images",
+      stageContextMismatch: "Open {0} in Aura once to capture this preview. Studio keeps it in memory only for this editing session.",
+      stageOpenContext: "Switch in Aura…",
+      stageContextSelected: "{0} preview selected.",
+      stageEyeToggle: "Show image {0} ({1}) in preview",
+      stageEyeHide: "Hide on editing stage only",
+      stageEyeShow: "Show on editing stage",
+      stageEyeHideShort: "Hide",
+      stageEyeShowShort: "Show",
       stageSelectLayer: "Edit layer {0}",
       stageMoveHandle: "Move",
       editorLevel: "Editing mode",
-      levelSimple: "Simple",
-      levelAdvanced: "All controls",
+      levelSimple: "Quick customize",
+      levelAdvanced: "Advanced",
+      inspectorTitle: "Edit theme",
+      inspectorSections: "Editor sections",
+      panelDesign: "Style",
+      panelArtwork: "Images",
+      panelLayout: "Placement",
+      panelChecks: "Checks",
+      reviewStates: "Review states",
       matrixTitle: "Every state at a glance",
       matrixHint: "Select a state to edit it.",
-      hiddenInStageView: "Hidden in stage view: {0}",
-      copyFramingToWide: "Copy framing → Wide/fullscreen",
-      copyFramingToNormal: "Copy framing → Launch window",
+      hiddenInStageView: "Not in this preview · {0}",
+      copyFramingToWide: "Copy placement to Wide",
+      copyFramingToNormal: "Copy placement to Standard",
       framingCopied: "Framing copied to {0}.",
       stageNewChat: "New chat",
       stageConversation: "Conversation",
       stageShowZones: "Show safe zones",
-      stageKeyboardHelp: "Click or press Enter to select artwork or the prompt block. Arrow keys move it (hold Shift for larger steps); plus and minus resize artwork; bracket keys adjust prompt width. The layer-card sliders mirror every value.",
-      stagePromptTag: "Prompt block",
-      stageLayerAria: "Layer {0} ({1}). Arrow keys move it; plus and minus resize.",
-      stagePromptAria: "New-chat prompt block. Arrow keys move it; bracket keys adjust width.",
-      stageEmpty: "No artwork layers apply to this stage view.",
+      stageKeyboardHelp: "Select an image or the new chat area in the preview. Drag to move; drag a handle to resize. Arrow keys make precise adjustments.",
+      stagePromptTag: "New chat area",
+      stageLayerAria: "Image {0} ({1}). Arrow keys move it; plus and minus resize.",
+      stagePromptAria: "New chat area. Arrow keys move it; bracket keys adjust width.",
+      stageEmpty: "No images are used in this preview.",
       stageSelectedAnnounce: "{0} selected.",
-      stageScaleHandle: "Resize artwork",
-      stageWidthHandle: "Adjust prompt width",
+      stageScaleHandle: "Resize image",
+      stageWidthHandle: "Resize new chat area",
       promptTemplate: "Create a {0} theme artwork asset. Subject: {1}. Visual direction: {2}. {3} Decorative artwork only; no interface text, controls, borrowed logos, remote resources, or photographic people. Keep the composition usable when clipped at different window sizes.",
       launcherPromptTemplate: "Create a production-ready {0}. Subject: {1}. Visual direction: {2}. {3} Output one square transparent PNG at exactly 96×96 px. Keep the silhouette legible at 24–48 px and centered inside a 72×72 px safe area. Use no words, interface controls, borrowed logos, remote resources, photographic people, opaque background, border, or baked drop shadow.",
       promptFallbackSubject: "an original abstract motif",
@@ -247,7 +315,7 @@
       promptRuleCorner: "Use a transparent composition that remains intentional when clipped at the viewport edge.",
       promptRuleCard: "Use a square transparent composition with the subject concentrated in the bottom-right 40%.",
       promptRuleBrand: "Use a small, flat, original mark with no words or borrowed brand shapes.",
-      promptRuleLauncher: "Design one original compact mark that represents the theme across the floating launcher, title bar, taskbar, tray, and Studio.",
+      promptRuleLauncher: "Design one original compact mark that represents the theme across the floating launcher, title bar, taskbar, tray, Studio, and the Aura and Aura Studio shortcuts on Desktop and in the Start menu.",
     },
     "zh-CN": {
       navEditor: "主题编辑器",
@@ -256,31 +324,64 @@
       undo: "撤销",
       redo: "重做",
       resetChanges: "重置",
-      editAppearance: "编辑配色",
+      backToThemes: "返回主题",
+      themeIdentity: "主题名称",
+      themeIdentityHelp: "请填写需要支持的各界面语言下显示的主题名称。",
+      themeNameEn: "英文名称",
+      themeNameZhCn: "简体中文名称",
+      themeNameZhTw: "繁体中文（台湾）名称",
+      themeDescriptionEn: "英文说明",
+      themeDescriptionZhCn: "简体中文说明",
+      themeDescriptionZhTw: "繁体中文（台湾）说明",
+      editAppearance: "主题模式",
       lightMode: "浅色",
       darkMode: "深色",
-      copyLightToDark: "复制浅色设置到深色",
-      copyDarkToLight: "复制深色设置到浅色",
-      modeHelp: "浅色和深色外观分别保存颜色及覆盖层透明度。",
-      colorsAndSurfaces: "颜色与表面",
-      colorsHelp: "可先调整主要颜色快速完成主题，再展开各组设置辅助颜色。",
-      typographyAndMaterials: "字体与材质",
+      copyLightToDark: "将浅色配色复制到深色",
+      copyDarkToLight: "将深色配色复制到浅色",
+      modeHelp: "浅色和深色可使用不同的配色和图片。",
+      colorsAndSurfaces: "颜色",
+      colorsHelp: "在“快速自定义”中选择主要颜色；“高级”还可调整辅助颜色和精确值。",
+      typographyAndMaterials: "字体与效果",
+      studioStyleHelp: "这些字体、圆角、模糊和阴影设置会同时应用到 Aura 和 Studio。",
+      appIdentity: "应用标识",
+      appIdentityHelp: "更换 Aura、Studio、启动器、任务栏和系统托盘使用的标识图，或调整周边控件的样式。请选择小于 400 KB、96 × 96 px 的静态透明 PNG。",
+      appIdentityPreview: "应用标识预览",
+      replaceAppMark: "更换标识图",
+      launcherSurface: "标识背景",
+      launcherSurfaceHover: "悬停背景",
+      launcherForeground: "标签和拖动柄",
+      launcherAccent: "标识强调色",
+      launcherBorder: "标识边框",
+      launcherRadius: "标识圆角",
+      launcherBorderWidth: "边框宽度",
       interfaceFont: "界面字体",
       displayFont: "标题字体",
       cornerRadius: "圆角",
-      surfaceBlur: "表面模糊",
-      softShadow: "柔和阴影",
+      themeOriginal: "主题原有设置",
+      inheritedRadiusHelp: "主题原有设置。调整后，所有界面元素将共用同一圆角半径。",
+      surfaceBlur: "面板模糊",
+      softShadow: "阴影",
       themeBackground: "主题背景",
       backgroundScope: "背景范围",
-      contentCanvas: "内容画布",
+      contentCanvas: "仅主区域",
       fullWindow: "整个窗口",
       contentScopeHelp: "背景从实际侧边栏之后开始显示。",
       fullScopeHelp: "背景延伸至实际侧边栏后方，侧边栏使用所选的半透明覆盖层。",
-      artworkLayers: "图片图层",
+      artworkLayers: "图片",
       layersHelp: "最多添加八个不响应指针操作的图片图层，并分别设置外观、页面场景及窗口尺寸。",
       addLayer: "添加图层",
-      promptPlacement: "新对话提示区域位置",
-      promptPlacementHelp: "仅移动新对话页面的提示区域，不会移动对话中的输入框。",
+      addArtwork: "添加图片…",
+      artworkRoleChoice: "图片类型",
+      artworkVisibilityHelp: "“在主题中显示”会应用到 Aura；预览中的“隐藏”只影响本次编辑。",
+      layerPlacementShared: "此图片在{0}中共用一个位置。请打开“高级”，限制适用外观或页面；也可添加单独的图片。",
+      layerPlacementSpecific: "此位置仅会更改{0}。",
+      appearanceBoth: "浅色和深色",
+      contextBoth: "新对话和对话",
+      promptPlacement: "新对话区域",
+      promptPlacementHelp: "可在预览中拖动，也可使用下方控件。浅色和深色共用此位置；对话中的输入框不会移动。",
+      nativePromptHelp: "正在沿用 Claude 当前布局。首次调整时，会先采用实时测得的大小和位置。",
+      conversationLayout: "对话布局",
+      conversationLayoutHelp: "对话使用 Claude 的实时输入框位置。请在上方选择“新对话”，再调整可移动的新对话区域。",
       promptWidth: "宽度",
       horizontalOffset: "水平偏移",
       verticalOffset: "垂直偏移",
@@ -309,57 +410,64 @@
       builtInTheme: "内置",
       customTheme: "自定义",
       editorTitleFor: "编辑{0}",
-      editorSummary: "草稿通过主机校验后，会应用到实际 Aura 窗口。",
+      editorSummary: "有效的草稿更改会立即应用到 Aura 和 Studio。",
       savedState: "已保存",
       unsavedState: "有未保存的更改",
-      validState: "有效草稿已应用",
-      invalidState: "当前仍应用上一个有效草稿",
+      validState: "预览已更新",
+      invalidState: "预览仍显示上一次有效设置",
       editorReady: "主题编辑器已就绪。",
       editorBusy: "正在应用编辑内容…",
       editorStateRejected: "编辑器收到的状态无效。请关闭工作室后重试。",
       editorActionFailed: "更改未应用。请检查标记的设置后重试。",
+      launcherMarkImported: "应用标识图已更换。",
+      launcherMarkFailed: "无法更换应用标识图。请选择小于 400 KB、96 × 96 px 的静态透明 PNG。",
+      launcherMarkApplyFailed: "应用标识图已加入草稿，但 Windows 未能在所有位置完成更新。请重试或重新启动 Aura。",
       saveBlocked: "请先修正校验问题再保存。",
       copiedModes: "外观配色已复制。",
       copiedPrompt: "提示词已复制。",
       copyPromptFailed: "无法复制提示词。请选中文本后手动复制。",
       promptBuilt: "提示词已在本地生成。",
-      layerLimit: "一个主题最多包含八个图片图层。",
-      noLayers: "暂无图片图层。需要装饰时可添加图片。",
-      layerNumber: "图层 {0}",
+      layerLimit: "一个主题最多可包含八张图片。",
+      noLayers: "还没有图片。需要时可添加一张。",
+      layerNumber: "图片 {0}",
+      layerName: "{0} {1}",
       layerSummary: "{0} · {1} · {2}",
-      replaceImage: "替换图片",
-      moveUp: "上移",
-      moveDown: "下移",
-      removeLayer: "移除",
-      layerRole: "用途",
+      replaceImage: "替换",
+      moveUp: "下移一层",
+      moveDown: "上移一层",
+      removeLayer: "从主题中移除",
+      layerRole: "图片类型",
       roleBackground: "背景",
-      roleHero: "主视觉",
+      roleHero: "主体",
       roleCorner: "角落装饰",
       roleDecoration: "装饰",
-      appearanceUse: "适用外观",
+      appearanceUse: "主题模式",
       appearanceAll: "浅色和深色",
       appearanceLight: "仅浅色",
       appearanceDark: "仅深色",
-      contextUse: "页面场景",
+      contextUse: "页面",
+      previewPage: "预览页面",
       contextAll: "所有页面",
       contextNewChat: "仅新对话",
       contextConversation: "仅对话页面",
       viewportUse: "窗口尺寸",
-      viewportAll: "普通和宽屏",
-      viewportNormal: "仅普通窗口",
-      viewportWide: "仅宽屏或全屏",
-      layerVisible: "显示图层",
+      viewportAll: "所有尺寸",
+      viewportNormal: "仅标准窗口",
+      viewportWide: "仅宽屏",
+      layerVisible: "在主题中显示",
+      layerInspectorTitle: "所选图片",
+      exactValue: "精确值",
       layerOpacity: "不透明度",
-      layerMask: "边缘遮罩",
+      layerMask: "边缘渐隐",
       maskNone: "无",
-      maskSoftRight: "柔化右边缘",
-      mobileBehavior: "小窗口显示方式",
-      mobileKeep: "保持",
+      maskSoftRight: "淡出右边缘",
+      mobileBehavior: "小窗口",
+      mobileKeep: "保持大小",
       mobileReduce: "缩小",
       mobileHide: "隐藏",
-      normalPreset: "普通窗口构图",
-      widePreset: "宽屏或全屏构图",
-      anchor: "锚点",
+      normalPreset: "位置：标准",
+      widePreset: "位置：宽屏",
+      anchor: "定位基准",
       anchorTopLeft: "左上",
       anchorTop: "上方",
       anchorTopRight: "右上",
@@ -369,34 +477,34 @@
       anchorBottomLeft: "左下",
       anchorBottom: "下方",
       anchorBottomRight: "右下",
-      focalX: "水平焦点",
-      focalY: "垂直焦点",
-      positionX: "水平位置",
-      positionY: "垂直位置",
-      scale: "缩放",
+      focalX: "图像焦点：水平",
+      focalY: "图像焦点：垂直",
+      positionX: "水平偏移",
+      positionY: "垂直偏移",
+      scale: "大小",
       imageBytes: "{0} / 400 KB",
       noImagePreview: "图片",
-      groupCanvas: "画布",
+      groupCanvas: "页面背景",
       groupSidebar: "侧边栏",
-      groupSurface: "表面",
+      groupSurface: "面板",
       groupText: "文字",
       groupAccent: "强调色",
       groupBorder: "边框",
-      canvasColor: "画布",
+      canvasColor: "页面背景",
       sidebarColor: "侧边栏",
-      surfaceColor: "表面",
-      textColor: "主要文字",
+      surfaceColor: "面板",
+      textColor: "文字",
       accentColor: "强调色",
       borderColor: "边框",
-      surfaceAlpha: "内容覆盖层",
-      sidebarAlpha: "侧边栏覆盖层",
+      surfaceAlpha: "面板不透明度",
+      sidebarAlpha: "侧边栏不透明度",
       fontSystemSans: "系统无衬线字体",
       fontHumanistSans: "人文无衬线字体",
       fontRoundedSans: "圆体无衬线字体",
       fontEditorialSerif: "编辑风衬线字体",
       shadowNone: "无",
       shadowSoft: "柔和",
-      shadowElevated: "悬浮",
+      shadowElevated: "明显",
       confirmResetTitle: "确认重置全部草稿更改？",
       confirmResetBody: "此操作将放弃本次编辑中的全部更改，并恢复已保存的主题。重置后无法撤销。",
       confirmResetAction: "重置更改",
@@ -408,6 +516,16 @@
       confirmDeleteAction: "删除主题",
       feedbackValid: "全部校验已通过",
       feedbackInvalid: "部分项目需要处理",
+      quickFeedbackValid: "可以保存 · 对比度和容量校验均已通过。",
+      quickFeedbackInvalid: "需要调整 · {0}",
+      studioLastValid: "在问题修正前，Studio 将继续显示上一个有效配色。",
+      quickFeedbackFix: "请打开已标记的设置并完成调整，然后再保存。",
+      validationColorFix: "部分颜色组合的对比度不足，请调整已标记的颜色。",
+      validationBudgetFix: "主题美术素材超出容量限制，请替换或移除已标记的图片。",
+      validationArtworkFix: "美术素材设置需要调整，请打开已标记的图层并修改。",
+      validationMetadataFix: "主题名称或说明需要调整，请填写已标记的字段。",
+      validationIdentityFix: "调整应用标识颜色，确保标签清晰可读。",
+      validationGenericFix: "有一项设置需要调整，请打开已标记的控件并修改。",
       contrastCheck: "{0}对比度",
       contrastCanvasText: "画布与文字",
       contrastSurfaceText: "表面与文字",
@@ -423,7 +541,7 @@
       budgetValue: "{0} / {1}",
       checkPass: "通过",
       checkFail: "需要处理",
-      validationIssue: "请检查{0}。",
+      validationIssue: "请检查{0}并调整已标记的设置。",
       firstIssue: "转到第一个问题",
       slotBackground: "背景",
       slotHero: "主视觉",
@@ -434,56 +552,74 @@
       slotCard3: "卡片 3",
       slotBrandMark: "品牌标记",
       slotLauncherMark: "应用与启动器标记",
-      stageTitle: "实时构图画布",
-      stageNotice: "画布会使用草稿的真实颜色与图片，但不是 Claude 预览。请以实际 Aura 窗口为准。",
-      stageSize: "构图预设",
-      stageNormal: "启动窗口",
-      stageWide: "宽屏或全屏",
-      stageRealLabel: "在实际窗口中查看",
+      stageTitle: "实时预览",
+      stageEvidence: "构图辅助 · 不是 Claude 预览或验收证据",
+      stageNotice: "有可用画面时，画布会显示实际 Aura 窗口的本机截取画面，并叠加可编辑的 Aura 图片。没有匹配画面时会显示构图示意图；此画布不是 Claude 预览或验收证据。",
+      stageSize: "预览尺寸",
+      stageNormal: "标准",
+      stageWide: "宽屏",
+      stageRealLabel: "Aura 窗口",
       stageRealLaunch: "启动尺寸",
       stageRealWide: "宽屏（≥1440）",
       stageRealFull: "最大化",
-      stageRealHelp: "每次通过校验的草稿更改都会立即应用到实际的 Aura 窗口（真实 claude.ai 页面）。这些按钮会以预设或自定义尺寸调出该窗口，也可以随意拖动调整窗口大小。启动尺寸对应“启动窗口”构图预设；宽屏和最大化对应“宽屏或全屏”构图预设。",
-      stageRealShown: "已调出 Aura 窗口，当前草稿已在其中生效。",
+      stageRealHelp: "每次通过校验的草稿更改都会立即应用到实际的 Aura 窗口（真实 claude.ai 页面）。调整预览尺寸时，Studio 会保持在前台；仅在需要操作独立窗口时使用“在 Aura 中检查”。",
+      stageRealShown: "Aura 预览尺寸已更新，Studio 会保持在前台。",
       stageTopmost: "保持置顶",
       topmostOn: "Aura 窗口已保持置顶。",
       topmostOff: "Aura 窗口已取消置顶。",
-      customWidth: "宽度（px）",
-      customHeight: "高度（px）",
-      applySize: "应用尺寸",
-      mirrorTitle: "实际窗口镜像",
-      mirrorPrivacy: "镜像是实际 Aura 窗口的缩放截取画面，包含其中的对话内容。它只保留在本机，不会保存到磁盘。",
-      mirrorEmpty: "暂无画面。请先打开 Aura 窗口，再点击刷新。",
+      customWidth: "宽度",
+      customHeight: "高度",
+      sizeUpdatesLive: "px · 即时更新",
+      mirrorTitle: "实时截取画面",
+      mirrorPrivacy: "画布可能包含对话内容。截取画面只保留在本机内存中，绝不会保存。",
+      mirrorEmpty: "正在等待实际 Aura 窗口。",
       mirrorRefresh: "刷新",
-      mirrorCaption: "实际 Aura 窗口 · {0}×{1}",
+      mirrorCaption: "Aura 实时画面 · {2} · {0}×{1}",
+      mirrorCaptionCached: "已捕获的{2}画面 · {0}×{1}",
+      mirrorUnavailable: "尚未捕获{0}画面。",
       mirrorAlt: "实际 Aura 窗口的缩放画面",
+      openAuraWindow: "在 Aura 中检查 ↗",
+      previewSizeHelp: "尺寸会自动更新。宽度低于 1440 px 时使用“标准”，达到 1440 px 时使用“宽屏”。",
       stageBackdropToggle: "在实时画面上拖动",
       stageBackdropReady: "已启用实时画面背景：画布现在叠加在实际窗口画面上，拖动图片时会显示半透明预览。",
-      stageLayersPanel: "图层",
-      stageContextMismatch: "实时画面当前处于另一个页面场景，在 Aura 窗口切换到该场景之前，此视图会以示意图显示。",
-      stageEyeToggle: "编辑时在画布中显示",
+      stageLayersPanel: "图片",
+      stageContextMismatch: "请在 Aura 中打开一次{0}，以捕获该预览。Studio 仅在本次编辑期间将画面保留在内存中。",
+      stageOpenContext: "在 Aura 中切换…",
+      stageContextSelected: "已选择{0}预览。",
+      stageEyeToggle: "在预览中显示图片 {0}（{1}）",
+      stageEyeHide: "仅在编辑画布中隐藏",
+      stageEyeShow: "在编辑画布中显示",
+      stageEyeHideShort: "隐藏",
+      stageEyeShowShort: "显示",
       stageSelectLayer: "编辑图层 {0}",
       stageMoveHandle: "移动",
       editorLevel: "编辑模式",
-      levelSimple: "简易",
-      levelAdvanced: "全部控件",
+      levelSimple: "快速自定义",
+      levelAdvanced: "高级",
+      inspectorTitle: "编辑主题",
+      inspectorSections: "编辑分区",
+      panelDesign: "样式",
+      panelArtwork: "图片",
+      panelLayout: "位置",
+      panelChecks: "检查",
+      reviewStates: "检查不同状态",
       matrixTitle: "全部状态一览",
       matrixHint: "点击某个状态即可编辑。",
-      hiddenInStageView: "当前画布视图中隐藏：{0}",
-      copyFramingToWide: "复制构图 → 宽屏或全屏",
-      copyFramingToNormal: "复制构图 → 启动窗口",
+      hiddenInStageView: "不在当前预览中显示 · {0}",
+      copyFramingToWide: "将位置设置复制到“宽屏”",
+      copyFramingToNormal: "将位置设置复制到“标准”",
       framingCopied: "构图已复制到{0}。",
       stageNewChat: "新对话",
-      stageConversation: "对话页面",
+      stageConversation: "对话",
       stageShowZones: "显示安全区域",
-      stageKeyboardHelp: "点击或按回车键选中图片或提示区域后，可用方向键移动（按住 Shift 幅度更大）；加号和减号缩放图片，中括号键调整提示区域宽度。图层卡片中的滑块会与画布数值保持同步。",
-      stagePromptTag: "提示区域",
-      stageLayerAria: "图层 {0}（{1}）。使用方向键移动，加号和减号缩放。",
-      stagePromptAria: "新对话提示区域。使用方向键移动，中括号键调整宽度。",
-      stageEmpty: "当前画布视图没有适用的图片图层。",
+      stageKeyboardHelp: "在预览中选中图片或新对话区域。拖动可移动，拖动控制点可调整大小；方向键可精确微调。",
+      stagePromptTag: "新对话区域",
+      stageLayerAria: "图片 {0}（{1}）。使用方向键移动，加号和减号调整大小。",
+      stagePromptAria: "新对话区域。使用方向键移动，中括号键调整宽度。",
+      stageEmpty: "此预览未使用任何图片。",
       stageSelectedAnnounce: "已选中{0}。",
       stageScaleHandle: "缩放图片",
-      stageWidthHandle: "调整提示区域宽度",
+      stageWidthHandle: "调整新对话区域大小",
       promptTemplate: "创建一个{0}主题图片素材。主体：{1}。视觉方向：{2}。{3} 图片仅用于装饰；不得包含界面文字、控件、他人品牌标识、远程资源或真实人物照片。请确保构图在不同窗口尺寸下裁切后仍可使用。",
       launcherPromptTemplate: "创建一个可直接使用的{0}。主体：{1}。视觉方向：{2}。{3} 输出一张 96×96 px 的正方形透明 PNG。图形需在 24–48 px 下清晰可辨，并位于中央 72×72 px 的安全区域内。不得包含文字、界面控件、他人品牌标识、远程资源、真实人物照片、不透明背景、外框或图片自带阴影。",
       promptFallbackSubject: "原创抽象图案",
@@ -493,7 +629,7 @@
       promptRuleCorner: "使用透明构图，确保在视口边缘裁切后仍然完整自然。",
       promptRuleCard: "使用方形透明构图，主体集中在右下方 40% 范围内。",
       promptRuleBrand: "使用不含文字及他人品牌造型的小型原创平面标记。",
-      promptRuleLauncher: "设计一个能代表主题的原创紧凑标记，用于悬浮启动器、标题栏、任务栏、系统托盘和 Studio。",
+      promptRuleLauncher: "设计一个能代表主题的原创紧凑标记，用于悬浮启动器、标题栏、任务栏、系统托盘、Studio，以及桌面和开始菜单中的 Aura 与 Aura Studio 快捷方式。",
     },
     "zh-TW": {
       navEditor: "主題編輯器",
@@ -502,31 +638,64 @@
       undo: "復原",
       redo: "重做",
       resetChanges: "重設",
-      editAppearance: "編輯配色",
+      backToThemes: "回到主題",
+      themeIdentity: "主題名稱",
+      themeIdentityHelp: "填寫需要支援的各介面語言名稱。",
+      themeNameEn: "英文名稱",
+      themeNameZhCn: "簡體中文名稱",
+      themeNameZhTw: "繁體中文（台灣）名稱",
+      themeDescriptionEn: "英文說明",
+      themeDescriptionZhCn: "簡體中文說明",
+      themeDescriptionZhTw: "繁體中文（台灣）說明",
+      editAppearance: "主題模式",
       lightMode: "淺色",
       darkMode: "深色",
-      copyLightToDark: "將淺色設定複製到深色",
-      copyDarkToLight: "將深色設定複製到淺色",
-      modeHelp: "淺色與深色外觀會分別儲存顏色和覆蓋層透明度。",
-      colorsAndSurfaces: "顏色與表面",
-      colorsHelp: "可先調整主要顏色快速完成主題，再展開各組設定輔助顏色。",
-      typographyAndMaterials: "字體與材質",
+      copyLightToDark: "將淺色配色複製到深色",
+      copyDarkToLight: "將深色配色複製到淺色",
+      modeHelp: "淺色與深色可使用不同的配色和圖片。",
+      colorsAndSurfaces: "顏色",
+      colorsHelp: "在「快速自訂」選擇主要顏色；「進階」還能調整輔助顏色與精確數值。",
+      typographyAndMaterials: "字體與效果",
+      studioStyleHelp: "這些字體、圓角、模糊與陰影設定會同時套用到 Aura 和 Studio。",
+      appIdentity: "App 識別",
+      appIdentityHelp: "更換 Aura、Studio、啟動器、工作列與系統匣使用的識別圖，或調整周邊控制項的樣式。請選擇小於 400 KB、96 × 96 px 的靜態透明 PNG。",
+      appIdentityPreview: "App 識別預覽",
+      replaceAppMark: "更換識別圖",
+      launcherSurface: "識別背景",
+      launcherSurfaceHover: "游標移入背景",
+      launcherForeground: "標籤與拖曳把手",
+      launcherAccent: "識別強調色",
+      launcherBorder: "識別邊框",
+      launcherRadius: "識別圓角",
+      launcherBorderWidth: "邊框寬度",
       interfaceFont: "介面字體",
       displayFont: "標題字體",
       cornerRadius: "圓角",
-      surfaceBlur: "表面模糊",
-      softShadow: "柔和陰影",
+      themeOriginal: "沿用主題設定",
+      inheritedRadiusHelp: "沿用主題設定。調整後，所有介面元素會共用同一個圓角大小。",
+      surfaceBlur: "面板模糊",
+      softShadow: "陰影",
       themeBackground: "主題背景",
       backgroundScope: "背景範圍",
-      contentCanvas: "內容畫布",
+      contentCanvas: "只顯示在主要區域",
       fullWindow: "整個視窗",
       contentScopeHelp: "背景會從實際側邊欄後方開始顯示。",
       fullScopeHelp: "背景會延伸到實際側邊欄後方，側邊欄則套用所選的半透明覆蓋層。",
-      artworkLayers: "圖片圖層",
+      artworkLayers: "圖片",
       layersHelp: "最多可新增八個不會接收指標操作的圖片圖層，並分別設定外觀、頁面情境和視窗大小。",
       addLayer: "新增圖層",
-      promptPlacement: "新對話提示區塊位置",
-      promptPlacementHelp: "只會移動新對話頁面的提示區塊，不會移動對話中的輸入框。",
+      addArtwork: "加入圖片…",
+      artworkRoleChoice: "圖片類型",
+      artworkVisibilityHelp: "「顯示在主題中」會套用到 Aura；預覽裡的「隱藏」只影響這次編輯。",
+      layerPlacementShared: "這張圖片會在{0}共用同一個位置。請開啟「進階」，限制套用的外觀或頁面；也可以另外加入一張圖片。",
+      layerPlacementSpecific: "這個位置只會變更{0}。",
+      appearanceBoth: "淺色與深色",
+      contextBoth: "新對話與對話",
+      promptPlacement: "新對話區域",
+      promptPlacementHelp: "可在預覽中拖曳，也可使用下方控制項。淺色與深色共用這個位置；對話中的輸入框不會移動。",
+      nativePromptHelp: "目前沿用 Claude 的版面。首次調整時，會先套用即時偵測到的大小與位置。",
+      conversationLayout: "對話版面",
+      conversationLayoutHelp: "對話會沿用 Claude 目前的輸入框位置。請先在上方選擇「新對話」，再調整可移動的新對話區域。",
       promptWidth: "寬度",
       horizontalOffset: "水平位移",
       verticalOffset: "垂直位移",
@@ -555,57 +724,64 @@
       builtInTheme: "內建",
       customTheme: "自訂",
       editorTitleFor: "編輯{0}",
-      editorSummary: "草稿通過主程式檢查後，會套用到實際的 Aura 視窗。",
+      editorSummary: "有效的草稿變更會立即套用到 Aura 和 Studio。",
       savedState: "已儲存",
       unsavedState: "有尚未儲存的變更",
-      validState: "有效草稿已套用",
-      invalidState: "目前仍套用上一個有效草稿",
+      validState: "預覽已更新",
+      invalidState: "預覽仍顯示上一組有效設定",
       editorReady: "主題編輯器已準備好。",
       editorBusy: "正在套用編輯內容…",
       editorStateRejected: "編輯器收到的狀態無效。請關閉工作室後再試一次。",
       editorActionFailed: "變更未套用。請檢查標示的設定後再試一次。",
+      launcherMarkImported: "App 識別圖已更換。",
+      launcherMarkFailed: "無法更換 App 識別圖。請選擇小於 400 KB、96 × 96 px 的靜態透明 PNG。",
+      launcherMarkApplyFailed: "App 識別圖已加入草稿，但 Windows 未能在所有位置完成更新。請再試一次或重新啟動 Aura。",
       saveBlocked: "請先修正檢查問題，再儲存主題。",
       copiedModes: "外觀配色已複製。",
       copiedPrompt: "提示詞已複製。",
       copyPromptFailed: "無法複製提示詞。請選取文字後手動複製。",
       promptBuilt: "提示詞已在本機產生。",
-      layerLimit: "一個主題最多可放八個圖片圖層。",
-      noLayers: "目前沒有圖片圖層。需要裝飾時再新增圖片即可。",
-      layerNumber: "圖層 {0}",
+      layerLimit: "一個主題最多可包含八張圖片。",
+      noLayers: "目前沒有圖片。需要時可加入一張。",
+      layerNumber: "圖片 {0}",
+      layerName: "{0} {1}",
       layerSummary: "{0} · {1} · {2}",
-      replaceImage: "更換圖片",
-      moveUp: "上移",
-      moveDown: "下移",
-      removeLayer: "移除",
-      layerRole: "用途",
+      replaceImage: "更換",
+      moveUp: "下移一層",
+      moveDown: "上移一層",
+      removeLayer: "從主題移除",
+      layerRole: "圖片類型",
       roleBackground: "背景",
-      roleHero: "主視覺",
+      roleHero: "主體",
       roleCorner: "角落裝飾",
       roleDecoration: "裝飾",
-      appearanceUse: "適用外觀",
+      appearanceUse: "主題模式",
       appearanceAll: "淺色和深色",
       appearanceLight: "只用於淺色",
       appearanceDark: "只用於深色",
-      contextUse: "頁面情境",
+      contextUse: "頁面",
+      previewPage: "預覽頁面",
       contextAll: "所有頁面",
       contextNewChat: "只用於新對話",
       contextConversation: "只用於對話頁面",
       viewportUse: "視窗大小",
-      viewportAll: "一般和寬螢幕",
-      viewportNormal: "只用於一般視窗",
-      viewportWide: "只用於寬螢幕或全螢幕",
-      layerVisible: "顯示圖層",
+      viewportAll: "所有大小",
+      viewportNormal: "只在標準視窗",
+      viewportWide: "只在寬螢幕",
+      layerVisible: "顯示在主題中",
+      layerInspectorTitle: "所選圖片",
+      exactValue: "精確數值",
       layerOpacity: "不透明度",
-      layerMask: "邊緣遮罩",
+      layerMask: "邊緣淡出",
       maskNone: "無",
-      maskSoftRight: "柔化右側邊緣",
-      mobileBehavior: "小視窗顯示方式",
-      mobileKeep: "保留",
+      maskSoftRight: "淡出右側",
+      mobileBehavior: "小視窗",
+      mobileKeep: "保持大小",
       mobileReduce: "縮小",
       mobileHide: "隱藏",
-      normalPreset: "一般視窗構圖",
-      widePreset: "寬螢幕或全螢幕構圖",
-      anchor: "錨點",
+      normalPreset: "位置：標準",
+      widePreset: "位置：寬螢幕",
+      anchor: "定位基準",
       anchorTopLeft: "左上",
       anchorTop: "上方",
       anchorTopRight: "右上",
@@ -615,34 +791,34 @@
       anchorBottomLeft: "左下",
       anchorBottom: "下方",
       anchorBottomRight: "右下",
-      focalX: "水平焦點",
-      focalY: "垂直焦點",
-      positionX: "水平位置",
-      positionY: "垂直位置",
-      scale: "縮放",
+      focalX: "圖片焦點：水平",
+      focalY: "圖片焦點：垂直",
+      positionX: "水平位移",
+      positionY: "垂直位移",
+      scale: "大小",
       imageBytes: "{0} / 400 KB",
       noImagePreview: "圖片",
-      groupCanvas: "畫布",
+      groupCanvas: "頁面背景",
       groupSidebar: "側邊欄",
-      groupSurface: "表面",
+      groupSurface: "面板",
       groupText: "文字",
       groupAccent: "強調色",
       groupBorder: "邊框",
-      canvasColor: "畫布",
+      canvasColor: "頁面背景",
       sidebarColor: "側邊欄",
-      surfaceColor: "表面",
-      textColor: "主要文字",
+      surfaceColor: "面板",
+      textColor: "文字",
       accentColor: "強調色",
       borderColor: "邊框",
-      surfaceAlpha: "內容覆蓋層",
-      sidebarAlpha: "側邊欄覆蓋層",
+      surfaceAlpha: "面板不透明度",
+      sidebarAlpha: "側邊欄不透明度",
       fontSystemSans: "系統無襯線字體",
       fontHumanistSans: "人文無襯線字體",
       fontRoundedSans: "圓體無襯線字體",
       fontEditorialSerif: "編輯風襯線字體",
       shadowNone: "無",
       shadowSoft: "柔和",
-      shadowElevated: "浮起",
+      shadowElevated: "明顯",
       confirmResetTitle: "要重設所有草稿變更嗎？",
       confirmResetBody: "這會放棄本次編輯中的所有變更，並還原已儲存的主題。重設後無法復原。",
       confirmResetAction: "重設變更",
@@ -654,6 +830,16 @@
       confirmDeleteAction: "刪除主題",
       feedbackValid: "所有檢查都已通過",
       feedbackInvalid: "有些項目需要調整",
+      quickFeedbackValid: "可以儲存 · 對比度和容量檢查都已通過。",
+      quickFeedbackInvalid: "需要調整 · {0}",
+      studioLastValid: "問題修正前，Studio 會繼續使用上一組有效配色。",
+      quickFeedbackFix: "請打開標示的設定並調整，再儲存主題。",
+      validationColorFix: "有一組顏色的對比度不足，請調整標示的顏色。",
+      validationBudgetFix: "主題美術素材超過容量限制，請更換或移除標示的圖片。",
+      validationArtworkFix: "美術素材設定需要調整，請打開標示的圖層修改。",
+      validationMetadataFix: "主題名稱或說明需要調整，請填寫標示的欄位。",
+      validationIdentityFix: "調整 App 識別顏色，讓標籤保持清楚易讀。",
+      validationGenericFix: "有一項設定需要調整，請打開標示的控制項修改。",
       contrastCheck: "{0}對比度",
       contrastCanvasText: "畫布與文字",
       contrastSurfaceText: "表面與文字",
@@ -669,7 +855,7 @@
       budgetValue: "{0} / {1}",
       checkPass: "通過",
       checkFail: "需要調整",
-      validationIssue: "請檢查{0}。",
+      validationIssue: "請檢查{0}並調整標示的設定。",
       firstIssue: "前往第一個問題",
       slotBackground: "背景",
       slotHero: "主視覺",
@@ -680,56 +866,74 @@
       slotCard3: "卡片 3",
       slotBrandMark: "品牌標記",
       slotLauncherMark: "App 與啟動器圖示",
-      stageTitle: "即時構圖畫布",
-      stageNotice: "畫布會套用草稿的實際顏色和圖片，但不是 Claude 預覽，請以實際的 Aura 視窗為準。",
-      stageSize: "構圖預設",
-      stageNormal: "啟動視窗",
-      stageWide: "寬螢幕或全螢幕",
-      stageRealLabel: "在實際視窗中檢視",
+      stageTitle: "即時預覽",
+      stageEvidence: "構圖輔助 · 不是 Claude 預覽或驗收依據",
+      stageNotice: "有可用畫面時，畫布會顯示實際 Aura 視窗的本機擷取畫面，並疊上可編輯的 Aura 圖片。沒有符合狀態的畫面時會顯示構圖示意圖；這不是 Claude 預覽或驗收依據。",
+      stageSize: "預覽大小",
+      stageNormal: "標準",
+      stageWide: "寬螢幕",
+      stageRealLabel: "Aura 視窗",
       stageRealLaunch: "啟動大小",
       stageRealWide: "寬螢幕（≥1440）",
       stageRealFull: "最大化",
-      stageRealHelp: "每次通過檢查的草稿變更都會立刻套用到實際的 Aura 視窗（真實的 claude.ai 頁面）。這些按鈕會以預設或自訂大小帶出該視窗，也可以自由拖曳調整視窗大小。啟動大小對應「啟動視窗」構圖預設；寬螢幕和最大化對應「寬螢幕或全螢幕」構圖預設。",
-      stageRealShown: "已帶出 Aura 視窗，目前的草稿已在裡面生效。",
+      stageRealHelp: "每次通過檢查的草稿變更都會立刻套用到實際的 Aura 視窗（真實的 claude.ai 頁面）。調整預覽大小時，Studio 會留在最前面；只有要操作獨立視窗時，才使用「在 Aura 中檢查」。",
+      stageRealShown: "Aura 預覽大小已更新，Studio 會留在最前面。",
       stageTopmost: "維持最上層",
       topmostOn: "Aura 視窗已維持在最上層。",
       topmostOff: "Aura 視窗已取消最上層。",
-      customWidth: "寬度（px）",
-      customHeight: "高度（px）",
-      applySize: "套用大小",
-      mirrorTitle: "實際視窗鏡像",
-      mirrorPrivacy: "鏡像是實際 Aura 視窗的縮放擷取畫面，會包含裡面的對話內容。它只會留在這台裝置上，不會儲存到磁碟。",
-      mirrorEmpty: "還沒有畫面。請先開啟 Aura 視窗，再按重新整理。",
+      customWidth: "寬度",
+      customHeight: "高度",
+      sizeUpdatesLive: "px · 即時更新",
+      mirrorTitle: "即時擷取畫面",
+      mirrorPrivacy: "畫布可能包含對話內容。擷取畫面只保留在本機記憶體中，絕不會儲存。",
+      mirrorEmpty: "正在等待實際 Aura 視窗。",
       mirrorRefresh: "重新整理",
-      mirrorCaption: "實際 Aura 視窗 · {0}×{1}",
+      mirrorCaption: "Aura 即時畫面 · {2} · {0}×{1}",
+      mirrorCaptionCached: "已擷取的{2}畫面 · {0}×{1}",
+      mirrorUnavailable: "還沒有{0}畫面。",
       mirrorAlt: "實際 Aura 視窗的縮放畫面",
+      openAuraWindow: "在 Aura 中檢查 ↗",
+      previewSizeHelp: "大小會自動更新。寬度低於 1440 px 時使用「標準」，達到 1440 px 時使用「寬螢幕」。",
       stageBackdropToggle: "在即時畫面上拖曳",
       stageBackdropReady: "已啟用即時畫面背景：畫布現在會疊在實際視窗畫面上，拖曳圖片時會顯示半透明預覽。",
-      stageLayersPanel: "圖層",
-      stageContextMismatch: "即時畫面目前在另一個頁面情境，在 Aura 視窗切換到該情境之前，這個檢視會以示意圖顯示。",
-      stageEyeToggle: "編輯時在畫布中顯示",
+      stageLayersPanel: "圖片",
+      stageContextMismatch: "請先在 Aura 開啟一次{0}，Studio 就能擷取這個預覽。畫面只會在這次編輯期間保留在記憶體中。",
+      stageOpenContext: "在 Aura 切換…",
+      stageContextSelected: "已選取{0}預覽。",
+      stageEyeToggle: "在預覽中顯示圖片 {0}（{1}）",
+      stageEyeHide: "只在編輯畫布中隱藏",
+      stageEyeShow: "在編輯畫布中顯示",
+      stageEyeHideShort: "隱藏",
+      stageEyeShowShort: "顯示",
       stageSelectLayer: "編輯圖層 {0}",
       stageMoveHandle: "移動",
       editorLevel: "編輯模式",
-      levelSimple: "簡易",
-      levelAdvanced: "所有控制項",
+      levelSimple: "快速自訂",
+      levelAdvanced: "進階",
+      inspectorTitle: "編輯主題",
+      inspectorSections: "編輯區段",
+      panelDesign: "樣式",
+      panelArtwork: "圖片",
+      panelLayout: "位置",
+      panelChecks: "檢查",
+      reviewStates: "檢查不同狀態",
       matrixTitle: "所有狀態一覽",
       matrixHint: "點選某個狀態即可編輯。",
-      hiddenInStageView: "目前畫布檢視中隱藏：{0}",
-      copyFramingToWide: "複製構圖 → 寬螢幕或全螢幕",
-      copyFramingToNormal: "複製構圖 → 啟動視窗",
+      hiddenInStageView: "不會顯示在目前預覽中 · {0}",
+      copyFramingToWide: "將位置設定複製到「寬螢幕」",
+      copyFramingToNormal: "將位置設定複製到「標準」",
       framingCopied: "構圖已複製到{0}。",
       stageNewChat: "新對話",
-      stageConversation: "對話頁面",
+      stageConversation: "對話",
       stageShowZones: "顯示安全區域",
-      stageKeyboardHelp: "點一下或按 Enter 選取圖片或提示區塊後，可用方向鍵移動（按住 Shift 幅度更大）；加號和減號可縮放圖片，中括號鍵可調整提示區塊寬度。圖層卡片裡的滑桿會和畫布數值同步。",
-      stagePromptTag: "提示區塊",
-      stageLayerAria: "圖層 {0}（{1}）。用方向鍵移動，加號和減號縮放。",
-      stagePromptAria: "新對話提示區塊。用方向鍵移動，中括號鍵調整寬度。",
-      stageEmpty: "目前這個畫布檢視沒有適用的圖片圖層。",
+      stageKeyboardHelp: "在預覽中選取圖片或新對話區域。拖曳可移動，拖曳控制點可調整大小；方向鍵可精確微調。",
+      stagePromptTag: "新對話區域",
+      stageLayerAria: "圖片 {0}（{1}）。方向鍵可移動，加號和減號可調整大小。",
+      stagePromptAria: "新對話區域。用方向鍵移動，中括號鍵調整寬度。",
+      stageEmpty: "此預覽未使用任何圖片。",
       stageSelectedAnnounce: "已選取{0}。",
       stageScaleHandle: "縮放圖片",
-      stageWidthHandle: "調整提示區塊寬度",
+      stageWidthHandle: "調整新對話區域大小",
       promptTemplate: "建立一張{0}主題圖片素材。主體：{1}。視覺方向：{2}。{3} 圖片只作裝飾；不要放入介面文字、控制項、他人品牌標誌、遠端資源或真實人物照片。請讓構圖在不同視窗大小下裁切後仍可使用。",
       launcherPromptTemplate: "建立一個可直接使用的{0}。主體：{1}。視覺方向：{2}。{3} 輸出一張 96×96 px 的正方形透明 PNG。圖案在 24–48 px 大小下仍要清楚可辨，並置於中央 72×72 px 的安全區域。不要放入文字、介面控制項、他人品牌標誌、遠端資源、真實人物照片、不透明背景、外框或圖片內建陰影。",
       promptFallbackSubject: "原創抽象圖案",
@@ -739,26 +943,36 @@
       promptRuleCorner: "使用透明構圖，讓圖片在視窗邊緣裁切後仍然自然完整。",
       promptRuleCard: "使用方形透明構圖，主體集中在右下方 40% 範圍內。",
       promptRuleBrand: "使用不含文字或他人品牌造型的小型原創平面標記。",
-      promptRuleLauncher: "設計一個能代表主題的原創精簡圖示，用在浮動啟動器、標題列、工作列、系統匣和 Studio。",
+      promptRuleLauncher: "設計一個能代表主題的原創精簡圖示，用於浮動啟動器、標題列、工作列、系統匣、Studio，以及桌面和「開始」功能表中的 Aura 與 Aura Studio 捷徑。",
     },
   };
 
   const ID_PATTERN = /^[a-z][a-z0-9-]{1,39}$/;
+  const LAYER_ID_PATTERN = /^layer-[a-f0-9]{32}$/;
   const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
+  const LAUNCHER_ASSET_PATTERN = /^(?:assets\/theme-art\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png|launcher-mark\.png)$/;
   const PREVIEW_PATH_PATTERN = /^\/active\/(?:[a-z0-9][a-z0-9-]{0,63}\/)*[a-z0-9][a-z0-9-]{0,80}\.webp$/;
   const ACTIONS = new Set([
-    "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
-    "pick-theme-layer-image", "remove-theme-layer", "move-theme-layer", "undo-theme-edit",
+    "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer", "apply-theme-patch",
+    "pick-theme-layer-image", "pick-theme-launcher-mark", "remove-theme-layer", "move-theme-layer", "undo-theme-edit",
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
   ]);
   const MODE_TOKEN_KEYS = Object.freeze([
     "canvas", "sidebar", "surface", "text", "accent", "border", "surfaceAlpha", "sidebarAlpha",
   ]);
+  const STUDIO_STYLE_COLOR_KEYS = Object.freeze([
+    "canvas", "sidebar", "surface", "raised", "text", "textSecondary", "textMuted",
+    "sidebarText", "sidebarTextMuted", "accent", "accentText", "border", "focus",
+  ]);
+  const STUDIO_STYLE_MODE_KEYS = Object.freeze([
+    ...STUDIO_STYLE_COLOR_KEYS, "surfaceAlpha", "sidebarAlpha",
+  ]);
   const COLOR_TOKEN_KEYS = new Set(MODE_TOKEN_KEYS.slice(0, 6));
   const FONT_UI_IDS = Object.freeze(["system-sans", "humanist-sans", "rounded-sans"]);
   const FONT_DISPLAY_IDS = Object.freeze([...FONT_UI_IDS, "editorial-serif"]);
   const SHADOW_IDS = Object.freeze(["none", "soft", "elevated"]);
+  const THEME_ORIGINAL = "theme-original";
   const ROLE_IDS = Object.freeze(["background", "hero", "corner", "decoration"]);
   const APPEARANCE_IDS = Object.freeze(["all", "light", "dark"]);
   const CONTEXT_IDS = Object.freeze(["all", "new-chat", "conversation"]);
@@ -809,11 +1023,11 @@
     ["brand-mark", "slotBrandMark"], ["launcher-mark", "slotLauncherMark"],
   ]);
 
-  // Stage geometry mirrors assets/renderer-inject.js: wide begins at 1440px
-  // windows, anchors are container percentage points, and framed images keep
-  // their natural pixel size inside a uniformly scaled logical canvas. The
-  // logical sizes equal the host's set-aura-preview client sizes so the stage
-  // and the real Aura window show the same geometry.
+  // Stage geometry mirrors assets/renderer-inject.js: the live renderer marks
+  // its effective normal/wide viewport, anchors are container percentage
+  // points, and framed images keep their natural pixel size inside a uniformly
+  // scaled logical canvas. The logical sizes equal the host's set-aura-preview
+  // client sizes so the stage and the real Aura window show the same geometry.
   const STAGE_SIZES = Object.freeze({ normal: [1180, 640], wide: [1560, 940] });
   const STAGE_SIDEBAR_WIDTH = 280;
   const STAGE_PROMPT_HEIGHT = 140;
@@ -835,6 +1049,9 @@
   });
   const STAGE_LAYER_PATHS = Object.freeze(["positionX", "positionY", "scale"]);
   const STAGE_PROMPT_TOKENS = Object.freeze({ width: "promptWidth", x: "promptX", y: "promptY" });
+  const STAGE_PROMPT_PATHS = Object.freeze([
+    "shared.prompt.x", "shared.prompt.y", "shared.prompt.width",
+  ]);
   const CONTRAST_TOKEN_MAP = Object.freeze({
     canvas: ["canvas-text"],
     surface: ["surface-text", "muted-text"],
@@ -854,6 +1071,22 @@
     const top = Math.min(logicalHeight - 16 - STAGE_PROMPT_HEIGHT,
       Math.max(16, (logicalHeight * 0.56) + (logicalHeight * yRatio)));
     return { left, top, width, height: STAGE_PROMPT_HEIGHT };
+  };
+
+  // Renderer prompt offsets use the visible portion of Claude's main canvas,
+  // after clipping it to the viewport. Keep the same bounds in Studio so a
+  // ratio maps to the same live pixels even when the canvas starts offscreen
+  // or is shorter than the WebView.
+  const clampedMirrorMainMetrics = (main, logicalWidth, logicalHeight) => {
+    if (!main || !Number.isFinite(logicalWidth) || !Number.isFinite(logicalHeight)
+        || !["left", "top", "width", "height"].every((key) => Number.isFinite(main[key]))) return null;
+    const left = Math.max(0, main.left);
+    const top = Math.max(0, main.top);
+    const right = Math.min(logicalWidth, main.left + main.width);
+    const bottom = Math.min(logicalHeight, main.top + main.height);
+    const width = right - left;
+    const height = bottom - top;
+    return width > 100 && height > 100 ? { left, top, width, height } : null;
   };
 
   const plainRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -907,12 +1140,16 @@
   }
 
   function normalizeShared(value) {
-    const keys = ["fontUi", "fontDisplay", "radius", "blur", "shadow", "backgroundScope", "prompt"];
-    if (!exactShape(value, keys) || !exactShape(value.prompt, ["width", "x", "y"])) return null;
+    const keys = ["fontUi", "fontDisplay", "radius", "blur", "shadow", "backgroundScope", "prompt", "inherited"];
+    const inheritedKeys = ["fontUi", "fontDisplay", "radius", "shadow"];
+    if (!exactShape(value, keys) || !exactShape(value.prompt, ["native", "width", "x", "y"])
+        || !exactShape(value.inherited, inheritedKeys)
+        || inheritedKeys.some((key) => typeof value.inherited[key] !== "boolean")) return null;
     if (!enumValue(value.fontUi, FONT_UI_IDS) || !enumValue(value.fontDisplay, FONT_DISPLAY_IDS)
         || !inRange(value.radius, 0, 32) || !inRange(value.blur, 0, 40)
         || !enumValue(value.shadow, SHADOW_IDS) || !enumValue(value.backgroundScope, ["content", "full-window"])
         || !inRange(value.prompt.width, 0.4, 0.96) || !inRange(value.prompt.x, -0.35, 0.35)
+        || typeof value.prompt.native !== "boolean"
         || !inRange(value.prompt.y, -0.3, 0.3)) return null;
     return {
       fontUi: value.fontUi,
@@ -921,8 +1158,73 @@
       blur: value.blur,
       shadow: value.shadow,
       backgroundScope: value.backgroundScope,
-      prompt: { width: value.prompt.width, x: value.prompt.x, y: value.prompt.y },
+      prompt: {
+        native: value.prompt.native,
+        width: value.prompt.width,
+        x: value.prompt.x,
+        y: value.prompt.y,
+      },
+      inherited: {
+        fontUi: value.inherited.fontUi,
+        fontDisplay: value.inherited.fontDisplay,
+        radius: value.inherited.radius,
+        shadow: value.inherited.shadow,
+      },
     };
+  }
+
+  function normalizeStudioStyle(value) {
+    if (!exactShape(value, ["light", "dark", "shared"])
+        || !exactShape(value.shared, ["fontUi", "fontDisplay", "radius", "blur", "shadow"])) return null;
+    const modes = Object.create(null);
+    for (const mode of ["light", "dark"]) {
+      const source = value[mode];
+      if (!exactShape(source, STUDIO_STYLE_MODE_KEYS)) return null;
+      const normalized = Object.create(null);
+      for (const key of STUDIO_STYLE_COLOR_KEYS) {
+        if (typeof source[key] !== "string" || !COLOR_PATTERN.test(source[key])) return null;
+        normalized[key] = source[key];
+      }
+      if (!inRange(source.surfaceAlpha, 0, 1) || !inRange(source.sidebarAlpha, 0, 1)) return null;
+      normalized.surfaceAlpha = source.surfaceAlpha;
+      normalized.sidebarAlpha = source.sidebarAlpha;
+      modes[mode] = normalized;
+    }
+    if (!enumValue(value.shared.fontUi, FONT_UI_IDS)
+        || !enumValue(value.shared.fontDisplay, FONT_DISPLAY_IDS)
+        || !inRange(value.shared.radius, 0, 32) || !inRange(value.shared.blur, 0, 40)
+        || !enumValue(value.shared.shadow, SHADOW_IDS)) return null;
+    return {
+      light: modes.light,
+      dark: modes.dark,
+      shared: {
+        fontUi: value.shared.fontUi,
+        fontDisplay: value.shared.fontDisplay,
+        radius: value.shared.radius,
+        blur: value.shared.blur,
+        shadow: value.shared.shadow,
+      },
+    };
+  }
+
+  function normalizeLauncher(value) {
+    const keys = [
+      "asset", "surface", "surfaceHover", "foreground", "accent", "border", "radius", "borderWidth",
+    ];
+    if (!exactShape(value, keys) || typeof value.asset !== "string"
+        || !LAUNCHER_ASSET_PATTERN.test(value.asset) || !inRange(value.radius, 8, 24)
+        || !inRange(value.borderWidth, 1, 3)) return null;
+    for (const key of ["surface", "surfaceHover", "foreground", "accent", "border"]) {
+      if (typeof value[key] !== "string" || !COLOR_PATTERN.test(value[key])) return null;
+    }
+    return { ...value };
+  }
+
+  function normalizeLauncherPreviewUrl(value) {
+    if (typeof value !== "string") return null;
+    if (/^https:\/\/aura\.assets\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png$/.test(value)) return value;
+    if (/^https:\/\/aura\.editor\/active\/launcher-[a-f0-9]{64}\.png$/.test(value)) return value;
+    return null;
   }
 
   function normalizeFrame(value) {
@@ -936,10 +1238,11 @@
 
   function normalizeLayer(value, expectedIndex) {
     const keys = [
-      "index", "role", "appearance", "context", "viewport", "visible", "opacity", "mask", "mobile",
+      "id", "index", "role", "appearance", "context", "viewport", "visible", "opacity", "mask", "mobile",
       "bytes", "previewUrl", "frames",
     ];
-    if (!exactShape(value, keys) || value.index !== expectedIndex || !integer(value.index, 0, 7)
+    if (!exactShape(value, keys) || !LAYER_ID_PATTERN.test(value.id)
+        || value.index !== expectedIndex || !integer(value.index, 0, 7)
         || !enumValue(value.role, ROLE_IDS) || !enumValue(value.appearance, APPEARANCE_IDS)
         || !enumValue(value.context, CONTEXT_IDS) || !enumValue(value.viewport, VIEWPORT_IDS)
         || typeof value.visible !== "boolean" || !inRange(value.opacity, 0, 1)
@@ -950,6 +1253,20 @@
     const wide = normalizeFrame(value.frames.wide);
     if (previewUrl === undefined || !normal || !wide) return null;
     return { ...value, previewUrl, frames: { normal, wide } };
+  }
+
+  function normalizeMetadata(value) {
+    const locales = ["en", "zh-CN", "zh-TW"];
+    if (!exactShape(value, ["labels", "descriptions"])
+        || !exactShape(value.labels, locales) || !exactShape(value.descriptions, locales)) return null;
+    const labels = Object.create(null);
+    const descriptions = Object.create(null);
+    for (const locale of locales) {
+      labels[locale] = safeText(value.labels[locale], 80);
+      descriptions[locale] = safeText(value.descriptions[locale], 220);
+      if (!labels[locale] || !descriptions[locale]) return null;
+    }
+    return { labels, descriptions };
   }
 
   function normalizeContrast(value) {
@@ -1018,43 +1335,72 @@
     }
     const required = [
       "active", "id", "sourceId", "source", "isNew", "session", "revision", "dirty", "canUndo", "canRedo",
-      "label", "tokens", "shared", "layers", "feedback",
+      "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
+      "launcherStylePreviewUrl", "shared", "layers", "feedback",
     ];
     if (!exactShape(value, required, optional) || !ID_PATTERN.test(value.id)
         || !ID_PATTERN.test(value.sourceId) || !enumValue(value.source, ["user", "builtin"])
         || typeof value.isNew !== "boolean" || typeof value.session !== "string" || !SESSION_PATTERN.test(value.session)
         || !integer(value.revision, 0, Number.MAX_SAFE_INTEGER) || typeof value.dirty !== "boolean"
         || typeof value.canUndo !== "boolean" || typeof value.canRedo !== "boolean") return undefined;
-    const label = safeText(value.label, 120);
+    const label = safeText(value.label, 80);
     if (!label || !exactShape(value.tokens, ["light", "dark"])) return undefined;
+    const metadata = normalizeMetadata(value.metadata);
     const light = normalizeModeTokens(value.tokens.light);
     const dark = normalizeModeTokens(value.tokens.dark);
+    const studioStyle = normalizeStudioStyle(value.studioStyle);
+    const launcher = normalizeLauncher(value.launcher);
+    const launcherStyle = normalizeLauncher(value.launcherStyle);
+    const launcherPreviewUrl = normalizeLauncherPreviewUrl(value.launcherPreviewUrl);
+    const launcherStylePreviewUrl = normalizeLauncherPreviewUrl(value.launcherStylePreviewUrl);
     const shared = normalizeShared(value.shared);
-    if (!light || !dark || !shared || !Array.isArray(value.layers) || value.layers.length > 8) return undefined;
+    if (!metadata || !light || !dark || !studioStyle || !launcher || !launcherStyle
+        || !launcherPreviewUrl || !launcherStylePreviewUrl || !shared
+        || !Array.isArray(value.layers) || value.layers.length > 8) return undefined;
     const layers = value.layers.map(normalizeLayer);
     const feedback = normalizeFeedback(value.feedback);
-    if (layers.some((layer) => !layer) || !feedback) return undefined;
+    if (layers.some((layer) => !layer) || new Set(layers.map((layer) => layer.id)).size !== layers.length
+        || !feedback) return undefined;
     if (value.lastAction !== undefined && !ACTIONS.has(value.lastAction)) return undefined;
     if (value.actionSucceeded !== undefined && typeof value.actionSucceeded !== "boolean") return undefined;
     if (value.error !== undefined && value.error !== null && !safeText(value.error, 500)) return undefined;
     return {
       ...value,
       label,
+      metadata,
       tokens: { light, dark },
+      studioStyle,
+      launcher,
+      launcherStyle,
+      launcherPreviewUrl,
+      launcherStylePreviewUrl,
       shared,
       layers,
       feedback,
     };
   }
 
-  function createController({ locale, send, setStatus, translate, focusThemeCard }) {
+  const hasUnsavedEditorWork = (work) => Boolean(
+    work.dirty
+    || work.deferred
+    || work.coalesced
+    || work.debounce
+    || work.inFlight
+    || work.stageKeys
+    || work.stageKeyDebounce
+  );
+
+  function createController({ locale, send, setStatus, translate, focusThemeCard, onStudioStyleChange }) {
     const normalizedLocale = Object.hasOwn(STRINGS, locale) ? locale : "en";
     const tr = (key) => STRINGS[normalizedLocale][key] ?? translate?.(key) ?? STRINGS.en[key] ?? key;
     const editor = document.getElementById("editor");
     const navEditor = document.getElementById("nav-editor");
-    const ordinarySections = ["themes", "background", "create"].map((id) => document.getElementById(id));
+    const ordinarySections = ["themes", "background", "create", "settings"].map((id) => document.getElementById(id));
     const ordinaryLinks = [...document.querySelectorAll(".rail-item")].filter((link) => link !== navEditor);
+    const studioShell = document.querySelector(".studio");
     const content = document.querySelector(".content");
+    const stageColumn = editor.querySelector(".editor-stagecol");
+    const editorControls = editor.querySelector(".editor-controls");
     const title = document.getElementById("editor-title");
     const summary = document.getElementById("editor-summary");
     const dirtyPill = document.getElementById("editor-dirty");
@@ -1064,6 +1410,10 @@
     const tokenGroups = document.getElementById("editor-token-groups");
     const layerList = document.getElementById("editor-layer-list");
     const feedbackRoot = document.getElementById("editor-feedback");
+    const quickFeedback = document.getElementById("editor-quick-feedback");
+    const inspectorHead = editor.querySelector(".editor-inspector-head");
+    const promptContextSection = editor.querySelector(".editor-prompt-context");
+    const promptContextUnavailable = editor.querySelector(".editor-prompt-unavailable");
     const confirmDialog = document.getElementById("editor-confirm-dialog");
     const confirmTitle = document.getElementById("editor-confirm-title");
     const confirmBody = document.getElementById("editor-confirm-body");
@@ -1071,15 +1421,37 @@
     const modeInputs = [...document.querySelectorAll('input[name="editor-mode"]')];
     const scopeInputs = [...document.querySelectorAll('input[name="background-scope"]')];
     const sharedInputs = [...document.querySelectorAll("[data-editor-shared]")];
+    const radiusInput = document.getElementById("editor-radius");
+    const inheritedRadiusNote = document.getElementById("editor-radius-inherited");
+    const nativePromptNote = document.getElementById("editor-prompt-native");
+    const launcherInputs = [...document.querySelectorAll("[data-editor-launcher]")];
+    const launcherTextInputs = [...document.querySelectorAll("[data-editor-launcher-text]")];
+    const launcherPreview = document.getElementById("editor-launcher-preview");
+    const launcherMark = document.getElementById("editor-launcher-mark");
+    const replaceLauncherMarkButton = document.getElementById("editor-launcher-replace");
     const promptInputs = [...document.querySelectorAll("[data-editor-prompt]")];
+    const promptExactInputs = [...document.querySelectorAll("[data-editor-prompt-exact]")];
     const saveButton = document.getElementById("editor-save");
     const cancelButton = document.getElementById("editor-cancel");
     const undoButton = document.getElementById("editor-undo");
     const redoButton = document.getElementById("editor-redo");
     const resetButton = document.getElementById("editor-reset");
     const addLayerButton = document.getElementById("editor-add-layer");
+    const addLayerRoleSelect = document.getElementById("editor-add-layer-role");
+    const backButton = document.getElementById("editor-back");
+    const topmostButton = document.getElementById("stage-real-topmost");
+    const metadataInputs = [...document.querySelectorAll("[data-editor-metadata]")];
+    const inspectorTabs = [...document.querySelectorAll("[data-editor-panel-target]")];
+    for (const input of metadataInputs) {
+      if (input.dataset.editorMetadata === "label" && input.dataset.editorLocale !== normalizedLocale) {
+        input.closest(".editor-field")?.classList.add("advanced-only");
+      }
+    }
     let state = null;
     let selectedMode = "light";
+    let selectedLayerId = null;
+    let renderedLayerSignature = null;
+    let inspectorPanel = "design";
     let pendingAction = null;
     let returnTheme = "default";
     let confirmCallback = null;
@@ -1087,6 +1459,29 @@
     let firstOpen = true;
     let entryAppearance = null;
     let appearanceTouched = false;
+    let topmostEnabled = false;
+    const coalescedChanges = new Map();
+    const deferredChanges = new Map();
+    let changeFlushTimer = null;
+    let inFlightChanges = [];
+    let inFlightRevision = null;
+    let inFlightSession = null;
+    let actionAfterPatch = null;
+    const hasUnsavedEdits = () => hasUnsavedEditorWork({
+      dirty: state?.dirty,
+      deferred: deferredChanges.size,
+      coalesced: coalescedChanges.size,
+      debounce: changeFlushTimer,
+      inFlight: inFlightChanges.length,
+      stageKeys: stageKeyPaths.size,
+      stageKeyDebounce: stageKeyTimer,
+    });
+    const reflectDirtyState = () => {
+      if (!state) return;
+      const locallyDirty = hasUnsavedEdits();
+      dirtyPill.textContent = locallyDirty ? tr("unsavedState") : tr("savedState");
+      dirtyPill.dataset.state = locallyDirty ? "dirty" : "saved";
+    };
 
     const announce = (message, tone = "ok") => {
       live.textContent = message;
@@ -1111,14 +1506,65 @@
       }));
     };
 
+    const setInheritedSelectPresentation = (select, inherited, value) => {
+      let option = select.querySelector("option[data-editor-inherited-option]");
+      if (!inherited) {
+        option?.remove();
+        delete select.dataset.inherited;
+        select.value = String(value);
+        return;
+      }
+      if (!option) {
+        option = document.createElement("option");
+        option.value = THEME_ORIGINAL;
+        option.disabled = true;
+        option.dataset.editorInheritedOption = "true";
+        select.prepend(option);
+      }
+      option.textContent = tr("themeOriginal");
+      option.selected = true;
+      select.dataset.inherited = "true";
+    };
+
+    const setInheritedRadiusPresentation = (inherited) => {
+      radiusInput.dataset.inherited = String(inherited);
+      inheritedRadiusNote.hidden = !inherited;
+    };
+
+    // A structural/replacing host action (layer reorder, image pick, save,
+    // undo, reset) that must settle before further interaction. Value patches
+    // (apply-theme-patch) never change layer structure, so they sync in the
+    // background without locking the editor.
+    const isBlockingAction = () => Boolean(pendingAction) && pendingAction !== "apply-theme-patch";
     const setPending = (action = null) => {
       pendingAction = action;
-      editor.setAttribute("aria-busy", String(Boolean(action)));
-      for (const button of editor.querySelectorAll("button")) button.disabled = Boolean(action);
+      const blocking = Boolean(action) && action !== "apply-theme-patch";
+      editor.setAttribute("aria-busy", String(blocking));
+      // Only structural actions disable every control; per-control busy gating
+      // in reflectButtonStates handles background patches without a full freeze.
+      for (const button of editor.querySelectorAll("button")) button.disabled = blocking;
       reflectButtonStates();
     };
 
     const post = (message) => {
+      if (message.type !== "apply-theme-patch" && (stageKeyPaths.size || stageKeyTimer)) {
+        if (actionAfterPatch) return false;
+        actionAfterPatch = { ...message };
+        flushStageKeyChanges();
+        if (!pendingAction && (coalescedChanges.size || changeFlushTimer)) flushThemeChanges();
+        if (pendingAction || coalescedChanges.size || changeFlushTimer) {
+          announce(tr("editorBusy"), "busy");
+          return true;
+        }
+        actionAfterPatch = null;
+      }
+      if (message.type !== "apply-theme-patch" && (coalescedChanges.size || changeFlushTimer)) {
+        if (actionAfterPatch) return false;
+        actionAfterPatch = { ...message };
+        flushThemeChanges();
+        announce(tr("editorBusy"), "busy");
+        return true;
+      }
       if (pendingAction || !send(message)) return false;
       setPending(message.type);
       announce(tr("editorBusy"), "busy");
@@ -1126,15 +1572,88 @@
     };
 
     const mutationBase = () => state ? { session: state.session, revision: state.revision } : null;
-    const postToken = (mode, token, value) => {
-      const base = mutationBase();
-      if (base) post({ type: "set-theme-token", ...base, mode, token, value });
+    const themeChangeKey = (change) => change.kind === "token"
+      ? `token:${change.mode}:${change.token}`
+      : change.kind === "layer"
+        ? `layer:${change.layerId}:${change.preset}:${change.property}`
+        : `metadata:${change.field}:${change.locale}`;
+    const clearInFlightChanges = () => {
+      inFlightChanges = [];
+      inFlightRevision = null;
+      inFlightSession = null;
     };
-    const postLayer = (index, preset, property, value) => {
+    const flushThemeChanges = () => {
+      if (changeFlushTimer) {
+        clearTimeout(changeFlushTimer);
+        changeFlushTimer = null;
+      }
+      if (pendingAction || !coalescedChanges.size) return;
+      const batch = [...coalescedChanges.entries()].slice(0, 16);
       const base = mutationBase();
-      if (base) post({ type: "set-theme-layer", ...base, index, preset, property, value });
+      if (!base) {
+        coalescedChanges.clear();
+        return;
+      }
+      for (const [key] of batch) coalescedChanges.delete(key);
+      inFlightChanges = batch.map(([, change]) => change);
+      const wireChanges = inFlightChanges.map((change) => {
+        if (change.kind !== "layer") return change;
+        const index = layerIndexForId(change.layerId);
+        if (index < 0) return null;
+        return {
+          kind: "layer", index, preset: change.preset,
+          property: change.property, value: change.value,
+        };
+      }).filter(Boolean);
+      if (!wireChanges.length) {
+        clearInFlightChanges();
+        reflectButtonStates();
+        return;
+      }
+      inFlightRevision = base.revision;
+      inFlightSession = base.session;
+      if (!post({ type: "apply-theme-patch", ...base, changes: wireChanges })) {
+        for (const [, change] of batch) coalescedChanges.set(themeChangeKey(change), change);
+        clearInFlightChanges();
+      }
+      reflectButtonStates();
     };
-
+    const queueThemeChanges = (changes, { immediate = false } = {}) => {
+      for (const [key, change] of deferredChanges) {
+        if (!coalescedChanges.has(key)) coalescedChanges.set(key, change);
+      }
+      deferredChanges.clear();
+      for (const change of changes) coalescedChanges.set(themeChangeKey(change), change);
+      if (changeFlushTimer) clearTimeout(changeFlushTimer);
+      if (immediate && !pendingAction) flushThemeChanges();
+      else changeFlushTimer = setTimeout(flushThemeChanges, 60);
+      reflectButtonStates();
+    };
+    const queueThemeChange = (change, options) => queueThemeChanges([change], options);
+    const queueTokenChange = (mode, token, value) => {
+      queueThemeChange({ kind: "token", mode, token, value });
+    };
+    const queueLayerChange = (index, preset, property, value) => {
+      const layerId = state?.layers?.[index]?.id;
+      if (layerId) queueThemeChange({ kind: "layer", layerId, preset, property, value });
+    };
+    const requeueInFlightChanges = () => {
+      for (const change of inFlightChanges) {
+        const key = themeChangeKey(change);
+        if (!coalescedChanges.has(key)) coalescedChanges.set(key, change);
+      }
+      clearInFlightChanges();
+    };
+    const deferInFlightChanges = () => {
+      for (const change of inFlightChanges) {
+        const key = themeChangeKey(change);
+        if (!coalescedChanges.has(key) && !deferredChanges.has(key)) deferredChanges.set(key, change);
+      }
+      clearInFlightChanges();
+    };
+    const selectedArtworkRole = () => ROLE_IDS.includes(addLayerRoleSelect?.value)
+      ? addLayerRoleSelect.value : "decoration";
+    const launcherToken = (property) => `launcher${property[0].toUpperCase()}${property.slice(1)}`;
     const setCurrentNavigation = (active) => {
       navEditor.hidden = !active;
       for (const link of ordinaryLinks) {
@@ -1147,13 +1666,56 @@
       else navEditor.removeAttribute("aria-current");
     };
 
+    const setInspectorPanel = (panel, { focus = false, reveal = false } = {}) => {
+      if (!["design", "artwork", "layout", "checks"].includes(panel)) return false;
+      inspectorPanel = panel;
+      editor.dataset.inspectorPanel = panel;
+      for (const tab of inspectorTabs) {
+        const selected = tab.dataset.editorPanelTarget === panel;
+        tab.setAttribute("aria-pressed", String(selected));
+        if (selected && focus) tab.focus();
+      }
+      if (reveal) requestAnimationFrame(() => {
+        const firstSection = editor.querySelector(`[data-editor-panel="${panel}"]:not([hidden])`);
+        if (!firstSection || !editorControls || !inspectorHead) return;
+        const visibleTop = inspectorHead.getBoundingClientRect().bottom + 12;
+        const sectionTop = firstSection.getBoundingClientRect().top;
+        if (sectionTop < visibleTop) editorControls.scrollTop += sectionTop - visibleTop;
+      });
+      return true;
+    };
+    setInspectorPanel(inspectorPanel);
+    inspectorTabs.forEach((tab) => tab.addEventListener("click", () => {
+      const panel = tab.dataset.editorPanelTarget;
+      if ((stageSelection?.kind === "prompt" && panel !== "layout")
+          || (stageSelection?.kind === "layer" && panel === "design")) {
+        stageSelection = null;
+        syncStageHud();
+      }
+      setInspectorPanel(panel, { reveal: true });
+    }));
+
+    const resetStudioViewport = (hash) => {
+      try {
+        if (window.location.hash !== hash) history.replaceState(null, "", hash);
+      } catch {}
+      // A rail fragment may have moved WebView's root scrolling element even
+      // though the visible document owns a nested scroller.
+      window.scrollTo(0, 0);
+      content.scrollTop = 0;
+    };
+
     const showEditor = () => {
       for (const section of ordinarySections) section.hidden = true;
       editor.hidden = false;
+      if (studioShell) studioShell.dataset.editorActive = "true";
       setCurrentNavigation(true);
       if (firstOpen) {
-        content.scrollTop = 0;
+        resetStudioViewport("#editor");
+        if (stageColumn) stageColumn.scrollTop = 0;
+        if (editorControls) editorControls.scrollTop = 0;
         requestAnimationFrame(() => {
+          resetStudioViewport("#editor");
           title.focus();
           applyStageLayout();
         });
@@ -1163,12 +1725,40 @@
 
     const hideEditor = (action = "") => {
       editor.hidden = true;
+      studioShell?.removeAttribute("data-editor-active");
       for (const section of ordinarySections) section.hidden = false;
       setCurrentNavigation(false);
+      resetStudioViewport("#themes");
       firstOpen = true;
       dropStageWork();
       stageSelection = null;
+      selectedLayerId = null;
+      renderedLayerSignature = null;
       stageHiddenLayers.clear();
+      stageLayersUserToggled = false;
+      setStageLayersCollapsed(true);
+      setInspectorPanel("design");
+      stageMirror = null;
+      stageLiveMirror = null;
+      stageMirrorCache.clear();
+      stageMirrorCacheBasis = null;
+      stageContextTouched = false;
+      previewSizeEditing = false;
+      previewSizeIntent = null;
+      previewExpectedRequest = null;
+      stageContext = "new-chat";
+      stageBackdropImg.removeAttribute("src");
+      stageBackdropImg.hidden = true;
+      if (mirrorCaption) mirrorCaption.textContent = tr("mirrorEmpty");
+      if (backdropToggleInput) {
+        backdropToggleInput.checked = true;
+        backdropToggleInput.disabled = true;
+      }
+      if (topmostEnabled) {
+        send({ type: "set-aura-topmost", enabled: false });
+        topmostEnabled = false;
+        topmostButton?.setAttribute("aria-pressed", "false");
+      }
       if (appearanceTouched && entryAppearance) {
         send({ type: "set-appearance", appearance: entryAppearance });
       }
@@ -1206,6 +1796,8 @@
     // lets users drag or arrow-key items. Local echo is instant; commits go
     // through the same validated bridge actions, queued one at a time.
     const stageRoot = document.getElementById("editor-stage");
+    const stagePanel = stageRoot?.closest(".stage-panel");
+    const editorHeader = editor.querySelector(".editor-header");
     const stageViewportInputs = [...document.querySelectorAll('input[name="stage-viewport"]')];
     const stageContextInputs = [...document.querySelectorAll('input[name="stage-context"]')];
     const stageZonesInput = document.getElementById("stage-zones");
@@ -1214,8 +1806,18 @@
     let stageDrag = null;
     let stageSelection = null;
     let stageKeyTimer = null;
-    let mutationQueue = [];
+    const stageKeyPaths = new Set();
     let stageMirror = null;
+    let stageLiveMirror = null;
+    const stageMirrorCache = new Map();
+    let stageMirrorCacheBasis = null;
+    let stageContextTouched = false;
+    let stagePreviewSize = [...STAGE_SIZES.normal];
+    let previewResizeTimer = null;
+    let previewSizeEditing = false;
+    let previewSizeIntent = null;
+    let previewRequestSerial = 0;
+    let previewExpectedRequest = null;
     // Drag pointermove is coalesced into one animation frame so a 120 Hz
     // pointer stream produces at most one layout pass per displayed frame.
     let stageDragFrame = 0;
@@ -1225,23 +1827,40 @@
     // Memoized lookups of the range inputs mirrored during a drag; nodes are
     // re-resolved automatically once a layer-card rebuild disconnects them.
     const stageInputCache = new Map();
+    const layerIndexForId = (id) => state?.layers.findIndex((layer) => layer.id === id) ?? -1;
+    const layerForId = (id) => state?.layers.find((layer) => layer.id === id) ?? null;
     const clampNumber = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
     const backdropToggleInput = document.getElementById("stage-backdrop");
+    const openAuraButton = document.getElementById("stage-open-aura");
     // With a live capture as backdrop, the stage adopts the real window's
     // exact dimensions so drags map 1:1 onto the real pixels. When the user
     // edits a page context the real window is not showing, that view falls
     // back to the schematic so the toggle always produces a visible change.
-    const stageBackdropOn = () => Boolean(backdropToggleInput?.checked && stageMirror
-      && (!stageMirror.geometry || stageMirror.geometry.context === "other"
-        || stageMirror.geometry.context === stageContext));
+    const hasUsableMirrorGeometry = (mirror) => {
+      const geometry = mirror?.geometry;
+      return Boolean(["new-chat", "conversation"].includes(geometry?.context)
+        && ["light", "dark"].includes(geometry?.mode)
+        && ["normal", "wide"].includes(geometry?.viewport)
+        && clampedMirrorMainMetrics(geometry?.main, mirror?.width, mirror?.height));
+    };
+    const stageBackdropOn = () => {
+      const geometry = stageMirror?.geometry;
+      return Boolean(backdropToggleInput?.checked
+        && stageMirror?.revision === state?.revision
+        && stageMirror?.width === stagePreviewSize[0]
+        && stageMirror?.height === stagePreviewSize[1]
+        && geometry?.context === stageContext
+        && geometry.mode === selectedMode
+        && geometry.viewport === stageViewport
+        && hasUsableMirrorGeometry(stageMirror));
+    };
     const stageLogicalSize = () => stageBackdropOn()
       ? [stageMirror.width, stageMirror.height]
-      : STAGE_SIZES[stageViewport];
+      : stagePreviewSize;
     const stageMainMetrics = (logicalWidth, logicalHeight) => {
       const geometryMain = stageBackdropOn() ? stageMirror?.geometry?.main : null;
-      if (geometryMain && geometryMain.width > 100) {
-        return { left: geometryMain.left, width: geometryMain.width, height: logicalHeight };
-      }
+      const measured = clampedMirrorMainMetrics(geometryMain, logicalWidth, logicalHeight);
+      if (measured) return measured;
       return { left: STAGE_SIDEBAR_WIDTH, width: logicalWidth - STAGE_SIDEBAR_WIDTH, height: logicalHeight };
     };
 
@@ -1265,56 +1884,130 @@
       }
       return node;
     };
-    const stageValue = (path) => stageOverrides.has(path) ? stageOverrides.get(path) : statePath(path);
+    const roundPromptRatio = (value) => Math.round(value * 10000) / 10000;
+    const measuredNativePrompt = () => {
+      const fallback = state?.shared?.prompt ?? { width: 0.76, x: 0, y: 0 };
+      if (!fallback.native) return { width: fallback.width, x: fallback.x, y: fallback.y };
+      const mirror = stageMirror;
+      const geometry = mirror?.geometry;
+      const main = geometry?.main;
+      const prompt = geometry?.prompt;
+      const matches = mirror?.revision === state?.revision
+        && mirror?.width === stagePreviewSize[0]
+        && mirror?.height === stagePreviewSize[1]
+        && geometry?.context === "new-chat"
+        && geometry?.mode === selectedMode;
+      if (!matches || !main || !prompt || prompt.width <= 40) {
+        return { width: fallback.width, x: fallback.x, y: fallback.y };
+      }
+      const mainMetrics = clampedMirrorMainMetrics(main, mirror.width, mirror.height);
+      if (!mainMetrics) {
+        return { width: fallback.width, x: fallback.x, y: fallback.y };
+      }
+      return {
+        width: roundPromptRatio(clampNumber(prompt.width / mainMetrics.width, 0.4, 0.96)),
+        x: roundPromptRatio(clampNumber(
+          ((prompt.left + (prompt.width / 2)) - (mainMetrics.left + (mainMetrics.width / 2))) / mainMetrics.width,
+          -0.35,
+          0.35,
+        )),
+        // Renderer offsets are relative to Claude's native vertical position.
+        y: 0,
+      };
+    };
+    const promptStateValue = (key) => state?.shared?.prompt?.native
+      ? measuredNativePrompt()[key]
+      : statePath(`shared.prompt.${key}`);
+    const stageValue = (path) => {
+      if (stageOverrides.has(path)) return stageOverrides.get(path);
+      const prompt = /^shared\.prompt\.(width|x|y)$/.exec(path);
+      return prompt ? promptStateValue(prompt[1]) : statePath(path);
+    };
     const setStageOverride = (path, value) => { if (path) stageOverrides.set(path, value); };
+    const seedNativePromptOverrides = () => {
+      if (!state?.shared?.prompt?.native) return;
+      const seed = measuredNativePrompt();
+      for (const key of ["width", "x", "y"]) {
+        const path = `shared.prompt.${key}`;
+        if (!stageOverrides.has(path)) setStageOverride(path, seed[key]);
+      }
+    };
     const dropStageWork = () => {
-      mutationQueue = [];
+      coalescedChanges.clear();
+      deferredChanges.clear();
+      clearInFlightChanges();
+      if (changeFlushTimer) { clearTimeout(changeFlushTimer); changeFlushTimer = null; }
       stageOverrides.clear();
       stageDrag = null;
       stageDragEvent = null;
       if (stageDragFrame) { cancelAnimationFrame(stageDragFrame); stageDragFrame = 0; }
       if (stageKeyTimer) { clearTimeout(stageKeyTimer); stageKeyTimer = null; }
+      stageKeyPaths.clear();
+      actionAfterPatch = null;
+      if (previewResizeTimer) { clearTimeout(previewResizeTimer); previewResizeTimer = null; }
     };
 
-    const pumpMutationQueue = () => {
-      if (pendingAction || !mutationQueue.length) return;
-      const next = mutationQueue.shift();
-      const base = mutationBase();
-      if (!base || !post({ ...next, ...base })) mutationQueue = [];
-    };
     const queueStageMutations = (messages) => {
-      mutationQueue.push(...messages);
-      pumpMutationQueue();
+      const changes = messages.map((message) => message.type === "set-theme-layer"
+        ? {
+          kind: "layer", layerId: state?.layers?.[message.index]?.id, preset: message.preset,
+          property: message.property, value: message.value,
+        }
+        : {
+          kind: "token", mode: message.mode, token: message.token, value: message.value,
+        }).filter((change) => change.kind !== "layer" || change.layerId);
+      queueThemeChanges(changes, { immediate: true });
     };
 
     const messageForStagePath = (path, value) => {
       const layer = /^layers\[(\d+)]\.frames\.(normal|wide)\.(positionX|positionY|scale)$/.exec(path);
       if (layer) {
-        const rounded = layer[3] === "scale" ? Math.round(value * 100) / 100 : Math.round(value);
+        const rounded = layer[3] === "scale"
+          ? Math.round(value * 10000) / 10000
+          : Math.round(value * 100) / 100;
         return { type: "set-theme-layer", index: Number(layer[1]), preset: layer[2], property: layer[3], value: rounded };
       }
       const prompt = /^shared\.prompt\.(width|x|y)$/.exec(path);
       if (prompt) {
-        return { type: "set-theme-token", mode: "shared", token: STAGE_PROMPT_TOKENS[prompt[1]], value: Math.round(value * 100) / 100 };
+        return {
+          type: "set-theme-token",
+          mode: "shared",
+          token: STAGE_PROMPT_TOKENS[prompt[1]],
+          value: roundPromptRatio(value),
+        };
       }
       return null;
     };
     const stageItemPaths = (selection) => {
       if (!selection) return [];
-      if (selection.kind === "prompt") return ["shared.prompt.x", "shared.prompt.y", "shared.prompt.width"];
-      return STAGE_LAYER_PATHS.map((property) => `layers[${selection.index}].frames.${stageViewport}.${property}`);
+      if (selection.kind === "prompt") return [...STAGE_PROMPT_PATHS];
+      const index = layerIndexForId(selection.id);
+      return index < 0 ? [] : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${stageViewport}.${property}`);
     };
     const commitStagePaths = (paths) => {
       const messages = [];
+      const adoptsNativePrompt = Boolean(state?.shared?.prompt?.native
+        && STAGE_PROMPT_PATHS.some((path) => paths.includes(path) && stageOverrides.has(path)
+          && Math.abs(Number(stageOverrides.get(path)) - Number(promptStateValue(path.split(".").at(-1)))) >= 0.00005));
       for (const path of paths) {
         if (!stageOverrides.has(path)) continue;
         const value = stageOverrides.get(path);
-        const saved = statePath(path);
-        if (typeof value === "number" && typeof saved === "number" && Math.abs(value - saved) < 0.0005) continue;
+        const promptKey = /^shared\.prompt\.(width|x|y)$/.exec(path)?.[1];
+        const saved = promptKey ? promptStateValue(promptKey) : statePath(path);
+        if (!(adoptsNativePrompt && promptKey)
+            && typeof value === "number" && typeof saved === "number" && Math.abs(value - saved) < 0.00005) continue;
         const message = messageForStagePath(path, value);
         if (message) messages.push(message);
       }
       if (messages.length) queueStageMutations(messages);
+    };
+    const flushStageKeyChanges = () => {
+      if (stageKeyTimer) clearTimeout(stageKeyTimer);
+      stageKeyTimer = null;
+      const paths = [...stageKeyPaths];
+      stageKeyPaths.clear();
+      if (paths.length) commitStagePaths(paths);
+      reflectButtonStates();
     };
 
     const stageFrame = document.createElement("div");
@@ -1353,6 +2046,11 @@
     stageHud.className = "stage-hud";
     const stageRing = document.createElement("div");
     stageRing.className = "stage-hud-ring";
+    // The ring is a pointer-only move surface for the current selection. It
+    // sits above overlapping artwork, so an interior drag keeps the layer the
+    // user chose in the palette instead of retargeting the topmost image.
+    // Focusable edge handles remain the equivalent keyboard controls.
+    stageRing.dataset.stageHandle = "move";
     stageRing.setAttribute("aria-hidden", "true");
     stageRing.hidden = true;
     stageHud.appendChild(stageRing);
@@ -1363,6 +2061,7 @@
       node.className = "stage-edge";
       node.dataset.stageHandle = "move";
       node.dataset.side = side;
+      node.setAttribute("role", "slider");
       node.tabIndex = 0;
       node.hidden = true;
       stageHud.appendChild(node);
@@ -1373,6 +2072,7 @@
       node.className = "stage-corner";
       node.dataset.stageHandle = "scale";
       node.dataset.corner = corner;
+      node.setAttribute("role", "slider");
       node.tabIndex = 0;
       node.hidden = true;
       stageHud.appendChild(node);
@@ -1389,54 +2089,49 @@
     stageOpacityWrap.appendChild(stageOpacityInput);
     stageHud.appendChild(stageOpacityWrap);
     stageOpacityInput.addEventListener("input", () => {
-      if (stageSelection?.kind !== "layer") return;
-      setStageOverride(`layers[${stageSelection.index}].opacity`, stageOpacityInput.valueAsNumber / 100);
+      if (isBlockingAction() || stageSelection?.kind !== "layer") return;
+      const index = layerIndexForId(stageSelection.id);
+      if (index < 0) return;
+      setStageOverride(`layers[${index}].opacity`, stageOpacityInput.valueAsNumber / 100);
       applyStageLayout();
     });
     stageOpacityInput.addEventListener("change", () => {
-      if (stageSelection?.kind !== "layer") return;
+      if (isBlockingAction() || stageSelection?.kind !== "layer") return;
+      const index = layerIndexForId(stageSelection.id);
+      if (index < 0) return;
       queueStageMutations([{
         type: "set-theme-layer",
-        index: stageSelection.index,
+        index,
         preset: "shared",
         property: "opacity",
         value: stageOpacityInput.valueAsNumber / 100,
       }]);
     });
-    // Procreate-style floating dialog: rows select the active layer, eyes hide
-    // a layer on the stage only (session-local, never written to the draft),
-    // arrows reorder through the validated move action, and the whole dialog
-    // collapses out of the way.
+    // The collapsed canvas palette is a fast selector only. Its visibility
+    // buttons are session-local; persistent image settings stay in the
+    // inspector so the canvas does not duplicate commands.
     const stageLayersPanel = document.createElement("div");
     stageLayersPanel.className = "stage-layers-panel";
     stageLayersPanel.setAttribute("role", "group");
     stageLayersPanel.dataset.editorI18nAriaLabel = "stageLayersPanel";
     stageLayersPanel.setAttribute("aria-label", "Layers");
-    stageLayersPanel.dataset.collapsed = "false";
+    stageLayersPanel.dataset.collapsed = "true";
     const stageLayersHead = document.createElement("button");
     stageLayersHead.type = "button";
     stageLayersHead.className = "stage-layers-head";
-    stageLayersHead.setAttribute("aria-expanded", "true");
+    stageLayersHead.setAttribute("aria-expanded", "false");
     const stageLayersList = document.createElement("div");
     stageLayersList.className = "stage-layers-list";
-    const stageLayersAdd = document.createElement("button");
-    stageLayersAdd.type = "button";
-    stageLayersAdd.className = "ghost-button stage-layers-add";
-    stageLayersAdd.textContent = tr("addLayer");
-    stageLayersAdd.dataset.editorI18n = "addLayer";
-    stageLayersPanel.append(stageLayersHead, stageLayersList, stageLayersAdd);
+    stageLayersPanel.append(stageLayersHead, stageLayersList);
+    let stageLayersUserToggled = false;
+    const setStageLayersCollapsed = (collapsed) => {
+      stageLayersPanel.dataset.collapsed = String(collapsed);
+      stageLayersHead.setAttribute("aria-expanded", String(!collapsed));
+    };
     stageLayersHead.addEventListener("click", () => {
       const collapsed = stageLayersPanel.dataset.collapsed === "true";
-      stageLayersPanel.dataset.collapsed = String(!collapsed);
-      stageLayersHead.setAttribute("aria-expanded", String(collapsed));
-    });
-    stageLayersAdd.addEventListener("click", () => {
-      if (!state || state.layers.length >= 8) {
-        announce(tr("layerLimit"), "error");
-        return;
-      }
-      const base = mutationBase();
-      if (base) post({ type: "pick-theme-layer-image", ...base, index: -1, role: "decoration" });
+      stageLayersUserToggled = true;
+      setStageLayersCollapsed(!collapsed);
     });
     const stageHiddenLayers = new Set();
     const stageEmptyNote = document.createElement("p");
@@ -1446,6 +2141,9 @@
     stagePromptEl.className = "stage-prompt";
     stagePromptEl.dataset.stageItem = "prompt";
     stagePromptEl.dataset.editorFocus = "stage-prompt";
+    stagePromptEl.setAttribute("role", "button");
+    stagePromptEl.setAttribute("aria-label", tr("stagePromptAria"));
+    stagePromptEl.setAttribute("aria-pressed", "false");
     stagePromptEl.tabIndex = 0;
     const stagePromptSample = document.createElement("span");
     stagePromptSample.className = "stage-prompt-sample";
@@ -1467,8 +2165,7 @@
     stageRoot.appendChild(stageFrame);
     const stageContextHint = document.createElement("p");
     stageContextHint.className = "help stage-context-hint";
-    stageContextHint.dataset.editorI18n = "stageContextMismatch";
-    stageContextHint.textContent = tr("stageContextMismatch");
+    stageContextHint.textContent = format(tr("stageContextMismatch"), tr("stageNewChat"));
     stageContextHint.hidden = true;
     stageRoot.appendChild(stageContextHint);
     stageRoot.dataset.zones = "false";
@@ -1483,17 +2180,25 @@
         && (context === "all" || context === stageContext)
         && (viewport === "all" || viewport === stageViewport);
     };
+    const stageContextLabel = (context = stageContext) => tr(
+      context === "conversation" ? "stageConversation" : "stageNewChat",
+    );
 
     const syncStageToolbar = () => {
       for (const input of stageViewportInputs) input.checked = input.value === stageViewport;
       for (const input of stageContextInputs) input.checked = input.value === stageContext;
       if (stageZonesInput) stageRoot.dataset.zones = String(stageZonesInput.checked);
+      const newChat = stageContext === "new-chat";
+      if (promptContextSection) {
+        promptContextSection.hidden = !newChat;
+        promptContextSection.inert = !newChat;
+      }
+      if (promptContextUnavailable) promptContextUnavailable.hidden = newChat;
     };
 
     const renderStageLayersPanel = () => {
       if (!state) return;
       stageLayersHead.textContent = `${tr("stageLayersPanel")} · ${state.layers.length}`;
-      stageLayersAdd.disabled = state.layers.length >= 8;
       stageLayersList.replaceChildren();
       if (stageContext === "new-chat") {
         const promptRow = document.createElement("div");
@@ -1511,17 +2216,19 @@
         stageLayersList.appendChild(promptRow);
       }
       for (const layer of state.layers) {
+        const gated = !stageLayerGate(layer);
         const chip = document.createElement("div");
         chip.className = "stage-chip";
-        chip.dataset.index = String(layer.index);
-        chip.dataset.active = String(stageSelection?.kind === "layer" && stageSelection.index === layer.index);
-        chip.dataset.stageHidden = String(stageHiddenLayers.has(layer.index));
-        chip.dataset.gated = String(!stageLayerGate(layer));
+        chip.dataset.layerId = layer.id;
+        chip.dataset.active = String(stageSelection?.kind === "layer" && stageSelection.id === layer.id);
+        chip.dataset.stageHidden = String(stageHiddenLayers.has(layer.id));
+        chip.dataset.gated = String(gated);
         const select = document.createElement("button");
         select.type = "button";
         select.className = "stage-chip-select";
-        select.dataset.editorFocus = `stage-chip-${layer.index}`;
+        select.dataset.editorFocus = `stage-chip-${layer.id}`;
         select.setAttribute("aria-label", format(tr("stageSelectLayer"), layer.index + 1));
+        select.disabled = gated;
         const thumb = document.createElement("span");
         thumb.className = "stage-chip-thumb";
         thumb.setAttribute("aria-hidden", "true");
@@ -1534,51 +2241,31 @@
         } else thumb.textContent = String(layer.index + 1);
         const text = document.createElement("span");
         text.className = "stage-chip-label";
-        text.textContent = `${layer.index + 1} · ${tr(`role${layer.role[0].toUpperCase()}${layer.role.slice(1)}`)}`;
+        const currentRole = String(stageValue(`layers[${layer.index}].role`) ?? layer.role);
+        text.textContent = `${layer.index + 1} · ${tr(`role${currentRole[0].toUpperCase()}${currentRole.slice(1)}`)}`;
         select.append(thumb, text);
         select.addEventListener("click", () => {
-          stageHiddenLayers.delete(layer.index);
-          selectStageItem({ kind: "layer", index: layer.index }, { reveal: true });
+          stageHiddenLayers.delete(layer.id);
+          selectStageItem({ kind: "layer", id: layer.id }, { reveal: true });
           renderStage();
-        });
-        const up = document.createElement("button");
-        up.type = "button";
-        up.className = "stage-chip-order";
-        up.textContent = "↑";
-        up.disabled = layer.index === 0;
-        up.dataset.editorFocus = `stage-order-up-${layer.index}`;
-        up.setAttribute("aria-label", tr("moveUp"));
-        up.addEventListener("click", () => {
-          const base = mutationBase();
-          if (base) post({ type: "move-theme-layer", ...base, index: layer.index, direction: "up" });
-        });
-        const down = document.createElement("button");
-        down.type = "button";
-        down.className = "stage-chip-order";
-        down.textContent = "↓";
-        down.disabled = layer.index === state.layers.length - 1;
-        down.dataset.editorFocus = `stage-order-down-${layer.index}`;
-        down.setAttribute("aria-label", tr("moveDown"));
-        down.addEventListener("click", () => {
-          const base = mutationBase();
-          if (base) post({ type: "move-theme-layer", ...base, index: layer.index, direction: "down" });
         });
         const eye = document.createElement("button");
         eye.type = "button";
         eye.className = "stage-eye";
-        eye.dataset.editorFocus = `stage-eye-${layer.index}`;
-        eye.setAttribute("aria-pressed", String(!stageHiddenLayers.has(layer.index)));
-        eye.setAttribute("aria-label", tr("stageEyeToggle"));
-        eye.textContent = stageHiddenLayers.has(layer.index) ? "○" : "●";
+        eye.dataset.editorFocus = `stage-eye-${layer.id}`;
+        eye.setAttribute("aria-pressed", String(!stageHiddenLayers.has(layer.id)));
+        eye.setAttribute("aria-label", format(tr("stageEyeToggle"), layer.index + 1, tr(`role${currentRole[0].toUpperCase()}${currentRole.slice(1)}`)));
+        eye.textContent = tr(stageHiddenLayers.has(layer.id) ? "stageEyeShowShort" : "stageEyeHideShort");
+        eye.disabled = gated;
         eye.addEventListener("click", () => {
-          if (stageHiddenLayers.has(layer.index)) stageHiddenLayers.delete(layer.index);
+          if (stageHiddenLayers.has(layer.id)) stageHiddenLayers.delete(layer.id);
           else {
-            stageHiddenLayers.add(layer.index);
-            if (stageSelection?.kind === "layer" && stageSelection.index === layer.index) stageSelection = null;
+            stageHiddenLayers.add(layer.id);
+            if (stageSelection?.kind === "layer" && stageSelection.id === layer.id) stageSelection = null;
           }
           renderStage();
         });
-        chip.append(select, up, down, eye);
+        chip.append(select, eye);
         stageLayersList.appendChild(chip);
       }
     };
@@ -1586,18 +2273,18 @@
     const ensureStageStructure = () => {
       if (!state) return;
       const focused = document.activeElement?.dataset?.editorFocus ?? null;
-      for (const index of [...stageHiddenLayers]) {
-        if (index >= state.layers.length) stageHiddenLayers.delete(index);
+      for (const id of [...stageHiddenLayers]) {
+        if (!layerForId(id)) stageHiddenLayers.delete(id);
       }
       const seen = new Set();
       let previous = null;
       for (const layer of state.layers) {
-        if (stageHiddenLayers.has(layer.index) || !stageLayerGate(layer)) continue;
-        seen.add(layer.index);
-        let entry = stageLayerNodes.get(layer.index);
+        if (stageHiddenLayers.has(layer.id) || !stageLayerGate(layer)) continue;
+        seen.add(layer.id);
+        let entry = stageLayerNodes.get(layer.id);
         if (entry && entry.previewUrl !== layer.previewUrl) {
           entry.wrap.remove();
-          stageLayerNodes.delete(layer.index);
+          stageLayerNodes.delete(layer.id);
           entry = null;
         }
         if (!entry) {
@@ -1615,23 +2302,26 @@
             item.textContent = tr("noImagePreview");
           }
           item.classList.add("stage-item");
-          item.dataset.stageItem = `layer-${layer.index}`;
-          item.dataset.editorFocus = `stage-layer-${layer.index}`;
+          item.dataset.stageItem = layer.id;
+          item.dataset.editorFocus = `stage-layer-${layer.id}`;
+          item.setAttribute("role", "button");
+          item.setAttribute("aria-pressed", "false");
           item.tabIndex = 0;
           wrap.appendChild(item);
           entry = { wrap, item, previewUrl: layer.previewUrl };
-          stageLayerNodes.set(layer.index, entry);
+          stageLayerNodes.set(layer.id, entry);
         }
-        const roleLabel = tr(`role${layer.role[0].toUpperCase()}${layer.role.slice(1)}`);
+        const currentRole = String(stageValue(`layers[${layer.index}].role`) ?? layer.role);
+        const roleLabel = tr(`role${currentRole[0].toUpperCase()}${currentRole.slice(1)}`);
         entry.item.setAttribute("aria-label", format(tr("stageLayerAria"), layer.index + 1, roleLabel));
         if (previous) previous.after(entry.wrap);
         else stageArt.prepend(entry.wrap);
         previous = entry.wrap;
       }
-      for (const [index, entry] of [...stageLayerNodes]) {
-        if (!seen.has(index)) {
+      for (const [id, entry] of [...stageLayerNodes]) {
+        if (!seen.has(id)) {
           entry.wrap.remove();
-          stageLayerNodes.delete(index);
+          stageLayerNodes.delete(id);
         }
       }
       stageContentHost.replaceChildren(...(stageContext === "new-chat"
@@ -1639,7 +2329,7 @@
         : [stageStripA, stageStripB, stageComposerEl]));
       stageEmptyNote.textContent = tr("stageEmpty");
       stageEmptyNote.hidden = seen.size > 0;
-      if (stageSelection?.kind === "layer" && !seen.has(stageSelection.index)) stageSelection = null;
+      if (stageSelection?.kind === "layer" && !seen.has(stageSelection.id)) stageSelection = null;
       if (stageSelection?.kind === "prompt" && stageContext !== "new-chat") stageSelection = null;
       renderStageLayersPanel();
       if (focused && !document.activeElement?.dataset?.editorFocus) {
@@ -1649,8 +2339,13 @@
     };
 
     const syncStageHud = () => {
+      stagePromptEl.setAttribute("aria-pressed", String(stageSelection?.kind === "prompt"));
+      for (const [id, entry] of stageLayerNodes) {
+        entry.item.setAttribute("aria-pressed",
+          String(stageSelection?.kind === "layer" && stageSelection.id === id));
+      }
       let target = null;
-      if (stageSelection?.kind === "layer") target = stageLayerNodes.get(stageSelection.index)?.item ?? null;
+      if (stageSelection?.kind === "layer") target = stageLayerNodes.get(stageSelection.id)?.item ?? null;
       else if (stageSelection?.kind === "prompt" && stageContext === "new-chat") target = stagePromptEl;
       const chrome = [...stageEdges, ...stageCorners];
       if (!target || !state) {
@@ -1684,22 +2379,50 @@
       setRect(stageEdges[1], clampX(left + rect.width - 4, 8), clampY(top + 12, sideLength), 8, sideLength);
       setRect(stageEdges[2], clampX(left + 12, barLength), clampY(top + rect.height - 4, 8), barLength, 8);
       setRect(stageEdges[3], clampX(left - 4, 8), clampY(top + 12, sideLength), 8, sideLength);
-      for (const node of stageEdges) node.setAttribute("aria-label", tr("stageMoveHandle"));
+      const selectionIndex = stageSelection.kind === "layer" ? layerIndexForId(stageSelection.id) : -1;
+      const framePrefix = selectionIndex >= 0 ? `layers[${selectionIndex}].frames.${stageViewport}.` : "";
+      const positionX = Number(stageSelection.kind === "prompt"
+        ? stageValue("shared.prompt.x") * 100
+        : stageValue(`${framePrefix}positionX`)) || 0;
+      const positionY = Number(stageSelection.kind === "prompt"
+        ? stageValue("shared.prompt.y") * 100
+        : stageValue(`${framePrefix}positionY`)) || 0;
+      for (const node of stageEdges) {
+        const horizontal = node.dataset.side === "e" || node.dataset.side === "w";
+        const value = horizontal ? positionX : positionY;
+        const limit = stageSelection.kind === "prompt" ? (horizontal ? 35 : 30) : 100;
+        node.setAttribute("aria-label", tr("stageMoveHandle"));
+        node.setAttribute("aria-orientation", horizontal ? "horizontal" : "vertical");
+        node.setAttribute("aria-valuemin", String(-limit));
+        node.setAttribute("aria-valuemax", String(limit));
+        node.setAttribute("aria-valuenow", String(Math.round(value * 100) / 100));
+        node.setAttribute("aria-valuetext", `${Math.round(value * 100) / 100}%`);
+      }
+      const cornerTarget = 24;
+      const cornerOffset = cornerTarget / 2;
       const cornerPoints = {
-        nw: [left - 7, top - 7], ne: [left + rect.width - 7, top - 7],
-        sw: [left - 7, top + rect.height - 7], se: [left + rect.width - 7, top + rect.height - 7],
+        nw: [left - cornerOffset, top - cornerOffset], ne: [left + rect.width - cornerOffset, top - cornerOffset],
+        sw: [left - cornerOffset, top + rect.height - cornerOffset], se: [left + rect.width - cornerOffset, top + rect.height - cornerOffset],
       };
       for (const node of stageCorners) {
         const point = cornerPoints[node.dataset.corner];
+        const value = stageSelection.kind === "prompt"
+          ? (Number(stageValue("shared.prompt.width")) || 0.4) * 100
+          : (Number(stageValue(`${framePrefix}scale`)) || 1) * 100;
         node.hidden = false;
-        node.style.left = `${clampX(point[0], 14)}px`;
-        node.style.top = `${clampY(point[1], 14)}px`;
+        node.style.left = `${clampX(point[0], cornerTarget)}px`;
+        node.style.top = `${clampY(point[1], cornerTarget)}px`;
         node.setAttribute("aria-label", tr(prompt ? "stageWidthHandle" : "stageScaleHandle"));
+        node.setAttribute("aria-valuemin", prompt ? "40" : "25");
+        node.setAttribute("aria-valuemax", prompt ? "96" : "300");
+        node.setAttribute("aria-valuenow", String(Math.round(value * 100) / 100));
+        node.setAttribute("aria-valuetext", `${Math.round(value * 100) / 100}%`);
       }
       if (prompt) {
         stageOpacityWrap.hidden = true;
       } else {
-        const opacity = Number(stageValue(`layers[${stageSelection.index}].opacity`));
+        const index = layerIndexForId(stageSelection.id);
+        const opacity = Number(index < 0 ? 1 : stageValue(`layers[${index}].opacity`));
         stageOpacityInput.value = String(Math.round((Number.isFinite(opacity) ? opacity : 1) * 100));
         stageOpacityInput.setAttribute("aria-label", tr("layerOpacity"));
         stageOpacityWrap.hidden = false;
@@ -1714,20 +2437,57 @@
       if (!state) return;
       const captureActive = stageBackdropOn();
       const [logicalWidth, logicalHeight] = stageLogicalSize();
-      const frameWidth = stageFrame.clientWidth;
-      const scale = frameWidth > 0 ? frameWidth / logicalWidth : 0;
-      stageFrame.style.height = scale ? `${Math.round(logicalHeight * scale)}px` : "";
+      const stageHostWidth = stageRoot.clientWidth;
+      const currentFrameHeight = stageFrame.offsetHeight;
+      const panelChromeHeight = Math.max(110,
+        (stagePanel?.offsetHeight ?? (currentFrameHeight + 110)) - currentFrameHeight);
+      const paneHeight = stageColumn?.clientHeight ?? 0;
+      const viewportHeight = content?.clientHeight || window.innerHeight || logicalHeight;
+      const entryOffset = (editorHeader?.offsetHeight ?? 0) + 22;
+      const availableFrameHeight = Math.max(120, paneHeight > 0
+        ? paneHeight - panelChromeHeight - 16
+        : viewportHeight - entryOffset - panelChromeHeight - 16);
+      const scale = stageHostWidth > 0
+        ? Math.min(1, stageHostWidth / logicalWidth, availableFrameHeight / logicalHeight)
+        : 0;
+      const frameWidth = scale ? Math.round(logicalWidth * scale) : 0;
+      const frameHeight = scale ? Math.round(logicalHeight * scale) : 0;
+      stageFrame.style.width = frameWidth ? `${frameWidth}px` : "";
+      stageFrame.style.height = frameHeight ? `${frameHeight}px` : "";
+      if (frameWidth) {
+        const compactLayers = frameWidth < 720 || frameHeight < 360;
+        if (compactLayers || !stageLayersUserToggled) setStageLayersCollapsed(true);
+      }
       stageFrame.dataset.backdrop = captureActive ? "capture" : "schematic";
-      const realContext = stageMirror?.geometry?.context;
-      stageContextHint.hidden = !(backdropToggleInput?.checked && stageMirror
-        && (realContext === "new-chat" || realContext === "conversation") && realContext !== stageContext);
+      stageFrame.dataset.captureState = captureActive
+        ? (stageMirror === stageLiveMirror ? "live" : "cached")
+        : "schematic";
+      const missingSelectedCapture = Boolean(backdropToggleInput?.checked && !captureActive);
+      stageContextHint.hidden = !missingSelectedCapture;
+      if (missingSelectedCapture) {
+        stageContextHint.textContent = format(tr("stageContextMismatch"), stageContextLabel());
+      }
+      if (openAuraButton) {
+        const labelKey = missingSelectedCapture ? "stageOpenContext" : "openAuraWindow";
+        openAuraButton.dataset.editorI18n = labelKey;
+        openAuraButton.textContent = tr(labelKey);
+      }
       stageBackdropImg.hidden = !captureActive;
       if (captureActive && stageBackdropImg.src !== stageMirror.image) stageBackdropImg.src = stageMirror.image;
-      stageSidebarEl.hidden = captureActive;
       stageCanvas.style.width = `${logicalWidth}px`;
       stageCanvas.style.height = `${logicalHeight}px`;
       stageCanvas.style.transform = `scale(${scale || 1})`;
       const tokenValue = (key) => stageValue(`tokens.${selectedMode}.${key}`);
+      // Over a live capture, an uncommitted colour edit stays invisible until the
+      // host re-renders and pushes a fresh capture. While one is pending, dim the
+      // capture and let the schematic fills preview the change immediately; it
+      // clears itself the moment the override commits and the recapture lands.
+      const colorPreview = captureActive && [...stageOverrides.keys()].some((path) =>
+        (path.startsWith(`tokens.${selectedMode}.`)
+          || path === "shared.radius" || path === "shared.blur" || path === "shared.shadow")
+          && String(stageOverrides.get(path)) !== String(statePath(path)));
+      stageFrame.dataset.colorPreview = colorPreview ? "true" : "";
+      stageSidebarEl.hidden = captureActive && !colorPreview;
       const scope = stageValue("shared.backgroundScope");
       const radius = Number(stageValue("shared.radius")) || 0;
       const blur = Number(stageValue("shared.blur")) || 0;
@@ -1737,13 +2497,15 @@
       stageArt.style.left = scope === "content" ? `${mainMetrics.left}px` : "0";
       const sidebarColor = tokenValue("sidebar") ?? "#808080";
       const sidebarAlpha = Number(tokenValue("sidebarAlpha")) || 1;
-      stageSidebarEl.style.width = `${STAGE_SIDEBAR_WIDTH}px`;
+      stageSidebarEl.style.width = `${mainMetrics.left}px`;
       stageSidebarEl.style.background = scope === "full-window"
         ? `color-mix(in srgb, ${sidebarColor} ${Math.round(sidebarAlpha * 100)}%, transparent)`
         : sidebarColor;
       stageSidebarEl.style.backdropFilter = scope === "full-window" && blur ? `blur(${Math.min(blur, 32)}px)` : "";
       stageSidebarEl.style.borderRight = `1px solid ${tokenValue("border") ?? "transparent"}`;
-      for (const [index, entry] of stageLayerNodes) {
+      for (const [id, entry] of stageLayerNodes) {
+        const index = layerIndexForId(id);
+        if (index < 0) continue;
         const framePath = (property) => `layers[${index}].frames.${stageViewport}.${property}`;
         const frameNumber = (property) => Number(stageValue(framePath(property)));
         const anchor = ANCHOR_POINTS[stageValue(framePath("anchor"))] ?? ANCHOR_POINTS.center;
@@ -1773,9 +2535,9 @@
         if (realPrompt && realPrompt.width > 40) {
           // The capture already shows the prompt at the saved draft values, so
           // the outline sits on the real rect and only uncommitted deltas move it.
-          const deltaX = ((Number(stageValue("shared.prompt.x")) || 0) - (Number(statePath("shared.prompt.x")) || 0)) * mainMetrics.width;
-          const deltaY = ((Number(stageValue("shared.prompt.y")) || 0) - (Number(statePath("shared.prompt.y")) || 0)) * mainMetrics.height;
-          const deltaW = ((Number(stageValue("shared.prompt.width")) || 0) - (Number(statePath("shared.prompt.width")) || 0)) * mainMetrics.width;
+          const deltaX = ((Number(stageValue("shared.prompt.x")) || 0) - (Number(promptStateValue("x")) || 0)) * mainMetrics.width;
+          const deltaY = ((Number(stageValue("shared.prompt.y")) || 0) - (Number(promptStateValue("y")) || 0)) * mainMetrics.height;
+          const deltaW = ((Number(stageValue("shared.prompt.width")) || 0) - (Number(promptStateValue("width")) || 0)) * mainMetrics.width;
           rect = {
             left: realPrompt.left + deltaX - (deltaW / 2),
             top: realPrompt.top + deltaY,
@@ -1828,11 +2590,20 @@
 
     const renderStage = () => {
       if (!state || stageDrag) return;
-      if (!mutationQueue.length && !pendingAction) stageOverrides.clear();
+      if (!coalescedChanges.size && !deferredChanges.size && !pendingAction
+          && !stageKeyTimer && !stageKeyPaths.size) stageOverrides.clear();
       ensureStageStructure();
       applyStageLayout();
       renderStageMatrix();
       updateLayerGateBadges();
+    };
+
+    const syncSelectedLayerCards = () => {
+      for (const card of layerList.querySelectorAll(".layer-card")) {
+        const selected = card.dataset.layerId === selectedLayerId;
+        card.dataset.selected = String(selected);
+        if (selected) card.open = true;
+      }
     };
 
     const selectStageItem = (selection, { reveal = false } = {}) => {
@@ -1840,18 +2611,21 @@
       for (const chip of stageLayersPanel.querySelectorAll(".stage-chip")) {
         chip.dataset.active = chip.classList.contains("stage-chip-prompt")
           ? String(selection?.kind === "prompt")
-          : String(selection?.kind === "layer" && Number(chip.dataset.index) === selection.index);
+          : String(selection?.kind === "layer" && chip.dataset.layerId === selection.id);
       }
       if (selection?.kind === "layer") {
+        const layer = layerForId(selection.id);
+        if (!layer) return;
+        selectedLayerId = selection.id;
         if (reveal) {
-          const card = layerList.querySelector(`[data-editor-layer="${selection.index}"]`);
-          if (card) {
-            card.open = true;
-            card.scrollIntoView?.({ block: "nearest" });
-          }
+          const card = layerList.querySelector(`[data-layer-id="${CSS.escape(selection.id)}"]`);
+          if (card) card.open = true;
         }
-        announce(format(tr("stageSelectedAnnounce"), format(tr("layerNumber"), selection.index + 1)));
+        syncSelectedLayerCards();
+        setInspectorPanel("artwork");
+        announce(format(tr("stageSelectedAnnounce"), format(tr("layerNumber"), layer.index + 1)));
       } else if (selection?.kind === "prompt") {
+        setInspectorPanel("layout");
         announce(format(tr("stageSelectedAnnounce"), tr("stagePromptTag")));
       }
       syncStageHud();
@@ -1859,7 +2633,7 @@
 
     const stageSelectionFromNode = (node) => node.dataset.stageItem === "prompt"
       ? { kind: "prompt" }
-      : { kind: "layer", index: Number(node.dataset.stageItem.slice("layer-".length)) };
+      : { kind: "layer", id: node.dataset.stageItem };
 
     const stageInputFor = (path) => {
       const cached = stageInputCache.get(path);
@@ -1878,6 +2652,8 @@
         if (!input || input.type !== "range") continue;
         const prompt = path.startsWith("shared.prompt.");
         input.value = String(prompt ? Math.round(value * 100) : value);
+        const exact = input.parentElement?.querySelector(".layer-exact-value, .prompt-exact-value");
+        if (exact) exact.value = String(prompt ? Math.round(value * 100) : value);
         const output = prompt
           ? document.getElementById(`${input.id}-output`)
           : input.parentElement?.querySelector("output");
@@ -1890,7 +2666,7 @@
     };
 
     stageRoot.addEventListener("pointerdown", (event) => {
-      if (!state || (event.button !== 0 && event.pointerType !== "touch")) return;
+      if (!state || isBlockingAction() || (event.button !== 0 && event.pointerType !== "touch")) return;
       if (event.target.closest?.(".stage-layers-panel, .stage-opacity")) return;
       const handle = event.target.closest?.("[data-stage-handle]");
       const itemNode = event.target.closest?.("[data-stage-item]");
@@ -1906,13 +2682,15 @@
         itemNode.focus?.();
       }
       if (!selection) return;
+      if (selection.kind === "prompt") seedNativePromptOverrides();
       const [logicalWidth, logicalHeight] = stageLogicalSize();
+      const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
       const scale = stageFrame.clientWidth > 0 ? stageFrame.clientWidth / logicalWidth : 1;
-      if (selection.kind === "layer") stageLayerNodes.get(selection.index)?.wrap.classList.add("is-active");
+      if (selection.kind === "layer") stageLayerNodes.get(selection.id)?.wrap.classList.add("is-active");
       const start = {};
       for (const path of stageItemPaths(selection)) start[path] = Number(stageValue(path)) || 0;
       const targetRect = (selection.kind === "layer"
-        ? stageLayerNodes.get(selection.index)?.item
+        ? stageLayerNodes.get(selection.id)?.item
         : stagePromptEl)?.getBoundingClientRect();
       const handleKind = handle?.dataset.stageHandle;
       const corner = handle?.dataset.corner ?? "se";
@@ -1929,9 +2707,10 @@
         scale,
         logicalHeight,
         artWidth: stageValue("shared.backgroundScope") === "content"
-          ? logicalWidth - stageMainMetrics(logicalWidth, logicalHeight).left
+          ? logicalWidth - mainMetrics.left
           : logicalWidth,
-        mainWidth: stageMainMetrics(logicalWidth, logicalHeight).width,
+        mainWidth: mainMetrics.width,
+        mainHeight: mainMetrics.height,
         start,
         rectSize: Math.max(60, (targetRect?.width ?? 0) + (targetRect?.height ?? 0)),
       };
@@ -1945,7 +2724,9 @@
       const dx = (event.clientX - drag.startX) / drag.scale;
       const dy = (event.clientY - drag.startY) / drag.scale;
       if (drag.kind === "layer-move") {
-        const prefix = `layers[${drag.selection.index}].frames.${stageViewport}.`;
+        const index = layerIndexForId(drag.selection.id);
+        if (index < 0) return;
+        const prefix = `layers[${index}].frames.${stageViewport}.`;
         let nextX = clampNumber(drag.start[`${prefix}positionX`] + (dx / drag.artWidth * 100), -100, 100);
         let nextY = clampNumber(drag.start[`${prefix}positionY`] + (dy / drag.logicalHeight * 100), -100, 100);
         if (!event.altKey) {
@@ -1956,12 +2737,14 @@
         setStageOverride(`${prefix}positionX`, nextX);
         setStageOverride(`${prefix}positionY`, nextY);
       } else if (drag.kind === "scale") {
-        const prefix = `layers[${drag.selection.index}].frames.${stageViewport}.`;
+        const index = layerIndexForId(drag.selection.id);
+        if (index < 0) return;
+        const prefix = `layers[${index}].frames.${stageViewport}.`;
         const factor = 1 + (((drag.signX * (event.clientX - drag.startX)) + (drag.signY * (event.clientY - drag.startY))) / drag.rectSize);
         setStageOverride(`${prefix}scale`, clampNumber(drag.start[`${prefix}scale`] * factor, 0.25, 3));
       } else if (drag.kind === "prompt-move") {
         let nextX = clampNumber(drag.start["shared.prompt.x"] + (dx / drag.mainWidth), -0.35, 0.35);
-        let nextY = clampNumber(drag.start["shared.prompt.y"] + (dy / drag.logicalHeight), -0.3, 0.3);
+        let nextY = clampNumber(drag.start["shared.prompt.y"] + (dy / drag.mainHeight), -0.3, 0.3);
         if (!event.altKey) {
           // Snap the prompt block back to its centered default; Alt bypasses.
           if (Math.abs(nextX) < 0.02) nextX = 0;
@@ -2013,7 +2796,7 @@
     stageRoot.addEventListener("pointercancel", endStageDrag);
 
     stageRoot.addEventListener("keydown", (event) => {
-      if (!state) return;
+      if (!state || isBlockingAction()) return;
       const handle = event.target.closest?.("[data-stage-handle]");
       const itemNode = event.target.closest?.("[data-stage-item]");
       if (!handle && !itemNode) return;
@@ -2025,28 +2808,60 @@
         return;
       }
       if (event.key === "Escape") {
-        for (const path of stageItemPaths(selection)) stageOverrides.delete(path);
-        if (stageKeyTimer) { clearTimeout(stageKeyTimer); stageKeyTimer = null; }
+        event.preventDefault();
+        const paths = stageItemPaths(selection);
+        for (const path of paths) {
+          stageOverrides.delete(path);
+          stageKeyPaths.delete(path);
+        }
+        if (!stageKeyPaths.size && stageKeyTimer) {
+          clearTimeout(stageKeyTimer);
+          stageKeyTimer = null;
+        }
         applyStageLayout();
+        reflectStageInputs(paths);
+        reflectButtonStates();
         return;
       }
       const step = event.shiftKey ? 5 : 1;
+      const handleKind = handle?.dataset.stageHandle;
+      const scaleDirection = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1
+        : event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 0;
       let changed = false;
       const adjust = (path, delta, minimum, maximum) => {
         setStageOverride(path, clampNumber((Number(stageValue(path)) || 0) + delta, minimum, maximum));
         changed = true;
       };
       if (selection.kind === "layer") {
-        const prefix = `layers[${selection.index}].frames.${stageViewport}.`;
-        if (event.key === "ArrowLeft") adjust(`${prefix}positionX`, -step, -100, 100);
+        const index = layerIndexForId(selection.id);
+        if (index < 0) return;
+        const prefix = `layers[${index}].frames.${stageViewport}.`;
+        if (handleKind === "scale" && scaleDirection) {
+          adjust(`${prefix}scale`, scaleDirection * (event.shiftKey ? 0.2 : 0.05), 0.25, 3);
+        } else if (handleKind === "move") {
+          const horizontal = handle.dataset.side === "e" || handle.dataset.side === "w";
+          if (horizontal && event.key === "ArrowLeft") adjust(`${prefix}positionX`, -step, -100, 100);
+          else if (horizontal && event.key === "ArrowRight") adjust(`${prefix}positionX`, step, -100, 100);
+          else if (!horizontal && event.key === "ArrowUp") adjust(`${prefix}positionY`, -step, -100, 100);
+          else if (!horizontal && event.key === "ArrowDown") adjust(`${prefix}positionY`, step, -100, 100);
+        } else if (event.key === "ArrowLeft") adjust(`${prefix}positionX`, -step, -100, 100);
         else if (event.key === "ArrowRight") adjust(`${prefix}positionX`, step, -100, 100);
         else if (event.key === "ArrowUp") adjust(`${prefix}positionY`, -step, -100, 100);
         else if (event.key === "ArrowDown") adjust(`${prefix}positionY`, step, -100, 100);
         else if (event.key === "+" || event.key === "=") adjust(`${prefix}scale`, event.shiftKey ? 0.2 : 0.05, 0.25, 3);
         else if (event.key === "-" || event.key === "_") adjust(`${prefix}scale`, event.shiftKey ? -0.2 : -0.05, 0.25, 3);
       } else {
+        seedNativePromptOverrides();
         const ratioStep = step / 100;
-        if (event.key === "ArrowLeft") adjust("shared.prompt.x", -ratioStep, -0.35, 0.35);
+        if (handleKind === "scale" && scaleDirection) {
+          adjust("shared.prompt.width", scaleDirection * ratioStep, 0.4, 0.96);
+        } else if (handleKind === "move") {
+          const horizontal = handle.dataset.side === "e" || handle.dataset.side === "w";
+          if (horizontal && event.key === "ArrowLeft") adjust("shared.prompt.x", -ratioStep, -0.35, 0.35);
+          else if (horizontal && event.key === "ArrowRight") adjust("shared.prompt.x", ratioStep, -0.35, 0.35);
+          else if (!horizontal && event.key === "ArrowUp") adjust("shared.prompt.y", -ratioStep, -0.3, 0.3);
+          else if (!horizontal && event.key === "ArrowDown") adjust("shared.prompt.y", ratioStep, -0.3, 0.3);
+        } else if (event.key === "ArrowLeft") adjust("shared.prompt.x", -ratioStep, -0.35, 0.35);
         else if (event.key === "ArrowRight") adjust("shared.prompt.x", ratioStep, -0.35, 0.35);
         else if (event.key === "ArrowUp") adjust("shared.prompt.y", -ratioStep, -0.3, 0.3);
         else if (event.key === "ArrowDown") adjust("shared.prompt.y", ratioStep, -0.3, 0.3);
@@ -2060,57 +2875,135 @@
       reflectStageInputs(stageItemPaths(selection));
       if (stageKeyTimer) clearTimeout(stageKeyTimer);
       const paths = stageItemPaths(selection);
-      stageKeyTimer = setTimeout(() => {
-        stageKeyTimer = null;
-        commitStagePaths(paths);
-      }, 600);
+      for (const path of paths) stageKeyPaths.add(path);
+      stageKeyTimer = setTimeout(flushStageKeyChanges, 220);
+      reflectButtonStates();
     });
+
+    const previewWidthInput = document.getElementById("stage-real-width");
+    const previewHeightInput = document.getElementById("stage-real-height");
+    const setPreviewInputValues = (width, height) => {
+      if (previewWidthInput) previewWidthInput.value = String(width);
+      if (previewHeightInput) previewHeightInput.value = String(height);
+    };
+    const reflectStageViewport = () => {
+      for (const input of stageViewportInputs) input.checked = input.value === stageViewport;
+    };
+    const readPreviewInputSize = ({ clamp = false } = {}) => {
+      let width = Math.round(Number(previewWidthInput?.value));
+      let height = Math.round(Number(previewHeightInput?.value));
+      if (clamp) {
+        width = Math.round(clampNumber(width || 1180, 920, 3840));
+        height = Math.round(clampNumber(height || 640, 620, 2400));
+      }
+      return integer(width, 920, 3840) && integer(height, 620, 2400) ? [width, height] : null;
+    };
+    const updatePreviewDraft = (dimensions) => {
+      if (!dimensions) return false;
+      previewSizeIntent = [...dimensions];
+      stagePreviewSize = dimensions;
+      stageViewport = dimensions[0] >= 1440 ? "wide" : "normal";
+      reflectStageViewport();
+      selectStageMirror();
+      renderStage();
+      return true;
+    };
+    const commitPreviewSize = ({ clamp = false, notify = false } = {}) => {
+      if (previewResizeTimer) { clearTimeout(previewResizeTimer); previewResizeTimer = null; }
+      const dimensions = readPreviewInputSize({ clamp });
+      if (!dimensions) return false;
+      setPreviewInputValues(...dimensions);
+      updatePreviewDraft(dimensions);
+      if (!sendPreviewSize(`${dimensions[0]}x${dimensions[1]}`, dimensions)) return false;
+      if (notify) announce(tr("stageRealShown"));
+      return true;
+    };
+    const schedulePreviewSize = () => {
+      if (previewResizeTimer) {
+        clearTimeout(previewResizeTimer);
+        previewResizeTimer = null;
+      }
+      const dimensions = readPreviewInputSize();
+      if (!dimensions) {
+        previewSizeIntent = null;
+        previewExpectedRequest = null;
+        return;
+      }
+      updatePreviewDraft(dimensions);
+      previewResizeTimer = setTimeout(() => {
+        previewResizeTimer = null;
+        commitPreviewSize();
+      }, 160);
+    };
+    const sendPreviewSize = (size, dimensions = null) => {
+      const request = previewRequestSerial + 1;
+      previewRequestSerial = request;
+      previewExpectedRequest = request;
+      previewSizeEditing = true;
+      previewSizeIntent = dimensions ? [...dimensions] : null;
+      if (send({ type: "set-aura-preview", size, request })) return true;
+      previewExpectedRequest = null;
+      return false;
+    };
 
     stageViewportInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
       stageViewport = input.value;
-      if (backdropToggleInput?.checked && stageMirror) {
-        // Editing a framing set drives the real window to that size, so the
-        // next capture shows the layout being edited.
-        send({ type: "set-aura-preview", size: input.value === "wide" ? "wide" : "launch" });
-      }
+      stagePreviewSize = [...STAGE_SIZES[stageViewport]];
+      setPreviewInputValues(...stagePreviewSize);
+      // Viewport controls resize Aura without foregrounding it; the next
+      // private capture becomes the stage backdrop while Studio stays usable.
+      sendPreviewSize(input.value === "wide" ? "wide" : "launch", stagePreviewSize);
+      selectStageMirror();
       renderStage();
     }));
     stageContextInputs.forEach((input) => input.addEventListener("change", () => {
-      if (input.checked) {
-        stageContext = input.value;
-        renderStage();
-      }
+      if (!input.checked) return;
+      stageContextTouched = true;
+      stageContext = input.value;
+      selectStageMirror();
+      renderStage();
+      announce(format(tr("stageContextSelected"), stageContextLabel()));
     }));
     stageZonesInput?.addEventListener("change", () => {
       stageRoot.dataset.zones = String(stageZonesInput.checked);
     });
     backdropToggleInput?.addEventListener("change", () => {
-      if (stageBackdropOn() && stageMirror) stageViewport = stageMirror.width >= 1440 ? "wide" : "normal";
+      if (backdropToggleInput.checked && hasUsableMirrorGeometry(stageLiveMirror)) {
+        stageViewport = stageLiveMirror.geometry.viewport;
+        reflectStageViewport();
+      }
+      selectStageMirror();
       renderStage();
     });
     const levelInputs = [...document.querySelectorAll('input[name="editor-level"]')];
     levelInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
       editor.dataset.level = input.value;
+      if (input.value === "simple") {
+        for (const details of tokenGroups.querySelectorAll(".quick-essential")) details.open = true;
+        if (stageSelection?.kind === "layer") setInspectorPanel("artwork");
+        else if (stageSelection?.kind === "prompt") setInspectorPanel("layout");
+        else if (!["design", "artwork"].includes(inspectorPanel)) setInspectorPanel("design");
+      } else if (stageSelection?.kind === "layer") setInspectorPanel("artwork");
+      else if (stageSelection?.kind === "prompt") setInspectorPanel("layout");
       renderStage();
     }));
-    for (const [id, size] of [
-      ["stage-real-launch", "launch"], ["stage-real-wide", "wide"], ["stage-real-full", "full"],
-    ]) {
+    for (const [id, size] of [["stage-real-full", "full"]]) {
       document.getElementById(id)?.addEventListener("click", () => {
-        if (!send({ type: "set-aura-preview", size })) return;
-        stageViewport = size === "launch" ? "normal" : "wide";
+        if (!sendPreviewSize(size)) return;
+        stageViewport = "wide";
+        reflectStageViewport();
         renderStage();
         announce(tr("stageRealShown"));
       });
     }
     // Real-window mirror: scaled captures of the actual Aura WebView pushed
     // by the host. True proportions at any window size, never written to disk.
-    const mirrorImage = document.getElementById("stage-mirror-image");
-    const mirrorEmpty = document.getElementById("stage-mirror-empty");
     const mirrorCaption = document.getElementById("stage-mirror-caption");
     const MIRROR_PREFIX = "data:image/jpeg;base64,";
+    const MIRROR_MAX_RAW_BYTES = 8_000_000;
+    const MIRROR_MAX_BASE64_LENGTH = Math.ceil(MIRROR_MAX_RAW_BYTES / 3) * 4;
     const normalizeMirrorRect = (value) => {
       if (value === null || value === undefined) return null;
       if (!exactShape(value, ["left", "top", "width", "height"])) return undefined;
@@ -2120,53 +3013,125 @@
       return { ...value };
     };
     const normalizeMirror = (value) => {
-      if (!exactShape(value, ["type", "image", "width", "height"], ["geometry"]) || value.type !== "aura-mirror") return null;
-      if (typeof value.image !== "string" || value.image.length > 8_000_000
-          || !value.image.startsWith(MIRROR_PREFIX)
-          || !/^[A-Za-z0-9+/]+={0,2}$/.test(value.image.slice(MIRROR_PREFIX.length))) return null;
+      if (!exactShape(value, ["type", "image", "width", "height", "revision", "request"], ["geometry"])
+          || value.type !== "aura-mirror" || !integer(value.revision, 0, Number.MAX_SAFE_INTEGER)
+          || !integer(value.request, 0, 2_147_483_647)) return null;
+      if (typeof value.image !== "string" || !value.image.startsWith(MIRROR_PREFIX)
+          || value.image.length > MIRROR_PREFIX.length + MIRROR_MAX_BASE64_LENGTH) return null;
+      const encoded = value.image.slice(MIRROR_PREFIX.length);
+      if (encoded.length > MIRROR_MAX_BASE64_LENGTH || encoded.length % 4 !== 0
+          || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) return null;
+      const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+      if ((encoded.length / 4 * 3) - padding > MIRROR_MAX_RAW_BYTES) return null;
       if (!integer(value.width, 200, 6000) || !integer(value.height, 200, 6000)) return null;
       let geometry = null;
       if (value.geometry !== undefined && value.geometry !== null) {
-        if (!exactShape(value.geometry, ["context", "mode", "main", "prompt"])
+        if (!exactShape(value.geometry, ["context", "mode", "viewport", "main", "prompt"])
             || !enumValue(value.geometry.context, ["new-chat", "conversation", "other"])
-            || !enumValue(value.geometry.mode, ["light", "dark"])) return null;
+            || !enumValue(value.geometry.mode, ["light", "dark"])
+            || !enumValue(value.geometry.viewport, ["normal", "wide"])) return null;
         const main = normalizeMirrorRect(value.geometry.main);
         const prompt = normalizeMirrorRect(value.geometry.prompt);
         if (main === undefined || prompt === undefined) return null;
-        geometry = { context: value.geometry.context, mode: value.geometry.mode, main, prompt };
+        geometry = {
+          context: value.geometry.context, mode: value.geometry.mode,
+          viewport: value.geometry.viewport, main, prompt,
+        };
       }
-      return { image: value.image, width: value.width, height: value.height, geometry };
+      return {
+        image: value.image, width: value.width, height: value.height,
+        revision: value.revision, request: value.request, geometry,
+      };
+    };
+    const mirrorBasis = (revision, mode, viewport, width, height) => (
+      `${revision}|${mode}|${viewport}|${width}x${height}`
+    );
+    const rememberStageMirror = (mirror) => {
+      const { geometry } = mirror;
+      if (mirror.revision !== state?.revision || !hasUsableMirrorGeometry(mirror)) return;
+      const basis = mirrorBasis(
+        mirror.revision, geometry.mode, geometry.viewport, mirror.width, mirror.height,
+      );
+      if (stageMirrorCacheBasis !== basis) {
+        stageMirrorCache.clear();
+        stageMirrorCacheBasis = basis;
+      }
+      // One exact-size, exact-appearance capture per page context. The cache
+      // is bounded to two in-memory JPEGs and is cleared when editing closes.
+      stageMirrorCache.set(geometry.context, mirror);
+    };
+    const updateMirrorCaption = () => {
+      if (!mirrorCaption) return;
+      if (!stageMirror) {
+        mirrorCaption.textContent = stageLiveMirror
+          ? format(tr("mirrorUnavailable"), stageContextLabel())
+          : tr("mirrorEmpty");
+        return;
+      }
+      const key = stageMirror === stageLiveMirror ? "mirrorCaption" : "mirrorCaptionCached";
+      mirrorCaption.textContent = format(
+        tr(key), stageMirror.width, stageMirror.height, stageContextLabel(stageMirror.geometry?.context),
+      );
+    };
+    const selectStageMirror = () => {
+      if (!hasUsableMirrorGeometry(stageLiveMirror)) {
+        stageMirror = null;
+        updateMirrorCaption();
+        return;
+      }
+      const basis = mirrorBasis(
+        state?.revision ?? -1, selectedMode, stageViewport, stagePreviewSize[0], stagePreviewSize[1],
+      );
+      stageMirror = basis === stageMirrorCacheBasis
+        ? stageMirrorCache.get(stageContext) ?? null
+        : null;
+      updateMirrorCaption();
     };
     const receiveMirror = (raw) => {
       const mirror = normalizeMirror(raw);
-      if (!mirror || !mirrorImage) return false;
-      mirrorImage.src = mirror.image;
-      mirrorImage.alt = tr("mirrorAlt");
-      mirrorImage.hidden = false;
-      if (mirrorEmpty) mirrorEmpty.hidden = true;
-      if (mirrorCaption) mirrorCaption.textContent = format(tr("mirrorCaption"), mirror.width, mirror.height);
-      const previousContext = stageMirror?.geometry?.context;
-      const previousMode = stageMirror?.geometry?.mode;
-      const first = !stageMirror;
-      stageMirror = mirror;
-      if (backdropToggleInput) backdropToggleInput.disabled = false;
+      if (!mirror || mirror.revision !== state?.revision) return false;
+      if (previewExpectedRequest !== null && mirror.request !== previewExpectedRequest) return false;
+      if (previewSizeEditing) {
+        if (previewExpectedRequest === null && !previewSizeIntent) return false;
+        if (previewSizeIntent
+            && (mirror.width !== previewSizeIntent[0] || mirror.height !== previewSizeIntent[1])) return false;
+        previewSizeEditing = false;
+        previewSizeIntent = null;
+        previewExpectedRequest = null;
+      }
+      const previousContext = stageLiveMirror?.geometry?.context;
+      const previousMode = stageLiveMirror?.geometry?.mode;
+      const first = !stageLiveMirror;
+      stageLiveMirror = mirror;
+      rememberStageMirror(mirror);
+      stagePreviewSize = [mirror.width, mirror.height];
+      setPreviewInputValues(mirror.width, mirror.height);
       if (backdropToggleInput?.checked) {
         // The framing set being edited follows the real window's dimensions,
-        // and the stage follows the real page when it navigates or reskins —
-        // without fighting a user who deliberately picked the other view.
-        stageViewport = mirror.width >= 1440 ? "wide" : "normal";
+        // while an explicit page selection stays pinned. Captures from both
+        // contexts remain switchable without repeatedly foregrounding Aura.
+        if (!hasUsableMirrorGeometry(mirror)) {
+          stageMirror = null;
+          updateMirrorCaption();
+          renderStage();
+          return true;
+        }
+        stageViewport = mirror.geometry.viewport;
+        reflectStageViewport();
         const realContext = mirror.geometry?.context;
         if ((realContext === "new-chat" || realContext === "conversation")
-            && (first || realContext !== previousContext)) {
+            && !stageContextTouched && (first || realContext !== previousContext)) {
           stageContext = realContext;
         }
         const realMode = mirror.geometry?.mode;
-        if (realMode && realMode !== selectedMode && (first || realMode !== previousMode)) {
+        if (realMode && !appearanceTouched && realMode !== selectedMode
+            && (first || realMode !== previousMode)) {
           selectedMode = realMode;
           for (const input of modeInputs) input.checked = input.value === selectedMode;
           reflectTokens();
         }
-        if (first) announce(tr("stageBackdropReady"));
+        selectStageMirror();
+        if (first && stageMirror) announce(tr("stageBackdropReady"));
         renderStage();
         if (stageDrag && stageBackdropOn()) {
           stageBackdropImg.src = mirror.image;
@@ -2176,29 +3141,25 @@
       return true;
     };
     document.getElementById("stage-mirror-refresh")?.addEventListener("click", () => {
+      if (mirrorCaption) mirrorCaption.textContent = tr("mirrorEmpty");
       send({ type: "refresh-aura-mirror" });
     });
-    let topmostEnabled = false;
-    const topmostButton = document.getElementById("stage-real-topmost");
+    document.getElementById("stage-open-aura")?.addEventListener("click", () => {
+      send({ type: "open-aura" });
+    });
     topmostButton?.addEventListener("click", () => {
       if (!send({ type: "set-aura-topmost", enabled: !topmostEnabled })) return;
       topmostEnabled = !topmostEnabled;
       topmostButton.setAttribute("aria-pressed", String(topmostEnabled));
       announce(tr(topmostEnabled ? "topmostOn" : "topmostOff"));
     });
-    document.getElementById("stage-real-apply")?.addEventListener("click", () => {
-      const widthInput = document.getElementById("stage-real-width");
-      const heightInput = document.getElementById("stage-real-height");
-      const width = Math.round(clampNumber(Number(widthInput?.value) || 1180, 920, 3840));
-      const height = Math.round(clampNumber(Number(heightInput?.value) || 640, 620, 2400));
-      if (widthInput) widthInput.value = String(width);
-      if (heightInput) heightInput.value = String(height);
-      if (!send({ type: "set-aura-preview", size: `${width}x${height}` })) return;
-      stageViewport = width >= 1440 ? "wide" : "normal";
-      renderStage();
-      announce(tr("stageRealShown"));
-    });
-
+    for (const input of [previewWidthInput, previewHeightInput]) {
+      input?.addEventListener("input", () => {
+        previewSizeEditing = true;
+        schedulePreviewSize();
+      });
+      input?.addEventListener("change", () => commitPreviewSize({ clamp: true }));
+    }
     // State matrix: light/dark × new-chat/conversation at a glance. The four
     // cells and their layer images are built once and reconciled on every
     // render so a redraw never re-decodes artwork or rebinds click handlers.
@@ -2233,8 +3194,10 @@
               send({ type: "set-appearance", appearance: mode });
             }
             selectedMode = mode;
+            stageContextTouched = true;
             stageContext = context;
             for (const input of modeInputs) input.checked = input.value === selectedMode;
+            selectStageMirror();
             reflectTokens();
             renderStage();
           });
@@ -2352,7 +3315,16 @@
     const updateLayerGateBadges = () => {
       if (!state) return;
       for (const layer of state.layers) {
+        const gated = !stageLayerGate(layer);
+        const card = layerList.querySelector(`[data-layer-id="${CSS.escape(layer.id)}"]`);
         const badge = layerList.querySelector(`[data-layer-badge="${layer.index}"]`);
+        if (card) {
+          card.dataset.gated = String(gated);
+          for (const control of card.querySelectorAll(".layer-preset, [data-layer-state-edit]")) {
+            control.disabled = gated;
+            if (control.classList.contains("layer-preset")) control.dataset.gated = String(gated);
+          }
+        }
         if (!badge) continue;
         const reasons = [];
         if (layer.appearance !== "all" && layer.appearance !== selectedMode) {
@@ -2377,13 +3349,20 @@
       )));
       announce(format(tr("framingCopied"), tr(target === "wide" ? "stageWide" : "stageNormal")));
     };
-    if (typeof ResizeObserver === "function") new ResizeObserver(() => applyStageLayout()).observe(stageRoot);
+    if (typeof ResizeObserver === "function") {
+      const stageLayoutObserver = new ResizeObserver(() => applyStageLayout());
+      stageLayoutObserver.observe(stageRoot);
+      if (stageColumn) stageLayoutObserver.observe(stageColumn);
+    } else {
+      window.addEventListener("resize", applyStageLayout, { passive: true });
+    }
     // ── End live framing stage ─────────────────────────────────────────
 
     const buildTokenControls = () => {
       for (const group of TOKEN_GROUPS) {
         const details = document.createElement("details");
-        details.className = "token-group";
+        const quickEssential = ["groupCanvas", "groupSurface", "groupText", "groupAccent"].includes(group.label);
+        details.className = `token-group${quickEssential ? " quick-essential" : " advanced-only"}`;
         if (["groupCanvas", "groupSurface", "groupText", "groupAccent"].includes(group.label)) details.open = true;
         const groupSummary = document.createElement("summary");
         groupSummary.textContent = tr(group.label);
@@ -2419,7 +3398,7 @@
               setStageOverride(picker.dataset.editorField, picker.value.toUpperCase());
               applyStageLayout();
             });
-            picker.addEventListener("change", () => postToken(selectedMode, token, picker.value.toUpperCase()));
+            picker.addEventListener("change", () => queueTokenChange(selectedMode, token, picker.value.toUpperCase()));
             text.addEventListener("change", () => {
               const value = text.value.trim().toUpperCase();
               if (!COLOR_PATTERN.test(value)) {
@@ -2431,7 +3410,7 @@
               picker.value = value;
               setStageOverride(text.dataset.editorField, value);
               applyStageLayout();
-              postToken(selectedMode, token, value);
+              queueTokenChange(selectedMode, token, value);
             });
             row.append(label, picker, text);
             fields.appendChild(row);
@@ -2454,7 +3433,7 @@
               setStageOverride(range.dataset.editorField, Number(range.value) / 100);
               applyStageLayout();
             });
-            range.addEventListener("change", () => postToken(selectedMode, token, Number(range.value) / 100));
+            range.addEventListener("change", () => queueTokenChange(selectedMode, token, Number(range.value) / 100));
             row.append(label, range, output);
             fields.appendChild(row);
           }
@@ -2469,8 +3448,8 @@
       const mode = state.tokens[selectedMode];
       for (const input of tokenGroups.querySelectorAll("[data-editor-token]")) {
         const token = input.dataset.editorToken;
-        const value = mode[token];
         input.dataset.editorField = `tokens.${selectedMode}.${token}`;
+        const value = stageValue(input.dataset.editorField) ?? mode[token];
         if (input.type === "color") {
           input.value = value;
           const text = tokenGroups.querySelector(`[data-editor-token-text="${token}"]`);
@@ -2492,10 +3471,11 @@
         }
         const pass = related.every((check) => check.pass);
         const worst = related.reduce((left, right) => (left.ratio / left.minimum) <= (right.ratio / right.minimum) ? left : right);
-        chip.textContent = worst.ratio.toFixed(2);
+        chip.textContent = `${worst.ratio.toFixed(1)}:1`;
         chip.dataset.pass = String(pass);
         chip.setAttribute("aria-label",
           `${tr(CONTRAST_LABEL_KEYS[worst.id])} ${worst.ratio.toFixed(2)} / ${worst.minimum.toFixed(2)} · ${tr(pass ? "checkPass" : "checkFail")}`);
+        chip.title = tr(pass ? "checkPass" : "checkFail");
         chip.hidden = false;
       }
     };
@@ -2505,19 +3485,80 @@
       const values = state.shared;
       for (const input of sharedInputs) {
         const key = input.dataset.editorShared;
-        input.value = String(values[key]);
+        const path = `shared.${key}`;
+        const value = stageValue(path) ?? values[key];
+        if (input.tagName === "SELECT" && ["fontUi", "fontDisplay", "shadow"].includes(key)) {
+          setInheritedSelectPresentation(input, values.inherited[key] && !stageOverrides.has(path), value);
+        } else {
+          input.value = String(value);
+        }
       }
-      document.getElementById("editor-radius-output").value = `${Math.round(values.radius)} px`;
-      document.getElementById("editor-blur-output").value = `${Math.round(values.blur)} px`;
-      for (const input of scopeInputs) input.checked = input.value === values.backgroundScope;
+      const radius = Number(stageValue("shared.radius") ?? values.radius);
+      const blur = Number(stageValue("shared.blur") ?? values.blur);
+      const backgroundScope = stageValue("shared.backgroundScope") ?? values.backgroundScope;
+      setInheritedRadiusPresentation(values.inherited.radius && !stageOverrides.has("shared.radius"));
+      document.getElementById("editor-radius-output").value = `${Math.round(radius)} px`;
+      document.getElementById("editor-blur-output").value = `${Math.round(blur)} px`;
+      for (const input of scopeInputs) input.checked = input.value === backgroundScope;
       document.getElementById("background-scope-help").textContent = tr(
-        values.backgroundScope === "full-window" ? "fullScopeHelp" : "contentScopeHelp");
-      document.querySelector(".asset-guide-frame").dataset.scope = values.backgroundScope;
+        backgroundScope === "full-window" ? "fullScopeHelp" : "contentScopeHelp");
+      document.querySelector(".asset-guide-frame").dataset.scope = backgroundScope;
       for (const input of promptInputs) {
         const key = input.dataset.editorPrompt;
-        input.value = String(Math.round(values.prompt[key] * 100));
+        const value = Number(stageValue(`shared.prompt.${key}`) ?? values.prompt[key]);
+        input.value = String(Math.round(value * 100));
+        const exact = document.getElementById(`${input.id}-exact`);
+        if (exact) exact.value = input.value;
         const output = document.getElementById(`${input.id}-output`);
-        if (output) output.value = `${Math.round(values.prompt[key] * 100)}%`;
+        if (output) output.value = `${Math.round(value * 100)}%`;
+      }
+      if (nativePromptNote) {
+        nativePromptNote.hidden = !values.prompt.native
+          || STAGE_PROMPT_PATHS.some((path) => stageOverrides.has(path));
+      }
+    };
+
+    const reflectLauncher = () => {
+      if (!state) return;
+      for (const input of launcherInputs) {
+        const key = input.dataset.editorLauncher;
+        const value = stageValue(`launcher.${key}`) ?? state.launcher[key];
+        input.dataset.editorField = `launcher.${key}`;
+        input.value = String(value);
+        if (input.type === "color") {
+          const text = launcherTextInputs.find((candidate) => candidate.dataset.editorLauncherText === key);
+          if (text) {
+            text.value = String(value);
+            text.dataset.editorField = `launcher.${key}`;
+          }
+        }
+      }
+      const radius = Number(stageValue("launcher.radius") ?? state.launcher.radius);
+      const borderWidth = Number(stageValue("launcher.borderWidth") ?? state.launcher.borderWidth);
+      document.getElementById("editor-launcher-radius-output").value = `${Math.round(radius)} px`;
+      document.getElementById("editor-launcher-border-width-output").value = `${Math.round(borderWidth)} px`;
+      if (launcherPreview) {
+        const read = (key) => stageValue(`launcher.${key}`) ?? state.launcher[key];
+        launcherPreview.style.background = read("surface");
+        launcherPreview.style.color = read("foreground");
+        launcherPreview.style.borderColor = read("border");
+        launcherPreview.style.borderWidth = `${borderWidth}px`;
+        launcherPreview.style.borderRadius = `${radius}px`;
+        launcherPreview.style.setProperty("--editor-launcher-hover", read("surfaceHover"));
+        launcherPreview.style.setProperty("--editor-launcher-accent", read("accent"));
+      }
+      if (launcherMark) {
+        const source = state.launcherPreviewUrl;
+        if (launcherMark.src !== source) launcherMark.src = source;
+      }
+    };
+
+    const reflectMetadata = () => {
+      if (!state) return;
+      for (const input of metadataInputs) {
+        const collection = input.dataset.editorMetadata === "label" ? "labels" : "descriptions";
+        const path = `metadata.${collection}.${input.dataset.editorLocale}`;
+        input.value = String(stageValue(path) ?? "");
       }
     };
 
@@ -2528,21 +3569,22 @@
       return node;
     };
 
-    const layerSelect = ({ layer, preset = "shared", property, labelKey, values }) => {
+    const layerSelect = ({ layer, preset = "shared", property, labelKey, values, quick = false }) => {
       const field = document.createElement("label");
-      field.className = "layer-field";
+      field.className = `layer-field${quick ? "" : " advanced-only"}`;
       const label = document.createElement("span");
       label.textContent = tr(labelKey);
       const select = document.createElement("select");
-      select.dataset.editorFocus = `layer-${layer.index}-${preset}-${property}`;
+      select.dataset.editorFocus = `layer-${layer.id}-${preset}-${property}`;
       select.dataset.editorField = preset === "shared"
         ? `layers[${layer.index}].${property}`
         : `layers[${layer.index}].frames.${preset}.${property}`;
       for (const [value, key] of values) select.appendChild(option(value, tr(key)));
-      select.value = preset === "shared" ? String(layer[property]) : String(layer.frames[preset][property]);
+      select.value = String(stageValue(select.dataset.editorField)
+        ?? (preset === "shared" ? layer[property] : layer.frames[preset][property]));
       select.addEventListener("change", () => {
         setStageOverride(select.dataset.editorField, select.value);
-        postLayer(layer.index, preset, property, select.value);
+        queueLayerChange(layer.index, preset, property, select.value);
         renderStage();
       });
       field.append(label, select);
@@ -2551,7 +3593,7 @@
 
     const layerRange = ({ layer, preset = "shared", property, labelKey, min, max, step, value, display }) => {
       const field = document.createElement("label");
-      field.className = "layer-field";
+      field.className = "layer-field advanced-only";
       const label = document.createElement("span");
       label.textContent = tr(labelKey);
       const output = document.createElement("output");
@@ -2560,28 +3602,65 @@
       range.min = String(min);
       range.max = String(max);
       range.step = String(step);
-      range.value = String(value);
-      range.dataset.editorFocus = `layer-${layer.index}-${preset}-${property}`;
+      range.value = String(stageValue(preset === "shared"
+        ? `layers[${layer.index}].${property}`
+        : `layers[${layer.index}].frames.${preset}.${property}`) ?? value);
+      range.dataset.editorFocus = `layer-${layer.id}-${preset}-${property}`;
       range.dataset.editorField = preset === "shared"
         ? `layers[${layer.index}].${property}`
         : `layers[${layer.index}].frames.${preset}.${property}`;
+      const exact = document.createElement("input");
+      exact.type = "number";
+      exact.className = "layer-exact-value";
+      exact.min = String(min);
+      exact.max = String(max);
+      exact.step = String(step);
+      exact.value = range.value;
+      exact.inputMode = "decimal";
+      exact.dataset.editorFocus = `layer-${layer.id}-${preset}-${property}-number`;
+      exact.dataset.editorField = range.dataset.editorField;
+      exact.setAttribute("aria-label", `${tr(labelKey)} · ${tr("exactValue")}`);
+      const pair = document.createElement("span");
+      pair.className = "layer-range-pair";
       const formatValue = () => display(range.valueAsNumber);
       output.value = formatValue();
       range.addEventListener("input", () => {
+        exact.value = range.value;
         output.value = formatValue();
         setStageOverride(range.dataset.editorField, range.valueAsNumber);
         applyStageLayout();
       });
-      range.addEventListener("change", () => postLayer(layer.index, preset, property, range.valueAsNumber));
+      range.addEventListener("change", () => queueLayerChange(layer.index, preset, property, range.valueAsNumber));
+      exact.addEventListener("input", () => {
+        if (!Number.isFinite(exact.valueAsNumber)) return;
+        const next = clampNumber(exact.valueAsNumber, min, max);
+        range.value = String(next);
+        output.value = display(next);
+        setStageOverride(range.dataset.editorField, next);
+        applyStageLayout();
+      });
+      exact.addEventListener("change", () => {
+        if (!Number.isFinite(exact.valueAsNumber)) {
+          exact.value = range.value;
+          return;
+        }
+        const next = clampNumber(exact.valueAsNumber, min, max);
+        exact.value = String(next);
+        range.value = String(next);
+        queueLayerChange(layer.index, preset, property, next);
+      });
       label.append(" ", output);
-      field.append(label, range);
+      pair.append(range, exact);
+      field.append(label, pair);
       return field;
     };
 
-    const renderFrame = (layer, preset) => {
+    const renderFrame = (layer, preset, disabled = false) => {
       const frame = layer.frames[preset];
       const fieldset = document.createElement("fieldset");
-      fieldset.className = "layer-preset";
+      fieldset.className = "layer-preset advanced-only";
+      fieldset.disabled = disabled;
+      fieldset.dataset.gated = String(disabled);
       const legend = document.createElement("legend");
       legend.textContent = tr(preset === "normal" ? "normalPreset" : "widePreset");
       const grid = document.createElement("div");
@@ -2601,21 +3680,68 @@
       return fieldset;
     };
 
+    // Everything a card renders, so an unrelated edit (e.g. a colour tweak that
+    // still triggers a full reflect) can leave the layer DOM — and its open,
+    // scroll, and focus state — untouched instead of tearing it down and
+    // reloading every thumbnail.
+    const LAYER_SIGNATURE_SHARED = ["role", "appearance", "context", "viewport", "mask", "mobile", "opacity", "visible"];
+    const LAYER_SIGNATURE_FRAME = ["anchor", "focalX", "focalY", "positionX", "positionY", "scale"];
+    const layerRenderSignature = () => {
+      const parts = [selectedLayerId, state.layers.length];
+      for (const layer of state.layers) {
+        const i = layer.index;
+        parts.push(layer.id, i, layer.previewUrl ?? "", layer.bytes ?? "", stageLayerGate(layer) ? 1 : 0);
+        for (const property of LAYER_SIGNATURE_SHARED) {
+          parts.push(stageValue(`layers[${i}].${property}`) ?? layer[property]);
+        }
+        for (const preset of ["normal", "wide"]) {
+          for (const property of LAYER_SIGNATURE_FRAME) {
+            parts.push(stageValue(`layers[${i}].frames.${preset}.${property}`) ?? layer.frames[preset][property]);
+          }
+        }
+      }
+      return parts.join("");
+    };
+
     const renderLayers = (focusKey = null) => {
-      layerList.replaceChildren();
       if (!state.layers.length) {
+        selectedLayerId = null;
+        if (renderedLayerSignature === "empty" && layerList.querySelector(".editor-layer-empty")) return;
+        renderedLayerSignature = "empty";
+        layerList.replaceChildren();
         const empty = document.createElement("p");
         empty.className = "editor-layer-empty";
         empty.textContent = tr("noLayers");
         layerList.appendChild(empty);
         return;
       }
+      if (!layerForId(selectedLayerId)) selectedLayerId = state.layers[0].id;
+      const signature = layerRenderSignature();
+      if (signature === renderedLayerSignature && layerList.querySelector(".layer-card")) return;
+      renderedLayerSignature = signature;
+      layerList.replaceChildren();
       for (const layer of state.layers) {
+        const gated = !stageLayerGate(layer);
         const card = document.createElement("details");
         card.className = "layer-card";
         card.dataset.editorLayer = String(layer.index);
-        card.open = focusKey?.startsWith(`layer-${layer.index}-`) || layer.index === 0;
+        card.dataset.layerId = layer.id;
+        card.dataset.selected = String(layer.id === selectedLayerId);
+        card.open = layer.id === selectedLayerId;
         const cardSummary = document.createElement("summary");
+        cardSummary.dataset.editorFocus = `layer-${layer.id}-summary`;
+        cardSummary.addEventListener("click", () => {
+          selectedLayerId = layer.id;
+          selectStageItem({ kind: "layer", id: layer.id }, { reveal: false });
+          requestAnimationFrame(() => {
+            card.open = true;
+            for (const sibling of layerList.querySelectorAll(".layer-card")) {
+              const selected = sibling === card;
+              sibling.dataset.selected = String(selected);
+              if (!selected) sibling.open = false;
+            }
+          });
+        });
         const preview = document.createElement("span");
         preview.className = "layer-preview";
         if (layer.previewUrl) {
@@ -2628,11 +3754,14 @@
         const summaryText = document.createElement("span");
         summaryText.className = "layer-summary-text";
         const strong = document.createElement("strong");
-        strong.textContent = format(tr("layerNumber"), layer.index + 1);
         const small = document.createElement("small");
-        const roleLabel = tr(`role${layer.role[0].toUpperCase()}${layer.role.slice(1)}`);
-        const appearanceLabel = tr(`appearance${layer.appearance === "all" ? "All" : layer.appearance[0].toUpperCase() + layer.appearance.slice(1)}`);
-        const contextKey = layer.context === "all" ? "contextAll" : layer.context === "new-chat" ? "contextNewChat" : "contextConversation";
+        const role = String(stageValue(`layers[${layer.index}].role`) ?? layer.role);
+        const appearance = String(stageValue(`layers[${layer.index}].appearance`) ?? layer.appearance);
+        const context = String(stageValue(`layers[${layer.index}].context`) ?? layer.context);
+        const roleLabel = tr(`role${role[0].toUpperCase()}${role.slice(1)}`);
+        strong.textContent = format(tr("layerName"), roleLabel, layer.index + 1);
+        const appearanceLabel = tr(`appearance${appearance === "all" ? "All" : appearance[0].toUpperCase() + appearance.slice(1)}`);
+        const contextKey = context === "all" ? "contextAll" : context === "new-chat" ? "contextNewChat" : "contextConversation";
         small.textContent = format(tr("layerSummary"), roleLabel, appearanceLabel, tr(contextKey));
         const gateBadge = document.createElement("span");
         gateBadge.className = "layer-gate-badge";
@@ -2646,23 +3775,34 @@
 
         const body = document.createElement("div");
         body.className = "layer-body";
+        const inspectorTitle = document.createElement("h3");
+        inspectorTitle.className = "layer-inspector-title";
+        inspectorTitle.textContent = tr("layerInspectorTitle");
         const actions = document.createElement("div");
         actions.className = "layer-actions";
         const replace = document.createElement("button");
         replace.type = "button";
         replace.className = "ghost-button";
         replace.textContent = tr("replaceImage");
-        replace.dataset.editorFocus = `layer-${layer.index}-replace`;
+        replace.dataset.editorFocus = `layer-${layer.id}-replace`;
+        replace.dataset.layerStructure = "";
         replace.addEventListener("click", () => {
           const base = mutationBase();
-          if (base) post({ type: "pick-theme-layer-image", ...base, index: layer.index, role: layer.role });
+          const role = String(stageValue(`layers[${layer.index}].role`) ?? layer.role);
+          const appearance = String(stageValue(`layers[${layer.index}].appearance`) ?? layer.appearance);
+          const context = String(stageValue(`layers[${layer.index}].context`) ?? layer.context);
+          if (base) post({
+            type: "pick-theme-layer-image", ...base, index: layer.index, role, appearance, context,
+          });
         });
         const up = document.createElement("button");
         up.type = "button";
         up.className = "ghost-button";
         up.textContent = tr("moveUp");
         up.disabled = layer.index === 0;
-        up.dataset.editorFocus = `layer-${layer.index}-move-up`;
+        up.dataset.layerBoundary = String(layer.index === 0);
+        up.dataset.editorFocus = `layer-${layer.id}-move-up`;
+        up.dataset.layerStructure = "";
         up.addEventListener("click", () => {
           const base = mutationBase();
           if (base) post({ type: "move-theme-layer", ...base, index: layer.index, direction: "up" });
@@ -2672,38 +3812,45 @@
         down.className = "ghost-button";
         down.textContent = tr("moveDown");
         down.disabled = layer.index === state.layers.length - 1;
-        down.dataset.editorFocus = `layer-${layer.index}-move-down`;
+        down.dataset.layerBoundary = String(layer.index === state.layers.length - 1);
+        down.dataset.editorFocus = `layer-${layer.id}-move-down`;
+        down.dataset.layerStructure = "";
         down.addEventListener("click", () => {
           const base = mutationBase();
           if (base) post({ type: "move-theme-layer", ...base, index: layer.index, direction: "down" });
         });
         const remove = document.createElement("button");
         remove.type = "button";
-        remove.className = "ghost-button";
+        remove.className = "ghost-button danger-button";
         remove.textContent = tr("removeLayer");
-        remove.dataset.editorFocus = `layer-${layer.index}-remove`;
+        remove.dataset.editorFocus = `layer-${layer.id}-remove`;
+        remove.dataset.layerStructure = "";
         remove.addEventListener("click", () => {
           const base = mutationBase();
           if (base) post({ type: "remove-theme-layer", ...base, index: layer.index });
         });
         const copyWide = document.createElement("button");
         copyWide.type = "button";
-        copyWide.className = "ghost-button";
+        copyWide.className = "ghost-button advanced-only";
         copyWide.textContent = tr("copyFramingToWide");
-        copyWide.dataset.editorFocus = `layer-${layer.index}-copy-wide`;
+        copyWide.disabled = gated;
+        copyWide.dataset.layerStateEdit = "";
+        copyWide.dataset.editorFocus = `layer-${layer.id}-copy-wide`;
         copyWide.addEventListener("click", () => copyLayerFraming(layer.index, "normal", "wide"));
         const copyNormal = document.createElement("button");
         copyNormal.type = "button";
-        copyNormal.className = "ghost-button";
+        copyNormal.className = "ghost-button advanced-only";
         copyNormal.textContent = tr("copyFramingToNormal");
-        copyNormal.dataset.editorFocus = `layer-${layer.index}-copy-normal`;
+        copyNormal.disabled = gated;
+        copyNormal.dataset.layerStateEdit = "";
+        copyNormal.dataset.editorFocus = `layer-${layer.id}-copy-normal`;
         copyNormal.addEventListener("click", () => copyLayerFraming(layer.index, "wide", "normal"));
         actions.append(replace, up, down, copyWide, copyNormal, remove);
 
         const sharedGrid = document.createElement("div");
         sharedGrid.className = "layer-grid";
         sharedGrid.append(
-          layerSelect({ layer, property: "role", labelKey: "layerRole", values: ROLE_IDS.map((value) => [value, `role${value[0].toUpperCase()}${value.slice(1)}`]) }),
+          layerSelect({ layer, property: "role", labelKey: "layerRole", quick: true, values: ROLE_IDS.map((value) => [value, `role${value[0].toUpperCase()}${value.slice(1)}`]) }),
           layerSelect({ layer, property: "appearance", labelKey: "appearanceUse", values: [["all", "appearanceAll"], ["light", "appearanceLight"], ["dark", "appearanceDark"]] }),
           layerSelect({ layer, property: "context", labelKey: "contextUse", values: [["all", "contextAll"], ["new-chat", "contextNewChat"], ["conversation", "contextConversation"]] }),
           layerSelect({ layer, property: "viewport", labelKey: "viewportUse", values: [["all", "viewportAll"], ["normal", "viewportNormal"], ["wide", "viewportWide"]] }),
@@ -2715,32 +3862,72 @@
         visible.className = "layer-field layer-checkbox";
         const visibleInput = document.createElement("input");
         visibleInput.type = "checkbox";
-        visibleInput.checked = layer.visible;
-        visibleInput.dataset.editorFocus = `layer-${layer.index}-shared-visible`;
+        visibleInput.checked = Boolean(stageValue(`layers[${layer.index}].visible`) ?? layer.visible);
+        visibleInput.dataset.editorFocus = `layer-${layer.id}-shared-visible`;
         visibleInput.dataset.editorField = `layers[${layer.index}].visible`;
         visibleInput.addEventListener("change", () => {
           setStageOverride(`layers[${layer.index}].visible`, visibleInput.checked);
-          postLayer(layer.index, "shared", "visible", visibleInput.checked);
+          queueLayerChange(layer.index, "shared", "visible", visibleInput.checked);
           renderStage();
         });
         visible.append(visibleInput, document.createTextNode(tr("layerVisible")));
         sharedGrid.appendChild(visible);
 
+        const placementScope = document.createElement("p");
+        placementScope.className = "help layer-placement-scope";
+        const appearanceScope = appearance === "all" ? tr("appearanceBoth") : appearanceLabel;
+        const contextScope = context === "all" ? tr("contextBoth") : tr(contextKey);
+        const scopeLabel = `${appearanceScope} · ${contextScope}`;
+        placementScope.textContent = format(tr(
+          appearance === "all" || context === "all" ? "layerPlacementShared" : "layerPlacementSpecific",
+        ), scopeLabel);
+
         const meta = document.createElement("p");
-        meta.className = "layer-meta";
+        meta.className = "layer-meta advanced-only";
         meta.textContent = format(tr("imageBytes"), formatBytes(layer.bytes));
-        body.append(actions, sharedGrid, renderFrame(layer, "normal"), renderFrame(layer, "wide"), meta);
+        body.append(inspectorTitle, sharedGrid, placementScope, actions,
+          renderFrame(layer, "normal", gated), renderFrame(layer, "wide", gated), meta);
         card.append(cardSummary, body);
         layerList.appendChild(card);
       }
       if (focusKey) requestAnimationFrame(() => layerList.querySelector(`[data-editor-focus="${focusKey}"]`)?.focus());
     };
 
-    const focusError = (field) => {
+    const revealAdvancedForError = (field) => {
       const direct = editor.querySelector(`[data-editor-field="${CSS.escape(field)}"]`);
+      if (field.startsWith("budget.") || direct?.closest(".advanced-only")) {
+        editor.dataset.level = "advanced";
+        for (const input of document.querySelectorAll('input[name="editor-level"]')) {
+          input.checked = input.value === "advanced";
+        }
+      }
+      const panel = direct?.closest("[data-editor-panel]")?.dataset.editorPanel
+        ?? (field.startsWith("budget.") ? "checks"
+          : field.startsWith("layers[") ? "artwork"
+            : field.startsWith("shared.prompt.") ? "layout" : "design");
+      setInspectorPanel(panel);
+      return direct;
+    };
+
+    const focusBelowInspector = (target) => {
+      if (!target) return;
+      target.focus({ preventScroll: true });
+      if (!editorControls || !inspectorHead) return;
+      const targetRect = target.getBoundingClientRect();
+      const controlsRect = editorControls.getBoundingClientRect();
+      const visibleTop = Math.max(controlsRect.top, inspectorHead.getBoundingClientRect().bottom) + 12;
+      const visibleBottom = controlsRect.bottom - 12;
+      const delta = targetRect.top < visibleTop
+        ? targetRect.top - visibleTop
+        : targetRect.bottom > visibleBottom ? targetRect.bottom - visibleBottom : 0;
+      if (delta) editorControls.scrollTop += delta;
+    };
+
+    const focusError = (field) => {
+      const direct = revealAdvancedForError(field);
       if (direct) {
         direct.closest("details")?.setAttribute("open", "");
-        direct.focus();
+        focusBelowInspector(direct);
         return;
       }
       const contrast = /^(light|dark)\.(.+)$/.exec(field);
@@ -2751,23 +3938,50 @@
         const token = contrast[2].includes("sidebar") ? "sidebar"
           : contrast[2].includes("surface") ? "surface"
             : contrast[2].includes("accent") || contrast[2] === "focus" ? "accent" : "text";
-        tokenGroups.querySelector(`[data-editor-token="${token}"]`)?.focus();
+        const target = tokenGroups.querySelector(`[data-editor-token="${token}"]`);
+        if (target?.closest(".advanced-only")) {
+          editor.dataset.level = "advanced";
+          for (const input of document.querySelectorAll('input[name="editor-level"]')) {
+            input.checked = input.value === "advanced";
+          }
+        }
+        setInspectorPanel("design");
+        renderStage();
+        target?.closest("details")?.setAttribute("open", "");
+        focusBelowInspector(target);
         return;
       }
-      const layer = /^layers\[(\d)]$/.exec(field);
+      const layer = /^layers\[(layer-[a-f0-9]{32}|\d+)]$/.exec(field);
       if (layer) {
-        const card = layerList.querySelector(`[data-editor-layer="${layer[1]}"]`);
+        setInspectorPanel("artwork");
+        const card = layer[1].startsWith("layer-")
+          ? layerList.querySelector(`[data-layer-id="${CSS.escape(layer[1])}"]`)
+          : layerList.querySelector(`[data-editor-layer="${layer[1]}"]`);
         if (card) {
+          selectedLayerId = card.dataset.layerId;
+          syncSelectedLayerCards();
           card.open = true;
-          card.querySelector("summary")?.focus();
+          focusBelowInspector(card.querySelector("summary"));
           return;
         }
       }
-      (field.startsWith("budget.") ? feedbackRoot : title).focus();
+      focusBelowInspector(field.startsWith("budget.") ? feedbackRoot : title);
+    };
+
+    const validationMessageFor = (error) => {
+      if (!error) return tr("validationGenericFix");
+      if (error.field.startsWith("launcher.")) return tr("validationIdentityFix");
+      if (error.code.includes("contrast") || /^(light|dark)\./.test(error.field)) return tr("validationColorFix");
+      if (error.code.includes("budget") || error.field.startsWith("budget.")) return tr("validationBudgetFix");
+      if (error.field.startsWith("layers[")) return tr("validationArtworkFix");
+      if (error.field.startsWith("metadata.") || error.field.startsWith("labels.")
+          || error.field.startsWith("descriptions.")) return tr("validationMetadataFix");
+      return tr("validationGenericFix");
     };
 
     const renderFeedback = () => {
       feedbackRoot.replaceChildren();
+      quickFeedback.replaceChildren();
       errorSummary.replaceChildren();
       errorSummary.hidden = true;
       const list = document.createElement("ul");
@@ -2799,10 +4013,21 @@
         addItem(`${tr("budgetLayer")} ${layer.id + 1}`, format(tr("budgetValue"), formatBytes(layer.bytes), formatBytes(layer.limit)), layer.pass);
       }
       feedbackRoot.appendChild(list);
+      const quickText = document.createElement("span");
+      quickText.textContent = state.feedback.valid
+        ? tr("quickFeedbackValid")
+        : `${format(tr("quickFeedbackInvalid"), validationMessageFor(state.feedback.errors[0]))} ${tr("studioLastValid")}`;
+      quickFeedback.dataset.pass = String(state.feedback.valid);
+      quickFeedback.appendChild(quickText);
       if (state.feedback.errors.length) {
         const first = state.feedback.errors[0];
+        const quickJump = document.createElement("button");
+        quickJump.type = "button";
+        quickJump.textContent = tr("firstIssue");
+        quickJump.addEventListener("click", () => focusError(first.field));
+        quickFeedback.appendChild(quickJump);
         const message = document.createElement("span");
-        message.textContent = format(tr("validationIssue"), first.field);
+        message.textContent = validationMessageFor(first);
         const jump = document.createElement("button");
         jump.type = "button";
         jump.textContent = tr("firstIssue");
@@ -2814,30 +4039,117 @@
 
     const reflectButtonStates = () => {
       if (!state) return;
-      const busy = Boolean(pendingAction);
-      undoButton.disabled = busy || !state.canUndo;
-      redoButton.disabled = busy || !state.canRedo;
-      resetButton.disabled = busy || !state.dirty;
-      saveButton.disabled = busy || (!state.dirty && !state.isNew) || !state.feedback.valid;
-      cancelButton.disabled = busy;
-      addLayerButton.disabled = busy || state.layers.length >= 8;
+      reflectDirtyState();
+      const busy = Boolean(pendingAction || coalescedChanges.size || changeFlushTimer
+        || stageKeyTimer || stageKeyPaths.size);
+      const blocked = deferredChanges.size > 0;
+      undoButton.disabled = busy || blocked || !state.canUndo;
+      redoButton.disabled = busy || blocked || !state.canRedo;
+      resetButton.disabled = busy || blocked || !state.dirty;
+      saveButton.disabled = busy
+        || (state.feedback.valid && (blocked || (!state.dirty && !state.isNew)));
+      // Leaving must always be possible while edits are still settling; only a
+      // blocking structural action (which briefly replaces state) holds it.
+      cancelButton.disabled = isBlockingAction();
+      backButton.disabled = isBlockingAction();
+      addLayerButton.disabled = busy || blocked || state.layers.length >= 8;
+      stageOpacityInput.disabled = isBlockingAction() || blocked;
+      if (replaceLauncherMarkButton) replaceLauncherMarkButton.disabled = busy || blocked;
+      addLayerButton.dataset.layerStructure = "";
+      for (const button of editor.querySelectorAll("[data-layer-structure]")) {
+        button.disabled = busy || blocked || (button === addLayerButton && state.layers.length >= 8)
+          || button.dataset.layerBoundary === "true";
+      }
     };
 
     const reflect = (focusKey = null) => {
       if (!state) return;
       title.textContent = format(tr("editorTitleFor"), state.label);
       summary.textContent = tr("editorSummary");
-      dirtyPill.textContent = state.dirty ? tr("unsavedState") : tr("savedState");
-      dirtyPill.dataset.state = state.dirty ? "dirty" : "saved";
+      reflectDirtyState();
       validPill.textContent = state.feedback.valid ? tr("validState") : tr("invalidState");
       validPill.dataset.state = state.feedback.valid ? "valid" : "invalid";
       for (const input of modeInputs) input.checked = input.value === selectedMode;
       reflectTokens();
       reflectShared();
+      reflectLauncher();
+      reflectMetadata();
       renderLayers(focusKey);
       renderFeedback();
       reflectButtonStates();
       renderStage();
+    };
+
+    const settlePendingAction = (normalized) => {
+      const { error: actionError } = normalized;
+      if (!pendingAction || normalized.lastAction !== pendingAction) return "waiting";
+      const succeeded = normalized.actionSucceeded !== false;
+      if (pendingAction !== "apply-theme-patch") {
+        const settledAction = pendingAction;
+        setPending(null);
+        if (actionError === "picker-cancelled") {
+          announce(tr("editorReady"));
+          return "settled";
+        }
+        if (!succeeded) dropStageWork();
+        const successMessage = settledAction === "pick-theme-launcher-mark"
+          ? tr("launcherMarkImported") : tr("editorReady");
+        const failureMessage = settledAction === "pick-theme-launcher-mark"
+          ? tr(actionError === "identity-apply-failed" ? "launcherMarkApplyFailed" : "launcherMarkFailed")
+          : tr("editorActionFailed");
+        announce(succeeded ? successMessage : failureMessage, succeeded ? "ok" : "error");
+        return "settled";
+      }
+      if (!inFlightSession || inFlightRevision === null
+          || normalized.session !== inFlightSession) {
+        dropStageWork();
+        setPending(null);
+        announce(tr("editorActionFailed"), "error");
+        return "stopped";
+      }
+      if (succeeded) {
+        // `lastAction` remains in every subsequent host state. Only the exact
+        // one-revision advance can acknowledge this patch rather than repeat
+        // a previous patch result.
+        if (normalized.revision !== inFlightRevision + 1) return "waiting";
+        clearInFlightChanges();
+        setPending(null);
+        announce(tr("editorReady"));
+        if (actionAfterPatch) {
+          const followup = actionAfterPatch;
+          actionAfterPatch = null;
+          const base = mutationBase();
+          const rebased = base && (Object.hasOwn(followup, "session") || Object.hasOwn(followup, "revision"))
+            ? { ...followup, ...base }
+            : followup;
+          if (!post(rebased)) announce(tr("editorActionFailed"), "error");
+        }
+        return "settled";
+      }
+      if (actionError === "request-rejected") {
+        if (normalized.revision > inFlightRevision) {
+          // The host moved forward before this request arrived. Rebase once
+          // against its confirmed revision; newer local values still win.
+          requeueInFlightChanges();
+          setPending(null);
+          announce(tr("editorActionFailed"), "error");
+          return "retry";
+        }
+        // A same-revision rejection may be permanent. Keep the local values
+        // visible, stop automatic traffic, and retry only after a fresh edit.
+        deferInFlightChanges();
+        actionAfterPatch = null;
+        setPending(null);
+        announce(tr("editorActionFailed"), "error");
+        return "blocked";
+      }
+      if (normalized.revision !== inFlightRevision + 1) return "waiting";
+      // Contrast/budget failures are persisted edits, not transport failures.
+      clearInFlightChanges();
+      actionAfterPatch = null;
+      setPending(null);
+      announce(tr("editorActionFailed"), "error");
+      return "settled";
     };
 
     const receive = (rawState, appearance = "system") => {
@@ -2857,6 +4169,7 @@
           return true;
         }
         state = null;
+        onStudioStyleChange?.(null, null, null, null);
         if (wasEditing || action) hideEditor(action);
         return true;
       }
@@ -2867,19 +4180,30 @@
         selectedMode = appearance === "dark" || (appearance === "system" && prefersDark) ? "dark" : "light";
         entryAppearance = appearance;
         appearanceTouched = false;
+        stageContextTouched = false;
+        stageMirror = null;
+        stageLiveMirror = null;
+        stageMirrorCache.clear();
+        stageMirrorCacheBasis = null;
+        previewSizeEditing = false;
+        previewSizeIntent = null;
+        previewExpectedRequest = null;
       }
       returnTheme = normalized.isNew ? normalized.sourceId : normalized.id;
       state = normalized;
-      if (normalized.lastAction && normalized.lastAction === pendingAction) {
-        const succeeded = normalized.actionSucceeded !== false;
-        setPending(null);
-        if (!succeeded) dropStageWork();
-        announce(succeeded ? tr("editorReady") : tr("editorActionFailed"), succeeded ? "ok" : "error");
-      } else if (!pendingAction) setPending(null);
+      selectStageMirror();
+      onStudioStyleChange?.(
+        normalized.studioStyle,
+        normalized.id,
+        normalized.launcherStyle,
+        normalized.launcherStylePreviewUrl,
+      );
+      const settlement = settlePendingAction(normalized);
+      if (settlement === "waiting" && !pendingAction) setPending(null);
       showEditor();
       reflect(entering ? null : focusKey);
       if (entering) announce(tr("editorReady"));
-      pumpMutationQueue();
+      if (settlement !== "blocked" && settlement !== "stopped") flushThemeChanges();
       return true;
     };
 
@@ -2890,11 +4214,33 @@
         send({ type: "set-appearance", appearance: input.value });
       }
       selectedMode = input.value;
+      selectStageMirror();
       reflectTokens();
       renderStage();
     }));
-    document.getElementById("copy-light-dark").addEventListener("click", () => postToken("mode-copy", "tokens", "light"));
-    document.getElementById("copy-dark-light").addEventListener("click", () => postToken("mode-copy", "tokens", "dark"));
+    document.getElementById("copy-light-dark").addEventListener("click", () => queueTokenChange("mode-copy", "tokens", "light"));
+    document.getElementById("copy-dark-light").addEventListener("click", () => queueTokenChange("mode-copy", "tokens", "dark"));
+
+    metadataInputs.forEach((input) => input.addEventListener("change", () => {
+      const data = input.dataset;
+      const value = input.value.trim();
+      if (!value) {
+        input.setAttribute("aria-invalid", "true");
+        announce(tr("editorActionFailed"), "error");
+        return;
+      }
+      input.removeAttribute("aria-invalid");
+      input.value = value;
+      const collection = data.editorMetadata === "label" ? "labels" : "descriptions";
+      setStageOverride(`metadata.${collection}.${data.editorLocale}`, value);
+      const field = data.editorMetadata;
+      queueThemeChange({
+        kind: "metadata",
+        field,
+        locale: data.editorLocale,
+        value,
+      });
+    }));
 
     sharedInputs.forEach((input) => {
       const key = input.dataset.editorShared;
@@ -2903,73 +4249,204 @@
       input.addEventListener("input", () => {
         if (unitOutput) unitOutput.value = `${input.value} px`;
         if (input.type === "range") {
+          if (key === "radius") setInheritedRadiusPresentation(false);
           setStageOverride(input.dataset.editorField, input.valueAsNumber);
           applyStageLayout();
         }
       });
       input.addEventListener("change", () => {
+        if (input.value === THEME_ORIGINAL) return;
         const value = input.type === "range" ? input.valueAsNumber : input.value;
         setStageOverride(input.dataset.editorField, value);
         applyStageLayout();
-        postToken("shared", key, value);
+        queueTokenChange("shared", key, value);
       });
+    });
+    const launcherLabelKeys = Object.freeze({
+      surface: "launcherSurface",
+      surfaceHover: "launcherSurfaceHover",
+      foreground: "launcherForeground",
+      accent: "launcherAccent",
+      border: "launcherBorder",
+      radius: "launcherRadius",
+      borderWidth: "launcherBorderWidth",
+    });
+    for (const input of launcherInputs) {
+      const key = input.dataset.editorLauncher;
+      input.setAttribute("aria-label", tr(launcherLabelKeys[key]));
+      if (input.type === "color") {
+        const text = launcherTextInputs.find((candidate) => candidate.dataset.editorLauncherText === key);
+        if (text) text.setAttribute("aria-label", `${tr(launcherLabelKeys[key])} HEX`);
+        input.addEventListener("input", () => {
+          const value = input.value.toUpperCase();
+          if (text) {
+            text.value = value;
+            text.removeAttribute("aria-invalid");
+          }
+          setStageOverride(`launcher.${key}`, value);
+          reflectLauncher();
+        });
+        input.addEventListener("change", () => queueTokenChange("shared", launcherToken(key), input.value.toUpperCase()));
+        text?.addEventListener("change", () => {
+          const value = text.value.trim().toUpperCase();
+          if (!COLOR_PATTERN.test(value)) {
+            text.setAttribute("aria-invalid", "true");
+            announce(tr("editorActionFailed"), "error");
+            return;
+          }
+          text.removeAttribute("aria-invalid");
+          input.value = value;
+          setStageOverride(`launcher.${key}`, value);
+          reflectLauncher();
+          queueTokenChange("shared", launcherToken(key), value);
+        });
+      } else {
+        input.addEventListener("input", () => {
+          setStageOverride(`launcher.${key}`, input.valueAsNumber);
+          reflectLauncher();
+        });
+        input.addEventListener("change", () => queueTokenChange("shared", launcherToken(key), input.valueAsNumber));
+      }
+    }
+    replaceLauncherMarkButton?.addEventListener("click", () => {
+      const base = editorMessageBase();
+      if (base) post({ type: "pick-theme-launcher-mark", ...base });
     });
     scopeInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
       setStageOverride("shared.backgroundScope", input.value);
       applyStageLayout();
-      postToken("shared", "backgroundScope", input.value);
+      queueTokenChange("shared", "backgroundScope", input.value);
     }));
     promptInputs.forEach((input) => {
       input.addEventListener("input", () => {
+        if (stageContext !== "new-chat") return;
+        seedNativePromptOverrides();
         document.getElementById(`${input.id}-output`).value = `${input.value}%`;
+        const exact = document.getElementById(`${input.id}-exact`);
+        if (exact) exact.value = input.value;
         setStageOverride(input.dataset.editorField, input.valueAsNumber / 100);
         applyStageLayout();
       });
       input.addEventListener("change", () => {
-        const token = input.dataset.editorPrompt === "width" ? "promptWidth"
-          : input.dataset.editorPrompt === "x" ? "promptX" : "promptY";
-        postToken("shared", token, input.valueAsNumber / 100);
+        if (stageContext !== "new-chat") return;
+        commitStagePaths(STAGE_PROMPT_PATHS);
+      });
+    });
+    promptExactInputs.forEach((exact) => {
+      const key = exact.dataset.editorPromptExact;
+      const range = promptInputs.find((input) => input.dataset.editorPrompt === key);
+      if (!range) return;
+      const labelKey = key === "width" ? "promptWidth" : key === "x" ? "horizontalOffset" : "verticalOffset";
+      exact.setAttribute("aria-label", `${tr(labelKey)} · ${tr("exactValue")}`);
+      const updateFromExact = () => {
+        if (stageContext !== "new-chat") return null;
+        if (!Number.isFinite(exact.valueAsNumber)) return null;
+        seedNativePromptOverrides();
+        const next = clampNumber(exact.valueAsNumber, Number(exact.min), Number(exact.max));
+        exact.value = String(next);
+        range.value = String(next);
+        document.getElementById(`${range.id}-output`).value = `${next}%`;
+        setStageOverride(range.dataset.editorField, next / 100);
+        applyStageLayout();
+        return next;
+      };
+      exact.addEventListener("input", updateFromExact);
+      exact.addEventListener("change", () => {
+        const next = updateFromExact();
+        if (next === null) {
+          exact.value = range.value;
+          return;
+        }
+        commitStagePaths(STAGE_PROMPT_PATHS);
       });
     });
 
-    undoButton.addEventListener("click", () => {
+    const performUndo = () => {
+      if (undoButton.disabled) return;
       const base = mutationBase();
       if (base) post({ type: "undo-theme-edit", ...base });
-    });
-    redoButton.addEventListener("click", () => {
+    };
+    const performRedo = () => {
+      if (redoButton.disabled) return;
       const base = mutationBase();
       if (base) post({ type: "redo-theme-edit", ...base });
-    });
-    resetButton.addEventListener("click", () => showConfirm({
-      titleText: tr("confirmResetTitle"), bodyText: tr("confirmResetBody"), actionText: tr("confirmResetAction"),
-      opener: resetButton, callback: () => state && post({ type: "begin-theme-edit", theme: state.id, reset: true }),
-    }));
-    saveButton.addEventListener("click", () => {
+    };
+    const performSave = () => {
+      if (saveButton.disabled) return;
       if (!state?.feedback.valid) {
         errorSummary.hidden = false;
-        errorSummary.focus?.();
+        focusBelowInspector(errorSummary);
         announce(tr("saveBlocked"), "error");
         return;
       }
       const base = mutationBase();
       if (base) post({ type: "save-theme-edit", ...base });
+    };
+    undoButton.addEventListener("click", performUndo);
+    redoButton.addEventListener("click", performRedo);
+    resetButton.addEventListener("click", () => showConfirm({
+      titleText: tr("confirmResetTitle"), bodyText: tr("confirmResetBody"), actionText: tr("confirmResetAction"),
+      opener: resetButton, callback: () => state && post({ type: "begin-theme-edit", theme: state.id, reset: true }),
+    }));
+    saveButton.addEventListener("click", performSave);
+
+    // Editor-wide shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z
+    // redo, Ctrl/Cmd+S save. Skipped while a dialog is open, and undo/redo
+    // yields to the browser's native text history when a text field is focused.
+    document.addEventListener("keydown", (event) => {
+      if (!state || editor.hidden) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (document.querySelector("dialog[open]")) return;
+      const key = event.key.toLowerCase();
+      if (key === "s") {
+        event.preventDefault();
+        performSave();
+        return;
+      }
+      const target = event.target;
+      const editingText = target instanceof HTMLElement
+        && (target.isContentEditable
+          || target.matches("textarea, input:not([type=color]):not([type=range]):not([type=radio]):not([type=checkbox]):not([type=button])"));
+      if (editingText) return;
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        performUndo();
+      } else if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        performRedo();
+      }
     });
     const discard = () => {
       const base = mutationBase();
-      if (base) post({ type: "discard-theme-edit", ...base });
+      if (!base) return;
+      // Cancel/Back stay live while a value patch is syncing; if that patch is
+      // still in flight, post() defers the discard, so schedule it to run the
+      // moment the patch settles rather than dropping it silently.
+      if (!post({ type: "discard-theme-edit", ...base }) && pendingAction) {
+        actionAfterPatch = { type: "discard-theme-edit", ...base };
+      }
     };
-    cancelButton.addEventListener("click", () => {
-      if (!state?.dirty) { discard(); return; }
+    const requestExit = (opener) => {
+      if (!hasUnsavedEdits()) { discard(); return; }
       showConfirm({
         titleText: tr("confirmDiscardTitle"), bodyText: tr("confirmDiscardBody"), actionText: tr("confirmDiscardAction"),
-        opener: cancelButton, callback: discard,
+        opener, callback: discard,
       });
-    });
+    };
+    cancelButton.addEventListener("click", () => requestExit(cancelButton));
+    backButton.addEventListener("click", () => requestExit(backButton));
     addLayerButton.addEventListener("click", () => {
       if (!state || state.layers.length >= 8) { announce(tr("layerLimit"), "error"); return; }
       const base = mutationBase();
-      if (base) post({ type: "pick-theme-layer-image", ...base, index: -1, role: "decoration" });
+      if (base) post({
+        type: "pick-theme-layer-image",
+        ...base,
+        index: -1,
+        role: selectedArtworkRole(),
+        appearance: selectedMode,
+        context: stageContext,
+      });
     });
 
     const promptSlot = document.getElementById("prompt-builder-slot");
@@ -3040,8 +4517,9 @@
       translate: tr,
       isActive: () => Boolean(state),
       normalizeEditorState,
+      normalizeStudioStyle,
     });
   }
 
-  window.CLAUDE_AURA_EDITOR = Object.freeze({ createController, normalizeEditorState });
+  window.CLAUDE_AURA_EDITOR = Object.freeze({ createController, normalizeEditorState, normalizeStudioStyle });
 })();

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
-import { listThemes, PROJECT_ROOT } from "./theme-core.mjs";
+import { listThemes, PROJECT_ROOT, studioStyleFromTheme } from "./theme-core.mjs";
 
 const SAFE_ARTWORK_PATH = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
 const SAFE_LAUNCHER_PATH = /^assets\/theme-art\/[a-z0-9-]+\/launcher-mark\.png$/;
@@ -79,6 +79,7 @@ const compact = Object.fromEntries(themes.map((theme) => [theme.name, {
   swatches: [...theme.swatches],
   preview: { ...theme.preview },
   launcher: studioLauncher(theme.launcher, theme.name),
+  studioStyle: studioStyleFromTheme(theme),
   studioPreview: theme.studioPreview,
   studioPreviewFrame: theme.studioPreviewFrame ? { ...theme.studioPreviewFrame } : null,
   newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,

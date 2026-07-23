@@ -166,6 +166,10 @@ html.claude-aura [data-claude-aura-sidebar] :is(a[href], button, [role="button"]
   color: hsl(var(--aura-sidebar-text-primary)) !important;
 }
 
+html.claude-aura [data-claude-aura-sidebar] svg {
+  color: inherit !important;
+}
+
 html.claude-aura [data-claude-aura-sidebar] :is(p, small, time, [data-secondary], [data-muted]) {
   color: hsl(var(--aura-sidebar-text-muted)) !important;
 }

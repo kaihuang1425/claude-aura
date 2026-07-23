@@ -70,15 +70,30 @@ Source: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4078.44
 The isolated SVG and WebP renderer layers under `assets/theme-art` are Claude
 Aura project assets licensed under the repository's MIT License. They contain
 no bundled third-party fonts or remote resources and do not add a software
-dependency or runtime service.
+dependency or runtime service. The eight distinct built-in launcher identities
+are also Claude Aura project assets: repository-only 1254×1254 transparent
+sources created with the built-in image-generation mode deterministically
+produce the shipped 96×96 PNGs and nine-frame ICOs. Their exact prompts are
+recorded beside the sources.
 
 The project-supplied concept images under `assets/studio-previews/masters` are
 distributed only as Aura Studio theme-selection media. The live renderer never
 loads these files as Claude artwork or backgrounds, and Studio framing never
 modifies their bytes. Alternate concepts under
-`assets/studio-previews/references` are source-only and excluded from releases.
-The older 640 x 360 WebP selector crops remain compatibility fallbacks.
+`assets/studio-previews/references` are source-only and excluded from releases,
+including the launcher source images and prompt record. Only their derived
+runtime PNG/ICO files ship. The older 640 x 360 WebP selector crops remain
+compatibility fallbacks.
 
 Claude Aura 0.3 adds no npm package or runtime font dependency. Theme font
 stacks use locally available system fallbacks. The WebView2 SDK listed above is
 the only vendored runtime integration covered by this notice.
+
+## README showcase media
+
+The six user-supplied PNGs under `docs/readme-showcase` are source-repository
+documentation references and are excluded from release installers. They may
+contain third-party interface imagery, product names and marks, and human-like
+portrait artwork. They are not licensed as runtime theme assets or standalone
+interface media. The repository's MIT License does not grant rights in any
+third-party name, mark, interface, artwork, or likeness shown in them.

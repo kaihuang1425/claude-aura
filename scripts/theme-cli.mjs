@@ -14,6 +14,7 @@ import {
   readConfig,
   readThemeKit,
   readThemeRegistry,
+  studioStyleFromTheme,
   writeConfig,
 } from "./theme-core.mjs";
 
@@ -26,7 +27,7 @@ const SLOT_SPECS = [
   ["card-1", "square, transparent, subject in the bottom-right 40%"],
   ["card-2", "square, transparent, subject in the bottom-right 40%"],
   ["card-3", "square, transparent, subject in the bottom-right 40%"],
-  ["brand-mark", "optional, small, flat; restyles the starburst identity"],
+  ["brand-mark", "optional small, flat reserved slot; live starburst replacement is not wired yet"],
   ["launcher-mark", "optional 96×96 transparent PNG; restyles the floating Aura Studio launcher"],
 ];
 
@@ -202,6 +203,24 @@ function booleanValue(value, label) {
   throw new Error(`${label} must be true or false`);
 }
 
+async function validateKitPayloads(kit) {
+  const payloads = [];
+  for (const appearance of ["light", "dark"]) {
+    const compiled = await compileTheme({
+      config: { ...DEFAULT_CONFIG, enabled: true, theme: kit.id, appearance },
+      themeKitDirectory: kit.sourceDirectory,
+    });
+    const bundle = await buildPayloadFromCompiled(compiled);
+    new Function(bundle.payload);
+    payloads.push({
+      appearance,
+      embeddedArtworkBytes: bundle.payloadBudget.embeddedArtworkBytes,
+      chromeBytes: bundle.payloadBudget.chromeBytes,
+    });
+  }
+  return payloads;
+}
+
 function help() {
   console.log(`Claude Aura theme tool
 
@@ -215,7 +234,7 @@ Commands:
   validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
       [--user-themes <path>]
   studio --config <path> --user-themes <path> --editor-root <path>
-      --locale <tag> --request-base64 <base64url-json> [--asset <absolute-webp-path>]
+      --locale <tag> --request-base64 <base64url-json> [--asset <absolute-host-owned-image-path>]
   studio-state --config <path> --user-themes <path> --editor-root <path> --locale <tag>
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
       [--appearance system|light|dark]
@@ -314,6 +333,12 @@ if (command === "help" || command === "--help") {
     launcher,
     artwork,
     source,
+    light,
+    dark,
+    typography,
+    shape,
+    effects,
+    blur,
   }) => ({
     name,
     label,
@@ -323,6 +348,7 @@ if (command === "help" || command === "--help") {
     swatches,
     preview,
     launcher,
+    studioStyle: studioStyleFromTheme({ light, dark, typography, shape, effects, blur }),
     source,
     artwork: artwork ? {
       path: artwork.path,
@@ -360,12 +386,14 @@ if (command === "help" || command === "--help") {
   if (positionals.length === 1) {
     if (options.theme || options.config) throw new Error("A kit folder cannot be combined with --theme or --config");
     const kit = await readThemeKit(path.resolve(positionals[0]));
+    const payloads = await validateKitPayloads(kit);
     console.log(JSON.stringify({
       pass: true,
       theme: kit.id,
       source: "folder",
       sourceFolder: kit.sourceDirectory,
       metadata: kit.metadata,
+      payloads,
     }));
     return;
   }

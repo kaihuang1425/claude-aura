@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-mode="light">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -23,8 +23,9 @@
     </div>
     <a class="rail-item is-current" href="#themes" aria-current="page" data-i18n="navThemes">Themes</a>
     <a class="rail-item" id="nav-editor" href="#editor" data-editor-i18n="navEditor" hidden>Theme editor</a>
-    <a class="rail-item" href="#background" data-i18n="navBackground">Background</a>
+    <a class="rail-item" href="#background" data-i18n="navBackground">Personal wallpaper</a>
     <a class="rail-item" href="#create" data-i18n="navCreate">Create a theme</a>
+    <a class="rail-item" href="#settings" data-i18n="navSettings">Settings</a>
     <div class="rail-foot">
       <button type="button" id="open-aura" class="ghost-button" data-i18n="auraWindow">Back to Claude Aura</button>
       <button type="button" id="open-desktop" class="ghost-button" data-i18n="desktopApp">Desktop app</button>
@@ -35,7 +36,7 @@
     <section id="themes" aria-labelledby="themes-title">
       <p class="kicker" data-i18n="themesKicker">Appearance</p>
       <h1 id="themes-title" data-i18n="themesTitle">Choose a look</h1>
-      <p class="lede" data-i18n="themesLede">Selection applies to the Claude window immediately and is saved on this device.</p>
+      <p class="lede" data-i18n="themesLede">Selection applies to Claude Aura and Studio immediately and is saved on this device.</p>
 
       <fieldset id="appearance-mode" class="appearance-mode" aria-describedby="appearance-help">
         <legend data-i18n="appearanceMode">Appearance mode</legend>
@@ -53,7 +54,7 @@
             <span data-i18n="appearanceDark">Dark</span>
           </label>
         </div>
-        <p id="appearance-help" class="help" data-i18n="appearanceHelp">System follows Windows. Light and Dark apply only to Claude Aura.</p>
+        <p id="appearance-help" class="help" data-i18n="appearanceHelp">System follows Windows. Light and Dark apply to Claude Aura and Studio.</p>
       </fieldset>
 
       <fieldset class="theme-grid" id="theme-grid" aria-describedby="themes-help">
@@ -70,9 +71,9 @@
     </section>
 
     <section id="background" aria-labelledby="background-title">
-      <p class="kicker" data-i18n="backgroundKicker">Personal touch</p>
-      <h2 id="background-title" data-i18n="backgroundTitle">Background image</h2>
-      <p class="lede" data-i18n="backgroundLede">A local image layered gently behind the interface. Decorative only — it never replaces Claude.</p>
+      <p class="kicker" data-i18n="backgroundKicker">Your window</p>
+      <h2 id="background-title" data-i18n="backgroundTitle">Personal wallpaper</h2>
+      <p class="lede" data-i18n="backgroundLede">Add one private image behind every theme. Wallpaper is personal to this device and is separate from artwork saved inside a theme.</p>
       <div class="actions-row">
         <button type="button" id="pick-image" class="primary-button" data-i18n="chooseImage">Choose an image…</button>
         <button type="button" id="adjust-background" class="ghost-button" data-i18n="adjustBackground" hidden>Adjust position</button>
@@ -82,14 +83,56 @@
     </section>
 
     <section id="create" aria-labelledby="create-title">
-      <p class="kicker" data-i18n="createKicker">Make it yours</p>
+      <p class="kicker" data-i18n="createKicker">Visual theme builder</p>
       <h2 id="create-title" data-i18n="createTitle">Create a theme</h2>
-      <p class="lede" data-i18n="createLede">Build a complete theme from a folder of tokens and artwork — three commands, no coding required.</p>
+      <p class="lede" data-i18n="createLede">Start with Default in the visual editor, then choose colors, style, and artwork. No code or theme folder is required.</p>
       <div class="actions-row">
-        <button type="button" id="import-theme" class="primary-button" data-i18n="importTheme">Install theme from folder…</button>
-        <button type="button" id="open-guide" class="ghost-button" data-i18n="openGuide">Open the guide</button>
+        <button type="button" id="start-theme" class="primary-button" data-i18n="startTheme">Customize Default</button>
+        <button type="button" id="import-theme" class="ghost-button" data-i18n="importTheme">Install theme from folder…</button>
       </div>
-      <p class="help" data-i18n="createHelp">Installed themes live in your user data folder and never modify the app.</p>
+      <details class="create-inline-guide">
+        <summary data-i18n="createGuide">How visual creation works</summary>
+        <ol>
+          <li data-i18n="createStepName">Give the theme a name in each language you use.</li>
+          <li data-i18n="createStepStyle">Choose the essential colors and overall style.</li>
+          <li data-i18n="createStepArtwork">Optionally add theme artwork, review the checks, and save.</li>
+        </ol>
+        <p class="help" data-i18n="createAdvancedHelp">Already have a theme kit? Install its folder with the secondary action above.</p>
+      </details>
+      <p class="help" data-i18n="createHelp">Your custom themes stay in Aura's user data folder and never modify Claude or the desktop app.</p>
+    </section>
+
+    <section id="settings" aria-labelledby="settings-title">
+      <p class="kicker" data-i18n="settingsKicker">Aura preferences</p>
+      <h2 id="settings-title" data-i18n="settingsTitle">Settings</h2>
+      <p class="lede" data-i18n="settingsLede">Choose how Aura speaks to you. These settings are saved on this device.</p>
+
+      <div class="settings-grid">
+        <fieldset id="language-settings" class="settings-card language-settings" aria-describedby="language-settings-help">
+          <legend data-i18n="languageTitle">Interface language</legend>
+          <div class="language-options">
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="en">
+              <span lang="en">English</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="zh-CN">
+              <span lang="zh-CN">简体中文</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="zh-TW">
+              <span lang="zh-TW">繁體中文（台灣）</span>
+            </label>
+          </div>
+          <p id="language-settings-help" class="help" data-i18n="languageHelp">Changes Aura Studio, the Aura button menu, and Aura messages. Claude keeps its own language setting.</p>
+        </fieldset>
+
+        <div class="settings-card getting-started-card">
+          <p class="settings-card-title" data-i18n="gettingStartedTitle">Getting started</p>
+          <p data-i18n="gettingStartedBody">Open the welcome guide whenever you want a quick refresher.</p>
+          <button type="button" id="open-welcome" class="ghost-button" data-i18n="openWelcome">Open welcome guide</button>
+        </div>
+      </div>
     </section>
 
     <section id="editor" class="editor-view" data-level="simple" aria-labelledby="editor-title" hidden>
@@ -99,114 +142,173 @@
           <h1 id="editor-title" tabindex="-1">Theme editor</h1>
           <p id="editor-summary" class="lede"></p>
         </div>
-        <div class="editor-state" aria-live="polite">
-          <span id="editor-dirty" class="editor-state-pill"></span>
-          <span id="editor-valid" class="editor-state-pill"></span>
-        </div>
       </header>
 
       <div id="editor-live" class="editor-live" role="status" aria-live="polite" aria-atomic="true"></div>
-      <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
-
-      <div class="editor-toolbar" role="group" aria-label="Edit history" data-editor-i18n-aria-label="historyActions">
-        <button type="button" id="editor-undo" class="ghost-button" data-editor-i18n="undo">Undo</button>
-        <button type="button" id="editor-redo" class="ghost-button" data-editor-i18n="redo">Redo</button>
-        <button type="button" id="editor-reset" class="ghost-button" data-editor-i18n="resetChanges">Reset</button>
-        <fieldset class="editor-level">
-          <legend class="sr-only" data-editor-i18n="editorLevel">Editing mode</legend>
-          <label><input type="radio" name="editor-level" value="simple" checked> <span data-editor-i18n="levelSimple">Simple</span></label>
-          <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">All controls</span></label>
-        </fieldset>
-      </div>
 
       <div class="editor-body">
       <aside class="editor-stagecol" aria-labelledby="editor-stage-title">
         <div class="stage-panel">
-          <h2 id="editor-stage-title" data-editor-i18n="stageTitle">Live framing stage</h2>
-          <p class="editor-guide-notice stage-notice" data-editor-i18n="stageNotice">The stage uses your draft's real colors and artwork, but it is not a Claude preview. Confirm in the actual Aura window.</p>
-          <div class="stage-toolbar">
-            <fieldset class="stage-choice">
-              <legend data-editor-i18n="stageSize">Framing set</legend>
-              <label><input type="radio" name="stage-viewport" value="normal" checked> <span data-editor-i18n="stageNormal">Launch window</span></label>
-              <label><input type="radio" name="stage-viewport" value="wide"> <span data-editor-i18n="stageWide">Wide/fullscreen</span></label>
+          <div class="stage-panel-head">
+            <div>
+              <h2 id="editor-stage-title" data-editor-i18n="stageTitle">Live preview</h2>
+              <span class="stage-evidence-label" data-editor-i18n="stageEvidence">Placement aid · not a Claude preview or acceptance evidence</span>
+            </div>
+            <span id="stage-mirror-caption" class="stage-capture-status" role="status" aria-live="polite" data-editor-i18n="mirrorEmpty">Waiting for the actual Aura window.</span>
+          </div>
+          <p id="stage-privacy" class="help mirror-privacy-notice" data-editor-i18n="mirrorPrivacy">May show conversation content. The capture stays in this device's memory and is never saved.</p>
+          <div class="stage-toolbar stage-toolbar-primary stage-viewport-toolbar">
+            <fieldset class="stage-choice segmented-control editor-mode" aria-describedby="editor-mode-help">
+              <legend data-editor-i18n="editAppearance">Theme mode</legend>
+              <div class="editor-mode-row">
+                <label><input type="radio" name="editor-mode" value="light" checked> <span data-editor-i18n="lightMode">Light</span></label>
+                <label><input type="radio" name="editor-mode" value="dark"> <span data-editor-i18n="darkMode">Dark</span></label>
+              </div>
             </fieldset>
-            <fieldset class="stage-choice">
-              <legend data-editor-i18n="contextUse">Page context</legend>
+            <fieldset class="stage-choice segmented-control">
+              <legend data-editor-i18n="previewPage">Preview page</legend>
               <label><input type="radio" name="stage-context" value="new-chat" checked> <span data-editor-i18n="stageNewChat">New chat</span></label>
               <label><input type="radio" name="stage-context" value="conversation"> <span data-editor-i18n="stageConversation">Conversation</span></label>
             </fieldset>
-            <label class="stage-zones-toggle"><input type="checkbox" id="stage-zones"> <span data-editor-i18n="stageShowZones">Show safe zones</span></label>
-            <label class="stage-zones-toggle"><input type="checkbox" id="stage-backdrop" checked disabled> <span data-editor-i18n="stageBackdropToggle">Drag on the live capture</span></label>
+            <fieldset class="stage-choice segmented-control">
+              <legend data-editor-i18n="stageSize">Preview size</legend>
+              <label><input type="radio" name="stage-viewport" value="normal" checked> <span data-editor-i18n="stageNormal">Standard</span></label>
+              <label><input type="radio" name="stage-viewport" value="wide"> <span data-editor-i18n="stageWide">Wide</span></label>
+            </fieldset>
+            <div class="stage-size-row">
+              <label class="stage-size-field"><span data-editor-i18n="customWidth">Width</span>
+                <input id="stage-real-width" type="number" min="920" max="3840" step="10" value="1180" inputmode="numeric"></label>
+              <span class="stage-size-separator" aria-hidden="true">×</span>
+              <label class="stage-size-field"><span data-editor-i18n="customHeight">Height</span>
+                <input id="stage-real-height" type="number" min="620" max="2400" step="10" value="640" inputmode="numeric"></label>
+              <span class="stage-size-live" data-editor-i18n="sizeUpdatesLive">Updates live</span>
+            </div>
+            <input type="checkbox" id="stage-backdrop" checked disabled hidden aria-hidden="true">
           </div>
-          <div id="editor-stage" class="editor-stage" role="group" data-editor-i18n-aria-label="stageTitle" aria-label="Live framing stage"></div>
-          <p class="help" data-editor-i18n="stageKeyboardHelp">Click or press Enter to select artwork or the prompt block. Arrow keys move it (hold Shift for larger steps); plus and minus resize artwork; bracket keys adjust prompt width. The layer-card sliders mirror every value.</p>
-          <div id="stage-matrix" class="stage-matrix" role="group" data-editor-i18n-aria-label="matrixTitle" aria-label="Every state at a glance"></div>
-          <p class="help" data-editor-i18n="matrixHint">Select a state to edit it.</p>
-          <div class="stage-real-row" role="group" aria-labelledby="stage-real-label">
-            <span id="stage-real-label" data-editor-i18n="stageRealLabel">See it in the real window</span>
-            <button type="button" id="stage-real-launch" class="ghost-button" data-editor-i18n="stageRealLaunch">Launch size</button>
-            <button type="button" id="stage-real-wide" class="ghost-button" data-editor-i18n="stageRealWide">Wide (≥1440)</button>
+          <p id="editor-mode-help" class="sr-only" data-editor-i18n="modeHelp">Light and Dark can use different colors and images.</p>
+          <div id="editor-stage" class="editor-stage" role="group" aria-describedby="stage-privacy" data-editor-i18n-aria-label="stageTitle" aria-label="Live framing stage"></div>
+          <div class="stage-capture-actions stage-canvas-actions">
+            <button type="button" id="stage-mirror-refresh" class="ghost-button" data-editor-i18n="mirrorRefresh">Refresh capture</button>
+            <button type="button" id="stage-open-aura" class="ghost-button" data-editor-i18n="openAuraWindow">Review in Aura ↗</button>
+          </div>
+        </div>
+        <div class="stage-secondary">
+          <p class="editor-guide-notice stage-notice advanced-only" data-editor-i18n="stageNotice">When available, the canvas uses a private capture of the actual Aura window with editable Aura artwork over it. Otherwise it shows the placement guide. It is not a Claude preview or acceptance evidence.</p>
+          <p class="help stage-size-help advanced-only" data-editor-i18n="previewSizeHelp">Dimensions update automatically. Standard is used below 1440 px; Wide is used from 1440 px.</p>
+          <p class="help" data-editor-i18n="stageKeyboardHelp">Select an image or the new chat area in the preview. Drag to move; drag a handle to resize. Arrow keys make precise adjustments.</p>
+          <details class="editor-review-states advanced-only">
+            <summary data-editor-i18n="reviewStates">Review states</summary>
+            <div class="stage-toolbar">
+              <label class="stage-zones-toggle"><input type="checkbox" id="stage-zones"> <span data-editor-i18n="stageShowZones">Show safe zones</span></label>
+            </div>
+            <div id="stage-matrix" class="stage-matrix" role="group" data-editor-i18n-aria-label="matrixTitle" aria-label="Every state at a glance"></div>
+            <p class="help" data-editor-i18n="matrixHint">Select a state to edit it.</p>
+          </details>
+          <div class="stage-real-row advanced-only" role="group" aria-labelledby="stage-real-label">
+            <span id="stage-real-label" data-editor-i18n="stageRealLabel">Aura window</span>
             <button type="button" id="stage-real-full" class="ghost-button" data-editor-i18n="stageRealFull">Maximized</button>
             <button type="button" id="stage-real-topmost" class="ghost-button" aria-pressed="false" data-editor-i18n="stageTopmost">Keep on top</button>
           </div>
-          <div class="stage-real-row stage-size-row">
-            <label class="stage-size-field"><span data-editor-i18n="customWidth">Width (px)</span>
-              <input id="stage-real-width" type="number" min="920" max="3840" step="10" value="1180" inputmode="numeric"></label>
-            <label class="stage-size-field"><span data-editor-i18n="customHeight">Height (px)</span>
-              <input id="stage-real-height" type="number" min="620" max="2400" step="10" value="640" inputmode="numeric"></label>
-            <button type="button" id="stage-real-apply" class="ghost-button" data-editor-i18n="applySize">Apply size</button>
-          </div>
-          <p class="help" data-editor-i18n="stageRealHelp">Every valid draft change is already applied to the actual Aura window on live claude.ai. These buttons bring that window forward at a preset or custom size — you can also resize it freely. Launch size uses the Launch framing set; Wide and Maximized use the Wide/fullscreen set.</p>
-          <details id="stage-mirror" class="stage-mirror">
-            <summary data-editor-i18n="mirrorTitle">Real window mirror</summary>
-            <p class="help" data-editor-i18n="mirrorPrivacy">The mirror is a scaled capture of your actual Aura window — including any conversation content. It stays on this device and is never saved to disk.</p>
-            <div class="stage-mirror-frame">
-              <img id="stage-mirror-image" alt="" hidden>
-              <p id="stage-mirror-empty" class="help" data-editor-i18n="mirrorEmpty">No capture yet. Open the Aura window, then refresh.</p>
-            </div>
-            <div class="stage-mirror-row">
-              <span id="stage-mirror-caption" class="help"></span>
-              <button type="button" id="stage-mirror-refresh" class="ghost-button" data-editor-i18n="mirrorRefresh">Refresh</button>
-            </div>
-          </details>
+          <p class="help advanced-only" data-editor-i18n="stageRealHelp">Every valid draft already applies to the actual Aura window on live claude.ai. Preview-size changes leave Studio in front; use Review in Aura only when you want to interact with the separate live window.</p>
         </div>
       </aside>
       <div class="editor-controls">
 
-      <fieldset class="editor-mode" aria-describedby="editor-mode-help">
-        <legend data-editor-i18n="editAppearance">Colors for</legend>
-        <div class="editor-mode-row">
-          <label><input type="radio" name="editor-mode" value="light" checked> <span data-editor-i18n="lightMode">Light</span></label>
-          <label><input type="radio" name="editor-mode" value="dark"> <span data-editor-i18n="darkMode">Dark</span></label>
-          <span class="editor-mode-spacer" aria-hidden="true"></span>
+      <div class="editor-inspector-head">
+        <div class="editor-inspector-title-row">
+          <button type="button" id="editor-back" class="ghost-button editor-back" data-editor-i18n="backToThemes">Back to themes</button>
+          <div class="editor-inspector-title-copy">
+            <h2 data-editor-i18n="inspectorTitle">Edit theme</h2>
+            <div class="editor-state" aria-live="polite">
+              <span id="editor-dirty" class="editor-state-pill"></span>
+              <span id="editor-valid" class="editor-state-pill"></span>
+            </div>
+          </div>
+          <div class="editor-inspector-head-actions">
+            <button type="button" id="editor-cancel" class="ghost-button" data-editor-i18n="cancelEditing">Cancel</button>
+            <button type="button" id="editor-save" class="primary-button" aria-describedby="editor-quick-feedback editor-error-summary" data-editor-i18n="saveTheme">Save theme</button>
+          </div>
+        </div>
+        <fieldset class="editor-level segmented-control">
+          <legend class="sr-only" data-editor-i18n="editorLevel">Editing mode</legend>
+          <label><input type="radio" name="editor-level" value="simple" checked> <span data-editor-i18n="levelSimple">Quick customize</span></label>
+          <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">Advanced</span></label>
+        </fieldset>
+        <div class="editor-inspector-nav" role="group" data-editor-i18n-aria-label="inspectorSections" aria-label="Control sections">
+          <button type="button" class="editor-inspector-tab" data-editor-panel-target="design" aria-pressed="true" data-editor-i18n="panelDesign">Style</button>
+          <button type="button" class="editor-inspector-tab" data-editor-panel-target="artwork" aria-pressed="false" data-editor-i18n="panelArtwork">Images</button>
+          <button type="button" class="editor-inspector-tab advanced-only" data-editor-panel-target="layout" aria-pressed="false" data-editor-i18n="panelLayout">Placement</button>
+          <button type="button" class="editor-inspector-tab advanced-only" data-editor-panel-target="checks" aria-pressed="false" data-editor-i18n="panelChecks">Checks</button>
+        </div>
+      </div>
+      <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
+      <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
+      <div class="editor-toolbar" role="group" aria-label="Edit history" data-editor-i18n-aria-label="historyActions">
+        <button type="button" id="editor-undo" class="ghost-button" data-editor-i18n="undo">Undo</button>
+        <button type="button" id="editor-redo" class="ghost-button" data-editor-i18n="redo">Redo</button>
+        <button type="button" id="editor-reset" class="ghost-button" data-editor-i18n="resetChanges">Reset</button>
+      </div>
+      <section class="editor-section editor-identity" data-editor-panel="design" aria-labelledby="editor-identity-title">
+        <h2 id="editor-identity-title" data-editor-i18n="themeIdentity">Theme name</h2>
+        <p class="help advanced-only" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
+        <div class="editor-control-grid editor-metadata-grid">
+          <label class="editor-field" for="editor-label-en">
+            <span data-editor-i18n="themeNameEn">English name</span>
+            <input id="editor-label-en" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="en" data-editor-field="metadata.labels.en">
+          </label>
+          <label class="editor-field" for="editor-label-zh-cn">
+            <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
+            <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
+          </label>
+          <label class="editor-field" for="editor-label-zh-tw">
+            <span data-editor-i18n="themeNameZhTw">Traditional Chinese (Taiwan) name</span>
+            <input id="editor-label-zh-tw" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-TW" data-editor-field="metadata.labels.zh-TW">
+          </label>
+        </div>
+        <div class="editor-control-grid editor-metadata-grid advanced-only">
+          <label class="editor-field" for="editor-description-en">
+            <span data-editor-i18n="themeDescriptionEn">English description</span>
+            <textarea id="editor-description-en" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="en" data-editor-field="metadata.descriptions.en"></textarea>
+          </label>
+          <label class="editor-field" for="editor-description-zh-cn">
+            <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
+            <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
+          </label>
+          <label class="editor-field" for="editor-description-zh-tw">
+            <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese (Taiwan) description</span>
+            <textarea id="editor-description-zh-tw" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-TW" data-editor-field="metadata.descriptions.zh-TW"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-colors-title">
+        <h2 id="editor-colors-title" data-editor-i18n="colorsAndSurfaces">Colors</h2>
+        <p class="help" data-editor-i18n="colorsHelp">Use the primary controls for a quick theme, then open a group for the supporting colors.</p>
+        <div class="appearance-copy-actions advanced-only">
           <button type="button" id="copy-light-dark" class="ghost-button" data-editor-i18n="copyLightToDark">Copy Light to Dark</button>
           <button type="button" id="copy-dark-light" class="ghost-button" data-editor-i18n="copyDarkToLight">Copy Dark to Light</button>
         </div>
-        <p id="editor-mode-help" class="help" data-editor-i18n="modeHelp">Each appearance keeps its own colors and overlay levels.</p>
-      </fieldset>
-
-      <section class="editor-section" aria-labelledby="editor-colors-title">
-        <h2 id="editor-colors-title" data-editor-i18n="colorsAndSurfaces">Colors and surfaces</h2>
-        <p class="help" data-editor-i18n="colorsHelp">Use the primary controls for a quick theme, then open a group for the supporting colors.</p>
         <div id="editor-token-groups" class="editor-token-groups"></div>
       </section>
 
-      <section class="editor-section" aria-labelledby="editor-materials-title">
+      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-materials-title">
         <h2 id="editor-materials-title" data-editor-i18n="typographyAndMaterials">Typography and materials</h2>
+        <p class="help" data-editor-i18n="studioStyleHelp">These type, corner, blur, and shadow choices style Aura and Studio together.</p>
         <div class="editor-control-grid">
           <label class="editor-field" for="editor-font-ui">
             <span data-editor-i18n="interfaceFont">Interface font</span>
             <select id="editor-font-ui" data-editor-shared="fontUi" data-editor-focus="shared-fontUi" data-editor-field="shared.fontUi"></select>
           </label>
-          <label class="editor-field" for="editor-font-display">
+          <label class="editor-field advanced-only" for="editor-font-display">
             <span data-editor-i18n="displayFont">Display font</span>
             <select id="editor-font-display" data-editor-shared="fontDisplay" data-editor-focus="shared-fontDisplay" data-editor-field="shared.fontDisplay"></select>
           </label>
           <label class="editor-field" for="editor-radius">
             <span><span data-editor-i18n="cornerRadius">Corner radius</span> <output id="editor-radius-output" for="editor-radius"></output></span>
-            <input id="editor-radius" type="range" min="0" max="32" step="1" data-editor-shared="radius" data-editor-focus="shared-radius" data-editor-field="shared.radius">
+            <input id="editor-radius" type="range" min="0" max="32" step="1" aria-describedby="editor-radius-inherited" data-editor-shared="radius" data-editor-focus="shared-radius" data-editor-field="shared.radius">
+            <small id="editor-radius-inherited" class="editor-inherited-note" data-editor-i18n="inheritedRadiusHelp" hidden>Theme original. Moving this control creates one shared corner radius.</small>
           </label>
-          <label class="editor-field" for="editor-blur">
+          <label class="editor-field advanced-only" for="editor-blur">
             <span><span data-editor-i18n="surfaceBlur">Surface blur</span> <output id="editor-blur-output" for="editor-blur"></output></span>
             <input id="editor-blur" type="range" min="0" max="40" step="1" data-editor-shared="blur" data-editor-focus="shared-blur" data-editor-field="shared.blur">
           </label>
@@ -217,47 +319,122 @@
         </div>
       </section>
 
-      <section class="editor-section" aria-labelledby="editor-background-title">
+      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-app-identity-title">
+        <h2 id="editor-app-identity-title" data-editor-i18n="appIdentity">App identity</h2>
+        <p class="help" data-editor-i18n="appIdentityHelp">Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.</p>
+        <div id="editor-launcher-preview" class="editor-launcher-preview" data-editor-i18n-aria-label="appIdentityPreview" aria-label="App identity preview">
+          <img id="editor-launcher-mark" alt="" draggable="false">
+          <span data-editor-i18n="railSubtitle">Studio</span>
+          <i aria-hidden="true"></i>
+        </div>
+        <div class="editor-launcher-actions">
+          <button type="button" id="editor-launcher-replace" class="ghost-button" data-editor-i18n="replaceAppMark">Replace mark</button>
+        </div>
+        <div class="editor-launcher-controls">
+          <label class="color-field">
+            <span data-editor-i18n="launcherSurface">Mark background</span>
+            <input type="color" data-editor-launcher="surface" data-editor-focus="launcher-surface-picker">
+            <input type="text" maxlength="7" inputmode="text" spellcheck="false" data-editor-launcher-text="surface" data-editor-focus="launcher-surface-text" aria-label="Mark background HEX">
+          </label>
+          <label class="color-field advanced-only">
+            <span data-editor-i18n="launcherSurfaceHover">Hover background</span>
+            <input type="color" data-editor-launcher="surfaceHover" data-editor-focus="launcher-surface-hover-picker">
+            <input type="text" maxlength="7" inputmode="text" spellcheck="false" data-editor-launcher-text="surfaceHover" data-editor-focus="launcher-surface-hover-text" aria-label="Hover background HEX">
+          </label>
+          <label class="color-field advanced-only">
+            <span data-editor-i18n="launcherForeground">Label and grip</span>
+            <input type="color" data-editor-launcher="foreground" data-editor-focus="launcher-foreground-picker">
+            <input type="text" maxlength="7" inputmode="text" spellcheck="false" data-editor-launcher-text="foreground" data-editor-focus="launcher-foreground-text" aria-label="Label and grip HEX">
+          </label>
+          <label class="color-field">
+            <span data-editor-i18n="launcherAccent">Identity accent</span>
+            <input type="color" data-editor-launcher="accent" data-editor-focus="launcher-accent-picker">
+            <input type="text" maxlength="7" inputmode="text" spellcheck="false" data-editor-launcher-text="accent" data-editor-focus="launcher-accent-text" aria-label="Identity accent HEX">
+          </label>
+          <label class="color-field advanced-only">
+            <span data-editor-i18n="launcherBorder">Identity border</span>
+            <input type="color" data-editor-launcher="border" data-editor-focus="launcher-border-picker">
+            <input type="text" maxlength="7" inputmode="text" spellcheck="false" data-editor-launcher-text="border" data-editor-focus="launcher-border-text" aria-label="Identity border HEX">
+          </label>
+          <label class="editor-field advanced-only" for="editor-launcher-radius">
+            <span><span data-editor-i18n="launcherRadius">Identity roundness</span> <output id="editor-launcher-radius-output" for="editor-launcher-radius"></output></span>
+            <input id="editor-launcher-radius" type="range" min="8" max="24" step="1" data-editor-launcher="radius" data-editor-focus="launcher-radius">
+          </label>
+          <label class="editor-field advanced-only" for="editor-launcher-border-width">
+            <span><span data-editor-i18n="launcherBorderWidth">Border width</span> <output id="editor-launcher-border-width-output" for="editor-launcher-border-width"></output></span>
+            <input id="editor-launcher-border-width" type="range" min="1" max="3" step="1" data-editor-launcher="borderWidth" data-editor-focus="launcher-border-width">
+          </label>
+        </div>
+      </section>
+
+      <section class="editor-section" data-editor-panel="design" aria-labelledby="editor-background-title">
         <h2 id="editor-background-title" data-editor-i18n="themeBackground">Theme background</h2>
         <fieldset class="editor-inline-fieldset">
           <legend data-editor-i18n="backgroundScope">Background scope</legend>
-          <label><input type="radio" name="background-scope" value="content" data-editor-focus="shared-backgroundScope-content" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="contentCanvas">Content canvas</span></label>
-          <label><input type="radio" name="background-scope" value="full-window" data-editor-focus="shared-backgroundScope-full" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="fullWindow">Full window</span></label>
+          <label><input type="radio" name="background-scope" value="content" data-editor-focus="shared-backgroundScope-content" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="contentCanvas">Main area only</span></label>
+          <label><input type="radio" name="background-scope" value="full-window" data-editor-focus="shared-backgroundScope-full" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="fullWindow">Entire window</span></label>
         </fieldset>
         <p id="background-scope-help" class="help"></p>
       </section>
 
-      <section class="editor-section" aria-labelledby="editor-layers-title">
+      <section class="editor-section" data-editor-panel="artwork" aria-labelledby="editor-layers-title">
         <div class="editor-section-head">
           <div>
-            <h2 id="editor-layers-title" data-editor-i18n="artworkLayers">Artwork layers</h2>
-            <p class="help" data-editor-i18n="layersHelp">Add up to eight pointer-inert images. Each layer can target an appearance, page context, and window size.</p>
+            <h2 id="editor-layers-title" data-editor-i18n="artworkLayers">Images</h2>
+            <p class="help advanced-only" data-editor-i18n="layersHelp">Add up to eight pointer-inert images. Each layer can target an appearance, page context, and window size.</p>
           </div>
-          <button type="button" id="editor-add-layer" class="primary-button" data-editor-i18n="addLayer">Add layer</button>
+          <div class="editor-add-artwork">
+            <label class="editor-add-role" for="editor-add-layer-role">
+              <span data-editor-i18n="artworkRoleChoice">Image type</span>
+              <select id="editor-add-layer-role">
+                <option value="background" data-editor-i18n="roleBackground">Background</option>
+                <option value="hero" data-editor-i18n="roleHero">Main subject</option>
+                <option value="corner" data-editor-i18n="roleCorner">Corner graphic</option>
+                <option value="decoration" data-editor-i18n="roleDecoration">Decoration</option>
+              </select>
+            </label>
+            <button type="button" id="editor-add-layer" class="ghost-button add-image-button" data-editor-i18n="addArtwork">Add image…</button>
+          </div>
         </div>
+        <p class="help" data-editor-i18n="artworkVisibilityHelp">Show in theme changes Aura. Hide in the preview is temporary.</p>
         <div id="editor-layer-list" class="editor-layer-list"></div>
       </section>
 
-      <section class="editor-section" aria-labelledby="editor-prompt-title">
-        <h2 id="editor-prompt-title" data-editor-i18n="promptPlacement">New-chat prompt placement</h2>
-        <p class="help" data-editor-i18n="promptPlacementHelp">Move only the new-chat prompt block. Conversation composers never move.</p>
+      <section class="editor-section editor-prompt-context" data-editor-panel="layout" aria-labelledby="editor-prompt-title">
+        <h2 id="editor-prompt-title" data-editor-i18n="promptPlacement">New chat area</h2>
+        <p class="help" data-editor-i18n="promptPlacementHelp">Drag it in the preview or use these controls. Light and Dark share this position; Conversation composers never move.</p>
+        <p id="editor-prompt-native" class="editor-inherited-note" data-editor-i18n="nativePromptHelp" hidden>Using Claude's current layout. Your first adjustment adopts the measured live size and position.</p>
         <div class="editor-control-grid editor-prompt-controls">
-          <label class="editor-field" for="editor-prompt-width">
-            <span><span data-editor-i18n="promptWidth">Width</span> <output id="editor-prompt-width-output" for="editor-prompt-width"></output></span>
-            <input id="editor-prompt-width" type="range" min="40" max="96" step="1" data-editor-prompt="width" data-editor-focus="prompt-width" data-editor-field="shared.prompt.width">
-          </label>
-          <label class="editor-field" for="editor-prompt-x">
-            <span><span data-editor-i18n="horizontalOffset">Horizontal offset</span> <output id="editor-prompt-x-output" for="editor-prompt-x"></output></span>
-            <input id="editor-prompt-x" type="range" min="-35" max="35" step="1" data-editor-prompt="x" data-editor-focus="prompt-x" data-editor-field="shared.prompt.x">
-          </label>
-          <label class="editor-field" for="editor-prompt-y">
-            <span><span data-editor-i18n="verticalOffset">Vertical offset</span> <output id="editor-prompt-y-output" for="editor-prompt-y"></output></span>
-            <input id="editor-prompt-y" type="range" min="-30" max="30" step="1" data-editor-prompt="y" data-editor-focus="prompt-y" data-editor-field="shared.prompt.y">
-          </label>
+          <div class="editor-field">
+            <span id="editor-prompt-width-label"><span data-editor-i18n="promptWidth">Width</span> <output id="editor-prompt-width-output" for="editor-prompt-width editor-prompt-width-exact"></output></span>
+            <span class="prompt-range-pair">
+              <input id="editor-prompt-width" type="range" min="40" max="96" step="1" aria-labelledby="editor-prompt-width-label" data-editor-prompt="width" data-editor-focus="prompt-width" data-editor-field="shared.prompt.width">
+              <input id="editor-prompt-width-exact" class="prompt-exact-value" type="number" min="40" max="96" step="1" inputmode="decimal" aria-labelledby="editor-prompt-width-label" data-editor-prompt-exact="width" data-editor-focus="prompt-width-exact" data-editor-field="shared.prompt.width">
+            </span>
+          </div>
+          <div class="editor-field">
+            <span id="editor-prompt-x-label"><span data-editor-i18n="horizontalOffset">Horizontal offset</span> <output id="editor-prompt-x-output" for="editor-prompt-x editor-prompt-x-exact"></output></span>
+            <span class="prompt-range-pair">
+              <input id="editor-prompt-x" type="range" min="-35" max="35" step="1" aria-labelledby="editor-prompt-x-label" data-editor-prompt="x" data-editor-focus="prompt-x" data-editor-field="shared.prompt.x">
+              <input id="editor-prompt-x-exact" class="prompt-exact-value" type="number" min="-35" max="35" step="1" inputmode="decimal" aria-labelledby="editor-prompt-x-label" data-editor-prompt-exact="x" data-editor-focus="prompt-x-exact" data-editor-field="shared.prompt.x">
+            </span>
+          </div>
+          <div class="editor-field">
+            <span id="editor-prompt-y-label"><span data-editor-i18n="verticalOffset">Vertical offset</span> <output id="editor-prompt-y-output" for="editor-prompt-y editor-prompt-y-exact"></output></span>
+            <span class="prompt-range-pair">
+              <input id="editor-prompt-y" type="range" min="-30" max="30" step="1" aria-labelledby="editor-prompt-y-label" data-editor-prompt="y" data-editor-focus="prompt-y" data-editor-field="shared.prompt.y">
+              <input id="editor-prompt-y-exact" class="prompt-exact-value" type="number" min="-30" max="30" step="1" inputmode="decimal" aria-labelledby="editor-prompt-y-label" data-editor-prompt-exact="y" data-editor-focus="prompt-y-exact" data-editor-field="shared.prompt.y">
+            </span>
+          </div>
         </div>
       </section>
 
-      <section class="editor-section editor-guide-section" aria-labelledby="asset-guide-title">
+      <section class="editor-section editor-prompt-unavailable" data-editor-panel="layout" aria-labelledby="editor-conversation-layout-title" hidden>
+        <h2 id="editor-conversation-layout-title" data-editor-i18n="conversationLayout">Conversation layout</h2>
+        <p class="help" data-editor-i18n="conversationLayoutHelp">Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.</p>
+      </section>
+
+      <section class="editor-section editor-guide-section advanced-only" data-editor-panel="layout" aria-labelledby="asset-guide-title">
         <h2 id="asset-guide-title" data-editor-i18n="assetGuide">Asset and safe-zone guide</h2>
         <p class="editor-guide-notice" data-editor-i18n="guideOnlyNotice">Guide only — this is not a Claude preview. Review the saved theme in the actual Aura window.</p>
         <figure class="asset-guide" aria-describedby="asset-guide-caption">
@@ -298,17 +475,12 @@
         </div>
       </section>
 
-      <section class="editor-section editor-feedback" aria-labelledby="editor-feedback-title">
+      <section class="editor-section editor-feedback advanced-only" data-editor-panel="checks" aria-labelledby="editor-feedback-title">
         <h2 id="editor-feedback-title" data-editor-i18n="validationAndBudgets">Validation and budgets</h2>
         <div id="editor-feedback" tabindex="-1"></div>
       </section>
 
       </div>
-      </div>
-
-      <div class="editor-savebar">
-        <button type="button" id="editor-cancel" class="ghost-button" data-editor-i18n="cancelEditing">Cancel</button>
-        <button type="button" id="editor-save" class="primary-button" data-editor-i18n="saveTheme">Save theme</button>
       </div>
     </section>
   </main>
@@ -318,6 +490,78 @@
     <output id="status" aria-live="polite">Ready.</output>
   </footer>
 </div>
+
+<dialog id="welcome-dialog" class="welcome-dialog" aria-labelledby="welcome-title" aria-describedby="welcome-body">
+  <form method="dialog">
+    <button type="button" id="welcome-close" class="dialog-close welcome-close" data-i18n-aria-label="welcomeClose" aria-label="Close welcome guide">×</button>
+    <div class="welcome-layout">
+      <div class="welcome-brand">
+        <div class="welcome-aperture" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <img id="welcome-theme-mark" alt="" draggable="false">
+        </div>
+        <p class="kicker" data-i18n="welcomeKicker">Welcome</p>
+        <h2 id="welcome-title" data-i18n="welcomeTitle">Meet Claude Aura</h2>
+        <p id="welcome-body" data-i18n="welcomeBody">Give Claude a look that feels like yours. Aura stays local and never changes Claude itself.</p>
+      </div>
+
+      <div class="welcome-guide">
+        <fieldset id="welcome-language" class="welcome-language" aria-describedby="welcome-language-help">
+          <legend data-i18n="welcomeLanguageTitle">Choose your language</legend>
+          <div class="language-options">
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="en">
+              <span lang="en">English</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="zh-CN">
+              <span lang="zh-CN">简体中文</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="zh-TW">
+              <span lang="zh-TW">繁體中文（台灣）</span>
+            </label>
+          </div>
+          <p id="welcome-language-help" class="help" data-i18n="welcomeLanguageHelp">You can change this later in Settings.</p>
+        </fieldset>
+
+        <ol class="welcome-steps">
+          <li>
+            <span class="welcome-step-number" aria-hidden="true">01</span>
+            <div>
+              <strong data-i18n="welcomeThemeTitle">Try a theme</strong>
+              <p data-i18n="welcomeThemeBody">Pick any theme card to apply it to Claude Aura and Studio immediately.</p>
+            </div>
+          </li>
+          <li>
+            <span class="welcome-step-number" aria-hidden="true">02</span>
+            <div>
+              <strong data-i18n="welcomeControlTitle">Keep control</strong>
+              <p data-i18n="welcomeControlBody">Compare Light and Dark, or restore Claude's Original look at any time.</p>
+            </div>
+          </li>
+          <li>
+            <span class="welcome-step-number" aria-hidden="true">03</span>
+            <div>
+              <strong data-i18n="welcomeCreateTitle">Make it yours</strong>
+              <p data-i18n="welcomeCreateBody">Add a personal wallpaper or duplicate a theme when you're ready to customize.</p>
+            </div>
+          </li>
+        </ol>
+
+        <p class="welcome-launcher-note" data-i18n="welcomeLauncherNote">Click the Aura button to open Studio, drag it to move it, or right-click for quick actions.</p>
+        <div class="dialog-actions welcome-actions">
+          <output id="welcome-status" class="welcome-status" role="status" aria-live="polite"></output>
+          <button type="button" id="welcome-later" class="ghost-button" data-i18n="welcomeLater">Skip</button>
+          <span class="dialog-actions-spacer" aria-hidden="true"></span>
+          <button type="button" id="welcome-try-theme" class="primary-button" data-i18n="welcomeTryTheme">Try a theme</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="crop-dialog" class="crop-dialog" aria-labelledby="crop-title" aria-describedby="crop-help crop-notice crop-error">
   <form method="dialog">

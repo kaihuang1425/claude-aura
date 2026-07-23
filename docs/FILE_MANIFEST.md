@@ -34,6 +34,8 @@ offline-preview files and comparison screenshots are not deliverables.
 - `NOTICE.md`
 - `package.json`
 - `README.md`
+- `README.zh-CN.md`
+- `README.zh-TW.md`
 - `SECURITY.md`
 - `THIRD_PARTY_NOTICES.md`
 - `Uninstall Claude Aura.cmd`
@@ -65,21 +67,86 @@ repository-only and excluded from releases and installed copies.
 - `assets/studio-previews/masters/korean-prestige.png`
 - `assets/studio-previews/masters/study-library.png`
 - `assets/studio-previews/references/cartoon-ocean-alternate.png`
+- `assets/studio-previews/references/launcher-marks-v2/PROMPTS.md`
+- `assets/studio-previews/references/launcher-marks-v2/default.png`
+- `assets/studio-previews/references/launcher-marks-v2/japanese-film-editorial.png`
+- `assets/studio-previews/references/launcher-marks-v2/korean-prestige.png`
+- `assets/studio-previews/references/launcher-marks-v2/cartoon-studio.png`
+- `assets/studio-previews/references/launcher-marks-v2/anime-twilight.png`
+- `assets/studio-previews/references/launcher-marks-v2/study-library.png`
+- `assets/studio-previews/references/launcher-marks-v2/japanese-idol.png`
+- `assets/studio-previews/references/launcher-marks-v2/korean-idol.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/PROMPTS.md`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/default.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/japanese-film-editorial.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/korean-prestige.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/cartoon-studio.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/anime-twilight.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/study-library.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/japanese-idol.png`
+- `assets/studio-previews/references/in-page-brand-wordmarks-v1/korean-idol.png`
 
 ### Floating launcher marks
 
-Deterministic transparent 96×96 Aura marks for the host-owned Studio launcher.
-Each permanent theme supplies its own palette; missing or invalid theme marks
-fall back to Default.
+Eight distinct deterministic transparent 96×96 Aura marks and complete native
+Windows icon frame sets. Missing or invalid identity assets fall back to
+Default as one unit.
 
 - `assets/theme-art/default/launcher-mark.png`
+- `assets/theme-art/default/launcher-mark.ico`
 - `assets/theme-art/japanese-film-editorial/launcher-mark.png`
+- `assets/theme-art/japanese-film-editorial/launcher-mark.ico`
 - `assets/theme-art/korean-prestige/launcher-mark.png`
+- `assets/theme-art/korean-prestige/launcher-mark.ico`
 - `assets/theme-art/cartoon-studio/launcher-mark.png`
+- `assets/theme-art/cartoon-studio/launcher-mark.ico`
 - `assets/theme-art/anime-twilight/launcher-mark.png`
+- `assets/theme-art/anime-twilight/launcher-mark.ico`
 - `assets/theme-art/study-library/launcher-mark.png`
+- `assets/theme-art/study-library/launcher-mark.ico`
 - `assets/theme-art/japanese-idol/launcher-mark.png`
+- `assets/theme-art/japanese-idol/launcher-mark.ico`
 - `assets/theme-art/korean-idol/launcher-mark.png`
+- `assets/theme-art/korean-idol/launcher-mark.ico`
+
+### Supporting compact brand-mark derivatives
+
+Three supplied-reference, text-free SVG derivatives remain as provenance and
+supporting assets. The active built-in replacement path uses the full
+appearance-specific wordmark PNGs below; these compact files never substitute
+for a horizontal lockup or Aura's launcher identity.
+
+- `assets/theme-art/japanese-film-editorial/brand-mark.svg`
+- `assets/theme-art/korean-prestige/brand-mark.svg`
+- `assets/theme-art/japanese-idol/brand-mark.svg`
+
+### Built-in in-page wordmarks
+
+The repository-only reference tree contains one normalized horizontal source
+per frozen built-in plus `PROMPTS.md`. Japanese Film Editorial and Japanese
+Idol reuse exact supplied full lockups, Korean Idol reuses its approved raster,
+and the other five directions are newly authored to their recipes. The
+deterministic builder emits separate Light and Dark runtime PNGs for every
+built-in. The renderer uses one full wordmark only when the live sidebar has a
+unique expanded host; Claude's native visual remains the collapsed and
+fail-safe path.
+
+- `assets/theme-art/default/brand-wordmark-light.png`
+- `assets/theme-art/default/brand-wordmark-dark.png`
+- `assets/theme-art/japanese-film-editorial/brand-wordmark-light.png`
+- `assets/theme-art/japanese-film-editorial/brand-wordmark-dark.png`
+- `assets/theme-art/korean-prestige/brand-wordmark-light.png`
+- `assets/theme-art/korean-prestige/brand-wordmark-dark.png`
+- `assets/theme-art/cartoon-studio/brand-wordmark-light.png`
+- `assets/theme-art/cartoon-studio/brand-wordmark-dark.png`
+- `assets/theme-art/anime-twilight/brand-wordmark-light.png`
+- `assets/theme-art/anime-twilight/brand-wordmark-dark.png`
+- `assets/theme-art/study-library/brand-wordmark-light.png`
+- `assets/theme-art/study-library/brand-wordmark-dark.png`
+- `assets/theme-art/japanese-idol/brand-wordmark-light.png`
+- `assets/theme-art/japanese-idol/brand-wordmark-dark.png`
+- `assets/theme-art/korean-idol/brand-wordmark-light.png`
+- `assets/theme-art/korean-idol/brand-wordmark-dark.png`
 
 ### Japanese Film Editorial runtime assets
 
@@ -191,6 +258,7 @@ the retired reconstructed preview are not deliverables.
 
 - `scripts/asset-audit.mjs`
 - `scripts/build-aura-icon.mjs`
+- `scripts/build-brand-wordmarks.mjs`
 - `scripts/build-launcher-assets.mjs`
 - `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
@@ -199,9 +267,25 @@ the retired reconstructed preview are not deliverables.
 - `scripts/state-cli.mjs`
 - `scripts/theme-cli.mjs`
 - `scripts/theme-core.mjs`
+- `scripts/theme-core/artwork.mjs`
+- `scripts/theme-core/compile.mjs`
+- `scripts/theme-core/constants.mjs`
+- `scripts/theme-core/registry.mjs`
+- `scripts/theme-core/studio.mjs`
+- `scripts/theme-core/validation.mjs`
 - `scripts/verify-cycle.mjs`
 - `scripts/webview-cli.mjs`
+- `tests/artwork.test.mjs`
+- `tests/config.test.mjs`
+- `tests/payload.test.mjs`
+- `tests/platform.test.mjs`
 - `tests/run-tests.mjs`
+- `tests/studio-editor.test.mjs`
+- `tests/support/context.mjs`
+- `tests/support/harness.mjs`
+- `tests/theme-cli.test.mjs`
+- `tests/themes.test.mjs`
+- `tests/user-kits.test.mjs`
 
 ## Windows application
 

@@ -21,8 +21,12 @@ $StudioRoot = Join-Path $Root 'studio'
 $ThemeArtRoot = Join-Path $Root 'assets\theme-art'
 $StudioPreviewRoot = Join-Path $Root 'assets\studio-previews\masters'
 $AuraIconPath = Join-Path $Root 'assets\brand\claude-aura.ico'
+$ShortcutIconRoot = Join-Path $DataRoot 'shortcut-icons'
 $StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
+$StudioPreferencesPath = Join-Path $DataRoot 'studio-preferences.json'
+$StudioIntroductionVersion = 1
 $StudioBackgroundMaxBytes = 16 * 1024 * 1024
+$StudioMirrorJpegMaxBytes = 8000000
 $StudioEditorRoot = Join-Path $DataRoot 'theme-drafts'
 $StudioEditorPreviewRoot = Join-Path $StudioEditorRoot 'preview'
 $StudioEditorImportRoot = Join-Path $StudioEditorRoot 'imports'
@@ -54,6 +58,125 @@ function Get-AuraUiCopy {
   $property = $allCopy.PSObject.Properties[$localeKey]
   if ($null -eq $property) { $property = $allCopy.PSObject.Properties['en'] }
   return $property.Value
+}
+
+function ConvertTo-AuraUiLocale {
+  param([AllowEmptyString()][string]$Locale)
+  $tag = if ($Locale) { $Locale.Replace('_', '-') } else { 'en' }
+  if ($tag -match '^zh-(?i:cn|sg|hans)(?:-|$)' -or $tag -match '^zh-(?i:hans)(?:-|$)') {
+    return 'zh-CN'
+  }
+  if ($tag -match '^zh-(?i:tw|hk|mo|hant)(?:-|$)' -or $tag -match '^zh-(?i:hant)(?:-|$)') {
+    return 'zh-TW'
+  }
+  return 'en'
+}
+
+function Get-AuraUiDefaultLocale {
+  $locale = [Globalization.CultureInfo]::CurrentUICulture.Name
+  $candidate = if ($locale) { $locale } else { 'en' }
+  return ConvertTo-AuraUiLocale -Locale $candidate
+}
+
+function Get-AuraUiStudioPreferences {
+  $fallback = [PSCustomObject]@{
+    schemaVersion = 1
+    locale = (Get-AuraUiDefaultLocale)
+    introductionVersion = 0
+  }
+  if (-not (Test-Path -LiteralPath $StudioPreferencesPath -PathType Leaf)) { return $fallback }
+  try {
+    $bytes = [IO.File]::ReadAllBytes($StudioPreferencesPath)
+    if ($bytes.Length -le 0 -or $bytes.Length -gt 4096) {
+      throw 'Aura Studio preferences have an invalid size.'
+    }
+    $source = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
+    $value = $source | ConvertFrom-Json
+    if ($value -isnot [System.Management.Automation.PSCustomObject]) {
+      throw 'Aura Studio preferences must be an object.'
+    }
+    $names = @($value.PSObject.Properties | ForEach-Object { $_.Name })
+    if ($names.Count -ne 3 -or
+        $names -cnotcontains 'schemaVersion' -or
+        $names -cnotcontains 'locale' -or
+        $names -cnotcontains 'introductionVersion' -or
+        ($value.schemaVersion -isnot [int] -and $value.schemaVersion -isnot [long]) -or
+        $value.schemaVersion -ne 1 -or
+        $value.locale -isnot [string] -or $value.locale -cnotin @('en', 'zh-CN', 'zh-TW') -or
+        ($value.introductionVersion -isnot [int] -and $value.introductionVersion -isnot [long]) -or
+        $value.introductionVersion -lt 0 -or
+        $value.introductionVersion -gt $StudioIntroductionVersion) {
+      throw 'Aura Studio preferences are invalid.'
+    }
+    return [PSCustomObject]@{
+      schemaVersion = 1
+      locale = [string]$value.locale
+      introductionVersion = [int]$value.introductionVersion
+    }
+  } catch {
+    Write-AuraUiLog -Message "Studio preferences were ignored: $($_.Exception.Message)"
+    return $fallback
+  }
+}
+
+function Write-AuraUiStudioPreferences {
+  param(
+    [Parameter(Mandatory = $true)][string]$Locale,
+    [Parameter(Mandatory = $true)][int]$IntroductionVersion
+  )
+  if ($Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
+    throw 'Aura Studio locale must be en, zh-CN, or zh-TW.'
+  }
+  if ($IntroductionVersion -lt 0 -or $IntroductionVersion -gt $StudioIntroductionVersion) {
+    throw 'Aura Studio introduction version is invalid.'
+  }
+  [void][IO.Directory]::CreateDirectory($DataRoot)
+  $temporary = Join-Path $DataRoot ('.studio-preferences-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+  $backup = Join-Path $DataRoot ('.studio-preferences-{0}.bak' -f [Guid]::NewGuid().ToString('N'))
+  $value = [ordered]@{
+    schemaVersion = 1
+    locale = $Locale
+    introductionVersion = $IntroductionVersion
+  }
+  try {
+    $json = ($value | ConvertTo-Json -Compress) + [Environment]::NewLine
+    [IO.File]::WriteAllText($temporary, $json, [Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $StudioPreferencesPath -PathType Leaf) {
+      [IO.File]::Replace($temporary, $StudioPreferencesPath, $backup)
+    } else {
+      [IO.File]::Move($temporary, $StudioPreferencesPath)
+    }
+  } finally {
+    if (Test-Path -LiteralPath $temporary -PathType Leaf) {
+      try { Remove-Item -LiteralPath $temporary -Force } catch {}
+    }
+    if (Test-Path -LiteralPath $backup -PathType Leaf) {
+      try { Remove-Item -LiteralPath $backup -Force } catch {}
+    }
+  }
+  return [PSCustomObject]@{
+    schemaVersion = 1
+    locale = $Locale
+    introductionVersion = $IntroductionVersion
+  }
+}
+
+function Get-AuraUiStudioUrl {
+  param([switch]$PreserveFragment)
+  if ($script:Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
+    throw 'Aura Studio cannot navigate with an invalid locale.'
+  }
+  $url = 'https://aura.studio/index.html?locale={0}' -f [Uri]::EscapeDataString($script:Locale)
+  if (-not $PreserveFragment -or $null -eq $script:StudioWebView) { return $url }
+  try {
+    $source = [Uri]$script:StudioWebView.Source
+    if ($source.Scheme -ceq 'https' -and $source.Host -ceq 'aura.studio' -and
+        $source.AbsolutePath -ceq '/index.html' -and
+        $source.Fragment -cin @('#themes', '#background', '#create', '#settings')) {
+      return $url + $source.Fragment.ToLowerInvariant()
+    }
+  } catch {}
+  return $url
 }
 
 function ConvertTo-AuraUiArgument {
@@ -114,6 +237,7 @@ function ConvertTo-AuraUiThemeMetadata {
     swatches = @(Get-AuraUiPropertyValue -InputObject $Item -Names @('swatches'))
     preview = Get-AuraUiPropertyValue -InputObject $Item -Names @('preview')
     launcher = Get-AuraUiPropertyValue -InputObject $Item -Names @('launcher')
+    studioStyle = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioStyle')
     studioPreview = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreview')
     studioPreviewFrame = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreviewFrame')
     source = Get-AuraUiPropertyValue -InputObject $Item -Names @('source')
@@ -158,11 +282,19 @@ function New-AuraUiThemeIcon {
   )
   $stream = $null
   $source = $null
+  $sourceIcon = $null
   $canvas = $null
   $graphics = $null
   $handle = [IntPtr]::Zero
   try {
     $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    if ([string]::Equals([IO.Path]::GetExtension($Path), '.ico', [StringComparison]::OrdinalIgnoreCase)) {
+      # Keep the ICO stream intact so System.Drawing selects the closest native
+      # frame. Built-in launcher icons contain the full Windows frame set and
+      # must not be flattened through the 96 px launcher PNG.
+      $sourceIcon = [Drawing.Icon]::new($stream, $Size, $Size)
+      return [Drawing.Icon]$sourceIcon.Clone()
+    }
     $source = [Drawing.Image]::FromStream($stream)
     $canvas = [Drawing.Bitmap]::new($Size, $Size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics = [Drawing.Graphics]::FromImage($canvas)
@@ -183,7 +315,137 @@ function New-AuraUiThemeIcon {
     if ($null -ne $graphics) { $graphics.Dispose() }
     if ($null -ne $canvas) { $canvas.Dispose() }
     if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $sourceIcon) { $sourceIcon.Dispose() }
     if ($null -ne $stream) { $stream.Dispose() }
+  }
+}
+
+function Test-AuraUiWindowsIcon {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $expectedSizes = @(16, 20, 24, 32, 40, 48, 64, 128, 256)
+  try {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt (6 + ($expectedSizes.Count * 16)) -or
+        [BitConverter]::ToUInt16($bytes, 0) -ne 0 -or
+        [BitConverter]::ToUInt16($bytes, 2) -ne 1 -or
+        [BitConverter]::ToUInt16($bytes, 4) -ne $expectedSizes.Count) {
+      return $false
+    }
+    $expectedOffset = 6 + ($expectedSizes.Count * 16)
+    for ($index = 0; $index -lt $expectedSizes.Count; $index++) {
+      $entry = 6 + ($index * 16)
+      $width = if ($bytes[$entry] -eq 0) { 256 } else { [int]$bytes[$entry] }
+      $height = if ($bytes[$entry + 1] -eq 0) { 256 } else { [int]$bytes[$entry + 1] }
+      $frameLength = [BitConverter]::ToUInt32($bytes, $entry + 8)
+      $frameOffset = [BitConverter]::ToUInt32($bytes, $entry + 12)
+      if ($width -ne $expectedSizes[$index] -or $height -ne $width -or
+          $bytes[$entry + 2] -ne 0 -or $bytes[$entry + 3] -ne 0 -or
+          [BitConverter]::ToUInt16($bytes, $entry + 4) -ne 1 -or
+          [BitConverter]::ToUInt16($bytes, $entry + 6) -ne 32 -or
+          $frameLength -eq 0 -or $frameOffset -ne $expectedOffset -or
+          ([uint64]$frameOffset + [uint64]$frameLength) -gt [uint64]$bytes.Length) {
+        return $false
+      }
+      if ($width -eq 256) {
+        if ($frameLength -lt 33 -or
+            -not [Linq.Enumerable]::SequenceEqual(
+              [byte[]]$bytes[$frameOffset..($frameOffset + 7)],
+              [byte[]](137, 80, 78, 71, 13, 10, 26, 10)) -or
+            [BitConverter]::ToUInt32([byte[]]($bytes[($frameOffset + 19)..($frameOffset + 16)]), 0) -ne 256 -or
+            [BitConverter]::ToUInt32([byte[]]($bytes[($frameOffset + 23)..($frameOffset + 20)]), 0) -ne 256) {
+          return $false
+        }
+      } else {
+        $stream = $null
+        $icon = $null
+        try {
+          $stream = [IO.MemoryStream]::new($bytes, $false)
+          $icon = [Drawing.Icon]::new($stream, $width, $height)
+          if ($icon.Width -ne $width -or $icon.Height -ne $height) { return $false }
+        } finally {
+          if ($null -ne $icon) { $icon.Dispose() }
+          if ($null -ne $stream) { $stream.Dispose() }
+        }
+      }
+      $expectedOffset += [int]$frameLength
+    }
+    return $expectedOffset -eq $bytes.Length
+  } catch { return $false }
+}
+
+function New-AuraUiMultiFramePngIconBytes {
+  [CmdletBinding(DefaultParameterSetName = 'Path')]
+  param(
+    [Parameter(Mandatory = $true, ParameterSetName = 'Path')][string]$SourcePath,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Bytes')][byte[]]$SourceBytes
+  )
+  $sizes = @(16, 20, 24, 32, 40, 48, 64, 128, 256)
+  $sourceStream = $null
+  $source = $null
+  try {
+    $sourceStream = if ($PSCmdlet.ParameterSetName -ceq 'Bytes') {
+      [IO.MemoryStream]::new($SourceBytes, $false)
+    } else {
+      [IO.File]::Open($SourcePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    }
+    $source = [Drawing.Image]::FromStream($sourceStream)
+    if ($source.Width -ne 96 -or $source.Height -ne 96) {
+      throw 'A custom launcher mark must be exactly 96 by 96 pixels.'
+    }
+    $frames = [Collections.Generic.List[byte[]]]::new()
+    foreach ($size in $sizes) {
+      $bitmap = $null
+      $graphics = $null
+      $memory = $null
+      try {
+        $bitmap = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $graphics = [Drawing.Graphics]::FromImage($bitmap)
+        $graphics.Clear([Drawing.Color]::Transparent)
+        $graphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
+        $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
+        $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::HighQuality
+        $graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $size, $size))
+        $memory = [IO.MemoryStream]::new()
+        $bitmap.Save($memory, [Drawing.Imaging.ImageFormat]::Png)
+        $frames.Add($memory.ToArray())
+      } finally {
+        if ($null -ne $memory) { $memory.Dispose() }
+        if ($null -ne $graphics) { $graphics.Dispose() }
+        if ($null -ne $bitmap) { $bitmap.Dispose() }
+      }
+    }
+    $output = [IO.MemoryStream]::new()
+    $writer = [IO.BinaryWriter]::new($output)
+    try {
+      $writer.Write([uint16]0)
+      $writer.Write([uint16]1)
+      $writer.Write([uint16]$sizes.Count)
+      $offset = 6 + ($sizes.Count * 16)
+      for ($index = 0; $index -lt $sizes.Count; $index++) {
+        $dimension = if ($sizes[$index] -eq 256) { 0 } else { $sizes[$index] }
+        $writer.Write([byte]$dimension)
+        $writer.Write([byte]$dimension)
+        $writer.Write([byte]0)
+        $writer.Write([byte]0)
+        $writer.Write([uint16]1)
+        $writer.Write([uint16]32)
+        $writer.Write([uint32]$frames[$index].Length)
+        $writer.Write([uint32]$offset)
+        $offset += $frames[$index].Length
+      }
+      foreach ($frame in $frames) { $writer.Write($frame) }
+      $writer.Flush()
+      return $output.ToArray()
+    } finally {
+      $writer.Dispose()
+      $output.Dispose()
+    }
+  } finally {
+    if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $sourceStream) { $sourceStream.Dispose() }
   }
 }
 
@@ -257,7 +519,10 @@ function Set-AuraUiPayloadState {
   if ($match.Success) { $script:ActiveLabel = $match.Groups['label'].Value }
   $themeMatch = [regex]::Match($script:Payload, '"theme":"(?<theme>[^"\\]+)"')
   if ($themeMatch.Success) { $script:ActiveThemeName = $themeMatch.Groups['theme'].Value }
-  Update-AuraUiLauncherStyle
+  [void](Update-AuraUiLauncherStyle)
+  # An identity commit can land after the main window is already visible; refresh
+  # the anchored bottom-right position and show the launcher if it is ready.
+  Update-AuraUiLauncherPosition
 }
 
 function Set-AuraUiConfig {
@@ -299,6 +564,18 @@ function Test-AuraUiSignInUri {
   } catch { return $false }
 }
 
+function Get-AuraUiNewWindowDisposition {
+  param([AllowNull()][object]$Value)
+  try {
+    $uri = if ($Value -is [Uri]) { $Value } else { [Uri]"$Value" }
+    if ((Test-AuraUiClaudeUri -Value $uri) -or (Test-AuraUiSignInUri -Value $uri)) {
+      return 'Popup'
+    }
+    if ($uri.Scheme -ceq 'https') { return 'External' }
+  } catch {}
+  return 'Block'
+}
+
 function Show-AuraUiMessage {
   param([string]$Message, [string]$Title = 'Claude Aura', [System.Windows.Forms.MessageBoxIcon]$Icon = [System.Windows.Forms.MessageBoxIcon]::Information)
   [void][System.Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title,
@@ -316,6 +593,24 @@ function Show-AuraUiLoading {
 
 function Hide-AuraUiLoading {
   $script:LoadingPanel.Visible = $false
+}
+
+function Get-AuraUiNavigationCompletionDisposition {
+  param(
+    [AllowNull()][object]$CurrentNavigationId,
+    [AllowNull()][object]$ReadyNavigationId,
+    [UInt64]$CompletedNavigationId,
+    [bool]$IsSuccess
+  )
+  if ($null -eq $CurrentNavigationId -or
+      [UInt64]$CurrentNavigationId -ne $CompletedNavigationId) {
+    return 'Ignore'
+  }
+  if ($IsSuccess -or
+      ($null -ne $ReadyNavigationId -and [UInt64]$ReadyNavigationId -eq $CompletedNavigationId)) {
+    return 'Loaded'
+  }
+  return 'Failure'
 }
 
 function Start-AuraUiScript {
@@ -406,7 +701,6 @@ function Update-AuraUiTrayAppearance {
   if ($null -ne $script:LauncherAppearanceItem -and -not $script:LauncherAppearanceItem.IsDisposed) {
     $script:LauncherAppearanceItem.Text = $appearanceText
   }
-  Update-AuraUiLauncherStyle
 }
 
 function Get-AuraUiLauncherDefaultStyle {
@@ -424,10 +718,37 @@ function Get-AuraUiLauncherDefaultStyle {
 
 function Get-AuraUiLauncherStyle {
   $fallback = Get-AuraUiLauncherDefaultStyle
-  $themeName = if (Get-AuraUiEnabled) { Get-AuraUiSelectedThemeName } else { 'default' }
+  $enabled = Get-AuraUiEnabled
+  $themeName = if ($enabled) { Get-AuraUiSelectedThemeName } else { 'default' }
   if (-not $themeName) { $themeName = 'default' }
+  $editorActive = $enabled -and
+    (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
+  $editorSourceId = if ($editorActive) {
+    Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('sourceId')
+  } else { $null }
+  $editorSource = if ($editorActive) {
+    Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('source')
+  } else { $null }
+  $editorId = if ($editorActive) {
+    Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('id')
+  } else { $null }
+  $editorLauncherPreviewUrl = if ($editorActive) {
+    Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('launcherStylePreviewUrl')
+  } else { $null }
+  # The active editor payload is the appearance Aura is actually rendering,
+  # even before a duplicate exists in the persisted theme list. Resolve its
+  # unchanged mark through the validated source theme while taking material
+  # values from the last-valid draft.
+  if ($editorActive -and $editorSourceId -is [string] -and
+      $editorSourceId -cmatch '^[a-z][a-z0-9-]{1,39}$') {
+    $themeName = $editorSourceId
+  }
   $theme = Get-AuraUiThemeByName -Name $themeName
   $raw = if ($null -ne $theme) { Get-AuraUiPropertyValue -InputObject $theme -Names @('launcher') } else { $null }
+  if ($editorActive) {
+    $draftLauncher = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('launcherStyle')
+    if ($null -ne $draftLauncher) { $raw = $draftLauncher }
+  }
   if ($null -eq $raw) { $raw = $fallback }
   $style = [ordered]@{}
   foreach ($key in @('surface', 'surfaceHover', 'foreground', 'accent', 'border')) {
@@ -450,8 +771,17 @@ function Get-AuraUiLauncherStyle {
   $style.asset = "$asset"
   $style.radius = $radius
   $style.borderWidth = $borderWidth
-  $style.source = if ($null -ne $theme) { "$($theme.source)" } else { 'builtin' }
-  $style.theme = "$themeName"
+  $editorLocalMark = $editorActive -and "$asset" -ceq 'launcher-mark.png' -and
+    $editorId -is [string] -and $editorId -cmatch '^[a-z][a-z0-9-]{1,39}$' -and
+    $editorLauncherPreviewUrl -is [string] -and
+    $editorLauncherPreviewUrl -cmatch '^https://aura\.editor/active/launcher-[a-f0-9]{64}\.png$'
+  $style.source = if ($editorLocalMark) {
+    'editor'
+  } elseif ($editorActive -and "$asset" -ceq 'launcher-mark.png' -and "$editorSource" -ceq 'user') {
+    'user'
+  } elseif ($null -ne $theme) { "$($theme.source)" } else { 'builtin' }
+  $style.theme = if ($editorLocalMark) { "$editorId" } else { "$themeName" }
+  if ($editorLocalMark) { $style.editorPreviewUrl = "$editorLauncherPreviewUrl" }
   return [PSCustomObject]$style
 }
 
@@ -459,26 +789,456 @@ function Get-AuraUiLauncherAssetPath {
   param([Parameter(Mandatory = $true)][object]$Style)
   $relative = "$($Style.asset)".Replace('/', [IO.Path]::DirectorySeparatorChar)
   try {
+    $allowedRoot = $null
+    $expectedEditorDigest = $null
     if ("$($Style.asset)" -cmatch '^assets/theme-art/[a-z][a-z0-9-]{1,39}/launcher-mark\.png$') {
       $rootPath = [IO.Path]::GetFullPath($ThemeArtRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
       $candidate = [IO.Path]::GetFullPath((Join-Path $Root $relative))
       if (-not $candidate.StartsWith($rootPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         return $null
       }
+      $allowedRoot = $rootPath
     } elseif ("$($Style.asset)" -ceq 'launcher-mark.png' -and "$($Style.source)" -ceq 'user') {
       $themeRoot = [IO.Path]::GetFullPath((Join-Path $UserThemesRoot "$($Style.theme)"))
       $candidate = [IO.Path]::GetFullPath((Join-Path $themeRoot 'launcher-mark.png'))
       if (-not $candidate.StartsWith($themeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         return $null
       }
+      $allowedRoot = [IO.Path]::GetFullPath($UserThemesRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    } elseif ("$($Style.asset)" -ceq 'launcher-mark.png' -and "$($Style.source)" -ceq 'editor' -and
+        "$($Style.editorPreviewUrl)" -cmatch '^https://aura\.editor/active/(?<file>launcher-(?<digest>[a-f0-9]{64})\.png)$') {
+      $expectedEditorDigest = "$($Matches['digest'])"
+      $allowedRoot = [IO.Path]::GetFullPath($StudioEditorPreviewRoot).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+      $candidate = [IO.Path]::GetFullPath((Join-Path (Join-Path $allowedRoot 'active') $Matches['file']))
+      if (-not $candidate.StartsWith($allowedRoot + [IO.Path]::DirectorySeparatorChar,
+          [StringComparison]::OrdinalIgnoreCase)) { return $null }
     } else {
       return $null
     }
-    if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { return $null }
-    $item = Get-Item -LiteralPath $candidate -Force
-    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $null }
+    if (-not (Test-AuraUiIdentityFileWithinRoot -Path $candidate -AllowedRoot $allowedRoot)) { return $null }
+    if ($expectedEditorDigest) {
+      $stream = $null
+      $sha256 = $null
+      try {
+        $stream = [IO.File]::Open($candidate, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        $actualDigest = ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+        if (-not [string]::Equals($actualDigest, $expectedEditorDigest, [StringComparison]::Ordinal)) {
+          return $null
+        }
+      } finally {
+        if ($null -ne $sha256) { $sha256.Dispose() }
+        if ($null -ne $stream) { $stream.Dispose() }
+      }
+    }
     return $candidate
   } catch { return $null }
+}
+
+function Test-AuraUiIdentityFileWithinRoot {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$AllowedRoot
+  )
+  try {
+    $rootFull = [IO.Path]::GetFullPath($AllowedRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $candidateFull = [IO.Path]::GetFullPath($Path)
+    if (-not $candidateFull.StartsWith($rootFull + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $candidateFull -PathType Leaf)) {
+      return $false
+    }
+    $cursor = $candidateFull
+    while ($true) {
+      $item = Get-Item -LiteralPath $cursor -Force
+      if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $false }
+      if ([string]::Equals($cursor.TrimEnd(
+            [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar),
+          $rootFull, [StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+      }
+      $parent = Split-Path $cursor -Parent
+      if (-not $parent) { return $false }
+      $cursor = [IO.Path]::GetFullPath($parent).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+      if (-not [string]::Equals($cursor, $rootFull, [StringComparison]::OrdinalIgnoreCase) -and
+          -not $cursor.StartsWith($rootFull + [IO.Path]::DirectorySeparatorChar,
+            [StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+      }
+    }
+  } catch { return $false }
+}
+
+function Remove-AuraUiUnusedShortcutIcons {
+  param([AllowNull()][string]$KeepPath)
+  try {
+    $rootFull = [IO.Path]::GetFullPath($ShortcutIconRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $rootFull -PathType Container)) { return }
+    $rootItem = Get-Item -LiteralPath $rootFull -Force
+    if (($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return }
+    $keepFull = if ($KeepPath) { [IO.Path]::GetFullPath($KeepPath) } else { $null }
+    foreach ($candidate in [IO.Directory]::EnumerateFiles(
+        $rootFull, '*.ico', [IO.SearchOption]::TopDirectoryOnly)) {
+      $candidateFull = [IO.Path]::GetFullPath($candidate)
+      if ($keepFull -and [string]::Equals($candidateFull, $keepFull,
+          [StringComparison]::OrdinalIgnoreCase)) { continue }
+      if ([IO.Path]::GetFileName($candidateFull) -cnotmatch '^[a-z][a-z0-9-]{1,39}-[a-f0-9]{16}\.ico$') {
+        continue
+      }
+      if (Test-AuraUiIdentityFileWithinRoot -Path $candidateFull -AllowedRoot $rootFull) {
+        [IO.File]::Delete($candidateFull)
+      }
+    }
+  } catch {
+    Write-AuraUiLog -Message "Unused theme identity cleanup failed: $($_.Exception.Message)"
+  }
+}
+
+function Get-AuraUiBuiltInLauncherThemeId {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  $asset = "$($Style.asset)"
+  if ($asset -cnotmatch '^assets/theme-art/(?<theme>[a-z][a-z0-9-]{1,39})/launcher-mark\.png$') { return $null }
+  $themeId = $Matches['theme']
+  $theme = Get-AuraUiThemeByName -Name $themeId
+  if ($null -eq $theme -or "$($theme.source)" -cne 'builtin' -or
+      -not [string]::Equals("$($theme.name)", $themeId, [StringComparison]::Ordinal)) { return $null }
+  $launcher = Get-AuraUiPropertyValue -InputObject $theme -Names @('launcher')
+  $registeredAsset = Get-AuraUiPropertyValue -InputObject $launcher -Names @('asset')
+  if (-not [string]::Equals([string]$registeredAsset, $asset, [StringComparison]::Ordinal)) { return $null }
+  return $themeId
+}
+
+function Get-AuraUiBuiltInThemeIconPath {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  $themeId = Get-AuraUiBuiltInLauncherThemeId -Style $Style
+  if (-not $themeId) { return $null }
+  $candidate = [IO.Path]::GetFullPath((Join-Path $ThemeArtRoot "$themeId\launcher-mark.ico"))
+  if (-not (Test-AuraUiIdentityFileWithinRoot -Path $candidate -AllowedRoot $ThemeArtRoot) -or
+      -not (Test-AuraUiWindowsIcon -Path $candidate)) { return $null }
+  return $candidate
+}
+
+function New-AuraUiCustomShortcutIcon {
+  param(
+    [Parameter(Mandatory = $true)][object]$Style,
+    [Parameter(Mandatory = $true)][string]$LauncherAssetPath,
+    [Parameter(Mandatory = $true)][byte[]]$LauncherAssetBytes,
+    [Parameter(Mandatory = $true)][byte[]]$ExpectedIconBytes
+  )
+  if ("$($Style.source)" -cnotin @('user', 'editor') -or "$($Style.asset)" -cne 'launcher-mark.png' -or
+      "$($Style.theme)" -cnotmatch '^[a-z][a-z0-9-]{1,39}$' -or
+      -not (Test-Path -LiteralPath $LauncherAssetPath -PathType Leaf)) {
+    return $null
+  }
+
+  $temporary = $null
+  $output = $null
+  try {
+    $auraDataParent = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ClaudeAura')).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $dataRootFull = [IO.Path]::GetFullPath($DataRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if (-not [string]::Equals($dataRootFull, (Join-Path $auraDataParent 'data'),
+        [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $auraDataParent -PathType Container) -or
+        -not (Test-Path -LiteralPath $dataRootFull -PathType Container)) {
+      return $null
+    }
+    $auraDataParentItem = Get-Item -LiteralPath $auraDataParent -Force
+    $dataRootItem = Get-Item -LiteralPath $dataRootFull -Force
+    if (($auraDataParentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        ($dataRootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $null }
+    $iconRootFull = [IO.Path]::GetFullPath($ShortcutIconRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if (-not $iconRootFull.StartsWith($dataRootFull + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+      return $null
+    }
+    [void][IO.Directory]::CreateDirectory($iconRootFull)
+    $iconRootItem = Get-Item -LiteralPath $iconRootFull -Force
+    if (($iconRootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $null }
+
+    $sha256 = $null
+    try {
+      $sha256 = [Security.Cryptography.SHA256]::Create()
+      $digest = ([BitConverter]::ToString($sha256.ComputeHash($LauncherAssetBytes))).Replace('-', '').ToLowerInvariant()
+    } finally {
+      if ($null -ne $sha256) { $sha256.Dispose() }
+    }
+    $target = [IO.Path]::GetFullPath((Join-Path $iconRootFull ("{0}-{1}.ico" -f "$($Style.theme)", $digest.Substring(0, 16))))
+    if (-not $target.StartsWith($iconRootFull + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+      return $null
+    }
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+      $existingBytes = [IO.File]::ReadAllBytes($target)
+      $sameBytes = $existingBytes.Length -eq $ExpectedIconBytes.Length
+      for ($index = 0; $sameBytes -and $index -lt $existingBytes.Length; $index++) {
+        if ($existingBytes[$index] -ne $ExpectedIconBytes[$index]) { $sameBytes = $false }
+      }
+      if ($sameBytes -and
+          (Test-AuraUiIdentityFileWithinRoot -Path $target -AllowedRoot $iconRootFull) -and
+          (Test-AuraUiWindowsIcon -Path $target)) { return $target }
+      [IO.File]::Delete($target)
+    }
+
+    $temporary = Join-Path $iconRootFull ('.identity-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+    $output = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $output.Write($ExpectedIconBytes, 0, $ExpectedIconBytes.Length)
+    $output.Flush($true)
+    $output.Dispose()
+    $output = $null
+    if (-not (Test-AuraUiWindowsIcon -Path $temporary)) {
+      throw 'The generated custom shortcut icon is invalid.'
+    }
+    [IO.File]::Move($temporary, $target)
+    $temporary = $null
+    if (-not (Test-AuraUiIdentityFileWithinRoot -Path $target -AllowedRoot $iconRootFull) -or
+        -not (Test-AuraUiWindowsIcon -Path $target)) { return $null }
+    return $target
+  } catch {
+    Write-AuraUiLog -Message "Custom shortcut icon could not be generated: $($_.Exception.Message)"
+    return $null
+  } finally {
+    if ($null -ne $output) { $output.Dispose() }
+    if ($temporary -and (Test-Path -LiteralPath $temporary -PathType Leaf)) {
+      try { [IO.File]::Delete($temporary) } catch {}
+    }
+  }
+}
+
+function Get-AuraUiShortcutIconPath {
+  param(
+    [Parameter(Mandatory = $true)][object]$Style,
+    [AllowNull()][string]$IdentityAssetPath,
+    [AllowNull()][string]$LauncherAssetPath,
+    [AllowNull()][byte[]]$LauncherAssetBytes,
+    [AllowNull()][byte[]]$ExpectedIconBytes
+  )
+  if ((Get-AuraUiBuiltInLauncherThemeId -Style $Style) -and $IdentityAssetPath -and
+      [string]::Equals([IO.Path]::GetExtension($IdentityAssetPath), '.ico', [StringComparison]::OrdinalIgnoreCase)) {
+    return $IdentityAssetPath
+  }
+  if ("$($Style.source)" -cin @('user', 'editor') -and "$($Style.asset)" -ceq 'launcher-mark.png' -and
+      $LauncherAssetPath -and $null -ne $LauncherAssetBytes -and $null -ne $ExpectedIconBytes) {
+    $customIcon = New-AuraUiCustomShortcutIcon -Style $Style -LauncherAssetPath $LauncherAssetPath `
+      -LauncherAssetBytes $LauncherAssetBytes -ExpectedIconBytes $ExpectedIconBytes
+    if ($customIcon) { return $customIcon }
+  }
+  return $null
+}
+
+function Test-AuraUiOwnedShortcutIconPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  try {
+    $candidate = [IO.Path]::GetFullPath($Path)
+    $themeRoot = [IO.Path]::GetFullPath($ThemeArtRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if ($candidate.StartsWith($themeRoot + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+      $relative = $candidate.Substring($themeRoot.Length + 1).Replace('\', '/')
+      return $relative -cmatch '^[a-z][a-z0-9-]{1,39}/launcher-mark\.ico$' -and
+        (Test-AuraUiIdentityFileWithinRoot -Path $candidate -AllowedRoot $themeRoot) -and
+        (Test-AuraUiWindowsIcon -Path $candidate)
+    }
+    $customRoot = [IO.Path]::GetFullPath($ShortcutIconRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    if ($candidate.StartsWith($customRoot + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+      return [IO.Path]::GetFileName($candidate) -cmatch '^[a-z][a-z0-9-]{1,39}-[a-f0-9]{16}\.ico$' -and
+        (Test-AuraUiIdentityFileWithinRoot -Path $candidate -AllowedRoot $customRoot) -and
+        (Test-AuraUiWindowsIcon -Path $candidate)
+    }
+    return [string]::Equals($candidate, [IO.Path]::GetFullPath($AuraIconPath),
+        [StringComparison]::OrdinalIgnoreCase) -and
+      (Test-AuraUiIdentityFileWithinRoot -Path $candidate -AllowedRoot (Join-Path $Root 'assets\brand')) -and
+      (Test-AuraUiWindowsIcon -Path $candidate)
+  } catch { return $false }
+}
+
+function Test-AuraUiOwnedShortcutTarget {
+  param(
+    [Parameter(Mandatory = $true)][object]$Shortcut,
+    [Parameter(Mandatory = $true)][string]$ExpectedPowerShell,
+    [Parameter(Mandatory = $true)][string]$ExpectedScript,
+    [Parameter(Mandatory = $true)][string]$ExpectedArguments
+  )
+  try {
+    if (-not [string]::Equals([IO.Path]::GetFullPath("$($Shortcut.TargetPath)"), $ExpectedPowerShell,
+        [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals("$($Shortcut.Arguments)", $ExpectedArguments, [StringComparison]::Ordinal)) {
+      return $false
+    }
+    $fileMatch = [regex]::Match("$($Shortcut.Arguments)",
+      '(?i)(?:^|\s)-File\s+"(?<script>[^"]+)"(?:\s|$)')
+    return $fileMatch.Success -and
+      [string]::Equals([IO.Path]::GetFullPath($fileMatch.Groups['script'].Value), $ExpectedScript,
+        [StringComparison]::OrdinalIgnoreCase)
+  } catch { return $false }
+}
+
+function Update-AuraUiOwnedShortcuts {
+  param([AllowNull()][string]$IconPath)
+  if (-not $IconPath -or -not ('AuraWindow' -as [type]) -or
+      -not (Test-AuraUiOwnedShortcutIconPath -Path $IconPath)) {
+    return $null
+  }
+  try {
+    $installedScript = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ClaudeAura\app\windows\aura-ui.ps1'))
+    $currentScript = [IO.Path]::GetFullPath($PSCommandPath)
+    if (-not [string]::Equals($currentScript, $installedScript, [StringComparison]::OrdinalIgnoreCase)) {
+      return [PSCustomObject]@{ Success = $true; Managed = $false; Changes = @() }
+    }
+    $powershell = [IO.Path]::GetFullPath((Get-Command powershell.exe -ErrorAction Stop).Source)
+    $baseArguments = "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installedScript`""
+    $desktop = [Environment]::GetFolderPath('Desktop')
+    $menuRoot = Join-Path ([Environment]::GetFolderPath('Programs')) 'Claude Aura'
+    # This explicit allowlist is the complete mutation surface: two app-owned
+    # names in each of the two installer-owned locations.
+    $ownedShortcuts = @(
+      [PSCustomObject]@{ Path = (Join-Path $desktop 'Claude Aura.lnk'); Arguments = $baseArguments },
+      [PSCustomObject]@{ Path = (Join-Path $desktop 'Claude Aura Studio.lnk'); Arguments = "$baseArguments -OpenStudio" },
+      [PSCustomObject]@{ Path = (Join-Path $menuRoot 'Claude Aura.lnk'); Arguments = $baseArguments },
+      [PSCustomObject]@{ Path = (Join-Path $menuRoot 'Claude Aura Studio.lnk'); Arguments = "$baseArguments -OpenStudio" }
+    )
+    $present = @($ownedShortcuts | Where-Object { Test-Path -LiteralPath $_.Path -PathType Leaf })
+    if ($present.Count -eq 0) {
+      return [PSCustomObject]@{ Success = $true; Managed = $false; Changes = @() }
+    }
+    if ($present.Count -ne $ownedShortcuts.Count) {
+      Write-AuraUiLog -Message 'Owned shortcut identity was not changed because only part of the four-shortcut set exists.'
+      return $null
+    }
+
+    $shell = New-Object -ComObject WScript.Shell
+    $validated = [Collections.Generic.List[object]]::new()
+    $changed = [Collections.Generic.List[object]]::new()
+    try {
+      foreach ($owned in $ownedShortcuts) {
+        $item = Get-Item -LiteralPath $owned.Path -Force
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+          throw "Owned shortcut is redirected: $($owned.Path)"
+        }
+        $shortcut = $null
+        try {
+          $shortcut = $shell.CreateShortcut($owned.Path)
+          if (-not (Test-AuraUiOwnedShortcutTarget -Shortcut $shortcut -ExpectedPowerShell $powershell `
+              -ExpectedScript $installedScript -ExpectedArguments $owned.Arguments)) {
+            throw "Owned shortcut target does not match the installed Aura host: $($owned.Path)"
+          }
+          $validated.Add([PSCustomObject]@{
+            Path = $owned.Path
+            Arguments = $owned.Arguments
+            PreviousIcon = "$($shortcut.IconLocation)"
+          })
+        } finally {
+          if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+            try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) } catch {}
+          }
+        }
+      }
+
+      $nextIconLocation = "$IconPath,0"
+      foreach ($entry in $validated) {
+        if ([string]::Equals($entry.PreviousIcon, $nextIconLocation, [StringComparison]::OrdinalIgnoreCase)) {
+          continue
+        }
+        $shortcut = $null
+        try {
+          $shortcut = $shell.CreateShortcut($entry.Path)
+          $shortcut.IconLocation = $nextIconLocation
+          $shortcut.Save()
+          $changed.Add($entry)
+        } catch {
+          # Save can write a .lnk and still report an error. Restore the complete
+          # prevalidated snapshot, including the in-flight entry, rather than
+          # trusting only calls that returned normally.
+          $rollbackComplete = $true
+          for ($rollbackIndex = $validated.Count - 1; $rollbackIndex -ge 0; $rollbackIndex--) {
+            $rollback = $null
+            try {
+              $rollback = $shell.CreateShortcut($validated[$rollbackIndex].Path)
+              $rollback.IconLocation = $validated[$rollbackIndex].PreviousIcon
+              $rollback.Save()
+            } catch {
+              $rollbackComplete = $false
+              Write-AuraUiLog -Message "Owned shortcut rollback failed for $($validated[$rollbackIndex].Path): $($_.Exception.Message)"
+            } finally {
+              if ($null -ne $rollback -and [Runtime.InteropServices.Marshal]::IsComObject($rollback)) {
+                try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($rollback) } catch {}
+              }
+            }
+          }
+          if (-not $rollbackComplete) {
+            return [PSCustomObject]@{
+              Success = $false
+              Managed = $true
+              Changes = @($validated)
+              RollbackIncomplete = $true
+            }
+          }
+          throw
+        } finally {
+          if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+            try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) } catch {}
+          }
+        }
+      }
+    } finally {
+      if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
+        try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) } catch {}
+      }
+    }
+    foreach ($entry in $changed) {
+      [AuraWindow]::SHChangeNotify(0x00002000, 0x0005, $entry.Path, $null)
+    }
+    if ($changed.Count -gt 0) {
+      [AuraWindow]::SHChangeNotify(0x08000000, 0x0000, $null, $null)
+    }
+    return [PSCustomObject]@{ Success = $true; Managed = $true; Changes = @($changed) }
+  } catch {
+    Write-AuraUiLog -Message "Owned shortcut icons could not be refreshed: $($_.Exception.Message)"
+    return $null
+  }
+}
+
+function Restore-AuraUiOwnedShortcuts {
+  param([AllowNull()][object]$Snapshot)
+  if ($null -eq $Snapshot -or -not $Snapshot.Managed -or @($Snapshot.Changes).Count -eq 0) { return $true }
+  $shell = $null
+  $restored = $true
+  try {
+    $shell = New-Object -ComObject WScript.Shell
+    foreach ($entry in @($Snapshot.Changes)) {
+      $shortcut = $null
+      try {
+        $shortcut = $shell.CreateShortcut($entry.Path)
+        $shortcut.IconLocation = $entry.PreviousIcon
+        $shortcut.Save()
+        [AuraWindow]::SHChangeNotify(0x00002000, 0x0005, $entry.Path, $null)
+      } catch {
+        $restored = $false
+        Write-AuraUiLog -Message "Owned shortcut rollback failed for $($entry.Path): $($_.Exception.Message)"
+      } finally {
+        if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+          try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) } catch {}
+        }
+      }
+    }
+    [AuraWindow]::SHChangeNotify(0x08000000, 0x0000, $null, $null)
+  } catch {
+    $restored = $false
+    Write-AuraUiLog -Message "Owned shortcut rollback could not start: $($_.Exception.Message)"
+  } finally {
+    if ($null -ne $shell -and [Runtime.InteropServices.Marshal]::IsComObject($shell)) {
+      try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) } catch {}
+    }
+  }
+  return $restored
 }
 
 function New-AuraUiRoundedRectanglePath {
@@ -494,115 +1254,970 @@ function New-AuraUiRoundedRectanglePath {
   return $path
 }
 
-function Update-AuraUiThemeIcons {
-  param([AllowNull()][string]$AssetPath)
-  if (-not $AssetPath -or -not ('AuraWindow' -as [type])) { return }
-  if ([string]::Equals($script:ThemeIdentityAssetPath, $AssetPath, [StringComparison]::OrdinalIgnoreCase)) { return }
-
-  $main = $null
-  $studio = $null
-  $notification = $null
+function Get-AuraUiIdentityDigest {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = $null
+  $sha256 = $null
   try {
-    $main = New-AuraUiThemeIcon -Path $AssetPath -Size 64
-    $studio = New-AuraUiThemeIcon -Path $AssetPath -Size 64
-    $notification = New-AuraUiThemeIcon -Path $AssetPath -Size 32
-  } catch {
-    foreach ($pending in @($main, $studio, $notification)) {
-      if ($null -ne $pending) { try { $pending.Dispose() } catch {} }
-    }
-    Write-AuraUiLog -Message "Theme app icon could not be loaded: $($_.Exception.Message)"
-    return
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+  } finally {
+    if ($null -ne $sha256) { $sha256.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
   }
+}
 
-  $oldIcons = @($script:MainIcon, $script:StudioIcon, $script:NotificationIcon)
-  $script:MainIcon = $main
-  $script:StudioIcon = $studio
-  $script:NotificationIcon = $notification
-  $script:ThemeIdentityAssetPath = $AssetPath
-  if ($null -ne $script:Form -and -not $script:Form.IsDisposed) { $script:Form.Icon = $script:MainIcon }
-  if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Icon = $script:StudioIcon }
-  if ($null -ne $script:TrayIcon) { $script:TrayIcon.Icon = $script:NotificationIcon }
-  foreach ($oldIcon in $oldIcons) {
-    if ($null -ne $oldIcon) { try { $oldIcon.Dispose() } catch {} }
+function Get-AuraUiWindowDpi {
+  param([AllowNull()][System.Windows.Forms.Form]$Form)
+  try {
+    if ($null -ne $Form -and -not $Form.IsDisposed) {
+      $dpi = [int][AuraWindow]::GetDpiForWindow($Form.Handle)
+      if ($dpi -ge 96 -and $dpi -le 768) { return $dpi }
+    }
+  } catch {}
+  try {
+    $dpi = [int][AuraWindow]::GetDpiForSystem()
+    if ($dpi -ge 96 -and $dpi -le 768) { return $dpi }
+  } catch {}
+  return 96
+}
+
+function Get-AuraUiSystemIconDimensions {
+  param([Parameter(Mandatory = $true)][int]$Dpi, [switch]$Small)
+  $widthMetric = if ($Small) { 49 } else { 11 } # SM_CXSMICON / SM_CXICON
+  $heightMetric = if ($Small) { 50 } else { 12 } # SM_CYSMICON / SM_CYICON
+  try {
+    $width = [int][AuraWindow]::GetSystemMetricsForDpi($widthMetric, [uint32]$Dpi)
+    $height = [int][AuraWindow]::GetSystemMetricsForDpi($heightMetric, [uint32]$Dpi)
+    if ($width -ge 8 -and $width -le 512 -and $height -ge 8 -and $height -le 512) {
+      return [PSCustomObject]@{ Width = $width; Height = $height }
+    }
+  } catch {}
+  $baseSize = if ($Small) { 16 } else { 32 }
+  $fallback = [int][Math]::Max(8, [Math]::Round($baseSize * $Dpi / 96))
+  return [PSCustomObject]@{ Width = $fallback; Height = $fallback }
+}
+
+function New-AuraUiNativeIconHandle {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][int]$Width,
+    [Parameter(Mandatory = $true)][int]$Height
+  )
+  if ($Width -lt 8 -or $Width -gt 512 -or $Height -lt 8 -or $Height -gt 512) {
+    throw 'The requested native icon size is outside the safe range.'
   }
+  $handle = [AuraWindow]::LoadImageW(
+    [IntPtr]::Zero, [IO.Path]::GetFullPath($Path), 1, $Width, $Height, 0x00000010)
+  if ($handle -eq [IntPtr]::Zero) {
+    throw [ComponentModel.Win32Exception]::new(
+      [Runtime.InteropServices.Marshal]::GetLastWin32Error(),
+      "Windows could not load the ${Width}x${Height} identity frame.")
+  }
+  return $handle
+}
+
+function New-AuraUiNativeFormIconPair {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][int]$Dpi
+  )
+  $small = [IntPtr]::Zero
+  $large = [IntPtr]::Zero
+  try {
+    $smallSize = Get-AuraUiSystemIconDimensions -Dpi $Dpi -Small
+    $largeSize = Get-AuraUiSystemIconDimensions -Dpi $Dpi
+    $small = New-AuraUiNativeIconHandle -Path $Path -Width $smallSize.Width -Height $smallSize.Height
+    $large = New-AuraUiNativeIconHandle -Path $Path -Width $largeSize.Width -Height $largeSize.Height
+    return [PSCustomObject]@{ Small = $small; Large = $large; Dpi = $Dpi }
+  } catch {
+    foreach ($handle in @($small, $large)) {
+      if ($handle -ne [IntPtr]::Zero) { try { [void][AuraWindow]::DestroyIcon($handle) } catch {} }
+    }
+    throw
+  }
+}
+
+function Dispose-AuraUiNativeFormIconPair {
+  param([AllowNull()][object]$Pair)
+  if ($null -eq $Pair) { return }
+  foreach ($handle in @($Pair.Small, $Pair.Large)) {
+    if ($null -ne $handle -and $handle -ne [IntPtr]::Zero) {
+      try { [void][AuraWindow]::DestroyIcon($handle) } catch {}
+    }
+  }
+}
+
+function Set-AuraUiNativeFormIcons {
+  param(
+    [Parameter(Mandatory = $true)][System.Windows.Forms.Form]$Form,
+    [AllowNull()][IntPtr]$Small = [IntPtr]::Zero,
+    [AllowNull()][IntPtr]$Large = [IntPtr]::Zero
+  )
+  if ($Form.IsDisposed) { throw 'The identity target window has been disposed.' }
+  $handle = $Form.Handle
+  [void][AuraWindow]::SendMessage($handle, 0x0080, [IntPtr]::Zero, $Small) # WM_SETICON / ICON_SMALL
+  [void][AuraWindow]::SendMessage($handle, 0x0080, [IntPtr]::new(1), $Large) # WM_SETICON / ICON_BIG
+}
+
+function New-AuraUiNotificationIcon {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $native = [IntPtr]::Zero
+  $borrowed = $null
+  try {
+    $dpi = Get-AuraUiWindowDpi
+    $size = Get-AuraUiSystemIconDimensions -Dpi $dpi -Small
+    # NotifyIcon has no per-monitor DPI callback. Keep a 64 px native source so
+    # Windows can downsample it crisply on notification areas through 400%.
+    $width = [Math]::Max(64, $size.Width)
+    $height = [Math]::Max(64, $size.Height)
+    $native = New-AuraUiNativeIconHandle -Path $Path -Width $width -Height $height
+    $borrowed = [Drawing.Icon]::FromHandle($native)
+    return [Drawing.Icon]$borrowed.Clone()
+  } finally {
+    if ($null -ne $borrowed) { try { $borrowed.Dispose() } catch {} }
+    if ($native -ne [IntPtr]::Zero) { try { [void][AuraWindow]::DestroyIcon($native) } catch {} }
+  }
+}
+
+function New-AuraUiThemeIconSet {
+  param([Parameter(Mandatory = $true)][string]$AssetPath)
+  if (-not ('AuraWindow' -as [type]) -or -not (Test-AuraUiWindowsIcon -Path $AssetPath)) {
+    throw 'The prepared theme identity is not a complete Windows icon.'
+  }
+  $notification = $null
+  $mainNative = $null
+  $studioNative = $null
+  try {
+    $digest = Get-AuraUiIdentityDigest -Path $AssetPath
+    $mainDpi = Get-AuraUiWindowDpi -Form $script:Form
+    $studioDpi = Get-AuraUiWindowDpi -Form $script:StudioForm
+    $mainNative = New-AuraUiNativeFormIconPair -Path $AssetPath -Dpi $mainDpi
+    $studioNative = New-AuraUiNativeFormIconPair -Path $AssetPath -Dpi $studioDpi
+    $notification = New-AuraUiNotificationIcon -Path $AssetPath
+    return [PSCustomObject]@{
+      Notification = $notification
+      MainNative = $mainNative
+      StudioNative = $studioNative
+      AssetPath = [IO.Path]::GetFullPath($AssetPath)
+      Digest = $digest
+    }
+  } catch {
+    if ($null -ne $notification) { try { $notification.Dispose() } catch {} }
+    Dispose-AuraUiNativeFormIconPair -Pair $mainNative
+    Dispose-AuraUiNativeFormIconPair -Pair $studioNative
+    throw
+  }
+}
+
+function Dispose-AuraUiThemeIconSet {
+  param([AllowNull()][object]$IconSet)
+  if ($null -eq $IconSet) { return }
+  if ($null -ne $IconSet.Notification) { try { $IconSet.Notification.Dispose() } catch {} }
+  Dispose-AuraUiNativeFormIconPair -Pair $IconSet.MainNative
+  Dispose-AuraUiNativeFormIconPair -Pair $IconSet.StudioNative
+}
+
+function Update-AuraUiNativeIdentityForDpi {
+  param(
+    [Parameter(Mandatory = $true)][ValidateSet('Main', 'Studio')][string]$Target,
+    [Parameter(Mandatory = $true)][System.Windows.Forms.Form]$Form,
+    [Parameter(Mandatory = $true)][int]$Dpi
+  )
+  if (-not $script:ThemeIdentityAssetPath -or -not $script:ThemeIdentityDigest -or
+      $null -eq $script:ThemeIdentityLock -or $script:IdentityRollbackIncomplete -or
+      $Dpi -lt 96 -or $Dpi -gt 768) { return }
+  $next = $null
+  try {
+    if (-not (Test-AuraUiOwnedShortcutIconPath -Path $script:ThemeIdentityAssetPath) -or
+        -not [string]::Equals(
+          (Get-AuraUiIdentityDigest -Path $script:ThemeIdentityAssetPath),
+          $script:ThemeIdentityDigest, [StringComparison]::Ordinal)) {
+      throw 'The locked identity asset no longer matches its committed digest.'
+    }
+    $next = New-AuraUiNativeFormIconPair -Path $script:ThemeIdentityAssetPath -Dpi $Dpi
+    Set-AuraUiNativeFormIcons -Form $Form -Small $next.Small -Large $next.Large
+    if ($Target -ceq 'Main') {
+      $old = $script:MainWindowIconPair
+      $script:MainWindowIconPair = $next
+    } else {
+      $old = $script:StudioWindowIconPair
+      $script:StudioWindowIconPair = $next
+    }
+    $next = $null
+    Dispose-AuraUiNativeFormIconPair -Pair $old
+  } catch {
+    Write-AuraUiLog -Message "$Target window DPI identity refresh failed: $($_.Exception.Message)"
+  } finally {
+    Dispose-AuraUiNativeFormIconPair -Pair $next
+  }
+}
+
+function Get-AuraUiLauncherMetrics {
+  param([int]$Dpi = $script:LauncherDpi)
+  # The window is the collapsed circular button plus a transparent halo that
+  # gives the layered renderer room for its soft shadow and hover growth. The
+  # halo derives arithmetically from the compact size so DPI sizing keeps a
+  # single logical conversion for the collapsed button.
+  $compact = ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherCompactSize -Dpi $Dpi
+  $halo = [int][Math]::Max(1, [Math]::Round($compact * ($script:LauncherHaloSize / $script:LauncherCompactSize)))
+  return [PSCustomObject]@{ Compact = $compact; Halo = $halo; Client = $compact + (2 * $halo) }
+}
+
+function New-AuraUiLauncherRegion {
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return $null }
+  # Classic fallback shape: the collapsed circular button inset by the halo, so
+  # the region path clips the same circle the layered surface would paint.
+  $metrics = Get-AuraUiLauncherMetrics
+  $bounds = [Drawing.RectangleF]::new($metrics.Halo, $metrics.Halo, $metrics.Compact, $metrics.Compact)
+  $path = New-AuraUiRoundedRectanglePath -Bounds $bounds -Radius ([double]$metrics.Compact / 2)
+  try { return [Drawing.Region]::new($path) }
+  finally { $path.Dispose() }
 }
 
 function Update-AuraUiLauncherRegion {
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
-  $radius = if ($null -ne $script:LauncherStyle) { [double]$script:LauncherStyle.radius } else { 16 }
-  $bounds = [Drawing.RectangleF]::new(0, 0, $script:Launcher.ClientSize.Width, $script:Launcher.ClientSize.Height)
-  $path = New-AuraUiRoundedRectanglePath -Bounds $bounds -Radius $radius
+  $nextRegion = New-AuraUiLauncherRegion
+  if ($null -eq $nextRegion) { return }
   $oldRegion = $script:Launcher.Region
-  $script:Launcher.Region = [Drawing.Region]::new($path)
-  $path.Dispose()
+  $script:Launcher.Region = $nextRegion
   if ($null -ne $oldRegion) { $oldRegion.Dispose() }
 }
 
-function Update-AuraUiLauncherStyle {
-  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
-  $style = Get-AuraUiLauncherStyle
-  $assetPath = Get-AuraUiLauncherAssetPath -Style $style
-  if ($null -eq $assetPath -and "$($style.asset)" -cne 'assets/theme-art/default/launcher-mark.png') {
-    $style = Get-AuraUiLauncherDefaultStyle
-    Add-Member -InputObject $style -NotePropertyName source -NotePropertyValue 'builtin' -Force
-    Add-Member -InputObject $style -NotePropertyName theme -NotePropertyValue 'default' -Force
-    $assetPath = Get-AuraUiLauncherAssetPath -Style $style
+function ConvertTo-AuraUiBlendedColor {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Color]$From,
+    [Parameter(Mandatory = $true)][Drawing.Color]$To,
+    [Parameter(Mandatory = $true)][double]$Amount
+  )
+  $mix = [Math]::Min(1.0, [Math]::Max(0.0, $Amount))
+  return [Drawing.Color]::FromArgb(
+    [int][Math]::Round($From.A + (($To.A - $From.A) * $mix)),
+    [int][Math]::Round($From.R + (($To.R - $From.R) * $mix)),
+    [int][Math]::Round($From.G + (($To.G - $From.G) * $mix)),
+    [int][Math]::Round($From.B + (($To.B - $From.B) * $mix)))
+}
+
+function New-AuraUiLauncherSurfaceBitmap {
+  param(
+    [Parameter(Mandatory = $true)][object]$Style,
+    [AllowNull()][object]$Mark,
+    [int]$Dpi = $script:LauncherDpi,
+    [double]$Hover = 0,
+    [bool]$Pressed = $false
+  )
+  # Renders the complete launcher at device pixels into an ARGB bitmap for
+  # UpdateLayeredWindow: soft shadow in the halo, antialiased circle, theme mark,
+  # and accent badge. Hover eases the circle slightly outward; a press compresses
+  # it. Future launcher states (greeting bubble, companion poses) belong here.
+  $bitmap = $null
+  $graphics = $null
+  try {
+    $metrics = Get-AuraUiLauncherMetrics -Dpi $Dpi
+    $scale = Get-AuraUiLauncherScale -Dpi $Dpi
+    $eased = [Math]::Min(1.0, [Math]::Max(0.0, $Hover))
+    $eased = $eased * $eased * (3.0 - (2.0 * $eased))
+    $bitmap = [Drawing.Bitmap]::new($metrics.Client, $metrics.Client, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $center = [double]$metrics.Client / 2
+    $radius = ([double]$metrics.Compact / 2) * (1.0 + (0.07 * $eased))
+    if ($Pressed) { $radius = ([double]$metrics.Compact / 2) * 0.94 }
+    # Soft drop shadow: a radial gradient fading to fully transparent, nudged
+    # down so the button reads as floating above the page.
+    $shadowRadius = $radius + (4.5 * $scale)
+    $shadowPath = [Drawing.Drawing2D.GraphicsPath]::new()
+    $shadowPath.AddEllipse(
+      [float]($center - $shadowRadius), [float]($center - $shadowRadius + (1.5 * $scale)),
+      [float]($shadowRadius * 2), [float]($shadowRadius * 2))
+    $shadowBrush = [Drawing.Drawing2D.PathGradientBrush]::new($shadowPath)
+    $shadowBrush.CenterColor = [Drawing.Color]::FromArgb([int](46 + (22 * $eased)), 0, 0, 0)
+    $shadowBrush.SurroundColors = @([Drawing.Color]::FromArgb(0, 0, 0, 0))
+    $graphics.FillPath($shadowBrush, $shadowPath)
+    $shadowBrush.Dispose()
+    $shadowPath.Dispose()
+    $surfaceColor = ConvertTo-AuraUiBlendedColor `
+      -From ([Drawing.ColorTranslator]::FromHtml("$($Style.surface)")) `
+      -To ([Drawing.ColorTranslator]::FromHtml("$($Style.surfaceHover)")) `
+      -Amount $eased
+    $borderWidth = [Math]::Max(1.0, [double]$Style.borderWidth * $scale)
+    $face = [Drawing.RectangleF]::new(
+      [float]($center - $radius + ($borderWidth / 2)), [float]($center - $radius + ($borderWidth / 2)),
+      [float](($radius * 2) - $borderWidth), [float](($radius * 2) - $borderWidth))
+    $fill = [Drawing.SolidBrush]::new($surfaceColor)
+    $graphics.FillEllipse($fill, $face)
+    $fill.Dispose()
+    $rim = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml("$($Style.border)"), [float]$borderWidth)
+    $graphics.DrawEllipse($rim, $face)
+    $rim.Dispose()
+    # The mark keeps the classic 2:3 ratio to the circle and scales with it so
+    # hover growth moves the whole composition, not just the rim.
+    $markSize = ($radius * 2) * (2.0 / 3.0)
+    $markLeft = $center - ($markSize / 2)
+    $markTop = $center - ($markSize / 2)
+    if ($null -ne $Mark) {
+      $graphics.DrawImage($Mark, [Drawing.RectangleF]::new(
+        [float]$markLeft, [float]$markTop, [float]$markSize, [float]$markSize))
+    } else {
+      # Fallback Aura mark: the eight-ray star around an accent core, matching
+      # the classic owner-drawn button.
+      $markPen = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml("$($Style.foreground)"), [float](2.2 * $scale))
+      $markPen.StartCap = [Drawing.Drawing2D.LineCap]::Round
+      $markPen.EndCap = [Drawing.Drawing2D.LineCap]::Round
+      $innerRay = $radius * (8.5 / 24.0)
+      $outerRay = $radius * (13.0 / 24.0)
+      for ($index = 0; $index -lt 8; $index++) {
+        $angle = (-90 + ($index * 45)) * [Math]::PI / 180
+        $graphics.DrawLine($markPen,
+          [float]($center + ([Math]::Cos($angle) * $innerRay)), [float]($center + ([Math]::Sin($angle) * $innerRay)),
+          [float]($center + ([Math]::Cos($angle) * $outerRay)), [float]($center + ([Math]::Sin($angle) * $outerRay)))
+      }
+      $markPen.Dispose()
+      $coreRadius = $radius * (5.0 / 24.0)
+      $core = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml("$($Style.accent)"))
+      $graphics.FillEllipse($core,
+        [float]($center - $coreRadius), [float]($center - $coreRadius),
+        [float]($coreRadius * 2), [float]($coreRadius * 2))
+      $core.Dispose()
+    }
+    if ($null -ne $Mark) {
+      # Keep the bounded accent token visible over authored bitmaps so the
+      # editor's accent control always has a live effect.
+      $badgeRadius = $markSize * 0.078
+      $badgeCenter = $center + ($markSize * 0.36)
+      $badge = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml("$($Style.accent)"))
+      $graphics.FillEllipse($badge,
+        [float]($badgeCenter - $badgeRadius), [float]($badgeCenter - $badgeRadius),
+        [float]($badgeRadius * 2), [float]($badgeRadius * 2))
+      $badge.Dispose()
+    }
+    $graphics.Dispose()
+    $graphics = $null
+    return $bitmap
+  } catch {
+    Write-AuraUiLog -Message "Launcher surface could not be rendered: $($_.Exception.Message)"
+    if ($null -ne $graphics) { try { $graphics.Dispose() } catch {} }
+    if ($null -ne $bitmap) { try { $bitmap.Dispose() } catch {} }
+    return $null
   }
+}
+
+function Push-AuraUiLauncherFrame {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Bitmap]$Bitmap,
+    [byte]$Alpha = 255
+  )
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return $false }
+  try { return [bool][AuraLayered]::Apply($script:Launcher.Handle, $Bitmap, $Alpha) }
+  catch {
+    Write-AuraUiLog -Message "Launcher frame could not be presented: $($_.Exception.Message)"
+    return $false
+  }
+}
+
+function Disable-AuraUiLauncherLayering {
+  # Permanent in-session fallback to the classic region look: clear the
+  # per-pixel style (Windows forbids mixing layering modes), restore the legacy
+  # translucency, and clip the window back to the circle.
+  $script:LauncherLayeredActive = $false
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  try { [AuraLayered]::ClearLayeredStyle($script:Launcher.Handle) } catch {}
+  try { $script:Launcher.Opacity = 0.96 } catch {}
+  Update-AuraUiLauncherRegion
+  if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
+    $script:LauncherButton.Invalidate()
+  }
+  Write-AuraUiLog -Message 'Launcher layered rendering is unavailable; using the classic region fallback.'
+}
+
+function Update-AuraUiLauncherSurface {
+  # Re-present the launcher for the current theme, DPI, and interaction state.
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  if (-not $script:LauncherLayeredActive) {
+    Update-AuraUiLauncherRegion
+    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
+      $script:LauncherButton.Invalidate()
+    }
+    return
+  }
+  $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
+  $hover = $script:LauncherAnimValue
+  $bitmap = New-AuraUiLauncherSurfaceBitmap -Style $style -Mark $script:LauncherMark `
+    -Hover $hover -Pressed $script:LauncherPressed
+  if ($null -eq $bitmap) { return }
+  $alpha = [byte][Math]::Min(255, [Math]::Round(245 + (10 * $hover)))
+  $presented = Push-AuraUiLauncherFrame -Bitmap $bitmap -Alpha $alpha
+  $bitmap.Dispose()
+  if (-not $presented) { Disable-AuraUiLauncherLayering }
+}
+
+function Start-AuraUiLauncherAnimation {
+  # Eases the hover state in and out on a UI timer; each tick re-renders one
+  # layered frame. The classic fallback keeps its immediate repaint behavior.
+  if (-not $script:LauncherLayeredActive) {
+    if ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed) {
+      try { $script:Launcher.Opacity = $(if ($script:LauncherHover) { 1.0 } else { 0.96 }) } catch {}
+    }
+    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
+      $script:LauncherButton.Invalidate()
+    }
+    return
+  }
+  if ($null -ne $script:LauncherAnimTimer -and -not $script:LauncherAnimTimer.Enabled) {
+    $script:LauncherAnimTimer.Start()
+  }
+}
+
+function Resolve-AuraUiLauncherAppearance {
+  param(
+    [Parameter(Mandatory = $true)][psobject]$Style,
+    [AllowNull()][string]$ResolvedAssetPath,
+    [AllowNull()][byte[]]$AssetBytes
+  )
+  # Pure resolver: computes the mark/identity paths and loads the launcher mark
+  # bitmap without mutating the launcher, windows, tray, shortcuts, or Jump List.
+  $assetPath = if ($ResolvedAssetPath) {
+    [IO.Path]::GetFullPath($ResolvedAssetPath)
+  } else {
+    Get-AuraUiLauncherAssetPath -Style $Style
+  }
+  $builtInIconPath = Get-AuraUiBuiltInThemeIconPath -Style $Style
+  $identityPath = if ($builtInIconPath) {
+    $builtInIconPath
+  } elseif ("$($Style.source)" -cin @('user', 'editor') -and "$($Style.asset)" -ceq 'launcher-mark.png') {
+    $assetPath
+  } else { $null }
   $mark = $null
   if ($assetPath) {
     $stream = $null
     $source = $null
     try {
-      $stream = [IO.File]::Open($assetPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+      $stream = if ($null -ne $AssetBytes) {
+        [IO.MemoryStream]::new($AssetBytes, $false)
+      } else {
+        [IO.File]::Open($assetPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+      }
       $source = [Drawing.Image]::FromStream($stream)
-      $mark = [Drawing.Bitmap]::new($source)
-    } catch { Write-AuraUiLog -Message "Launcher mark could not be loaded: $($_.Exception.Message)" }
-    finally {
+      if ($source.Width -eq 96 -and $source.Height -eq 96) { $mark = [Drawing.Bitmap]::new($source) }
+    } catch {
+      Write-AuraUiLog -Message "Launcher mark could not be loaded: $($_.Exception.Message)"
+    } finally {
       if ($null -ne $source) { $source.Dispose() }
       if ($null -ne $stream) { $stream.Dispose() }
     }
   }
-  if ($null -ne $script:LauncherMark) { $script:LauncherMark.Dispose() }
-  $script:LauncherMark = $mark
-  $script:LauncherStyle = $style
-  $script:Launcher.BackColor = [Drawing.ColorTranslator]::FromHtml("$($style.surface)")
+  return [PSCustomObject]@{ Style = $Style; Mark = $mark; AssetPath = $assetPath; IdentityPath = $identityPath }
+}
+
+function Get-AuraUiLauncherPreviewUrl {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  $builtInTheme = Get-AuraUiBuiltInLauncherThemeId -Style $Style
+  if ($builtInTheme) { return "https://aura.assets/$builtInTheme/launcher-mark.png" }
+  if ("$($Style.source)" -ceq 'user' -and "$($Style.asset)" -ceq 'launcher-mark.png' -and
+      "$($Style.theme)" -cmatch '^[a-z][a-z0-9-]{1,39}$') {
+    return "https://aura.user-themes/$($Style.theme)/launcher-mark.png"
+  }
+  if ("$($Style.source)" -ceq 'editor' -and "$($Style.asset)" -ceq 'launcher-mark.png' -and
+      "$($Style.editorPreviewUrl)" -cmatch '^https://aura\.editor/active/launcher-[a-f0-9]{64}\.png$') {
+    return "$($Style.editorPreviewUrl)"
+  }
+  return $null
+}
+
+function Dispose-AuraUiIdentityCandidate {
+  param([AllowNull()][object]$Candidate)
+  if ($null -eq $Candidate) { return }
+  if ($null -ne $Candidate.Mark) {
+    try { $Candidate.Mark.Dispose() } catch {}
+    $Candidate.Mark = $null
+  }
+  if ($null -ne $Candidate.Region) {
+    try { $Candidate.Region.Dispose() } catch {}
+    $Candidate.Region = $null
+  }
+  if ($null -ne $Candidate.Surface) {
+    try { $Candidate.Surface.Dispose() } catch {}
+    $Candidate.Surface = $null
+  }
+  if ($null -ne $Candidate.IconSet) {
+    Dispose-AuraUiThemeIconSet -IconSet $Candidate.IconSet
+    $Candidate.IconSet = $null
+  }
+  foreach ($lockName in @('AssetLock', 'IdentityLock')) {
+    $lock = $Candidate.$lockName
+    if ($null -ne $lock) {
+      try { $lock.Dispose() } catch {}
+      $Candidate.$lockName = $null
+    }
+  }
+}
+
+function New-AuraUiIdentityCandidate {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  $appearance = $null
+  $iconSet = $null
+  $region = $null
+  $surface = $null
+  $assetLock = $null
+  $identityLock = $null
+  try {
+    if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or
+        $null -eq $script:LauncherButton -or $script:LauncherButton.IsDisposed -or
+        $null -eq $script:Form -or $script:Form.IsDisposed -or
+        $null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or
+        $null -eq $script:TrayIcon) {
+      throw 'Aura identity controls are not ready.'
+    }
+    $assetPath = Get-AuraUiLauncherAssetPath -Style $Style
+    if (-not $assetPath) { throw 'The launcher mark path could not be resolved safely.' }
+    $assetLock = [IO.File]::Open(
+      $assetPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $lockedAssetPath = Get-AuraUiLauncherAssetPath -Style $Style
+    if (-not $lockedAssetPath -or -not [string]::Equals(
+        [IO.Path]::GetFullPath($lockedAssetPath), [IO.Path]::GetFullPath($assetPath),
+        [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'The locked launcher mark is no longer inside its approved source root.'
+    }
+    $assetMemory = [IO.MemoryStream]::new()
+    try {
+      $assetLock.CopyTo($assetMemory)
+      $assetBytes = $assetMemory.ToArray()
+      $assetLock.Position = 0
+    } finally {
+      $assetMemory.Dispose()
+    }
+    $appearance = Resolve-AuraUiLauncherAppearance -Style $Style `
+      -ResolvedAssetPath $assetPath -AssetBytes $assetBytes
+    if ($null -eq $appearance.Mark -or -not $appearance.AssetPath -or -not $appearance.IdentityPath) {
+      throw 'The launcher mark and identity assets could not both be loaded.'
+    }
+    $expectedIconBytes = if ("$($Style.source)" -cin @('user', 'editor')) {
+      New-AuraUiMultiFramePngIconBytes -SourceBytes $assetBytes
+    } else { $null }
+    $shortcutIconPath = Get-AuraUiShortcutIconPath -Style $Style `
+      -IdentityAssetPath $appearance.IdentityPath -LauncherAssetPath $appearance.AssetPath `
+      -LauncherAssetBytes $assetBytes -ExpectedIconBytes $expectedIconBytes
+    if (-not $shortcutIconPath -or -not (Test-AuraUiOwnedShortcutIconPath -Path $shortcutIconPath)) {
+      throw 'The candidate shortcut icon is not an Aura-owned Windows icon.'
+    }
+    if (Get-AuraUiBuiltInLauncherThemeId -Style $Style) {
+      if (-not [string]::Equals(
+          [IO.Path]::GetFullPath($shortcutIconPath), [IO.Path]::GetFullPath($appearance.IdentityPath),
+          [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The built-in launcher and Windows identity do not name the same theme.'
+      }
+    } elseif ("$($Style.source)" -cin @('user', 'editor')) {
+      $customRootFull = [IO.Path]::GetFullPath($ShortcutIconRoot).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+      $shortcutFull = [IO.Path]::GetFullPath($shortcutIconPath)
+      if (-not $shortcutFull.StartsWith(
+          $customRootFull + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+          [IO.Path]::GetFileName($shortcutFull) -cnotmatch ('^{0}-[a-f0-9]{{16}}\.ico$' -f
+            [regex]::Escape("$($Style.theme)"))) {
+        throw 'The custom Windows identity is not the content-addressed icon for this theme.'
+      }
+    } else {
+      throw 'The launcher identity source is not supported.'
+    }
+
+    # Keep the exact ICO snapshot locked against replacement while it backs the
+    # running windows. All validation and native-handle creation below reopen it
+    # read-only, which remains permitted by this lock.
+    $identityLock = [IO.File]::Open(
+      $shortcutIconPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    if (-not (Test-AuraUiOwnedShortcutIconPath -Path $shortcutIconPath)) {
+      throw 'The locked candidate shortcut icon is no longer an Aura-owned Windows icon.'
+    }
+    if ($null -ne $expectedIconBytes) {
+      $identityMemory = [IO.MemoryStream]::new()
+      try {
+        $identityLock.CopyTo($identityMemory)
+        $identityBytes = $identityMemory.ToArray()
+        $identityLock.Position = 0
+      } finally {
+        $identityMemory.Dispose()
+      }
+      $sameBytes = $identityBytes.Length -eq $expectedIconBytes.Length
+      for ($index = 0; $sameBytes -and $index -lt $identityBytes.Length; $index++) {
+        if ($identityBytes[$index] -ne $expectedIconBytes[$index]) { $sameBytes = $false }
+      }
+      if (-not $sameBytes) {
+        throw 'The custom Windows identity is not derived from the locked launcher-mark snapshot.'
+      }
+    }
+
+    # Every visible surface consumes the same exact multi-frame ICO. The 96 px
+    # PNG remains only the painted launcher/Studio mark.
+    $iconSet = New-AuraUiThemeIconSet -AssetPath $shortcutIconPath
+    $region = New-AuraUiLauncherRegion
+    if ($null -eq $region) { throw 'The launcher region could not be prepared.' }
+    # The layered look is validated before commit exactly like the region: a
+    # style that cannot render never replaces the running identity.
+    $surface = $null
+    if ($script:LauncherLayeredActive) {
+      $surface = New-AuraUiLauncherSurfaceBitmap -Style $Style -Mark $appearance.Mark
+      if ($null -eq $surface) { throw 'The launcher layered surface could not be prepared.' }
+    }
+    $previewUrl = Get-AuraUiLauncherPreviewUrl -Style $Style
+    if (-not $previewUrl) { throw 'The launcher preview URL could not be resolved safely.' }
+    $material = [PSCustomObject][ordered]@{
+      surface = "$($Style.surface)"
+      surfaceHover = "$($Style.surfaceHover)"
+      foreground = "$($Style.foreground)"
+      accent = "$($Style.accent)"
+      border = "$($Style.border)"
+      radius = [double]$Style.radius
+      borderWidth = [double]$Style.borderWidth
+    }
+    $candidate = [PSCustomObject]@{
+      Style = $Style
+      Material = $material
+      PreviewUrl = $previewUrl
+      Mark = $appearance.Mark
+      Region = $region
+      Surface = $surface
+      IconSet = $iconSet
+      ShortcutIconPath = [IO.Path]::GetFullPath($shortcutIconPath)
+      AssetLock = $assetLock
+      IdentityLock = $identityLock
+    }
+    $assetLock = $null
+    $identityLock = $null
+    return $candidate
+  } catch {
+    if ($null -ne $appearance -and $null -ne $appearance.Mark) {
+      try { $appearance.Mark.Dispose() } catch {}
+    }
+    if ($null -ne $region) { try { $region.Dispose() } catch {} }
+    if ($null -ne $surface) { try { $surface.Dispose() } catch {} }
+    if ($null -ne $iconSet) { Dispose-AuraUiThemeIconSet -IconSet $iconSet }
+    if ($null -ne $identityLock) { try { $identityLock.Dispose() } catch {} }
+    if ($null -ne $assetLock) { try { $assetLock.Dispose() } catch {} }
+    Write-AuraUiLog -Message "Theme identity candidate could not be prepared: $($_.Exception.Message)"
+    return $null
+  }
+}
+
+function Set-AuraUiIdentityCandidate {
+  param([Parameter(Mandatory = $true)][object]$Candidate)
+  $script:IdentityRollbackIncomplete = $false
+  $old = [PSCustomObject]@{
+    LauncherStyle = $script:LauncherStyle
+    LauncherMark = $script:LauncherMark
+    LauncherRegion = $script:Launcher.Region
+    LauncherBackColor = $script:Launcher.BackColor
+    ButtonBackColor = $script:LauncherButton.BackColor
+    ButtonHoverColor = $script:LauncherButton.FlatAppearance.MouseOverBackColor
+    ButtonDownColor = $script:LauncherButton.FlatAppearance.MouseDownBackColor
+    NotificationIcon = $script:NotificationIcon
+    MainWindowIconPair = $script:MainWindowIconPair
+    StudioWindowIconPair = $script:StudioWindowIconPair
+    ThemeIdentityAssetPath = $script:ThemeIdentityAssetPath
+    ThemeIdentityDigest = $script:ThemeIdentityDigest
+    ThemeIdentityLock = $script:ThemeIdentityLock
+    ShellIdentityIconPath = $script:ShellIdentityIconPath
+    EffectiveLauncherIdentity = $script:EffectiveLauncherIdentity
+  }
+  try {
+    $surface = [Drawing.ColorTranslator]::FromHtml("$($Candidate.Material.surface)")
+    $layeredPresented = $false
+    if ($script:LauncherLayeredActive) {
+      # Present the pre-validated layered frame; the region stays unapplied so
+      # the per-pixel alpha keeps defining both the shape and the hit area. If
+      # composition is unavailable this machine falls back to the classic
+      # region identity instead of failing the whole commit.
+      $layeredPresented = Push-AuraUiLauncherFrame -Bitmap $Candidate.Surface -Alpha 245
+      if (-not $layeredPresented) { Disable-AuraUiLauncherLayering }
+    }
+    if (-not $layeredPresented) {
+      $interimRegion = $script:Launcher.Region
+      $script:Launcher.Region = $Candidate.Region
+      if ($null -ne $interimRegion -and -not [object]::ReferenceEquals($interimRegion, $old.LauncherRegion)) {
+        try { $interimRegion.Dispose() } catch {}
+      }
+    }
+    $script:Launcher.BackColor = $surface
+    $script:LauncherButton.BackColor = $surface
+    $script:LauncherButton.FlatAppearance.MouseOverBackColor = $surface
+    $script:LauncherButton.FlatAppearance.MouseDownBackColor = $surface
+    $script:TrayIcon.Icon = $Candidate.IconSet.Notification
+    Set-AuraUiNativeFormIcons -Form $script:Form `
+      -Small $Candidate.IconSet.MainNative.Small -Large $Candidate.IconSet.MainNative.Large
+    Set-AuraUiNativeFormIcons -Form $script:StudioForm `
+      -Small $Candidate.IconSet.StudioNative.Small -Large $Candidate.IconSet.StudioNative.Large
+
+    $script:LauncherStyle = $Candidate.Style
+    $script:LauncherMark = $Candidate.Mark
+    $script:NotificationIcon = $Candidate.IconSet.Notification
+    $script:MainWindowIconPair = $Candidate.IconSet.MainNative
+    $script:StudioWindowIconPair = $Candidate.IconSet.StudioNative
+    $script:ThemeIdentityAssetPath = $Candidate.IconSet.AssetPath
+    $script:ThemeIdentityDigest = $Candidate.IconSet.Digest
+    $script:ThemeIdentityLock = $Candidate.IdentityLock
+    $script:ShellIdentityIconPath = $Candidate.ShortcutIconPath
+    $script:EffectiveLauncherIdentity = [PSCustomObject][ordered]@{
+      launcher = $Candidate.Material
+      previewUrl = $Candidate.PreviewUrl
+    }
+  } catch {
+    $commitFailure = $_.Exception
+    # Restore every independently owned surface even if a preceding restoration
+    # fails. When any rollback is incomplete, the coordinator quarantines the
+    # entire candidate until process shutdown rather than disposing a resource
+    # that a live native control may still reference.
+    $script:LauncherStyle = $old.LauncherStyle
+    $script:LauncherMark = $old.LauncherMark
+    try {
+      if ($script:LauncherLayeredActive) {
+        # Re-render the restored style/mark; a failure inside falls back to the
+        # classic region path on its own.
+        Update-AuraUiLauncherSurface
+      } else {
+        $script:Launcher.Region = $old.LauncherRegion
+      }
+    } catch {
+      $script:IdentityRollbackIncomplete = $true
+      Write-AuraUiLog -Message "Theme identity launcher-region rollback failed: $($_.Exception.Message)"
+    }
+    try {
+      $script:Launcher.BackColor = $old.LauncherBackColor
+      $script:LauncherButton.BackColor = $old.ButtonBackColor
+      $script:LauncherButton.FlatAppearance.MouseOverBackColor = $old.ButtonHoverColor
+      $script:LauncherButton.FlatAppearance.MouseDownBackColor = $old.ButtonDownColor
+    } catch {
+      $script:IdentityRollbackIncomplete = $true
+      Write-AuraUiLog -Message "Theme identity launcher-material rollback failed: $($_.Exception.Message)"
+    }
+    try {
+      $script:TrayIcon.Icon = $old.NotificationIcon
+    } catch {
+      $script:IdentityRollbackIncomplete = $true
+      Write-AuraUiLog -Message "Theme identity notification-area rollback failed: $($_.Exception.Message)"
+    }
+    try {
+      if ($null -ne $old.MainWindowIconPair) {
+        Set-AuraUiNativeFormIcons -Form $script:Form `
+          -Small $old.MainWindowIconPair.Small -Large $old.MainWindowIconPair.Large
+      } else {
+        Set-AuraUiNativeFormIcons -Form $script:Form
+        $script:Form.Icon = $script:MainIcon
+      }
+    } catch {
+      $script:IdentityRollbackIncomplete = $true
+      Write-AuraUiLog -Message "Theme identity Aura-window rollback failed: $($_.Exception.Message)"
+    }
+    try {
+      if ($null -ne $old.StudioWindowIconPair) {
+        Set-AuraUiNativeFormIcons -Form $script:StudioForm `
+          -Small $old.StudioWindowIconPair.Small -Large $old.StudioWindowIconPair.Large
+      } else {
+        Set-AuraUiNativeFormIcons -Form $script:StudioForm
+        $script:StudioForm.Icon = $script:StudioIcon
+      }
+    } catch {
+      $script:IdentityRollbackIncomplete = $true
+      Write-AuraUiLog -Message "Theme identity Studio-window rollback failed: $($_.Exception.Message)"
+    }
+    $script:NotificationIcon = $old.NotificationIcon
+    $script:MainWindowIconPair = $old.MainWindowIconPair
+    $script:StudioWindowIconPair = $old.StudioWindowIconPair
+    $script:ThemeIdentityAssetPath = $old.ThemeIdentityAssetPath
+    $script:ThemeIdentityDigest = $old.ThemeIdentityDigest
+    $script:ThemeIdentityLock = $old.ThemeIdentityLock
+    $script:ShellIdentityIconPath = $old.ShellIdentityIconPath
+    $script:EffectiveLauncherIdentity = $old.EffectiveLauncherIdentity
+    if ($script:IdentityRollbackIncomplete) {
+      Write-AuraUiLog -Message 'Theme identity runtime rollback was incomplete; the candidate is quarantined until shutdown.'
+    }
+    Write-AuraUiLog -Message "Theme identity runtime commit failed: $($commitFailure.Message)"
+    return $false
+  }
+  $Candidate.Mark = $null
+  if ($script:LauncherLayeredActive) {
+    # The layered path never applied the region candidate, and the presented
+    # frame was copied by Windows, so both stay owned here and are released.
+    if ($null -ne $Candidate.Region) { try { $Candidate.Region.Dispose() } catch {} }
+  }
+  $Candidate.Region = $null
+  if ($null -ne $Candidate.Surface) { try { $Candidate.Surface.Dispose() } catch {} }
+  $Candidate.Surface = $null
+  $Candidate.IconSet = $null
+  $Candidate.IdentityLock = $null
+  try { $script:LauncherButton.Invalidate() } catch {}
+  # A theme change restyles the launcher, so the hover tip and launch hint are
+  # rebuilt from the new material the next time they appear.
+  Hide-AuraUiLauncherTip
+  if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) {
+    try { $script:LauncherHint.Close() } catch {}
+  }
+  foreach ($resource in @($old.LauncherMark, $old.LauncherRegion, $old.NotificationIcon)) {
+    if ($null -ne $resource) { try { $resource.Dispose() } catch {} }
+  }
+  Dispose-AuraUiNativeFormIconPair -Pair $old.MainWindowIconPair
+  Dispose-AuraUiNativeFormIconPair -Pair $old.StudioWindowIconPair
+  if ($null -ne $old.ThemeIdentityLock) { try { $old.ThemeIdentityLock.Dispose() } catch {} }
+  return $true
+}
+
+function Stop-AuraUiAfterIdentityFailure {
+  # An incomplete rollback means at least one native surface may no longer match
+  # the last complete identity. Hide every product surface immediately and close
+  # on the UI queue; continuing to present a mixed identity is never safe.
+  $wasVisible = ($null -ne $script:TrayIcon -and $script:TrayIcon.Visible) -or
+    ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed -and $script:Launcher.Visible) -or
+    ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed -and $script:StudioForm.Visible) -or
+    ($null -ne $script:Form -and -not $script:Form.IsDisposed -and $script:Form.Visible)
+  if (-not $wasVisible) { return }
+  Write-AuraUiLog -Message 'Claude Aura is closing because its application identity could not be rolled back completely.'
+  try { if ($null -ne $script:TrayIcon) { $script:TrayIcon.Visible = $false } } catch {}
+  try { if ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Hide() } } catch {}
+  try { if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Hide() } } catch {}
+  try { if ($null -ne $script:Form -and -not $script:Form.IsDisposed) { $script:Form.Hide() } } catch {}
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  try {
+    $closeAction = [Action]{
+      if ($null -ne $script:Form -and -not $script:Form.IsDisposed) { $script:Form.Close() }
+    }
+    [void]$script:Form.BeginInvoke($closeAction)
+  } catch {
+    try { $script:Form.Close() } catch {}
+  }
+}
+
+function Update-AuraUiLauncherStyle {
+  # The requested identity and one complete Default candidate are the only
+  # attempts. A candidate is prepared fully, its four installed shortcuts move
+  # transactionally, and only then do the launcher, windows, taskbar, and tray
+  # swap together. If both attempts fail, the previous complete identity stays.
+  $script:LauncherStyleAppliedAsRequested = $false
+  if ($script:IdentityRollbackIncomplete) {
+    Write-AuraUiLog -Message 'Theme identity update was refused after an incomplete runtime rollback.'
+    return $false
+  }
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return $false }
+  $requestedStyle = Get-AuraUiLauncherStyle
+  $defaultStyle = Get-AuraUiLauncherDefaultStyle
+  Add-Member -InputObject $defaultStyle -NotePropertyName source -NotePropertyValue 'builtin' -Force
+  Add-Member -InputObject $defaultStyle -NotePropertyName theme -NotePropertyValue 'default' -Force
+  $styles = @($requestedStyle, $defaultStyle)
+
+  for ($attempt = 0; $attempt -lt 2; $attempt++) {
+    $candidate = New-AuraUiIdentityCandidate -Style $styles[$attempt]
+    if ($null -eq $candidate) { continue }
+    $shortcutSnapshot = $null
+    $runtimeCommitted = $false
+    try {
+      $shortcutSnapshot = Update-AuraUiOwnedShortcuts -IconPath $candidate.ShortcutIconPath
+      if ($null -ne $shortcutSnapshot -and $shortcutSnapshot.RollbackIncomplete -eq $true) {
+        $script:IdentityRollbackIncomplete = $true
+        if ($null -ne $candidate.AssetLock) {
+          try { $candidate.AssetLock.Dispose() } catch {}
+          $candidate.AssetLock = $null
+        }
+        $script:DeferredIdentityCandidates.Add($candidate)
+        $candidate = $null
+        Stop-AuraUiAfterIdentityFailure
+        break
+      }
+      if ($null -eq $shortcutSnapshot -or $shortcutSnapshot.Success -ne $true) { continue }
+      if (-not (Set-AuraUiIdentityCandidate -Candidate $candidate)) {
+        $shortcutsRestored = Restore-AuraUiOwnedShortcuts -Snapshot $shortcutSnapshot
+        if (-not $shortcutsRestored) {
+          $script:IdentityRollbackIncomplete = $true
+          Write-AuraUiLog -Message 'Theme identity shortcut rollback was incomplete.'
+        }
+        if ($script:IdentityRollbackIncomplete) {
+          if ($null -ne $candidate.AssetLock) {
+            try { $candidate.AssetLock.Dispose() } catch {}
+            $candidate.AssetLock = $null
+          }
+          $script:DeferredIdentityCandidates.Add($candidate)
+          $candidate = $null
+          Stop-AuraUiAfterIdentityFailure
+          break
+        }
+        continue
+      }
+      $runtimeCommitted = $true
+
+      $script:LauncherStyleAppliedAsRequested = ($attempt -eq 0)
+      $jumpListCurrent = $script:JumpListRegistered -and [string]::Equals(
+        $script:JumpListIdentityPath, $script:ShellIdentityIconPath,
+        [StringComparison]::OrdinalIgnoreCase)
+      if ($script:JumpListRegistered) {
+        if (-not $jumpListCurrent) {
+          $jumpListCurrent = Register-AuraUiJumpList
+          $script:JumpListRegistered = $jumpListCurrent
+          if (-not $jumpListCurrent) {
+            $script:JumpListRegistrationDue = [DateTime]::UtcNow.AddSeconds(30)
+          }
+        }
+      }
+      if ($jumpListCurrent) {
+        Remove-AuraUiUnusedShortcutIcons -KeepPath $script:ShellIdentityIconPath
+      }
+      return $true
+    } catch {
+      if (-not $runtimeCommitted -and $null -ne $shortcutSnapshot) {
+        if (-not (Restore-AuraUiOwnedShortcuts -Snapshot $shortcutSnapshot)) {
+          $script:IdentityRollbackIncomplete = $true
+        }
+      }
+      $scope = if ($runtimeCommitted) { 'post-commit shell refresh' } else { 'atomic identity apply' }
+      Write-AuraUiLog -Message "Theme $scope failed: $($_.Exception.Message)"
+      if ($runtimeCommitted) { return $true }
+      if ($script:IdentityRollbackIncomplete -and $null -ne $candidate) {
+        if ($null -ne $candidate.AssetLock) {
+          try { $candidate.AssetLock.Dispose() } catch {}
+          $candidate.AssetLock = $null
+        }
+        $script:DeferredIdentityCandidates.Add($candidate)
+        $candidate = $null
+        Stop-AuraUiAfterIdentityFailure
+        break
+      }
+    } finally {
+      Dispose-AuraUiIdentityCandidate -Candidate $candidate
+    }
+  }
+  Write-AuraUiLog -Message 'Theme identity remained unchanged because no complete safe identity could be loaded.'
+  return $false
+}
+
+function Get-AuraUiLauncherScale {
+  param([int]$Dpi = $script:LauncherDpi)
+  if ($Dpi -lt 96 -or $Dpi -gt 768) { $Dpi = 96 }
+  return [double]$Dpi / 96.0
+}
+
+function ConvertTo-AuraUiLauncherPixels {
+  param([Parameter(Mandatory = $true)][double]$Logical, [int]$Dpi = $script:LauncherDpi)
+  return [int][Math]::Max(1, [Math]::Round($Logical * (Get-AuraUiLauncherScale -Dpi $Dpi)))
+}
+
+function Update-AuraUiLauncherDpi {
+  param([Parameter(Mandatory = $true)][int]$Dpi)
+  if ($Dpi -lt 96 -or $Dpi -gt 768 -or $null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  $script:LauncherDpi = $Dpi
+  # DPI sizing performs a single logical conversion — the collapsed circular
+  # button — and derives the transparent halo arithmetically from it.
+  $compactPixels = ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherCompactSize -Dpi $Dpi
+  $haloPixels = [int][Math]::Max(1, [Math]::Round($compactPixels * ($script:LauncherHaloSize / $script:LauncherCompactSize)))
+  $clientPixels = $compactPixels + (2 * $haloPixels)
+  $script:Launcher.ClientSize = [Drawing.Size]::new($clientPixels, $clientPixels)
   if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
-    $script:LauncherButton.BackColor = $script:Launcher.BackColor
-    $script:LauncherButton.FlatAppearance.MouseOverBackColor = $script:Launcher.BackColor
-    $script:LauncherButton.FlatAppearance.MouseDownBackColor = $script:Launcher.BackColor
+    $script:LauncherButton.Bounds = [Drawing.Rectangle]::new($haloPixels, $haloPixels, $compactPixels, $compactPixels)
+  }
+  Update-AuraUiLauncherSurface
+  if ($script:Form -and -not $script:Form.IsDisposed -and $script:Form.Visible) {
+    Update-AuraUiLauncherPosition
+  }
+  if ($script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
     $script:LauncherButton.Invalidate()
   }
-  Update-AuraUiThemeIcons -AssetPath $assetPath
-  Update-AuraUiLauncherRegion
-}
-
-function Set-AuraUiLauncherExpanded {
-  param([bool]$Expanded)
-  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or $script:LauncherDragging) { return }
-  $targetWidth = if ($Expanded) { $script:LauncherExpandedWidth } else { $script:LauncherCompactSize }
-  if ($script:Launcher.ClientSize.Width -eq $targetWidth -and $script:LauncherExpanded -eq $Expanded) { return }
-  $oldBounds = $script:Launcher.Bounds
-  if ($Expanded) {
-    try {
-      $formLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0)).X
-      $formCenter = $formLeft + ($script:Form.ClientSize.Width / 2)
-      $script:LauncherExpandsLeft = ($oldBounds.Left + ($oldBounds.Width / 2)) -ge $formCenter
-    } catch { $script:LauncherExpandsLeft = $true }
-  }
-  $anchor = if ($script:LauncherExpandsLeft) { $oldBounds.Right } else { $oldBounds.Left }
-  $script:Launcher.ClientSize = [Drawing.Size]::new($targetWidth, $script:LauncherCompactSize)
-  $targetX = if ($script:LauncherExpandsLeft) { $anchor - $targetWidth } else { $anchor }
-  $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location ([Drawing.Point]::new($targetX, $oldBounds.Top))
-  $script:LauncherExpanded = $Expanded
-  Update-AuraUiLauncherRegion
-  if ($null -ne $script:LauncherButton) { $script:LauncherButton.Invalidate() }
-}
-
-function Test-AuraUiLauncherGrip {
-  param([Parameter(Mandatory = $true)][Drawing.Point]$Location)
-  if (-not $script:LauncherExpanded) { return $false }
-  if ($script:LauncherExpandsLeft) { return $Location.X -le 38 }
-  return $Location.X -ge ($script:Launcher.ClientSize.Width - 38)
 }
 
 function Get-AuraUiLauncherClampedLocation {
@@ -612,9 +2227,14 @@ function Get-AuraUiLauncherClampedLocation {
     $bottomRight = $script:Form.PointToScreen(
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
   } catch { return $Location }
-  $gap = $script:LauncherSafeGap
-  $x = [Math]::Max($topLeft.X + $gap, [Math]::Min($Location.X, $bottomRight.X - $script:Launcher.Width - $gap))
-  $y = [Math]::Max($topLeft.Y + $gap, [Math]::Min($Location.Y, $bottomRight.Y - $script:Launcher.Height - $gap))
+  $gap = ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherSafeGap
+  # Clamp the visible circle, not the transparent halo, so the safe inset keeps
+  # its classic meaning around the painted button.
+  $halo = (Get-AuraUiLauncherMetrics).Halo
+  $x = [Math]::Max($topLeft.X + $gap - $halo,
+    [Math]::Min($Location.X, $bottomRight.X - $script:Launcher.Width + $halo - $gap))
+  $y = [Math]::Max($topLeft.Y + $gap - $halo,
+    [Math]::Min($Location.Y, $bottomRight.Y - $script:Launcher.Height + $halo - $gap))
   return [Drawing.Point]::new([int]$x, [int]$y)
 }
 
@@ -636,8 +2256,16 @@ function Save-AuraUiLauncherPosition {
   try {
     $bottomRight = $script:Form.PointToScreen(
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
-    $script:LauncherRightGap = [int][Math]::Max($script:LauncherSafeGap, $bottomRight.X - ($script:Launcher.Location.X + $script:Launcher.Width))
-    $script:LauncherBottomGap = [int][Math]::Max($script:LauncherSafeGap, $bottomRight.Y - ($script:Launcher.Location.Y + $script:Launcher.Height))
+    $scale = Get-AuraUiLauncherScale
+    # Gaps measure from the visible circle's edge (window edge minus halo) so
+    # positions saved before the halo existed keep meaning the same thing.
+    $halo = (Get-AuraUiLauncherMetrics).Halo
+    $script:LauncherRightGap = [int][Math]::Max(
+      $script:LauncherSafeGap,
+      [Math]::Round(($bottomRight.X - ($script:Launcher.Location.X + $script:Launcher.Width - $halo)) / $scale))
+    $script:LauncherBottomGap = [int][Math]::Max(
+      $script:LauncherSafeGap,
+      [Math]::Round(($bottomRight.Y - ($script:Launcher.Location.Y + $script:Launcher.Height - $halo)) / $scale))
     $payload = [ordered]@{ right = $script:LauncherRightGap; bottom = $script:LauncherBottomGap } | ConvertTo-Json -Compress
     [System.IO.File]::WriteAllText((Join-Path $DataRoot 'launcher-pos.json'), $payload)
   } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
@@ -648,6 +2276,7 @@ function Update-AuraUiLauncherPosition {
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized -or -not $script:Form.Visible) {
     if ($script:Launcher.Visible) { $script:Launcher.Hide() }
+    Hide-AuraUiLauncherTip
     return
   }
   if ($script:LauncherDragging) { return }
@@ -658,26 +2287,310 @@ function Update-AuraUiLauncherPosition {
     $bottomRight = $script:Form.PointToScreen(
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
   } catch { return }
+  $halo = (Get-AuraUiLauncherMetrics).Halo
   $desired = [Drawing.Point]::new(
-    $bottomRight.X - $script:Launcher.Width - $script:LauncherRightGap,
-    $bottomRight.Y - $script:Launcher.Height - $script:LauncherBottomGap)
+    $bottomRight.X - $script:Launcher.Width + $halo -
+      (ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherRightGap),
+    $bottomRight.Y - $script:Launcher.Height + $halo -
+      (ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherBottomGap))
   $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location $desired
   if (-not $script:Launcher.Visible) {
+    if (($null -eq $script:LauncherStyle -or $null -eq $script:EffectiveLauncherIdentity) -and
+        -not (Update-AuraUiLauncherStyle)) {
+      return
+    }
+    if ($null -eq $script:LauncherStyle -or $null -eq $script:EffectiveLauncherIdentity) { return }
     $script:Launcher.Show($script:Form)
+    # Showing (and owner assignment) rewrites the extended style, which drops
+    # the layered bit and its composited frame; present a fresh one.
+    if ($script:LauncherLayeredActive) { Update-AuraUiLauncherSurface }
+  }
+  Update-AuraUiLauncherHintPosition
+}
+
+function New-AuraUiLauncherTipBitmap {
+  param(
+    [Parameter(Mandatory = $true)][object]$Style,
+    [int]$Dpi = $script:LauncherDpi
+  )
+  # A stylized hover caption for the launcher: theme surface, "Aura Studio"
+  # title, and a one-line usage hint. Rendered per-pixel so the rounded card and
+  # its shadow composite cleanly over the page like the launcher itself.
+  $bitmap = $null
+  $graphics = $null
+  $titleFont = $null
+  $hintFont = $null
+  try {
+    $scale = Get-AuraUiLauncherScale -Dpi $Dpi
+    $titleFont = [Drawing.Font]::new('Segoe UI Semibold', [float](13 * $scale), [Drawing.GraphicsUnit]::Pixel)
+    $hintFont = [Drawing.Font]::new('Segoe UI', [float](11 * $scale), [Drawing.GraphicsUnit]::Pixel)
+    $title = "$($script:UiCopy.launcherTipTitle)"
+    $hint = "$($script:UiCopy.launcherTipHint)"
+    $measure = [Drawing.Graphics]::FromImage([Drawing.Bitmap]::new(1, 1))
+    $measure.TextRenderingHint = [Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+    $titleSize = $measure.MeasureString($title, $titleFont)
+    $hintSize = $measure.MeasureString($hint, $hintFont)
+    $measure.Dispose()
+    $margin = [int][Math]::Ceiling(5 * $scale)
+    $padX = 12 * $scale
+    $padY = 8 * $scale
+    $gap = 2 * $scale
+    $cardWidth = [Math]::Max($titleSize.Width, $hintSize.Width) + (2 * $padX)
+    $cardHeight = (2 * $padY) + $titleSize.Height + $gap + $hintSize.Height
+    $width = [int][Math]::Ceiling($cardWidth) + (2 * $margin)
+    $height = [int][Math]::Ceiling($cardHeight) + (2 * $margin)
+    $bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.TextRenderingHint = [Drawing.Text.TextRenderingHint]::AntiAliasGridFit
+    $cardRadius = 9 * $scale
+    $card = [Drawing.RectangleF]::new($margin, $margin, [float]$cardWidth, [float]$cardHeight)
+    for ($inflate = 3; $inflate -ge 1; $inflate--) {
+      $shadowRect = [Drawing.RectangleF]::new(
+        $card.X - $inflate, ($card.Y - $inflate) + (1.5 * $scale),
+        $card.Width + (2 * $inflate), $card.Height + (2 * $inflate))
+      $shadowPath = New-AuraUiRoundedRectanglePath -Bounds $shadowRect -Radius ($cardRadius + $inflate)
+      $shadowBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb((4 * (4 - $inflate)), 0, 0, 0))
+      $graphics.FillPath($shadowBrush, $shadowPath)
+      $shadowBrush.Dispose()
+      $shadowPath.Dispose()
+    }
+    $surfaceColor = [Drawing.ColorTranslator]::FromHtml("$($Style.surface)")
+    $foregroundColor = [Drawing.ColorTranslator]::FromHtml("$($Style.foreground)")
+    $cardPath = New-AuraUiRoundedRectanglePath -Bounds $card -Radius $cardRadius
+    $fill = [Drawing.SolidBrush]::new($surfaceColor)
+    $graphics.FillPath($fill, $cardPath)
+    $fill.Dispose()
+    $rim = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml("$($Style.border)"), [float][Math]::Max(1.0, 1 * $scale))
+    $graphics.DrawPath($rim, $cardPath)
+    $rim.Dispose()
+    $cardPath.Dispose()
+    $titleBrush = [Drawing.SolidBrush]::new($foregroundColor)
+    $graphics.DrawString($title, $titleFont, $titleBrush, [float]($card.X + $padX), [float]($card.Y + $padY))
+    $titleBrush.Dispose()
+    $hintBrush = [Drawing.SolidBrush]::new((ConvertTo-AuraUiBlendedColor -From $foregroundColor -To $surfaceColor -Amount 0.32))
+    $graphics.DrawString($hint, $hintFont, $hintBrush,
+      [float]($card.X + $padX), [float]($card.Y + $padY + $titleSize.Height + $gap))
+    $hintBrush.Dispose()
+    $graphics.Dispose()
+    $graphics = $null
+    return $bitmap
+  } catch {
+    Write-AuraUiLog -Message "Launcher tip could not be rendered: $($_.Exception.Message)"
+    if ($null -ne $graphics) { try { $graphics.Dispose() } catch {} }
+    if ($null -ne $bitmap) { try { $bitmap.Dispose() } catch {} }
+    return $null
+  } finally {
+    if ($null -ne $titleFont) { try { $titleFont.Dispose() } catch {} }
+    if ($null -ne $hintFont) { try { $hintFont.Dispose() } catch {} }
   }
 }
 
-function Show-AuraUiFirstRunNavHint {
-  if ($null -eq $script:TrayIcon -or -not $script:TrayIcon.Visible) { return }
-  $marker = Join-Path $DataRoot 'nav-hint-seen'
-  if (Test-Path -LiteralPath $marker -PathType Leaf) { return }
+function Show-AuraUiLauncherTip {
+  if ($script:LauncherTipDisabled -or $script:LauncherTipVisible -or $script:LauncherDragging) { return }
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible) { return }
+  $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
+  $bitmap = New-AuraUiLauncherTipBitmap -Style $style
+  if ($null -eq $bitmap) { return }
   try {
-    $script:TrayIcon.BalloonTipTitle = "$($script:UiCopy.navHintTitle)"
-    $script:TrayIcon.BalloonTipText = "$($script:UiCopy.navHintBody)"
-    $script:TrayIcon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
-    $script:TrayIcon.ShowBalloonTip(9000)
-    [System.IO.File]::WriteAllText($marker, 'shown')
-  } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
+    if ($null -eq $script:LauncherTip -or $script:LauncherTip.IsDisposed) {
+      $script:LauncherTip = [System.Windows.Forms.Form]::new()
+      $script:LauncherTip.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+      $script:LauncherTip.ShowInTaskbar = $false
+      $script:LauncherTip.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+      $script:LauncherTip.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
+      $script:LauncherTip.Text = 'Claude Aura Studio tip'
+      $script:LauncherTip.Owner = $script:Form
+    }
+    $metrics = Get-AuraUiLauncherMetrics
+    $scale = Get-AuraUiLauncherScale
+    $script:LauncherTip.ClientSize = [Drawing.Size]::new($bitmap.Width, $bitmap.Height)
+    # Above the circle, right-aligned to it, clamped inside the Aura window.
+    $circleRight = $script:Launcher.Location.X + $metrics.Halo + $metrics.Compact
+    $desired = [Drawing.Point]::new(
+      $circleRight - $bitmap.Width,
+      $script:Launcher.Location.Y + $metrics.Halo - $bitmap.Height - [int][Math]::Round(6 * $scale))
+    try {
+      $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
+      if ($desired.Y -lt $topLeft.Y) {
+        $desired.Y = $script:Launcher.Location.Y + $metrics.Halo + $metrics.Compact + [int][Math]::Round(6 * $scale)
+      }
+      if ($desired.X -lt $topLeft.X) { $desired.X = $topLeft.X }
+    } catch {}
+    $script:LauncherTip.Location = $desired
+    [AuraLayered]::SetTipStyles($script:LauncherTip.Handle)
+    if (-not [AuraLayered]::Apply($script:LauncherTip.Handle, $bitmap, 0)) {
+      $script:LauncherTipDisabled = $true
+      $bitmap.Dispose()
+      return
+    }
+    if ($null -ne $script:LauncherTipBitmap) { try { $script:LauncherTipBitmap.Dispose() } catch {} }
+    $script:LauncherTipBitmap = $bitmap
+    $bitmap = $null
+    $script:LauncherTipAlpha = 0
+    $script:LauncherTipVisible = $true
+    # SW_SHOWNA: visible without stealing activation from Claude's composer.
+    [void][AuraWindow]::ShowWindow($script:LauncherTip.Handle, 8)
+    if ($null -ne $script:LauncherAnimTimer -and -not $script:LauncherAnimTimer.Enabled) {
+      $script:LauncherAnimTimer.Start()
+    }
+  } catch {
+    Write-AuraUiLog -Message "Launcher tip could not be shown: $($_.Exception.Message)"
+    $script:LauncherTipDisabled = $true
+  } finally {
+    if ($null -ne $bitmap) { try { $bitmap.Dispose() } catch {} }
+  }
+}
+
+function Hide-AuraUiLauncherTip {
+  if ($null -ne $script:LauncherTipTimer) { try { $script:LauncherTipTimer.Stop() } catch {} }
+  if (-not $script:LauncherTipVisible) { return }
+  $script:LauncherTipVisible = $false
+  $script:LauncherTipAlpha = 0
+  if ($null -ne $script:LauncherTip -and -not $script:LauncherTip.IsDisposed) {
+    try { [void][AuraWindow]::ShowWindow($script:LauncherTip.Handle, 0) } catch {}
+  }
+}
+
+function Update-AuraUiLauncherHintPosition {
+  if ($null -eq $script:LauncherHint -or $script:LauncherHint.IsDisposed) { return }
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  try {
+    $metrics = Get-AuraUiLauncherMetrics
+    $gap = ConvertTo-AuraUiLauncherPixels -Logical 12
+    $desired = [Drawing.Point]::new(
+      $script:Launcher.Location.X + $metrics.Halo + $metrics.Compact - $script:LauncherHint.Width,
+      $script:Launcher.Location.Y + $metrics.Halo - $script:LauncherHint.Height - $gap)
+    $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
+    $bottomRight = $script:Form.PointToScreen(
+      [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
+    $maximumX = [Math]::Max($topLeft.X, $bottomRight.X - $script:LauncherHint.Width)
+    $maximumY = [Math]::Max($topLeft.Y, $bottomRight.Y - $script:LauncherHint.Height)
+    $desired.X = [Math]::Max($topLeft.X, [Math]::Min($desired.X, $maximumX))
+    $desired.Y = [Math]::Max($topLeft.Y, [Math]::Min($desired.Y, $maximumY))
+    $script:LauncherHint.Location = $desired
+  } catch {}
+}
+
+function Show-AuraUiLauncherHint {
+  # A stylized launch reminder pinned near the launcher. "Got it" closes it for
+  # this session; "Don't show again" persists the dismissal marker. Real WinForms
+  # controls keep it keyboard- and screen-reader-accessible.
+  if ($script:LauncherHintShown) { return }
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible) { return }
+  $marker = Join-Path $DataRoot 'launcher-hint-dismissed'
+  if (Test-Path -LiteralPath $marker -PathType Leaf) { return }
+  $script:LauncherHintShown = $true
+  try {
+    $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
+    $scale = Get-AuraUiLauncherScale
+    $surfaceColor = [Drawing.ColorTranslator]::FromHtml("$($style.surface)")
+    $foregroundColor = [Drawing.ColorTranslator]::FromHtml("$($style.foreground)")
+    $accentColor = [Drawing.ColorTranslator]::FromHtml("$($style.accent)")
+    $accentLuminance = (0.299 * $accentColor.R) + (0.587 * $accentColor.G) + (0.114 * $accentColor.B)
+    $accentText = if ($accentLuminance -gt 150) { [Drawing.Color]::FromArgb(255, 26, 22, 31) } else { [Drawing.Color]::White }
+    $px = { param([double]$Logical) [int][Math]::Round($Logical * $scale) }
+    $hint = [System.Windows.Forms.Form]::new()
+    $hint.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $hint.ShowInTaskbar = $false
+    $hint.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+    $hint.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
+    $hint.BackColor = $surfaceColor
+    $hint.KeyPreview = $true
+    $hint.Text = "$($script:UiCopy.launcherHintTitle)"
+    $hint.AccessibleName = "$($script:UiCopy.launcherHintTitle)"
+    $hint.ClientSize = [Drawing.Size]::new((& $px 336), (& $px 148))
+    $hintBounds = [Drawing.RectangleF]::new(0, 0, $hint.ClientSize.Width, $hint.ClientSize.Height)
+    $hintPath = New-AuraUiRoundedRectanglePath -Bounds $hintBounds -Radius (14 * $scale)
+    try { $hint.Region = [Drawing.Region]::new($hintPath) } finally { $hintPath.Dispose() }
+
+    $markPanel = [System.Windows.Forms.Panel]::new()
+    $markPanel.Bounds = [Drawing.Rectangle]::new((& $px 20), (& $px 20), (& $px 40), (& $px 40))
+    $markPanel.BackColor = $surfaceColor
+    $markPanel.add_Paint({
+      param($sender, $eventArgs)
+      $graphics = $eventArgs.Graphics
+      $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+      $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+      $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $side = [Math]::Min($sender.ClientSize.Width, $sender.ClientSize.Height)
+      if ($null -ne $script:LauncherMark) {
+        $graphics.DrawImage($script:LauncherMark, [Drawing.Rectangle]::new(0, 0, $side, $side))
+      } else {
+        $paintStyle = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
+        $accent = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml("$($paintStyle.accent)"))
+        $graphics.FillEllipse($accent, [Drawing.Rectangle]::new([int]($side / 4), [int]($side / 4), [int]($side / 2), [int]($side / 2)))
+        $accent.Dispose()
+      }
+    })
+
+    $titleLabel = [System.Windows.Forms.Label]::new()
+    $titleLabel.Text = "$($script:UiCopy.launcherHintTitle)"
+    $titleLabel.Font = [Drawing.Font]::new('Segoe UI Semibold', [float](14 * $scale), [Drawing.GraphicsUnit]::Pixel)
+    $titleLabel.ForeColor = $foregroundColor
+    $titleLabel.BackColor = $surfaceColor
+    $titleLabel.Bounds = [Drawing.Rectangle]::new((& $px 74), (& $px 22), (& $px 242), (& $px 20))
+
+    $bodyLabel = [System.Windows.Forms.Label]::new()
+    $bodyLabel.Text = "$($script:UiCopy.launcherHintBody)"
+    $bodyLabel.Font = [Drawing.Font]::new('Segoe UI', [float](11.5 * $scale), [Drawing.GraphicsUnit]::Pixel)
+    $bodyLabel.ForeColor = ConvertTo-AuraUiBlendedColor -From $foregroundColor -To $surfaceColor -Amount 0.22
+    $bodyLabel.BackColor = $surfaceColor
+    $bodyLabel.Bounds = [Drawing.Rectangle]::new((& $px 74), (& $px 44), (& $px 242), (& $px 56))
+
+    $dismissButton = [System.Windows.Forms.Button]::new()
+    $dismissButton.Text = "$($script:UiCopy.launcherHintDismiss)"
+    $dismissButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $dismissButton.FlatAppearance.BorderSize = 0
+    $dismissButton.FlatAppearance.MouseOverBackColor = ConvertTo-AuraUiBlendedColor -From $surfaceColor -To $foregroundColor -Amount 0.08
+    $dismissButton.BackColor = $surfaceColor
+    $dismissButton.ForeColor = ConvertTo-AuraUiBlendedColor -From $foregroundColor -To $surfaceColor -Amount 0.3
+    $dismissButton.UseVisualStyleBackColor = $false
+    $dismissButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $dismissButton.AccessibleName = "$($script:UiCopy.launcherHintDismiss)"
+    $dismissButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+    $dismissButton.Bounds = [Drawing.Rectangle]::new((& $px 96), (& $px 108), (& $px 128), (& $px 28))
+
+    $gotItButton = [System.Windows.Forms.Button]::new()
+    $gotItButton.Text = "$($script:UiCopy.launcherHintGotIt)"
+    $gotItButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $gotItButton.FlatAppearance.BorderSize = 0
+    $gotItButton.FlatAppearance.MouseOverBackColor = ConvertTo-AuraUiBlendedColor -From $accentColor -To $accentText -Amount 0.12
+    $gotItButton.BackColor = $accentColor
+    $gotItButton.ForeColor = $accentText
+    $gotItButton.UseVisualStyleBackColor = $false
+    $gotItButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $gotItButton.AccessibleName = "$($script:UiCopy.launcherHintGotIt)"
+    $gotItButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+    $gotItButton.Bounds = [Drawing.Rectangle]::new((& $px 232), (& $px 108), (& $px 84), (& $px 28))
+
+    $hint.Controls.AddRange(@($markPanel, $titleLabel, $bodyLabel, $dismissButton, $gotItButton))
+    $gotItButton.add_Click({ if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) { $script:LauncherHint.Close() } })
+    $dismissButton.add_Click({
+      try {
+        [System.IO.File]::WriteAllText((Join-Path $DataRoot 'launcher-hint-dismissed'), 'dismissed')
+      } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
+      if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) { $script:LauncherHint.Close() }
+    })
+    $hint.add_KeyDown({
+      param($sender, $eventArgs)
+      if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $sender.Close() }
+    })
+    $hint.add_FormClosed({ $script:LauncherHint = $null })
+
+    $hint.Owner = $script:Form
+    $script:LauncherHint = $hint
+    # Keep the card attached to the launcher through window resize, movement,
+    # DPI relocation, and a user drag of the launcher itself.
+    Update-AuraUiLauncherHintPosition
+    # SW_SHOWNA keeps focus in Claude; the card still accepts clicks and Escape
+    # once the user interacts with it.
+    [void][AuraWindow]::ShowWindow($hint.Handle, 8)
+  } catch {
+    Write-AuraUiLog -Message $_.Exception.ToString()
+  }
 }
 
 function Register-AuraUiJumpList {
@@ -691,7 +2604,7 @@ function Register-AuraUiJumpList {
     Add-Type -AssemblyName PresentationFramework -ErrorAction Stop
     $shellPath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
     $scriptPath = Join-Path $PSScriptRoot 'aura-ui.ps1'
-    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { return }
+    if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { return $false }
     $jumpList = [System.Windows.Shell.JumpList]::new()
     $jumpList.ShowFrequentCategory = $false
     $jumpList.ShowRecentCategory = $false
@@ -701,13 +2614,22 @@ function Register-AuraUiJumpList {
     $task.ApplicationPath = $shellPath
     $task.Arguments = '-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -OpenStudio' -f $scriptPath
     $task.WorkingDirectory = $Root
-    if (Test-Path -LiteralPath $AuraIconPath -PathType Leaf) {
-      $task.IconResourcePath = $AuraIconPath
+    $jumpIconPath = if ($script:ShellIdentityIconPath -and
+        (Test-AuraUiOwnedShortcutIconPath -Path $script:ShellIdentityIconPath)) {
+      $script:ShellIdentityIconPath
+    } else { $AuraIconPath }
+    if (Test-Path -LiteralPath $jumpIconPath -PathType Leaf) {
+      $task.IconResourcePath = $jumpIconPath
       $task.IconResourceIndex = 0
     }
     [void]$jumpList.JumpItems.Add($task)
     $jumpList.Apply()
-  } catch { Write-AuraUiLog -Message "Jump List registration skipped: $($_.Exception.Message)" }
+    $script:JumpListIdentityPath = $jumpIconPath
+    return $true
+  } catch {
+    Write-AuraUiLog -Message "Jump List registration skipped: $($_.Exception.Message)"
+    return $false
+  }
 }
 
 function ConvertTo-AuraUiStudioNumber {
@@ -1001,6 +2923,79 @@ function ConvertTo-AuraUiStudioInteger {
   return [int]$number
 }
 
+function Assert-AuraUiStudioStyle {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  if ($Style -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Style -Names @('light', 'dark', 'shared'))) {
+    throw 'Aura Studio editor state has an invalid Studio style.'
+  }
+  $modeNames = @(
+    'canvas', 'sidebar', 'surface', 'raised', 'text', 'textSecondary', 'textMuted',
+    'sidebarText', 'sidebarTextMuted', 'accent', 'accentText', 'border', 'focus',
+    'surfaceAlpha', 'sidebarAlpha')
+  foreach ($mode in @('light', 'dark')) {
+    $colors = $Style.$mode
+    if ($colors -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $colors -Names $modeNames)) {
+      throw "Aura Studio editor state has an invalid $mode Studio style."
+    }
+    foreach ($name in $modeNames[0..12]) {
+      if ($colors.$name -isnot [string] -or $colors.$name -cnotmatch '^#[0-9A-Fa-f]{6}$') {
+        throw "Aura Studio editor state has an invalid $mode Studio color."
+      }
+    }
+    foreach ($name in @('surfaceAlpha', 'sidebarAlpha')) {
+      if ($colors.$name -is [bool] -or $colors.$name -is [string] -or $colors.$name -is [char]) {
+        throw "Aura Studio editor state has an invalid $mode Studio material value."
+      }
+      try { $alpha = [Convert]::ToDouble($colors.$name, [Globalization.CultureInfo]::InvariantCulture) }
+      catch { throw "Aura Studio editor state has an invalid $mode Studio material value." }
+      if ([double]::IsNaN($alpha) -or [double]::IsInfinity($alpha) -or $alpha -lt 0 -or $alpha -gt 1) {
+        throw "Aura Studio editor state has an invalid $mode Studio material value."
+      }
+    }
+  }
+  $shared = $Style.shared
+  if ($shared -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $shared -Names @('fontUi', 'fontDisplay', 'radius', 'blur', 'shadow')) -or
+      $shared.fontUi -isnot [string] -or $shared.fontUi -cnotin @('system-sans', 'humanist-sans', 'rounded-sans') -or
+      $shared.fontDisplay -isnot [string] -or $shared.fontDisplay -cnotin @('system-sans', 'humanist-sans', 'rounded-sans', 'editorial-serif') -or
+      $shared.shadow -isnot [string] -or $shared.shadow -cnotin @('none', 'soft', 'elevated')) {
+    throw 'Aura Studio editor state has invalid shared Studio styling.'
+  }
+  foreach ($item in @(@('radius', 0, 32), @('blur', 0, 40))) {
+    $value = $shared.($item[0])
+    if ($value -is [bool] -or $value -is [string] -or $value -is [char]) {
+      throw 'Aura Studio editor state has an invalid Studio style measurement.'
+    }
+    try { $number = [Convert]::ToDouble($value, [Globalization.CultureInfo]::InvariantCulture) }
+    catch { throw 'Aura Studio editor state has an invalid Studio style measurement.' }
+    if ([double]::IsNaN($number) -or [double]::IsInfinity($number) -or
+        $number -lt [double]$item[1] -or $number -gt [double]$item[2]) {
+      throw 'Aura Studio editor state has an invalid Studio style measurement.'
+    }
+  }
+}
+
+function Assert-AuraUiStudioLauncherStyle {
+  param([Parameter(Mandatory = $true)][object]$Style)
+  $names = @('asset', 'surface', 'surfaceHover', 'foreground', 'accent', 'border', 'radius', 'borderWidth')
+  if ($Style -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Style -Names $names)) {
+    throw 'Aura Studio editor state has an invalid launcher style.'
+  }
+  if ($Style.asset -isnot [string] -or $Style.asset -cnotmatch '^(assets/theme-art/(default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)/launcher-mark\.png|launcher-mark\.png)$') {
+    throw 'Aura Studio editor state has an invalid launcher asset.'
+  }
+  foreach ($name in @('surface', 'surfaceHover', 'foreground', 'accent', 'border')) {
+    if ($Style.$name -isnot [string] -or $Style.$name -cnotmatch '^#[0-9A-F]{6}$') {
+      throw 'Aura Studio editor state has an invalid launcher color.'
+    }
+  }
+  [void](ConvertTo-AuraUiStudioNumber -Value $Style.radius -Minimum 8 -Maximum 24 -Label 'Launcher radius')
+  [void](ConvertTo-AuraUiStudioNumber -Value $Style.borderWidth -Minimum 1 -Maximum 3 -Label 'Launcher border width')
+}
+
 function ConvertTo-AuraUiBase64Url {
   param([Parameter(Mandatory = $true)][string]$Value)
   return [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value)).TrimEnd('=').Replace('+', '-').Replace('/', '_')
@@ -1020,12 +3015,16 @@ function Assert-AuraUiStudioEditorPublicValue {
   if ($Value -is [string] -or $Value -is [char]) {
     $text = "$Value"
     if ($text.Length -gt 4096) { throw 'Aura Studio editor state contains an oversized string.' }
-    if ($text -match '(?i)(?:^|[\s(])(?:[a-z]:[\\/]|\\\\)|\bfile:') {
-      throw 'Aura Studio editor state cannot expose a filesystem path.'
-    }
+    # User-authored metadata may legitimately mention path-like examples. Real
+    # filesystem exposure is rejected by the property-name checks below, while
+    # the sole public preview URL retains its exact allowlisted shape.
     if ($Name -ceq 'previewUrl' -and
         $text -cnotmatch '^https://aura\.editor/active/layer-[a-f0-9]{32}\.webp\?v=[a-f0-9]{64}$') {
       throw 'Aura Studio editor state contains an invalid preview URL.'
+    }
+    if ($Name -cin @('launcherPreviewUrl', 'launcherStylePreviewUrl') -and
+        $text -cnotmatch '^https://aura\.(assets/(default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)/launcher-mark\.png|editor/active/launcher-[a-f0-9]{64}\.png)$') {
+      throw 'Aura Studio editor state contains an invalid launcher preview URL.'
     }
     return
   }
@@ -1061,7 +3060,8 @@ function ConvertTo-AuraUiStudioEditorState {
   }
   $allowed = @(
     'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
-    'canUndo', 'canRedo', 'label', 'tokens', 'shared', 'layers', 'feedback',
+    'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
+    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'layers', 'feedback',
     'lastAction', 'actionSucceeded', 'error')
   $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($name in $actual) {
@@ -1074,7 +3074,8 @@ function ConvertTo-AuraUiStudioEditorState {
   if ($State.active) {
     $required = @(
       'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
-      'canUndo', 'canRedo', 'label', 'tokens', 'shared', 'layers', 'feedback')
+      'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
+      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'layers', 'feedback')
     foreach ($name in $required) {
       if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
     }
@@ -1098,6 +3099,24 @@ function ConvertTo-AuraUiStudioEditorState {
     if ($State.label -isnot [string] -or -not $State.label.Trim() -or $State.label.Length -gt 80) {
       throw 'Aura Studio editor state has an invalid label.'
     }
+    if ($State.metadata -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $State.metadata -Names @('labels', 'descriptions'))) {
+      throw 'Aura Studio editor state has invalid metadata.'
+    }
+    foreach ($field in @('labels', 'descriptions')) {
+      $localized = $State.metadata.$field
+      if ($localized -isnot [System.Management.Automation.PSCustomObject] -or
+          -not (Test-AuraUiStudioExactProperties -Message $localized -Names @('en', 'zh-CN', 'zh-TW'))) {
+        throw "Aura Studio editor state has invalid localized $field."
+      }
+      $maximum = if ($field -ceq 'labels') { 80 } else { 220 }
+      foreach ($locale in @('en', 'zh-CN', 'zh-TW')) {
+        $text = $localized.$locale
+        if ($text -isnot [string] -or -not $text.Trim() -or $text.Length -gt $maximum) {
+          throw "Aura Studio editor state has invalid $field.$locale."
+        }
+      }
+    }
     if ($State.tokens -isnot [System.Management.Automation.PSCustomObject] -or
         $null -eq $State.tokens.PSObject.Properties['light'] -or
         $null -eq $State.tokens.PSObject.Properties['dark']) {
@@ -1106,8 +3125,27 @@ function ConvertTo-AuraUiStudioEditorState {
     if ($State.shared -isnot [System.Management.Automation.PSCustomObject]) {
       throw 'Aura Studio editor state has invalid shared controls.'
     }
+    Assert-AuraUiStudioStyle -Style $State.studioStyle
+    Assert-AuraUiStudioLauncherStyle -Style $State.launcher
+    Assert-AuraUiStudioLauncherStyle -Style $State.launcherStyle
+    foreach ($name in @('launcherPreviewUrl', 'launcherStylePreviewUrl')) {
+      if ($State.$name -isnot [string] -or
+          $State.$name -cnotmatch '^https://aura\.(assets/(default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)/launcher-mark\.png|editor/active/launcher-[a-f0-9]{64}\.png)$') {
+        throw "Aura Studio editor state has an invalid $name."
+      }
+    }
     $layers = @($State.layers)
     if ($layers.Count -gt 8) { throw 'Aura Studio editor state contains too many layers.' }
+    $layerIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($layer in $layers) {
+      if ($layer -isnot [System.Management.Automation.PSCustomObject] -or
+          $null -eq $layer.PSObject.Properties['id'] -or
+          $layer.id -isnot [string] -or
+          $layer.id -cnotmatch '^layer-[a-f0-9]{32}$' -or
+          -not $layerIds.Add($layer.id)) {
+        throw 'Aura Studio editor state has an invalid or duplicate layer identity.'
+      }
+    }
     if ($State.feedback -isnot [System.Management.Automation.PSCustomObject]) {
       throw 'Aura Studio editor state has invalid feedback.'
     }
@@ -1117,8 +3155,8 @@ function ConvertTo-AuraUiStudioEditorState {
   }
   if ($null -ne $State.PSObject.Properties['lastAction'] -and $null -ne $State.lastAction -and
       ($State.lastAction -isnot [string] -or $State.lastAction -cnotin @(
-        'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
-        'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+        'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+        'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
         'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
         'delete-user-theme'))) {
     throw 'Aura Studio editor state has an invalid last action.'
@@ -1207,8 +3245,44 @@ function Get-AuraUiStudioEditorCoreState {
   return ConvertFrom-AuraUiStudioEditorResponse -Raw $raw
 }
 
+function Update-AuraUiStudioEditorSessionTracking {
+  param([Parameter(Mandatory = $true)][object]$State)
+  $active = (Get-AuraUiPropertyValue -InputObject $State -Names @('active')) -eq $true
+  if (-not $active) {
+    $script:StudioEditorTrackedSession = $null
+    $script:StudioEditorEntryAppearance = $null
+    return
+  }
+  $session = Get-AuraUiPropertyValue -InputObject $State -Names @('session')
+  if ($session -isnot [string] -or -not $session.Trim()) { return }
+  if (-not [string]::Equals([string]$script:StudioEditorTrackedSession, $session,
+      [StringComparison]::Ordinal)) {
+    $script:StudioEditorTrackedSession = $session
+    $script:StudioEditorEntryAppearance = Get-AuraUiAppearance
+  }
+}
+
+function Restore-AuraUiStudioPreviewState {
+  if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+    try { $script:Form.TopMost = $false }
+    catch { Write-AuraUiLog -Message "Aura preview topmost state could not be cleared: $($_.Exception.Message)" }
+  }
+  if (-not $script:StudioEditorTrackedSession -or
+      $script:StudioEditorEntryAppearance -notin @('system', 'light', 'dark') -or
+      [string]::Equals((Get-AuraUiAppearance), [string]$script:StudioEditorEntryAppearance,
+        [StringComparison]::Ordinal)) {
+    return
+  }
+  try {
+    Invoke-AuraUiSetAppearance -Appearance ([string]$script:StudioEditorEntryAppearance)
+  } catch {
+    Write-AuraUiLog -Message "Aura Studio entry appearance could not be restored: $($_.Exception.Message)"
+  }
+}
+
 function Sync-AuraUiStudioEditorDraft {
   $result = Get-AuraUiStudioEditorCoreState
+  Update-AuraUiStudioEditorSessionTracking -State $result.State
   $script:StudioEditorState = $result.State
   if ($null -ne $result.Payload) {
     $payloadChanged = -not [string]::Equals($script:Payload, $result.Payload, [StringComparison]::Ordinal)
@@ -1228,6 +3302,7 @@ function Get-AuraUiStudioEditorStatus {
       'save-theme-edit' { return "$($script:UiCopy.themeEditSaveFailed)" }
       'delete-user-theme' { return "$($script:UiCopy.themeDeleteFailed)" }
       'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageFailed)" }
+      'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
       default { return "$($script:UiCopy.themeEditFailed)" }
     }
   }
@@ -1235,6 +3310,7 @@ function Get-AuraUiStudioEditorStatus {
     'create-theme-copy' { return "$($script:UiCopy.themeCopyReady)" }
     'begin-theme-edit' { return "$($script:UiCopy.themeEditReady)" }
     'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageImported)" }
+    'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
     'save-theme-edit' { return "$($script:UiCopy.themeEditSaved)" }
     'discard-theme-edit' { return "$($script:UiCopy.themeEditDiscarded)" }
     'delete-user-theme' { return "$($script:UiCopy.themeDeleted)" }
@@ -1247,6 +3323,7 @@ function Complete-AuraUiStudioEditorAction {
     [Parameter(Mandatory = $true)][string]$Action,
     [Parameter(Mandatory = $true)][object]$Result
   )
+  Update-AuraUiStudioEditorSessionTracking -State $Result.State
   $script:StudioEditorState = $Result.State
   if ($Result.ConfigChanged) {
     $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -1264,8 +3341,24 @@ function Complete-AuraUiStudioEditorAction {
   $errorValue = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('error')
   if ($null -ne $actionSucceeded) { $succeeded = [bool]$actionSucceeded }
   if ($null -ne $errorValue -and "$errorValue".Trim()) { $succeeded = $false }
-  Send-AuraUiStudioState -Status (Get-AuraUiStudioEditorStatus -Action $Action -Succeeded $succeeded) `
+  if ($Action -ceq 'pick-theme-launcher-mark' -and $succeeded -and
+      $script:LauncherStyleAppliedAsRequested -ne $true) {
+    $succeeded = $false
+    $script:StudioEditorState['actionSucceeded'] = $false
+    $script:StudioEditorState['error'] = 'identity-apply-failed'
+  }
+  $status = if ($Action -ceq 'pick-theme-launcher-mark' -and
+      (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('error')) -ceq 'identity-apply-failed') {
+    "$($script:UiCopy.themeLauncherMarkApplyFailed)"
+  } else {
+    Get-AuraUiStudioEditorStatus -Action $Action -Succeeded $succeeded
+  }
+  Send-AuraUiStudioState -Status $status `
     -Tone $(if ($succeeded) { 'ok' } else { 'error' }) -Action $Action -ActionSucceeded $succeeded
+  # Invalid edits advance the editor revision but deliberately keep Aura on the
+  # previous valid payload. Re-capture that honest last-valid result under the
+  # new revision; successful applies request their capture after injection.
+  if ($Result.Apply -ceq 'none') { Request-AuraUiMirror }
   return $succeeded
 }
 
@@ -1345,6 +3438,12 @@ function Invoke-AuraUiSetThemeLayer {
   return Invoke-AuraUiStudioEditorRequest -Request $Request
 }
 
+function Invoke-AuraUiApplyThemePatch {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
 function Invoke-AuraUiPickThemeLayerImage {
   param(
     [Parameter(Mandatory = $true)][object]$Request,
@@ -1362,9 +3461,9 @@ function Invoke-AuraUiPickThemeLayerImage {
     $dialog.RestoreDirectory = $true
     if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
       $script:StudioEditorState['lastAction'] = 'pick-theme-layer-image'
-      $script:StudioEditorState['actionSucceeded'] = $false
-      $script:StudioEditorState['error'] = $null
-      Send-AuraUiStudioState -Action 'pick-theme-layer-image' -ActionSucceeded $false
+      $script:StudioEditorState['actionSucceeded'] = $true
+      $script:StudioEditorState['error'] = 'picker-cancelled'
+      Send-AuraUiStudioState -Action 'pick-theme-layer-image' -ActionSucceeded $true
       return $false
     }
     $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
@@ -1405,6 +3504,51 @@ function Invoke-AuraUiPickThemeLayerImage {
   }
 }
 
+function Invoke-AuraUiPickThemeLauncherMark {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  Assert-AuraUiStudioEditorSession -Request $Request
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  $targetPath = $null
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseThemeLauncherMarkTitle)"
+    $dialog.Filter = 'PNG (*.png)|*.png'
+    $dialog.CheckFileExists = $true
+    $dialog.Multiselect = $false
+    $dialog.RestoreDirectory = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      $script:StudioEditorState['lastAction'] = 'pick-theme-launcher-mark'
+      $script:StudioEditorState['actionSucceeded'] = $true
+      $script:StudioEditorState['error'] = 'picker-cancelled'
+      Send-AuraUiStudioState -Action 'pick-theme-launcher-mark' -ActionSucceeded $true
+      return $false
+    }
+    $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
+    if ($sourceItem.PSIsContainer -or
+        ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $sourceItem.Length -le 0 -or $sourceItem.Length -ge 400000) {
+      throw 'The selected launcher mark must be a regular PNG file smaller than 400 KB.'
+    }
+    $targetPath = Join-Path $StudioEditorImportRoot ('launcher-{0}.png' -f [Guid]::NewGuid().ToString('N'))
+    [IO.File]::Copy($sourceItem.FullName, $targetPath, $false)
+    return Invoke-AuraUiStudioEditorRequest -Request $Request -AssetPath $targetPath
+  } finally {
+    $dialog.Dispose()
+    if ($targetPath -and (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+      try {
+        $target = Get-Item -LiteralPath $targetPath -Force
+        if (($target.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
+            [string]::Equals($target.DirectoryName, [IO.Path]::GetFullPath($StudioEditorImportRoot), [StringComparison]::OrdinalIgnoreCase)) {
+          [IO.File]::Delete($target.FullName)
+        }
+      } catch { Write-AuraUiLog -Message "Studio launcher import cleanup failed: $($_.Exception.Message)" }
+    }
+  }
+}
+
 function Invoke-AuraUiRemoveThemeLayer {
   param([Parameter(Mandatory = $true)][object]$Request)
   Assert-AuraUiStudioEditorSession -Request $Request
@@ -1441,6 +3585,123 @@ function Invoke-AuraUiDiscardThemeEdit {
   return Invoke-AuraUiStudioEditorRequest -Request $Request
 }
 
+function Test-AuraUiByteSequenceEqual {
+  param(
+    [Parameter(Mandatory = $true)][byte[]]$First,
+    [Parameter(Mandatory = $true)][byte[]]$Second
+  )
+  if ($First.Length -ne $Second.Length) { return $false }
+  for ($index = 0; $index -lt $First.Length; $index++) {
+    if ($First[$index] -ne $Second[$index]) { return $false }
+  }
+  return $true
+}
+
+function New-AuraUiDeleteRecoverySnapshot {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][byte[]]$ConfigBytes,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Payload,
+    [Parameter(Mandatory = $true)][string]$RequestedTheme,
+    [AllowNull()][string]$ActiveThemeName,
+    [AllowNull()][string]$ActiveLabel
+  )
+  $configDirectory = [IO.Path]::GetFullPath((Split-Path $ConfigPath -Parent)).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $recoveryPath = [IO.Path]::GetFullPath($Path)
+  if (-not $recoveryPath.StartsWith($configDirectory + [IO.Path]::DirectorySeparatorChar,
+      [StringComparison]::OrdinalIgnoreCase) -or
+      [IO.Path]::GetFileName($recoveryPath) -cnotmatch '^\.delete-recovery-[a-f0-9]{32}$') {
+    throw 'Refusing to write a theme-delete recovery snapshot outside app data.'
+  }
+  [void][IO.Directory]::CreateDirectory($recoveryPath)
+  $item = Get-Item -LiteralPath $recoveryPath -Force
+  if (-not $item.PSIsContainer -or
+      ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'Theme-delete recovery storage cannot be a symbolic link or junction.'
+  }
+  [IO.File]::WriteAllBytes((Join-Path $recoveryPath 'config.snapshot.json'), $ConfigBytes)
+  [IO.File]::WriteAllText((Join-Path $recoveryPath 'payload.snapshot.js'), $Payload,
+    [Text.UTF8Encoding]::new($false))
+  $state = [ordered]@{
+    requestedTheme = $RequestedTheme
+    activeThemeName = $ActiveThemeName
+    activeLabel = $ActiveLabel
+    capturedUtc = [DateTime]::UtcNow.ToString('o')
+  } | ConvertTo-Json -Depth 3
+  [IO.File]::WriteAllText((Join-Path $recoveryPath 'state.snapshot.json'), $state,
+    [Text.UTF8Encoding]::new($false))
+}
+
+function Restore-AuraUiDeleteConfigBytes {
+  param(
+    [Parameter(Mandatory = $true)][byte[]]$Bytes,
+    [AllowNull()][string]$RecoveryPath
+  )
+  if ($Bytes.Length -eq 0) { throw 'The theme-delete config snapshot is empty.' }
+  $configDirectory = [IO.Path]::GetFullPath((Split-Path $ConfigPath -Parent))
+  [void][IO.Directory]::CreateDirectory($configDirectory)
+  $temporary = Join-Path $configDirectory ('.delete-config-restore-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+  $backup = if ($RecoveryPath -and (Test-Path -LiteralPath $RecoveryPath -PathType Container)) {
+    Join-Path $RecoveryPath 'switched-config.json'
+  } else { $null }
+  $stream = $null
+  try {
+    $stream = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $stream.Write($Bytes, 0, $Bytes.Length)
+    $stream.Flush($true)
+    $stream.Dispose()
+    $stream = $null
+    if ([IO.File]::Exists($ConfigPath)) {
+      [IO.File]::Replace($temporary, $ConfigPath, $backup)
+    } else {
+      [IO.File]::Move($temporary, $ConfigPath)
+    }
+    $restored = [IO.File]::ReadAllBytes($ConfigPath)
+    if (-not (Test-AuraUiByteSequenceEqual -First $restored -Second $Bytes)) {
+      throw 'The theme-delete config rollback did not restore the exact bytes.'
+    }
+  } finally {
+    if ($null -ne $stream) { $stream.Dispose() }
+    if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
+  }
+}
+
+function Restore-AuraUiDeleteInMemoryState {
+  param(
+    [Parameter(Mandatory = $true)][object]$Config,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Payload,
+    [AllowNull()][string]$ActiveThemeName,
+    [AllowNull()][string]$ActiveLabel
+  )
+  $script:Config = $Config
+  $script:Payload = $Payload
+  $script:ActiveThemeName = $ActiveThemeName
+  $script:ActiveLabel = $ActiveLabel
+}
+
+function Remove-AuraUiDeleteRecoverySnapshot {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $configDirectory = [IO.Path]::GetFullPath((Split-Path $ConfigPath -Parent)).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $recoveryPath = [IO.Path]::GetFullPath($Path)
+  if (-not $recoveryPath.StartsWith($configDirectory + [IO.Path]::DirectorySeparatorChar,
+      [StringComparison]::OrdinalIgnoreCase) -or
+      [IO.Path]::GetFileName($recoveryPath) -cnotmatch '^\.delete-recovery-[a-f0-9]{32}$' -or
+      -not (Test-Path -LiteralPath $recoveryPath -PathType Container)) {
+    return
+  }
+  $item = Get-Item -LiteralPath $recoveryPath -Force
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'Refusing to remove redirected theme-delete recovery storage.'
+  }
+  foreach ($name in @('config.snapshot.json', 'payload.snapshot.js', 'state.snapshot.json', 'switched-config.json')) {
+    $candidate = Join-Path $recoveryPath $name
+    if ([IO.File]::Exists($candidate)) { [IO.File]::Delete($candidate) }
+  }
+  [IO.Directory]::Delete($recoveryPath, $false)
+}
+
 function Invoke-AuraUiDeleteUserTheme {
   param([Parameter(Mandatory = $true)][object]$Request)
   if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true) {
@@ -1450,17 +3711,91 @@ function Invoke-AuraUiDeleteUserTheme {
   $configuredTheme = if ($null -ne $script:Config) {
     Get-AuraUiPropertyValue -InputObject $script:Config -Names @('theme')
   } else { $null }
-  if ([string]::Equals([string]$configuredTheme, [string]$Request.theme, [StringComparison]::Ordinal) -or
-      [string]::Equals([string]$script:ActiveThemeName, [string]$Request.theme, [StringComparison]::Ordinal)) {
-    Set-AuraUiConfig -Options @('--theme', 'default', '--enabled', 'true')
+  $mustSwitch = [string]::Equals([string]$configuredTheme, [string]$Request.theme, [StringComparison]::Ordinal) -or
+    [string]::Equals([string]$script:ActiveThemeName, [string]$Request.theme, [StringComparison]::Ordinal)
+  if (-not $mustSwitch) { return Invoke-AuraUiStudioEditorRequest -Request $Request }
+
+  $previousConfigBytes = [IO.File]::ReadAllBytes($ConfigPath)
+  if ($previousConfigBytes.Length -eq 0) { throw 'Aura Studio cannot delete a theme with an empty config snapshot.' }
+  $previousConfigState = $script:Config
+  $previousPayload = [string]$script:Payload
+  $previousActiveThemeName = $script:ActiveThemeName
+  $previousActiveLabel = $script:ActiveLabel
+  $wasEnabled = Get-AuraUiEnabled
+  $switchAttempted = $false
+  try {
+    $switchAttempted = $true
+    Set-AuraUiConfig -Options @(
+      '--theme', 'default', '--enabled', $wasEnabled.ToString().ToLowerInvariant())
     $restoredTheme = Get-AuraUiPropertyValue -InputObject $script:Config -Names @('theme')
+    $restoredEnabled = Get-AuraUiPropertyValue -InputObject $script:Config -Names @('enabled')
     if (-not [string]::Equals([string]$restoredTheme, 'default', [StringComparison]::Ordinal) -or
+        $restoredEnabled -isnot [bool] -or [bool]$restoredEnabled -ne $wasEnabled -or
         -not [string]::Equals([string]$script:ActiveThemeName, 'default', [StringComparison]::Ordinal)) {
-      throw 'Aura Studio could not apply Default before deleting the active theme.'
+      throw 'Aura Studio could not select Default safely before deleting the active theme.'
     }
-    Apply-AuraUiTheme
+    if ($wasEnabled) { Apply-AuraUiTheme }
+    $result = Invoke-AuraUiStudioEditorCore -Request $Request
+  } catch {
+    $primaryFailure = $_.Exception
+    if (-not $switchAttempted) { throw $primaryFailure }
+
+    $rollbackFailures = [Collections.Generic.List[Exception]]::new()
+    $artifactFailure = $null
+    $configDirectory = [IO.Path]::GetFullPath((Split-Path $ConfigPath -Parent))
+    $recoveryPath = Join-Path $configDirectory ('.delete-recovery-{0}' -f [Guid]::NewGuid().ToString('N'))
+    try {
+      New-AuraUiDeleteRecoverySnapshot -Path $recoveryPath -ConfigBytes $previousConfigBytes `
+        -Payload $previousPayload -RequestedTheme ([string]$Request.theme) `
+        -ActiveThemeName $previousActiveThemeName -ActiveLabel $previousActiveLabel
+    } catch { $artifactFailure = $_.Exception }
+
+    try { Restore-AuraUiDeleteConfigBytes -Bytes $previousConfigBytes -RecoveryPath $recoveryPath }
+    catch { $rollbackFailures.Add($_.Exception) }
+    try {
+      Restore-AuraUiDeleteInMemoryState -Config $previousConfigState -Payload $previousPayload `
+        -ActiveThemeName $previousActiveThemeName -ActiveLabel $previousActiveLabel
+    } catch { $rollbackFailures.Add($_.Exception) }
+    try { Set-AuraUiPreferredColorScheme }
+    catch { $rollbackFailures.Add($_.Exception) }
+    try { Update-AuraUiTrayAppearance }
+    catch { $rollbackFailures.Add($_.Exception) }
+    try { Apply-AuraUiTheme }
+    catch { $rollbackFailures.Add($_.Exception) }
+    try {
+      $restoredBytes = [IO.File]::ReadAllBytes($ConfigPath)
+      if (-not (Test-AuraUiByteSequenceEqual -First $restoredBytes -Second $previousConfigBytes) -or
+          -not [object]::ReferenceEquals($script:Config, $previousConfigState) -or
+          -not [string]::Equals($script:Payload, $previousPayload, [StringComparison]::Ordinal) -or
+          -not [object]::Equals($script:ActiveThemeName, $previousActiveThemeName) -or
+          -not [object]::Equals($script:ActiveLabel, $previousActiveLabel)) {
+        throw 'Theme-delete rollback verification found incomplete config or runtime state.'
+      }
+    } catch { $rollbackFailures.Add($_.Exception) }
+
+    if ($rollbackFailures.Count -eq 0) {
+      if ($artifactFailure) {
+        Write-AuraUiLog -Message "Theme-delete recovery snapshot could not be written: $($artifactFailure.Message)"
+      }
+      try { Remove-AuraUiDeleteRecoverySnapshot -Path $recoveryPath }
+      catch { Write-AuraUiLog -Message "Theme-delete recovery snapshot cleanup failed: $($_.Exception.Message)" }
+      throw $primaryFailure
+    }
+
+    $combined = [Collections.Generic.List[Exception]]::new()
+    $combined.Add($primaryFailure)
+    if ($artifactFailure) { $combined.Add($artifactFailure) }
+    foreach ($rollbackFailure in $rollbackFailures) { $combined.Add($rollbackFailure) }
+    $recoveryAvailable = Test-Path -LiteralPath $recoveryPath -PathType Container
+    $message = if ($recoveryAvailable) {
+      "Theme deletion failed and rollback was incomplete. Recovery snapshots were retained at $recoveryPath"
+    } else {
+      'Theme deletion failed and rollback was incomplete. Recovery snapshots could not be retained.'
+    }
+    Write-AuraUiLog -Message $message
+    throw [AggregateException]::new($message, [Exception[]]$combined.ToArray())
   }
-  return Invoke-AuraUiStudioEditorRequest -Request $Request
+  return Complete-AuraUiStudioEditorAction -Action ([string]$Request.type) -Result $result
 }
 
 function Send-AuraUiStudioState {
@@ -1469,8 +3804,8 @@ function Send-AuraUiStudioState {
     [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok',
     [ValidateSet(
       '', 'set-image-framing', 'set-card-preview-crop',
-      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
-      'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
       'delete-user-theme')][string]$Action = '',
     [bool]$ActionSucceeded = $true
@@ -1498,6 +3833,10 @@ function Send-AuraUiStudioState {
       type = 'state'
       theme = "$themeName"
       appearance = (Get-AuraUiAppearance)
+      locale = "$($script:Locale)"
+      introductionPending = ($null -eq $script:StudioPreferences -or
+        [int]$script:StudioPreferences.introductionVersion -lt $StudioIntroductionVersion)
+      introductionRequested = [bool]$script:StudioIntroductionRequested
       enabled = $enabled
       hasImage = ($null -ne $imageValue -and "$imageValue".Trim().Length -gt 0)
       imagePreviewUrl = $imagePreviewUrl
@@ -1506,6 +3845,7 @@ function Send-AuraUiStudioState {
       studioPreviewCrops = Get-AuraUiStudioPreviewCrops
       themes = @($script:Themes)
       editor = $script:StudioEditorState
+      effectiveIdentity = $script:EffectiveLauncherIdentity
       status = $Status
       tone = $Tone
     }
@@ -1521,7 +3861,9 @@ function Send-AuraUiStudioState {
 }
 
 function Show-AuraUiStudio {
+  param([switch]$OfferIntroduction)
   if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed) { return }
+  if ($OfferIntroduction) { $script:StudioIntroductionRequested = $true }
   if (-not $script:StudioForm.Visible) { $script:StudioForm.Show() }
   if ($script:StudioForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
     $script:StudioForm.WindowState = [System.Windows.Forms.FormWindowState]::Normal
@@ -1529,6 +3871,7 @@ function Show-AuraUiStudio {
   Set-AuraUiFormWithinWorkingArea -Form $script:StudioForm
   $script:StudioForm.Activate()
   $script:StudioForm.BringToFront()
+  if ($OfferIntroduction) { Send-AuraUiStudioState }
   Request-AuraUiMirror
 }
 
@@ -1542,8 +3885,37 @@ function Show-AuraUiMain {
   $script:Form.BringToFront()
 }
 
+function Show-AuraUiMainForPreview {
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if (-not $script:Form.Visible -or
+      $script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
+    if ('AuraWindow' -as [type]) {
+      # SW_SHOWNOACTIVATE: make a capturable window available without stealing
+      # focus from the Studio inspector that requested the preview size.
+      [void][AuraWindow]::ShowWindow($script:Form.Handle, 4)
+    } elseif (-not $script:Form.Visible) {
+      $script:Form.Show()
+    }
+  }
+}
+
+function Restore-AuraUiStudioFocus {
+  param([IntPtr]$PreviousForeground)
+  if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
+  if ($PreviousForeground -eq [IntPtr]::Zero -or $PreviousForeground -ne $script:StudioForm.Handle) { return }
+  $currentForeground = [AuraWindow]::GetForegroundWindow()
+  if ($currentForeground -eq $script:StudioForm.Handle) { return }
+  if ($null -ne $script:Form -and -not $script:Form.IsDisposed -and
+      $currentForeground -ne [IntPtr]::Zero -and $currentForeground -ne $script:Form.Handle) { return }
+  $script:StudioForm.Activate()
+  $script:StudioForm.BringToFront()
+}
+
 function Set-AuraUiPreviewSize {
-  param([Parameter(Mandatory = $true)][string]$Size)
+  param(
+    [Parameter(Mandatory = $true)][string]$Size,
+    [Parameter(Mandatory = $true)][int]$Request
+  )
   $customWidth = 0
   $customHeight = 0
   if ($Size -cmatch '^(\d{3,4})x(\d{3,4})$') {
@@ -1556,10 +3928,13 @@ function Set-AuraUiPreviewSize {
     throw 'Aura preview size is not allowed.'
   }
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
-  Show-AuraUiMain
+  $script:MirrorPreviewRequest = $Request
+  $previousForeground = [AuraWindow]::GetForegroundWindow()
+  Show-AuraUiMainForPreview
   if ($Size -ceq 'full') {
     $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
     Request-AuraUiMirror
+    Restore-AuraUiStudioFocus -PreviousForeground $previousForeground
     return
   }
   $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
@@ -1581,17 +3956,45 @@ function Set-AuraUiPreviewSize {
     Set-AuraUiFormWithinWorkingArea -Form $script:Form
   }
   Request-AuraUiMirror
+  Restore-AuraUiStudioFocus -PreviousForeground $previousForeground
 }
 
 function Request-AuraUiMirror {
+  # Every accepted request invalidates older probes and captures so a delayed
+  # frame can never rewind the canvas to a superseded size or page state.
+  $script:MirrorGeneration = [long]$script:MirrorGeneration + 1
+  $script:MirrorSemanticRetries = 0
+  $script:MirrorSemanticPreviousContext = $null
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) {
+    $script:MirrorDue = $null
+    return
+  }
   if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) { return }
   $script:MirrorDue = [DateTime]::UtcNow.AddMilliseconds(350)
 }
 
+function Request-AuraUiContextMirror {
+  $previousContext = $null
+  if ($null -ne $script:MirrorGeometry -and
+      [string]$script:MirrorGeometry.context -in @('new-chat', 'conversation')) {
+    $previousContext = [string]$script:MirrorGeometry.context
+  }
+  Request-AuraUiMirror
+  $script:MirrorSemanticRetries = 3
+  $script:MirrorSemanticPreviousContext = $previousContext
+}
+
 function Start-AuraUiMirrorCapture {
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) { return }
+  if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
   try {
+    $script:MirrorCaptureSession = [string](Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session'))
+    if (-not $script:MirrorCaptureSession) { return }
+    $script:MirrorCaptureRevision = [long](Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('revision'))
+    $script:MirrorCapturePreviewRequest = [int]$script:MirrorPreviewRequest
+    $script:MirrorCaptureGeneration = [long]$script:MirrorGeneration
     $script:MirrorStream = [IO.MemoryStream]::new()
     $script:MirrorCaptureTask = $script:WebView.CoreWebView2.CapturePreviewAsync(
       [Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat]::Jpeg, $script:MirrorStream)
@@ -1602,6 +4005,10 @@ function Start-AuraUiMirrorCapture {
       $script:MirrorStream = $null
     }
     $script:MirrorCaptureTask = $null
+    $script:MirrorCaptureSession = $null
+    $script:MirrorCaptureRevision = [long]-1
+    $script:MirrorCapturePreviewRequest = -1
+    $script:MirrorCaptureGeneration = [long]-1
   }
 }
 
@@ -1611,11 +4018,28 @@ function Update-AuraUiMirror {
     if (-not $script:MirrorCaptureTask.IsCompleted) { return }
     $task = $script:MirrorCaptureTask
     $stream = $script:MirrorStream
+    $captureSession = $script:MirrorCaptureSession
+    $captureRevision = $script:MirrorCaptureRevision
+    $capturePreviewRequest = $script:MirrorCapturePreviewRequest
+    $captureGeneration = $script:MirrorCaptureGeneration
     $script:MirrorCaptureTask = $null
     $script:MirrorStream = $null
+    $script:MirrorCaptureSession = $null
+    $script:MirrorCaptureRevision = [long]-1
+    $script:MirrorCapturePreviewRequest = -1
+    $script:MirrorCaptureGeneration = [long]-1
     try {
       [void]$task.GetAwaiter().GetResult()
-      if ($null -ne $script:StudioWebView -and $null -ne $script:StudioWebView.CoreWebView2 -and $stream.Length -gt 0 -and $stream.Length -le 8000000) {
+      $activeSession = [string](Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session'))
+      $activeRevision = [long](Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('revision'))
+      if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true -and
+          $captureSession -and $captureSession -ceq $activeSession -and
+          $captureRevision -eq $activeRevision -and
+          $capturePreviewRequest -eq $script:MirrorPreviewRequest -and
+          $captureGeneration -eq $script:MirrorGeneration -and
+          $null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed -and $script:StudioForm.Visible -and
+          $null -ne $script:StudioWebView -and $null -ne $script:StudioWebView.CoreWebView2 -and
+          $stream.Length -gt 0 -and $stream.Length -le $StudioMirrorJpegMaxBytes) {
         $geometry = $script:MirrorGeometry
         $width = [int]$script:WebView.ClientSize.Width
         $height = [int]$script:WebView.ClientSize.Height
@@ -1629,8 +4053,11 @@ function Update-AuraUiMirror {
           image = 'data:image/jpeg;base64,' + [Convert]::ToBase64String($stream.ToArray())
           width = $width
           height = $height
+          revision = $captureRevision
+          request = $capturePreviewRequest
         }
-        if ($null -ne $geometry) {
+        $mirrorViewport = if ($null -ne $geometry) { [string]$geometry.viewport } else { '' }
+        if ($mirrorViewport -in @('normal', 'wide')) {
           $rect = $null
           if ($null -ne $geometry.main) {
             $rect = [ordered]@{
@@ -1648,6 +4075,7 @@ function Update-AuraUiMirror {
           $payload['geometry'] = [ordered]@{
             context = [string]$geometry.context
             mode = [string]$geometry.mode
+            viewport = $mirrorViewport
             main = $rect
             prompt = $promptRect
           }
@@ -1664,14 +4092,28 @@ function Update-AuraUiMirror {
   if ($null -ne $script:MirrorProbeTask) {
     if (-not $script:MirrorProbeTask.IsCompleted) { return }
     $task = $script:MirrorProbeTask
+    $probeGeneration = $script:MirrorProbeGeneration
     $script:MirrorProbeTask = $null
+    $script:MirrorProbeGeneration = [long]-1
     $script:MirrorGeometry = $null
     try {
       $raw = $task.GetAwaiter().GetResult()
+      if ($probeGeneration -ne $script:MirrorGeneration) { return }
       if ($raw -and $raw -cne 'null') { $script:MirrorGeometry = $raw | ConvertFrom-Json }
     } catch {
       Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
     }
+    $semanticContext = if ($null -ne $script:MirrorGeometry) { [string]$script:MirrorGeometry.context } else { 'other' }
+    $semanticUnsettled = $semanticContext -notin @('new-chat', 'conversation') -or
+      ($script:MirrorSemanticPreviousContext -and
+       [string]::Equals($semanticContext, [string]$script:MirrorSemanticPreviousContext, [StringComparison]::Ordinal))
+    if ($semanticUnsettled -and $script:MirrorSemanticRetries -gt 0) {
+      $script:MirrorSemanticRetries--
+      $script:MirrorDue = [DateTime]::UtcNow.AddMilliseconds(250)
+      return
+    }
+    $script:MirrorSemanticRetries = 0
+    $script:MirrorSemanticPreviousContext = $null
     Start-AuraUiMirrorCapture
     return
   }
@@ -1682,10 +4124,12 @@ function Update-AuraUiMirror {
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) { return }
   # The renderer marks the live layout; read it so the Studio stage aligns
   # its overlays with the real sidebar, prompt block, context, and mode.
-  $probe = '(() => { try { const root = document.documentElement; const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }; return { context: root.dataset.claudeAuraContext || "other", mode: root.dataset.claudeAuraEffectiveMode || "light", innerWidth: window.innerWidth, innerHeight: window.innerHeight, main: rect(document.querySelector("[data-claude-aura-main-canvas]")), prompt: rect(document.querySelector("[data-claude-aura-prompt]")) }; } catch { return null; } })()'
+  $probe = '(() => { try { const root = document.documentElement; const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }; const viewport = root.dataset.claudeAuraViewport; return { context: root.dataset.claudeAuraContext || "other", mode: root.dataset.claudeAuraEffectiveMode || "light", viewport: viewport === "normal" || viewport === "wide" ? viewport : null, innerWidth: window.innerWidth, innerHeight: window.innerHeight, main: rect(document.querySelector("[data-claude-aura-main-canvas]")), prompt: rect(document.querySelector("[data-claude-aura-prompt]")) }; } catch { return null; } })()'
   try {
+    $script:MirrorProbeGeneration = [long]$script:MirrorGeneration
     $script:MirrorProbeTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($probe)
   } catch {
+    $script:MirrorProbeGeneration = [long]-1
     Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
     Start-AuraUiMirrorCapture
   }
@@ -2053,8 +4497,11 @@ function Invoke-AuraUiSetCardPreviewCrop {
 
 function Invoke-AuraUiSetEnabled {
   param([Parameter(Mandatory = $true)][bool]$Enabled)
-  Set-AuraUiConfig -Options @('--enabled', $Enabled.ToString().ToLowerInvariant())
-  Set-AuraUiPreferredColorScheme -Enabled $Enabled
+  $options = @('--enabled', $Enabled.ToString().ToLowerInvariant())
+  if (-not $Enabled) { $options += @('--appearance', 'system') }
+  Set-AuraUiConfig -Options $options
+  $appearance = if ($Enabled) { Get-AuraUiAppearance } else { 'system' }
+  Set-AuraUiPreferredColorScheme -Appearance $appearance -Enabled $Enabled
   if ($Enabled) {
     Apply-AuraUiTheme
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
@@ -2070,9 +4517,123 @@ function Invoke-AuraUiSetEnabled {
 function Invoke-AuraUiSetAppearance {
   param([Parameter(Mandatory = $true)][string]$Appearance)
   if ($Appearance -cnotin @('system', 'light', 'dark')) { throw 'Studio appearance must be system, light, or dark.' }
-  Set-AuraUiConfig -Options @('--appearance', $Appearance)
-  Set-AuraUiPreferredColorScheme -Appearance $Appearance
-  if (Get-AuraUiEnabled) { Apply-AuraUiTheme }
+  $enabled = Get-AuraUiEnabled
+  $effectiveAppearance = if ($enabled) { $Appearance } else { 'system' }
+  Set-AuraUiConfig -Options @('--appearance', $effectiveAppearance)
+  Set-AuraUiPreferredColorScheme -Appearance $effectiveAppearance -Enabled $enabled
+  if ($enabled) { Apply-AuraUiTheme }
+  Send-AuraUiStudioState
+}
+
+function Update-AuraUiLocalizedChrome {
+  try {
+    if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed) {
+      $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
+    }
+    if ($null -ne $script:TrayOpenStudioItem -and -not $script:TrayOpenStudioItem.IsDisposed) {
+      $script:TrayOpenStudioItem.Text = "$($script:UiCopy.openStudio)"
+    }
+    if ($null -ne $script:TrayOpenDesktopItem -and -not $script:TrayOpenDesktopItem.IsDisposed) {
+      $script:TrayOpenDesktopItem.Text = "$($script:UiCopy.openDesktopApp)"
+    }
+    if ($null -ne $script:TrayExitItem -and -not $script:TrayExitItem.IsDisposed) {
+      $script:TrayExitItem.Text = "$($script:UiCopy.exitApp)"
+    }
+    if ($null -ne $script:LauncherStudioItem -and -not $script:LauncherStudioItem.IsDisposed) {
+      $script:LauncherStudioItem.Text = "$($script:UiCopy.openStudio)"
+    }
+    if ($null -ne $script:LauncherDesktopItem -and -not $script:LauncherDesktopItem.IsDisposed) {
+      $script:LauncherDesktopItem.Text = "$($script:UiCopy.openDesktopApp)"
+    }
+    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
+      $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
+    }
+    if ($null -ne $script:RetryButton -and -not $script:RetryButton.IsDisposed) {
+      $script:RetryButton.Text = "$($script:UiCopy.retry)"
+      $script:RetryButton.AccessibleName = "$($script:UiCopy.retry)"
+    }
+    if ($null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed -and
+        $script:LoadingPanel.Visible -and $null -ne $script:LoadingLabel -and
+        -not $script:LoadingLabel.IsDisposed) {
+      $script:LoadingLabel.Text = if ($script:RetryButton.Visible) {
+        "$($script:UiCopy.loadFailed)"
+      } else {
+        "$($script:UiCopy.loadingClaude)"
+      }
+    }
+    Hide-AuraUiLauncherTip
+    if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) {
+      $script:LauncherHint.Close()
+    }
+    Update-AuraUiTrayAppearance
+    $script:JumpListRegistered = $false
+    $script:JumpListRegistrationDue = [DateTime]::UtcNow
+  } catch {
+    Write-AuraUiLog -Message "Localized Aura chrome could not be fully refreshed: $($_.Exception.Message)"
+  }
+}
+
+function Invoke-AuraUiSetLocale {
+  param([Parameter(Mandatory = $true)][string]$Locale)
+  if ($Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
+    throw 'Studio locale must be en, zh-CN, or zh-TW.'
+  }
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true) {
+    throw 'Finish or discard the current Aura Studio edit before changing language.'
+  }
+  if ($null -ne $script:StudioPreferences -and
+      $script:StudioPreferences.locale -ceq $Locale -and $script:Locale -ceq $Locale) {
+    Send-AuraUiStudioState
+    return
+  }
+
+  $previousPreferences = $script:StudioPreferences
+  $previousLocale = $script:Locale
+  try {
+    $introductionVersion = if ($null -ne $previousPreferences) {
+      [int]$previousPreferences.introductionVersion
+    } else { 0 }
+    $script:StudioPreferences = Write-AuraUiStudioPreferences `
+      -Locale $Locale -IntroductionVersion $introductionVersion
+    $script:Locale = $Locale
+    $script:UiCopy = Get-AuraUiCopy -Locale $script:Locale
+    Update-AuraUiLocalizedChrome
+    [void](Update-AuraUiThemes)
+    Set-AuraUiConfig -Options @()
+    if ($null -ne $script:StudioWebView -and $null -ne $script:StudioWebView.CoreWebView2) {
+      $script:StudioReady = $false
+      $script:StudioWebView.CoreWebView2.Navigate((Get-AuraUiStudioUrl -PreserveFragment))
+    }
+  } catch {
+    $failure = $_
+    $script:Locale = $previousLocale
+    $script:UiCopy = Get-AuraUiCopy -Locale $script:Locale
+    if ($null -ne $previousPreferences) {
+      try {
+        $script:StudioPreferences = Write-AuraUiStudioPreferences `
+          -Locale ([string]$previousPreferences.locale) `
+          -IntroductionVersion ([int]$previousPreferences.introductionVersion)
+      } catch {
+        Write-AuraUiLog -Message "Studio locale rollback could not restore preferences: $($_.Exception.Message)"
+        $script:StudioPreferences = $previousPreferences
+      }
+    }
+    Update-AuraUiLocalizedChrome
+    try {
+      [void](Update-AuraUiThemes)
+      Set-AuraUiConfig -Options @()
+    } catch {
+      Write-AuraUiLog -Message "Studio locale rollback could not refresh runtime state: $($_.Exception.Message)"
+    }
+    throw $failure
+  }
+}
+
+function Invoke-AuraUiCompleteStudioIntroduction {
+  $locale = if ($script:Locale -cin @('en', 'zh-CN', 'zh-TW')) { $script:Locale } else { 'en' }
+  $script:StudioPreferences = Write-AuraUiStudioPreferences `
+    -Locale $locale -IntroductionVersion $StudioIntroductionVersion
+  $script:StudioIntroductionRequested = $false
   Send-AuraUiStudioState
 }
 
@@ -2155,6 +4716,14 @@ function Assert-AuraUiStudioEditorMessage {
           }
           break
         }
+        { $_ -cin @('launcherSurface', 'launcherSurfaceHover', 'launcherForeground', 'launcherAccent', 'launcherBorder') } {
+          if ($Message.value -isnot [string] -or $Message.value -cnotmatch '^#[0-9A-Fa-f]{6}$') {
+            throw 'Aura Studio launcher colors require a six-digit hex color.'
+          }
+          break
+        }
+        'launcherRadius' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 8 -Maximum 24 -Label 'Launcher radius'); break }
+        'launcherBorderWidth' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 1 -Maximum 3 -Label 'Launcher border width'); break }
         'promptWidth' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.4 -Maximum 0.96 -Label 'Prompt width'); break }
         'promptX' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -0.35 -Maximum 0.35 -Label 'Prompt horizontal position'); break }
         'promptY' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -0.3 -Maximum 0.3 -Label 'Prompt vertical position'); break }
@@ -2217,14 +4786,76 @@ function Assert-AuraUiStudioEditorMessage {
       }
       break
     }
+    'apply-theme-patch' {
+      if ($Message.changes -isnot [System.Array]) {
+        throw 'Aura Studio theme patches must supply a changes array.'
+      }
+      $changes = @($Message.changes)
+      if ($changes.Count -lt 1 -or $changes.Count -gt 16) {
+        throw 'Aura Studio theme patches must contain between 1 and 16 changes.'
+      }
+      foreach ($change in $changes) {
+        if ($change -isnot [System.Management.Automation.PSCustomObject] -or
+            $change.kind -isnot [string]) {
+          throw 'Aura Studio theme patch changes must be objects with a kind.'
+        }
+        switch -CaseSensitive ([string]$change.kind) {
+          'token' {
+            if (-not (Test-AuraUiStudioExactProperties -Message $change -Names @('kind', 'mode', 'token', 'value'))) {
+              throw 'Aura Studio token patches have an invalid shape.'
+            }
+            $tokenMessage = [PSCustomObject][ordered]@{
+              type = 'set-theme-token'; session = $Message.session; revision = $Message.revision
+              mode = $change.mode; token = $change.token; value = $change.value
+            }
+            Assert-AuraUiStudioEditorMessage -Message $tokenMessage
+            break
+          }
+          'layer' {
+            if (-not (Test-AuraUiStudioExactProperties -Message $change -Names @('kind', 'index', 'preset', 'property', 'value'))) {
+              throw 'Aura Studio layer patches have an invalid shape.'
+            }
+            $layerMessage = [PSCustomObject][ordered]@{
+              type = 'set-theme-layer'; session = $Message.session; revision = $Message.revision
+              index = $change.index; preset = $change.preset; property = $change.property; value = $change.value
+            }
+            Assert-AuraUiStudioEditorMessage -Message $layerMessage
+            break
+          }
+          'metadata' {
+            if (-not (Test-AuraUiStudioExactProperties -Message $change -Names @('kind', 'field', 'locale', 'value')) -or
+                $change.field -isnot [string] -or $change.field -cnotin @('label', 'description') -or
+                $change.locale -isnot [string] -or $change.locale -cnotin @('en', 'zh-CN', 'zh-TW') -or
+                $change.value -isnot [string]) {
+              throw 'Aura Studio metadata patches are invalid.'
+            }
+            $maximum = if ($change.field -ceq 'label') { 80 } else { 220 }
+            if (-not $change.value.Trim() -or $change.value.Length -gt $maximum -or
+                $change.value -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') {
+              throw 'Aura Studio metadata text is invalid.'
+            }
+            break
+          }
+          default { throw 'Aura Studio theme patch kind is not allowed.' }
+        }
+      }
+      break
+    }
     'pick-theme-layer-image' {
       [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum -1 -Maximum 7 -Label 'Theme layer index')
       if ($Message.role -isnot [string] -or
           $Message.role -cnotin @('background', 'hero', 'corner', 'decoration')) {
         throw 'Aura Studio image layer role is invalid.'
       }
+      if ($Message.appearance -isnot [string] -or $Message.appearance -cnotin @('all', 'light', 'dark')) {
+        throw 'Aura Studio image layer appearance is invalid.'
+      }
+      if ($Message.context -isnot [string] -or $Message.context -cnotin @('all', 'new-chat', 'conversation')) {
+        throw 'Aura Studio image layer context is invalid.'
+      }
       break
     }
+    'pick-theme-launcher-mark' { break }
     'remove-theme-layer' {
       [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
       break
@@ -2244,7 +4875,7 @@ function Get-AuraUiStudioMessage {
     [Parameter(Mandatory = $true)][string]$Json,
     [Parameter(Mandatory = $true)][string]$Source
   )
-  if ($Json.Length -gt 4096) { throw 'Studio message is too large.' }
+  if ($Json.Length -gt 16384) { throw 'Studio message is too large.' }
   try { $sourceUri = [Uri]$Source } catch { throw 'Studio message source is invalid.' }
   if ($sourceUri.Scheme -cne 'https' -or $sourceUri.Host -cne 'aura.studio') {
     throw 'Studio message source is not allowed.'
@@ -2258,6 +4889,7 @@ function Get-AuraUiStudioMessage {
   $expectedProperties = @(switch -CaseSensitive ($type) {
     'set-theme' { 'type'; 'theme'; break }
     'set-appearance' { 'type'; 'appearance'; break }
+    'set-locale' { 'type'; 'locale'; break }
     'set-enabled' { 'type'; 'enabled'; break }
     'set-image-framing' { 'type'; 'x'; 'y'; 'zoom'; break }
     'set-card-preview-crop' { 'type'; 'theme'; 'x'; 'y'; 'zoom'; break }
@@ -2265,7 +4897,9 @@ function Get-AuraUiStudioMessage {
     'begin-theme-edit' { 'type'; 'theme'; 'reset'; break }
     'set-theme-token' { 'type'; 'session'; 'revision'; 'mode'; 'token'; 'value'; break }
     'set-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'preset'; 'property'; 'value'; break }
-    'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; break }
+    'apply-theme-patch' { 'type'; 'session'; 'revision'; 'changes'; break }
+    'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; 'appearance'; 'context'; break }
+    'pick-theme-launcher-mark' { 'type'; 'session'; 'revision'; break }
     'remove-theme-layer' { 'type'; 'session'; 'revision'; 'index'; break }
     'move-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'direction'; break }
     'undo-theme-edit' { 'type'; 'session'; 'revision'; break }
@@ -2273,7 +4907,7 @@ function Get-AuraUiStudioMessage {
     'save-theme-edit' { 'type'; 'session'; 'revision'; break }
     'discard-theme-edit' { 'type'; 'session'; 'revision'; break }
     'delete-user-theme' { 'type'; 'theme'; break }
-    'set-aura-preview' { 'type'; 'size'; break }
+    'set-aura-preview' { 'type'; 'size'; 'request'; break }
     'set-aura-topmost' { 'type'; 'enabled'; break }
     default { 'type'; break }
   })
@@ -2283,10 +4917,14 @@ function Get-AuraUiStudioMessage {
     if ($propertyNames -cnotcontains $name) { throw 'Studio message is missing a required property.' }
   }
   if ($type -in @(
-      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
-      'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
+      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
       'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme')) {
     Assert-AuraUiStudioEditorMessage -Message $message
+  }
+  if ($type -ceq 'set-locale' -and
+      ($message.locale -isnot [string] -or $message.locale -cnotin @('en', 'zh-CN', 'zh-TW'))) {
+    throw 'Studio locale is invalid.'
   }
   return $message
 }
@@ -2315,6 +4953,14 @@ function Invoke-AuraUiStudioMessage {
       Invoke-AuraUiSetAppearance -Appearance ([string]$message.appearance)
       break
     }
+    'set-locale' {
+      Invoke-AuraUiSetLocale -Locale ([string]$message.locale)
+      break
+    }
+    'complete-studio-introduction' {
+      Invoke-AuraUiCompleteStudioIntroduction
+      break
+    }
     'set-image' { [void](Invoke-AuraUiChooseBackground -Owner $script:StudioForm); break }
     'clear-image' { Invoke-AuraUiClearBackground; break }
     'set-image-framing' {
@@ -2334,7 +4980,8 @@ function Invoke-AuraUiStudioMessage {
     'open-aura' { Show-AuraUiMain; break }
     'set-aura-preview' {
       if ($message.size -isnot [string]) { throw 'Aura preview size must be a string.' }
-      Set-AuraUiPreviewSize -Size ([string]$message.size)
+      $previewRequest = ConvertTo-AuraUiStudioInteger -Value $message.request -Minimum 1 -Maximum 2147483647 -Label 'Aura preview request'
+      Set-AuraUiPreviewSize -Size ([string]$message.size) -Request $previewRequest
       break
     }
     'set-aura-topmost' {
@@ -2355,8 +5002,13 @@ function Invoke-AuraUiStudioMessage {
     'begin-theme-edit' { [void](Invoke-AuraUiBeginThemeEdit -Request $message); break }
     'set-theme-token' { [void](Invoke-AuraUiSetThemeToken -Request $message); break }
     'set-theme-layer' { [void](Invoke-AuraUiSetThemeLayer -Request $message); break }
+    'apply-theme-patch' { [void](Invoke-AuraUiApplyThemePatch -Request $message); break }
     'pick-theme-layer-image' {
       [void](Invoke-AuraUiPickThemeLayerImage -Request $message -Owner $script:StudioForm)
+      break
+    }
+    'pick-theme-launcher-mark' {
+      [void](Invoke-AuraUiPickThemeLauncherMark -Request $message -Owner $script:StudioForm)
       break
     }
     'remove-theme-layer' { [void](Invoke-AuraUiRemoveThemeLayer -Request $message); break }
@@ -2382,13 +5034,18 @@ $script:EnsureTask = $null
 $script:ScriptTask = $null
 $script:ScriptAction = $null
 $script:ScriptCovered = $false
+$script:ActiveNavigationId = $null
+$script:ReadyNavigationId = $null
 $script:Themes = @()
 $script:UiCopy = $null
 $script:Locale = 'en'
+$script:StudioPreferences = $null
 $script:StudioMessageTypes = @(
   'get-state',
   'set-theme',
   'set-appearance',
+  'set-locale',
+  'complete-studio-introduction',
   'set-image',
   'clear-image',
   'set-image-framing',
@@ -2401,7 +5058,9 @@ $script:StudioMessageTypes = @(
   'begin-theme-edit',
   'set-theme-token',
   'set-theme-layer',
+  'apply-theme-patch',
   'pick-theme-layer-image',
+  'pick-theme-launcher-mark',
   'remove-theme-layer',
   'move-theme-layer',
   'undo-theme-edit',
@@ -2414,19 +5073,31 @@ $script:StudioMessageTypes = @(
   'refresh-aura-mirror'
 )
 $script:StudioEditorState = [ordered]@{ active = $false }
+$script:StudioEditorTrackedSession = $null
+$script:StudioEditorEntryAppearance = $null
 $script:StudioForm = $null
 $script:StudioWebView = $null
 $script:StudioEnsureTask = $null
 $script:StudioReady = $false
 $script:StudioInitializationFailed = $false
+$script:StudioIntroductionRequested = $false
 $script:StudioBackgroundFingerprint = $null
 $script:StudioBackgroundPreviewUrl = $null
 $script:StudioBackgroundPreviewPath = $null
 $script:MirrorCaptureTask = $null
 $script:MirrorStream = $null
+$script:MirrorCaptureSession = $null
+$script:MirrorCaptureRevision = [long]-1
+$script:MirrorCapturePreviewRequest = -1
+$script:MirrorCaptureGeneration = [long]-1
 $script:MirrorDue = $null
 $script:MirrorProbeTask = $null
+$script:MirrorProbeGeneration = [long]-1
 $script:MirrorGeometry = $null
+$script:MirrorGeneration = [long]0
+$script:MirrorPreviewRequest = 0
+$script:MirrorSemanticRetries = 0
+$script:MirrorSemanticPreviousContext = $null
 $script:WebViewEnvironment = $null
 $script:TrayIcon = $null
 $script:TrayMenu = $null
@@ -2437,34 +5108,63 @@ $script:TrayExitItem = $null
 $script:MainIcon = $null
 $script:StudioIcon = $null
 $script:NotificationIcon = $null
+$script:MainWindowIconPair = $null
+$script:StudioWindowIconPair = $null
+$script:MainIconWindow = $null
+$script:StudioIconWindow = $null
 $script:ThemeIdentityAssetPath = $null
+$script:ThemeIdentityDigest = $null
+$script:ThemeIdentityLock = $null
+$script:IdentityRollbackIncomplete = $false
+$script:DeferredIdentityCandidates = [Collections.Generic.List[object]]::new()
+$script:ShellIdentityIconPath = $null
+$script:JumpListIdentityPath = $null
+$script:EffectiveLauncherIdentity = $null
 $script:StudioOpenSignal = $null
 $script:Launcher = $null
 $script:LauncherButton = $null
+$script:LauncherDpiWindow = $null
+$script:LauncherDpi = 96
 $script:LauncherMenu = $null
+$script:LauncherStudioItem = $null
 $script:LauncherAppearanceItem = $null
+$script:LauncherDesktopItem = $null
 $script:LauncherStyle = $null
 $script:LauncherMark = $null
 $script:LauncherDragging = $false
 $script:LauncherDragged = $false
-$script:LauncherDragArmed = $false
-$script:LauncherClickArmed = $false
 $script:LauncherDragStart = $null
 $script:LauncherDragOrigin = $null
 $script:LauncherHover = $false
-$script:LauncherExpanded = $false
-$script:LauncherExpandsLeft = $true
+$script:LauncherPressed = $false
 $script:LauncherCompactSize = 48
-$script:LauncherExpandedWidth = 176
+$script:LauncherHaloSize = 10
 $script:LauncherSafeGap = 16
 $script:LauncherRightGap = 16
 $script:LauncherBottomGap = 16
+$script:LauncherLayeredActive = $true
+$script:LauncherAnimTimer = $null
+$script:LauncherAnimValue = 0.0
+$script:LauncherTip = $null
+$script:LauncherTipTimer = $null
+$script:LauncherTipBitmap = $null
+$script:LauncherTipVisible = $false
+$script:LauncherTipAlpha = 0
+$script:LauncherTipDisabled = $false
+$script:LauncherHint = $null
+$script:LauncherHintShown = $false
 $script:JumpListRegistered = $false
+$script:JumpListRegistrationDue = [DateTime]::MinValue
 $script:Closing = $false
 $mutex = $null
 $ownsMutex = $false
+$startupOperationLock = $null
 
 try {
+  # Serialize the entire pre-mutex startup window with install/uninstall. Once
+  # the UI mutex exists, installers can detect this host without racing a
+  # launcher that is still loading files from the app tree.
+  $startupOperationLock = Enter-AuraOperationLock
   if ([Threading.Thread]::CurrentThread.ApartmentState -ne [Threading.ApartmentState]::STA) {
     throw 'Claude Aura must run in a standard Windows desktop session.'
   }
@@ -2472,10 +5172,9 @@ try {
   [void](Assert-AuraUiStudioEditorRoots -Create)
   New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot, $StudioBackgroundRoot | Out-Null
   $script:Node = Get-AuraNodeRuntime
-  $locale = [Globalization.CultureInfo]::CurrentUICulture.Name
-  if (-not $locale) { $locale = 'en' }
-  $script:Locale = $locale
-  $script:UiCopy = Get-AuraUiCopy -Locale $locale
+  $script:StudioPreferences = Get-AuraUiStudioPreferences
+  $script:Locale = [string]$script:StudioPreferences.locale
+  $script:UiCopy = Get-AuraUiCopy -Locale $script:Locale
   $script:ActiveLabel = "$($script:UiCopy.theme)"
 
   $initialOptions = @()
@@ -2489,7 +5188,7 @@ try {
   if ($ClearImage) {
     $initialOptions += @('--clear-image', '--image-position', 'center', '--image-zoom', '1')
   }
-  if ($Mode -eq 'Restore') { $initialOptions += @('--enabled', 'false') }
+  if ($Mode -eq 'Restore') { $initialOptions += @('--enabled', 'false', '--appearance', 'system') }
   elseif ($Theme -or $Image -or $ClearImage) { $initialOptions += @('--enabled', 'true') }
   if ($initialOptions.Count -gt 0) { Set-AuraUiConfig -Options $initialOptions }
   else {
@@ -2520,18 +5219,125 @@ try {
   [void][Reflection.Assembly]::LoadFrom($formsDll)
 
   if (-not ('AuraWindow' -as [type])) {
-    Add-Type @'
+    Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing @'
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 public static class AuraWindow {
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindow(string className, string windowName);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr handle, int command);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr handle);
+  [DllImport("user32.dll", SetLastError = true)] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+  [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
+  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr handle);
+  [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
+  [DllImport("user32.dll")] public static extern int GetSystemMetricsForDpi(int index, uint dpi);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  public static extern IntPtr LoadImageW(IntPtr instance, string name, uint type, int width, int height, uint flags);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+  public static extern IntPtr SendMessage(IntPtr handle, uint message, IntPtr wParam, IntPtr lParam);
   [DllImport("shell32.dll")] public static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appID);
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern void SHChangeNotify(uint eventId, uint flags, string item1, string item2);
+}
+public sealed class AuraDpiChangedEventArgs : EventArgs {
+  public AuraDpiChangedEventArgs(int dpi) { Dpi = dpi; }
+  public int Dpi { get; private set; }
+}
+public sealed class AuraIconWindow : NativeWindow, IDisposable {
+  public event EventHandler<AuraDpiChangedEventArgs> DpiChanged;
+  public void Attach(IntPtr handle) {
+    if (Handle == handle) return;
+    if (Handle != IntPtr.Zero) ReleaseHandle();
+    AssignHandle(handle);
+  }
+  public void Detach() {
+    if (Handle != IntPtr.Zero) ReleaseHandle();
+  }
+  protected override void WndProc(ref Message message) {
+    base.WndProc(ref message);
+    if (message.Msg == 0x02E0) {
+      int dpi = unchecked((int)((long)message.WParam & 0xFFFF));
+      EventHandler<AuraDpiChangedEventArgs> handler = DpiChanged;
+      if (handler != null && dpi > 0) handler(this, new AuraDpiChangedEventArgs(dpi));
+    }
+  }
+  public void Dispose() { Detach(); }
+}
+public static class AuraLayered {
+  // Per-pixel alpha presentation for the floating launcher and its hover tip.
+  // UpdateLayeredWindow composites a premultiplied 32-bit bitmap, so the circular
+  // edge antialiases against whatever is behind it and fully transparent pixels
+  // are click-through — neither is possible with a 1-bit window region.
+  [StructLayout(LayoutKind.Sequential)] public struct AuraNativePoint { public int X; public int Y; }
+  [StructLayout(LayoutKind.Sequential)] public struct AuraNativeSize { public int Width; public int Height; }
+  [StructLayout(LayoutKind.Sequential, Pack = 1)] public struct AuraBlendFunction {
+    public byte BlendOp; public byte BlendFlags; public byte SourceConstantAlpha; public byte AlphaFormat;
+  }
+  [DllImport("user32.dll", SetLastError = true)] static extern int GetWindowLong(IntPtr handle, int index);
+  [DllImport("user32.dll", SetLastError = true)] static extern int SetWindowLong(IntPtr handle, int index, int value);
+  [DllImport("user32.dll", SetLastError = true)] static extern bool UpdateLayeredWindow(IntPtr handle, IntPtr screenDc, IntPtr windowPosition, ref AuraNativeSize size, IntPtr sourceDc, ref AuraNativePoint sourceOrigin, int colorKey, ref AuraBlendFunction blend, int flags);
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr handle);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr handle, IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+  [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr handle);
+  [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr handle);
+  public static void ClearLayeredStyle(IntPtr handle) {
+    // Required before falling back to SetLayeredWindowAttributes-based opacity:
+    // Windows forbids mixing the two layering modes on one WS_EX_LAYERED window.
+    int style = GetWindowLong(handle, -20);
+    if ((style & 0x80000) != 0) SetWindowLong(handle, -20, style & ~0x80000);
+  }
+  public static void SetTipStyles(IntPtr handle) {
+    // Layered + tool window + no-activate + transparent: a purely decorative
+    // surface that never takes focus and never intercepts the mouse.
+    int style = GetWindowLong(handle, -20);
+    SetWindowLong(handle, -20, style | 0x80000 | 0x80 | 0x8000000 | 0x20);
+  }
+  public static bool Apply(IntPtr handle, System.Drawing.Bitmap bitmap, byte opacity) {
+    // WinForms rewrites the extended style from CreateParams on visibility and
+    // owner changes, so the layered bit must be re-asserted on every present.
+    int style = GetWindowLong(handle, -20);
+    if ((style & 0x80000) == 0) SetWindowLong(handle, -20, style | 0x80000);
+    IntPtr screenDc = GetDC(IntPtr.Zero);
+    if (screenDc == IntPtr.Zero) return false;
+    IntPtr memoryDc = IntPtr.Zero;
+    IntPtr gdiBitmap = IntPtr.Zero;
+    IntPtr previous = IntPtr.Zero;
+    try {
+      memoryDc = CreateCompatibleDC(screenDc);
+      if (memoryDc == IntPtr.Zero) return false;
+      gdiBitmap = bitmap.GetHbitmap(System.Drawing.Color.FromArgb(0));
+      previous = SelectObject(memoryDc, gdiBitmap);
+      AuraNativeSize size = new AuraNativeSize(); size.Width = bitmap.Width; size.Height = bitmap.Height;
+      AuraNativePoint origin = new AuraNativePoint();
+      AuraBlendFunction blend = new AuraBlendFunction();
+      blend.BlendOp = 0; blend.BlendFlags = 0; blend.SourceConstantAlpha = opacity; blend.AlphaFormat = 1;
+      return UpdateLayeredWindow(handle, screenDc, IntPtr.Zero, ref size, memoryDc, ref origin, 0, ref blend, 2);
+    } finally {
+      if (previous != IntPtr.Zero) SelectObject(memoryDc, previous);
+      if (gdiBitmap != IntPtr.Zero) DeleteObject(gdiBitmap);
+      if (memoryDc != IntPtr.Zero) DeleteDC(memoryDc);
+      ReleaseDC(IntPtr.Zero, screenDc);
+    }
+  }
 }
 '@
+  }
+  # Opt into per-monitor-v2 sizing before EnableVisualStyles or the first Aura
+  # HWND. The thread override keeps the STA UI correct even if a host-created
+  # hidden PowerShell window prevented the process-wide call.
+  try {
+    $perMonitorV2 = [IntPtr]::new(-4)
+    [void][AuraWindow]::SetProcessDpiAwarenessContext($perMonitorV2)
+    if ([AuraWindow]::SetThreadDpiAwarenessContext($perMonitorV2) -eq [IntPtr]::Zero) {
+      Write-AuraUiLog -Message 'Per-monitor-v2 thread DPI awareness was unavailable; Windows will use its safe fallback scaling.'
+    }
+  } catch {
+    Write-AuraUiLog -Message "Per-monitor-v2 DPI awareness was unavailable: $($_.Exception.Message)"
   }
   # Give the process a stable taskbar identity so it stops grouping under the
   # generic PowerShell host. This is also the prerequisite for attaching a
@@ -2547,6 +5353,8 @@ public static class AuraWindow {
   $createdNew = $false
   $mutex = [System.Threading.Mutex]::new($true, "Local\ClaudeAura.$sid.Ui", [ref]$createdNew)
   $ownsMutex = $createdNew
+  Exit-AuraOperationLock -Mutex $startupOperationLock
+  $startupOperationLock = $null
   if (-not $createdNew) {
     if ($OpenStudio) {
       [void]$script:StudioOpenSignal.Set()
@@ -2565,6 +5373,23 @@ public static class AuraWindow {
   [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
 
   $script:Form = [System.Windows.Forms.Form]::new()
+  $script:MainIconWindow = [AuraIconWindow]::new()
+  $script:MainIconWindow.add_DpiChanged({
+    param($sender, $eventArgs)
+    Update-AuraUiNativeIdentityForDpi -Target Main -Form $script:Form -Dpi ([int]$eventArgs.Dpi)
+  })
+  $script:Form.add_HandleCreated({
+    $script:MainIconWindow.Attach($script:Form.Handle)
+    $dpi = Get-AuraUiWindowDpi -Form $script:Form
+    if ($script:ThemeIdentityAssetPath -and
+        ($null -eq $script:MainWindowIconPair -or $script:MainWindowIconPair.Dpi -ne $dpi)) {
+      Update-AuraUiNativeIdentityForDpi -Target Main -Form $script:Form -Dpi $dpi
+    } elseif ($null -ne $script:MainWindowIconPair) {
+      Set-AuraUiNativeFormIcons -Form $script:Form `
+        -Small $script:MainWindowIconPair.Small -Large $script:MainWindowIconPair.Large
+    }
+  })
+  $script:Form.add_HandleDestroyed({ $script:MainIconWindow.Detach() })
   $script:Form.Text = 'Claude Aura'
   $script:Form.StartPosition = 'Manual'
   $script:Form.ClientSize = [Drawing.Size]::new(1180, 640)
@@ -2586,6 +5411,23 @@ public static class AuraWindow {
   })
 
   $script:StudioForm = [System.Windows.Forms.Form]::new()
+  $script:StudioIconWindow = [AuraIconWindow]::new()
+  $script:StudioIconWindow.add_DpiChanged({
+    param($sender, $eventArgs)
+    Update-AuraUiNativeIdentityForDpi -Target Studio -Form $script:StudioForm -Dpi ([int]$eventArgs.Dpi)
+  })
+  $script:StudioForm.add_HandleCreated({
+    $script:StudioIconWindow.Attach($script:StudioForm.Handle)
+    $dpi = Get-AuraUiWindowDpi -Form $script:StudioForm
+    if ($script:ThemeIdentityAssetPath -and
+        ($null -eq $script:StudioWindowIconPair -or $script:StudioWindowIconPair.Dpi -ne $dpi)) {
+      Update-AuraUiNativeIdentityForDpi -Target Studio -Form $script:StudioForm -Dpi $dpi
+    } elseif ($null -ne $script:StudioWindowIconPair) {
+      Set-AuraUiNativeFormIcons -Form $script:StudioForm `
+        -Small $script:StudioWindowIconPair.Small -Large $script:StudioWindowIconPair.Large
+    }
+  })
+  $script:StudioForm.add_HandleDestroyed({ $script:StudioIconWindow.Detach() })
   $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
   $script:StudioForm.StartPosition = 'Manual'
   $script:StudioForm.ClientSize = [Drawing.Size]::new(1080, 720)
@@ -2607,6 +5449,7 @@ public static class AuraWindow {
     param($sender, $eventArgs)
     if (-not $script:Closing -and $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
       $eventArgs.Cancel = $true
+      Restore-AuraUiStudioPreviewState
       $sender.Hide()
     }
   })
@@ -2648,7 +5491,7 @@ public static class AuraWindow {
   $script:TrayIcon.Icon = $script:NotificationIcon
   $script:TrayIcon.ContextMenuStrip = $script:TrayMenu
   $script:TrayIcon.add_DoubleClick({ Show-AuraUiStudio })
-  $script:TrayIcon.Visible = $true
+  $script:TrayIcon.Visible = $false
   Update-AuraUiTrayAppearance
 
   $script:LoadingPanel = [System.Windows.Forms.Panel]::new()
@@ -2700,16 +5543,23 @@ public static class AuraWindow {
   # inside the content. Being its own top-level window it renders above the
   # WebView without an in-content control's airspace limits, reserves no layout
   # space, never reflows or clips Claude, and keeps the main form content-only.
-  # Hover names Studio and exposes a dedicated drag grip; the body opens Studio,
-  # while right-click exposes appearance and Desktop actions. It never touches
-  # the claude.ai document.
+  # The permanently circular button opens Studio on a click and becomes a drag
+  # surface only after the DPI-scaled movement threshold; right-click exposes
+  # appearance and Desktop actions. It never touches the claude.ai document.
   $script:LauncherMenu = [System.Windows.Forms.ContextMenuStrip]::new()
-  $launcherStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
+  $script:LauncherStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
   $script:LauncherAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
-  $launcherDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
-  [void]$script:LauncherMenu.Items.AddRange(@($launcherStudioItem, $script:LauncherAppearanceItem, $launcherDesktopItem))
-  $script:LauncherMenu.add_Opening({ Update-AuraUiTrayAppearance })
-  $launcherStudioItem.add_Click({ Show-AuraUiStudio })
+  $script:LauncherDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
+  [void]$script:LauncherMenu.Items.AddRange(@(
+    $script:LauncherStudioItem,
+    $script:LauncherAppearanceItem,
+    $script:LauncherDesktopItem
+  ))
+  $script:LauncherMenu.add_Opening({
+    Hide-AuraUiLauncherTip
+    Update-AuraUiTrayAppearance
+  })
+  $script:LauncherStudioItem.add_Click({ Show-AuraUiStudio -OfferIntroduction })
   $script:LauncherAppearanceItem.add_Click({
     try {
       Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
@@ -2718,7 +5568,7 @@ public static class AuraWindow {
       Show-AuraUiMessage -Title "$($script:UiCopy.appearanceNotChangedTitle)" -Icon Warning -Message "$($script:UiCopy.appearanceNotChangedMessage)"
     }
   })
-  $launcherDesktopItem.add_Click({
+  $script:LauncherDesktopItem.add_Click({
     try {
       Invoke-AuraUiOpenDesktopApp
     } catch {
@@ -2728,17 +5578,37 @@ public static class AuraWindow {
   })
 
   $script:Launcher = [System.Windows.Forms.Form]::new()
+  $script:LauncherDpiWindow = [AuraIconWindow]::new()
+  $script:LauncherDpiWindow.add_DpiChanged({
+    param($sender, $eventArgs)
+    Update-AuraUiLauncherDpi -Dpi ([int]$eventArgs.Dpi)
+  })
+  $script:Launcher.add_HandleCreated({
+    $script:LauncherDpiWindow.Attach($script:Launcher.Handle)
+    $script:LauncherDpi = Get-AuraUiWindowDpi -Form $script:Launcher
+  })
+  $script:Launcher.add_HandleDestroyed({ $script:LauncherDpiWindow.Detach() })
   $script:Launcher.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
   $script:Launcher.ShowInTaskbar = $false
   $script:Launcher.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
   $script:Launcher.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
-  $script:Launcher.ClientSize = [Drawing.Size]::new($script:LauncherCompactSize, $script:LauncherCompactSize)
+  $script:LauncherDpi = Get-AuraUiWindowDpi -Form $script:Launcher
+  # Honor an explicit opt-out of layered rendering before any visual is built.
+  if ($null -ne $script:Config -and $null -ne $script:Config.PSObject.Properties['launcherClassic'] -and
+      [bool]$script:Config.launcherClassic) {
+    $script:LauncherLayeredActive = $false
+  }
+  # The window carries a transparent halo around the circle for the layered
+  # renderer's shadow and hover growth; only the inner circle takes input.
+  $launcherMetrics = Get-AuraUiLauncherMetrics
+  $script:Launcher.ClientSize = [Drawing.Size]::new($launcherMetrics.Client, $launcherMetrics.Client)
   $script:Launcher.BackColor = [Drawing.ColorTranslator]::FromHtml('#2F2937')
-  $script:Launcher.Opacity = 0.96
+  if (-not $script:LauncherLayeredActive) { $script:Launcher.Opacity = 0.96 }
   $script:Launcher.Text = 'Claude Aura'
 
   $script:LauncherButton = [System.Windows.Forms.Button]::new()
-  $script:LauncherButton.Dock = 'Fill'
+  $script:LauncherButton.Bounds = [Drawing.Rectangle]::new(
+    $launcherMetrics.Halo, $launcherMetrics.Halo, $launcherMetrics.Compact, $launcherMetrics.Compact)
   $script:LauncherButton.Text = ''
   $script:LauncherButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
   $script:LauncherButton.FlatAppearance.BorderSize = 0
@@ -2755,16 +5625,23 @@ public static class AuraWindow {
   $script:LauncherButton.add_Paint({
     param($sender, $eventArgs)
     $graphics = $eventArgs.Graphics
+    if ($sender.ClientSize.Width -le 0 -or $sender.ClientSize.Height -le 0) { return }
+    $graphicsState = $graphics.Save()
+    try {
+    $launcherScale = Get-AuraUiLauncherScale
+    $graphics.ScaleTransform([float]$launcherScale, [float]$launcherScale)
     $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $width = $sender.ClientSize.Width
-    $height = $sender.ClientSize.Height
-    if ($width -le 0 -or $height -le 0) { return }
+    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $width = [double]$sender.ClientSize.Width / $launcherScale
+    $height = [double]$sender.ClientSize.Height / $launcherScale
     $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
     $surface = if ($script:LauncherHover) { "$($style.surfaceHover)" } else { "$($style.surface)" }
     $fill = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml($surface))
     $borderWidth = [float]$style.borderWidth
     $bounds = [Drawing.RectangleF]::new($borderWidth / 2, $borderWidth / 2, $width - $borderWidth, $height - $borderWidth)
-    $shape = New-AuraUiRoundedRectanglePath -Bounds $bounds -Radius ([double]$style.radius)
+    # The launcher always paints as the collapsed circular button.
+    $cornerRadius = [double]$height / 2
+    $shape = New-AuraUiRoundedRectanglePath -Bounds $bounds -Radius $cornerRadius
     $graphics.FillPath($fill, $shape)
     $fill.Dispose()
     $rim = [Drawing.Pen]::new([Drawing.ColorTranslator]::FromHtml("$($style.border)"), $borderWidth)
@@ -2772,16 +5649,17 @@ public static class AuraWindow {
     $rim.Dispose()
     $shape.Dispose()
 
-    $iconX = if (-not $script:LauncherExpanded) {
-      [Math]::Floor(($width - 32) / 2)
-    } elseif ($script:LauncherExpandsLeft) {
-      $width - 40
-    } else { 8 }
+    $iconX = [Math]::Floor(($width - 32) / 2)
     if ($null -ne $script:LauncherMark) {
       $previousInterpolation = $graphics.InterpolationMode
       $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
       $graphics.DrawImage($script:LauncherMark, [Drawing.Rectangle]::new($iconX, 8, 32, 32))
       $graphics.InterpolationMode = $previousInterpolation
+      # Keep the bounded accent token visible even when the authored bitmap is
+      # present; otherwise this editor control would affect only the fallback.
+      $badge = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml("$($style.accent)"))
+      $graphics.FillEllipse($badge, [float]($iconX + 25), 33, 5, 5)
+      $badge.Dispose()
     } else {
       $markCenterX = $iconX + 16
       $markCenterY = 24
@@ -2800,105 +5678,156 @@ public static class AuraWindow {
       $core.Dispose()
     }
 
-    if ($script:LauncherExpanded) {
-      $gripLeft = if ($script:LauncherExpandsLeft) { 0 } else { $width - 38 }
-      $dividerX = if ($script:LauncherExpandsLeft) { 38 } else { $width - 39 }
-      $divider = [Drawing.Pen]::new([Drawing.Color]::FromArgb(70, [Drawing.ColorTranslator]::FromHtml("$($style.foreground)")), 1)
-      $graphics.DrawLine($divider, $dividerX, 11, $dividerX, $height - 11)
-      $divider.Dispose()
-      $textLeft = if ($script:LauncherExpandsLeft) { 46 } else { 48 }
-      $textRight = if ($script:LauncherExpandsLeft) { $width - 47 } else { $width - 46 }
-      $textRect = [Drawing.Rectangle]::new($textLeft, 0, [Math]::Max(1, $textRight - $textLeft), $height)
-      $font = [Drawing.Font]::new('Segoe UI Semibold', 9.5, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Point)
-      $flags = [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor
-        [System.Windows.Forms.TextFormatFlags]::SingleLine -bor
-        [System.Windows.Forms.TextFormatFlags]::EndEllipsis -bor
-        [System.Windows.Forms.TextFormatFlags]::NoPrefix
-      [System.Windows.Forms.TextRenderer]::DrawText($graphics, "$($script:UiCopy.openStudio)", $font, $textRect,
-        [Drawing.ColorTranslator]::FromHtml("$($style.foreground)"), $flags)
-      $font.Dispose()
-      $grip = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(155, [Drawing.ColorTranslator]::FromHtml("$($style.foreground)")))
-      $gripCenter = $gripLeft + 19
-      foreach ($offsetX in @(-3, 3)) {
-        foreach ($offsetY in @(-6, 0, 6)) {
-          $graphics.FillEllipse($grip, [float]($gripCenter + $offsetX - 1.2), [float](24 + $offsetY - 1.2), 2.4, 2.4)
-        }
-      }
-      $grip.Dispose()
+    } finally {
+      $graphics.Restore($graphicsState)
     }
   })
-  $script:LauncherButton.add_MouseDown({
+  # Pointer handling is shared between the button and its window so the halo
+  # ring behaves like part of the button and input keeps working even if a
+  # layered window ever routes a message past the invisible child control.
+  $launcherPointerInside = {
+    if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible) { return $false }
+    $cursor = [System.Windows.Forms.Cursor]::Position
+    $bounds = $script:Launcher.Bounds
+    $deltaX = $cursor.X - ($bounds.X + ($bounds.Width / 2.0))
+    $deltaY = $cursor.Y - ($bounds.Y + ($bounds.Height / 2.0))
+    $radius = $bounds.Width / 2.0
+    return ((($deltaX * $deltaX) + ($deltaY * $deltaY)) -le ($radius * $radius))
+  }
+  $launcherPointerDown = {
     param($sender, $eventArgs)
     if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
-      $script:LauncherDragArmed = Test-AuraUiLauncherGrip -Location $eventArgs.Location
-      $script:LauncherClickArmed = -not $script:LauncherDragArmed
-      $script:LauncherDragging = $script:LauncherDragArmed
+      # The whole collapsed button is the drag surface: a press arms a potential
+      # drag, and the DPI-scaled movement threshold below decides whether the
+      # gesture was a drag or the Studio click.
+      $script:LauncherDragging = $true
       $script:LauncherDragged = $false
-      if ($script:LauncherDragArmed) {
-        $script:LauncherDragStart = [System.Windows.Forms.Cursor]::Position
-        $script:LauncherDragOrigin = $script:Launcher.Location
-      }
+      $script:LauncherDragStart = [System.Windows.Forms.Cursor]::Position
+      $script:LauncherDragOrigin = $script:Launcher.Location
+      $script:LauncherPressed = $true
+      Hide-AuraUiLauncherTip
+      Update-AuraUiLauncherSurface
     }
-  })
-  $script:LauncherButton.add_MouseMove({
+  }
+  $launcherPointerMove = {
     param($sender, $eventArgs)
-    if (-not $script:LauncherDragging) {
-      $sender.Cursor = if (Test-AuraUiLauncherGrip -Location $eventArgs.Location) {
-        [System.Windows.Forms.Cursors]::SizeAll
-      } else { [System.Windows.Forms.Cursors]::Hand }
-      return
-    }
+    if (-not $script:LauncherDragging) { return }
     $now = [System.Windows.Forms.Cursor]::Position
     $deltaX = $now.X - $script:LauncherDragStart.X
     $deltaY = $now.Y - $script:LauncherDragStart.Y
-    if (-not $script:LauncherDragged -and ([Math]::Abs($deltaX) -gt 6 -or [Math]::Abs($deltaY) -gt 6)) {
+    $dragThreshold = ConvertTo-AuraUiLauncherPixels -Logical 6
+    if (-not $script:LauncherDragged -and
+        ([Math]::Abs($deltaX) -gt $dragThreshold -or [Math]::Abs($deltaY) -gt $dragThreshold)) {
       $script:LauncherDragged = $true
+      $sender.Cursor = [System.Windows.Forms.Cursors]::SizeAll
+      Hide-AuraUiLauncherTip
     }
     if ($script:LauncherDragged) {
       $target = [Drawing.Point]::new($script:LauncherDragOrigin.X + $deltaX, $script:LauncherDragOrigin.Y + $deltaY)
       $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location $target
     }
-  })
-  $script:LauncherButton.add_MouseUp({
+  }
+  $launcherPointerUp = {
     param($sender, $eventArgs)
     if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Right) {
       $script:LauncherDragging = $false
-      $script:LauncherDragArmed = $false
-      $script:LauncherClickArmed = $false
-      $script:LauncherMenu.Show($script:LauncherButton, $eventArgs.Location)
+      $script:LauncherDragged = $false
+      Hide-AuraUiLauncherTip
+      $script:LauncherMenu.Show([System.Windows.Forms.Cursor]::Position)
       return
     }
     if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
       $moved = $script:LauncherDragged
-      $wasDragArmed = $script:LauncherDragArmed
-      $wasClickArmed = $script:LauncherClickArmed
+      $wasClickArmed = $script:LauncherDragging -and -not $moved
       $script:LauncherDragging = $false
       $script:LauncherDragged = $false
-      $script:LauncherDragArmed = $false
-      $script:LauncherClickArmed = $false
-      if ($wasDragArmed) {
-        Set-AuraUiLauncherExpanded -Expanded $false
-      }
-      if ($moved -and $wasDragArmed) {
+      $script:LauncherPressed = $false
+      $sender.Cursor = [System.Windows.Forms.Cursors]::Hand
+      Update-AuraUiLauncherSurface
+      if ($moved) {
         Save-AuraUiLauncherPosition
       } elseif ($wasClickArmed) {
-        Show-AuraUiStudio
+        Show-AuraUiStudio -OfferIntroduction
       }
     }
-  })
-  $script:LauncherButton.add_MouseEnter({
+  }
+  $launcherPointerEnter = {
     $script:LauncherHover = $true
-    if ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Opacity = 1.0 }
-    Set-AuraUiLauncherExpanded -Expanded $true
-    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) { $script:LauncherButton.Invalidate() }
-  })
-  $script:LauncherButton.add_MouseLeave({
+    Start-AuraUiLauncherAnimation
+    if (-not $script:LauncherTipDisabled -and -not $script:LauncherTipVisible -and
+        -not $script:LauncherDragging -and $null -ne $script:LauncherTipTimer) {
+      $script:LauncherTipTimer.Stop()
+      $script:LauncherTipTimer.Start()
+    }
+  }
+  $launcherPointerLeave = {
+    # Moving between the button and its halo raises a leave event without the
+    # pointer actually leaving the launcher; keep the hover state in that case.
+    if (& $launcherPointerInside) { return }
     $script:LauncherHover = $false
-    if ($null -ne $script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Opacity = 0.96 }
-    if (-not $script:LauncherDragging) { Set-AuraUiLauncherExpanded -Expanded $false }
-    if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) { $script:LauncherButton.Invalidate() }
-  })
+    $script:LauncherPressed = $false
+    Hide-AuraUiLauncherTip
+    Start-AuraUiLauncherAnimation
+  }
+  $script:LauncherButton.add_MouseDown($launcherPointerDown)
+  $script:LauncherButton.add_MouseMove($launcherPointerMove)
+  $script:LauncherButton.add_MouseUp($launcherPointerUp)
+  $script:LauncherButton.add_MouseEnter($launcherPointerEnter)
+  $script:LauncherButton.add_MouseLeave($launcherPointerLeave)
+  $script:Launcher.add_MouseDown($launcherPointerDown)
+  $script:Launcher.add_MouseMove($launcherPointerMove)
+  $script:Launcher.add_MouseUp($launcherPointerUp)
+  $script:Launcher.add_MouseEnter($launcherPointerEnter)
+  $script:Launcher.add_MouseLeave($launcherPointerLeave)
   $script:Launcher.Controls.Add($script:LauncherButton)
+
+  # Hover microinteraction: one eased layered frame per tick, shared with the
+  # tip's fade-in. The timer runs only while something is animating.
+  $script:LauncherAnimTimer = [System.Windows.Forms.Timer]::new()
+  $script:LauncherAnimTimer.Interval = 15
+  $script:LauncherAnimTimer.add_Tick({
+    if ($script:Closing -or -not $script:LauncherLayeredActive) {
+      $script:LauncherAnimTimer.Stop()
+      return
+    }
+    $target = if ($script:LauncherHover) { 1.0 } else { 0.0 }
+    $step = if ($target -gt $script:LauncherAnimValue) { 0.18 } else { 0.11 }
+    $script:LauncherAnimValue = if ($target -gt $script:LauncherAnimValue) {
+      [Math]::Min($target, $script:LauncherAnimValue + $step)
+    } else {
+      [Math]::Max($target, $script:LauncherAnimValue - $step)
+    }
+    Update-AuraUiLauncherSurface
+    $tipSettled = $true
+    if ($script:LauncherTipVisible -and $null -ne $script:LauncherTipBitmap -and
+        $null -ne $script:LauncherTip -and -not $script:LauncherTip.IsDisposed -and
+        $script:LauncherTipAlpha -lt 255) {
+      $script:LauncherTipAlpha = [Math]::Min(255, $script:LauncherTipAlpha + 34)
+      try {
+        [void][AuraLayered]::Apply($script:LauncherTip.Handle, $script:LauncherTipBitmap, [byte]$script:LauncherTipAlpha)
+      } catch { $script:LauncherTipAlpha = 255 }
+      $tipSettled = $script:LauncherTipAlpha -ge 255
+    }
+    if ($tipSettled -and [Math]::Abs($script:LauncherAnimValue - $target) -lt 0.0001) {
+      $script:LauncherAnimTimer.Stop()
+    }
+  })
+  # A short hover dwell before the "Aura Studio" caption appears.
+  $script:LauncherTipTimer = [System.Windows.Forms.Timer]::new()
+  $script:LauncherTipTimer.Interval = 450
+  $script:LauncherTipTimer.add_Tick({
+    $script:LauncherTipTimer.Stop()
+    if ($script:LauncherHover -and -not $script:LauncherDragging) { Show-AuraUiLauncherTip }
+  })
+  # Resolve and commit the complete launcher/window/tray/shortcut identity before
+  # any of those surfaces become visible.
+  $initialIdentityReady = $false
+  try { $initialIdentityReady = [bool](Update-AuraUiLauncherStyle) }
+  catch { Write-AuraUiLog -Message "Initial Aura identity failed: $($_.Exception.Message)" }
+  if (-not $initialIdentityReady) {
+    throw 'Claude Aura could not establish a complete safe application identity.'
+  }
+  $script:TrayIcon.Visible = $true
   $script:Launcher.add_FormClosing({
     param($sender, $eventArgs)
     if (-not $script:Closing -and $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
@@ -2908,10 +5837,10 @@ public static class AuraWindow {
   })
 
   Read-AuraUiLauncherPosition
+  $script:Launcher.add_LocationChanged({ Update-AuraUiLauncherHintPosition })
   $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_Shown({ Update-AuraUiLauncherPosition })
-  Update-AuraUiTrayAppearance
 
   $script:RetryButton.add_Click({
     if ($script:WebReady -and $null -ne $script:WebView.CoreWebView2) {
@@ -2924,9 +5853,18 @@ public static class AuraWindow {
   $timer.Interval = 60
   $timer.add_Tick({
     if ($script:Closing) { return }
-    if (-not $script:JumpListRegistered) {
-      $script:JumpListRegistered = $true
-      Register-AuraUiJumpList
+    if (-not $script:JumpListRegistered -and [DateTime]::UtcNow -ge $script:JumpListRegistrationDue) {
+      $script:JumpListRegistered = [bool](Register-AuraUiJumpList)
+      if ($script:JumpListRegistered) {
+        $script:JumpListRegistrationDue = [DateTime]::MinValue
+        if ($script:ShellIdentityIconPath -and
+            [string]::Equals($script:JumpListIdentityPath, $script:ShellIdentityIconPath,
+              [StringComparison]::OrdinalIgnoreCase)) {
+          Remove-AuraUiUnusedShortcutIcons -KeepPath $script:ShellIdentityIconPath
+        }
+      } else {
+        $script:JumpListRegistrationDue = [DateTime]::UtcNow.AddSeconds(30)
+      }
     }
     try {
       if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
@@ -3010,28 +5948,38 @@ public static class AuraWindow {
           })
           $studioCore.add_WebMessageReceived({
             param($sender, $eventArgs)
+            $rawMessage = $null
             try {
-              Invoke-AuraUiStudioMessage -Json $eventArgs.WebMessageAsJson -Source $eventArgs.Source
+              $rawMessage = $eventArgs.WebMessageAsJson
+              Invoke-AuraUiStudioMessage -Json $rawMessage -Source $eventArgs.Source
             } catch {
               Write-AuraUiLog -Message "Studio message rejected: $($_.Exception.Message)"
               $failedAction = ''
               try {
-                $failedMessage = $eventArgs.WebMessageAsJson | ConvertFrom-Json
+                if ($rawMessage -isnot [string] -or $rawMessage.Length -gt 16384) {
+                  throw 'Rejected Studio message is not safe to inspect.'
+                }
+                $failedMessage = $rawMessage | ConvertFrom-Json
                 if ($failedMessage.type -is [string] -and
                     $script:StudioMessageTypes -ccontains $failedMessage.type -and
                     $failedMessage.type -in @(
+                      'set-locale', 'complete-studio-introduction',
                       'set-image-framing', 'set-card-preview-crop',
-                      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
-                      'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+                      'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+                      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme')) {
                   $failedAction = [string]$failedMessage.type
                 }
               } catch {}
               if ($failedAction) {
-                if ($failedAction -in @(
-                    'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer',
-                    'pick-theme-layer-image', 'remove-theme-layer', 'move-theme-layer',
+                if ($failedAction -ceq 'set-locale') {
+                  Send-AuraUiStudioState -Status "$($script:UiCopy.localeNotChangedMessage)" -Tone error
+                } elseif ($failedAction -ceq 'complete-studio-introduction') {
+                  Send-AuraUiStudioState -Status "$($script:UiCopy.studioPreferencesNotSaved)" -Tone error
+                } elseif ($failedAction -in @(
+                    'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+                    'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                     'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                     'delete-user-theme')) {
                   $script:StudioEditorState['lastAction'] = $failedAction
@@ -3052,7 +6000,7 @@ public static class AuraWindow {
             $eventArgs.Handled = $true
           })
           $script:StudioReady = $true
-          $studioCore.Navigate('https://aura.studio/index.html')
+          $studioCore.Navigate((Get-AuraUiStudioUrl))
         } catch {
           $script:StudioEnsureTask = $null
           $script:StudioReady = $false
@@ -3073,13 +6021,44 @@ public static class AuraWindow {
         Set-AuraUiPreferredColorScheme
 
         $core.add_NavigationStarting({
+          param($sender, $eventArgs)
+          $script:ActiveNavigationId = [UInt64]$eventArgs.NavigationId
+          $script:ReadyNavigationId = $null
           $script:PageReady = $false
           Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
         })
+        $core.add_DOMContentLoaded({
+          param($sender, $eventArgs)
+          if ($null -eq $script:ActiveNavigationId -or
+              [UInt64]$script:ActiveNavigationId -ne [UInt64]$eventArgs.NavigationId -or
+              -not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+            return
+          }
+          # NavigationCompleted may report OperationCanceled or ConnectionAborted
+          # after a usable post-auth document has already reached DOMContentLoaded.
+          # Record that concrete readiness signal and reveal the page immediately;
+          # theme injection remains independent and runs from NavigationCompleted.
+          $script:ReadyNavigationId = [UInt64]$eventArgs.NavigationId
+          $script:PageReady = $true
+          Hide-AuraUiLoading
+        })
         $core.add_NavigationCompleted({
           param($sender, $eventArgs)
-          if (-not $eventArgs.IsSuccess) {
+          $navigationDisposition = Get-AuraUiNavigationCompletionDisposition `
+            -CurrentNavigationId $script:ActiveNavigationId `
+            -ReadyNavigationId $script:ReadyNavigationId `
+            -CompletedNavigationId ([UInt64]$eventArgs.NavigationId) `
+            -IsSuccess ([bool]$eventArgs.IsSuccess)
+          if ($navigationDisposition -eq 'Ignore') {
+            # OAuth redirects can finish an older navigation after its replacement
+            # is already live. A superseded completion must never change the cover.
+            return
+          }
+          $script:ActiveNavigationId = $null
+          if ($navigationDisposition -eq 'Failure') {
             # A genuine navigation failure is the only case that keeps the cover.
+            $script:ReadyNavigationId = $null
+            $script:PageReady = $false
             Show-AuraUiLoading -Message "$($script:UiCopy.loadFailed)" -Retry $true
             return
           }
@@ -3092,23 +6071,36 @@ public static class AuraWindow {
             # on this real navigation signal — rather than waiting for the async theme
             # script to confirm — is what prevents an injection race from stranding an
             # opaque cover over a working, signed-in interface.
+            $script:ReadyNavigationId = [UInt64]$eventArgs.NavigationId
             $script:PageReady = $true
             Hide-AuraUiLoading
-            Show-AuraUiFirstRunNavHint
+            Show-AuraUiLauncherHint
             if ($enabled) { Apply-AuraUiTheme }
           } else {
+            $script:ReadyNavigationId = $null
             Hide-AuraUiLoading
           }
+          Request-AuraUiContextMirror
         })
+        # Claude uses client-side history navigation between new chat and
+        # conversations. Refresh the private Studio mirror after either a
+        # source or history transition; Request-AuraUiMirror coalesces bursts
+        # and keeps its existing editor-session/generation guards.
+        $core.add_SourceChanged({ Request-AuraUiContextMirror })
+        $core.add_HistoryChanged({ Request-AuraUiContextMirror })
         $core.add_NewWindowRequested({
           param($sender, $eventArgs)
           try {
             $uri = [Uri]$eventArgs.Uri
-            if ((Test-AuraUiClaudeUri -Value $uri) -or (Test-AuraUiSignInUri -Value $uri)) {
-              $eventArgs.Handled = $true
-              $script:WebView.CoreWebView2.Navigate($uri.AbsoluteUri)
-            } elseif ($uri.Scheme -eq 'https') {
-              $eventArgs.Handled = $true
+            $newWindowDisposition = Get-AuraUiNewWindowDisposition -Value $uri
+            if ($newWindowDisposition -eq 'Popup') {
+              # Keep Handled false so WebView2 creates the real popup and preserves
+              # window.opener. Replacing window.open with a main-view Navigate gives
+              # the caller a closed dummy WindowProxy and breaks OAuth completion.
+              return
+            }
+            $eventArgs.Handled = $true
+            if ($newWindowDisposition -eq 'External') {
               Start-Process $uri.AbsoluteUri | Out-Null
             }
           } catch {
@@ -3207,6 +6199,8 @@ public static class AuraWindow {
 
   $script:Form.add_Shown({
     $script:PageReady = $false
+    $script:ActiveNavigationId = $null
+    $script:ReadyNavigationId = $null
     $script:PendingApply = $false
     $script:PendingRestore = $false
     Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
@@ -3216,6 +6210,7 @@ public static class AuraWindow {
     } catch { Fail-AuraUiStartup -Exception $_.Exception }
   })
   $script:Form.add_FormClosing({
+    Restore-AuraUiStudioPreviewState
     $script:Closing = $true
     $timer.Stop()
     if ($script:TrayIcon) {
@@ -3225,6 +6220,11 @@ public static class AuraWindow {
     }
     if ($script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Close() }
     if ($script:StudioWebView -and -not $script:StudioWebView.IsDisposed) { $script:StudioWebView.Dispose() }
+    if ($script:LauncherAnimTimer) { $script:LauncherAnimTimer.Stop(); $script:LauncherAnimTimer.Dispose(); $script:LauncherAnimTimer = $null }
+    if ($script:LauncherTipTimer) { $script:LauncherTipTimer.Stop(); $script:LauncherTipTimer.Dispose(); $script:LauncherTipTimer = $null }
+    if ($script:LauncherHint -and -not $script:LauncherHint.IsDisposed) { $script:LauncherHint.Close() }
+    if ($script:LauncherTip -and -not $script:LauncherTip.IsDisposed) { $script:LauncherTip.Dispose(); $script:LauncherTip = $null }
+    if ($script:LauncherTipBitmap) { $script:LauncherTipBitmap.Dispose(); $script:LauncherTipBitmap = $null }
     if ($script:Launcher -and -not $script:Launcher.IsDisposed) { $script:Launcher.Close() }
     if ($script:LauncherMark) { $script:LauncherMark.Dispose(); $script:LauncherMark = $null }
     if ($script:TrayMenu) { $script:TrayMenu.Dispose() }
@@ -3248,6 +6248,10 @@ public static class AuraWindow {
   } catch {}
   exit 1
 } finally {
+  if ($null -ne $startupOperationLock) {
+    try { Exit-AuraOperationLock -Mutex $startupOperationLock } catch {}
+    $startupOperationLock = $null
+  }
   if ($null -ne $script:TrayIcon) {
     try {
       $script:TrayIcon.Visible = $false
@@ -3259,6 +6263,16 @@ public static class AuraWindow {
     try { $script:StudioOpenSignal.Dispose() } catch {}
     $script:StudioOpenSignal = $null
   }
+  foreach ($tracker in @($script:MainIconWindow, $script:StudioIconWindow, $script:LauncherDpiWindow)) {
+    if ($null -ne $tracker) { try { $tracker.Dispose() } catch {} }
+  }
+  $script:MainIconWindow = $null
+  $script:StudioIconWindow = $null
+  $script:LauncherDpiWindow = $null
+  Dispose-AuraUiNativeFormIconPair -Pair $script:MainWindowIconPair
+  Dispose-AuraUiNativeFormIconPair -Pair $script:StudioWindowIconPair
+  $script:MainWindowIconPair = $null
+  $script:StudioWindowIconPair = $null
   foreach ($ownedIcon in @($script:MainIcon, $script:StudioIcon, $script:NotificationIcon)) {
     if ($null -ne $ownedIcon) {
       try { $ownedIcon.Dispose() } catch {}
@@ -3268,6 +6282,15 @@ public static class AuraWindow {
   $script:StudioIcon = $null
   $script:NotificationIcon = $null
   $script:ThemeIdentityAssetPath = $null
+  $script:ThemeIdentityDigest = $null
+  if ($null -ne $script:ThemeIdentityLock) {
+    try { $script:ThemeIdentityLock.Dispose() } catch {}
+    $script:ThemeIdentityLock = $null
+  }
+  foreach ($candidate in @($script:DeferredIdentityCandidates)) {
+    Dispose-AuraUiIdentityCandidate -Candidate $candidate
+  }
+  $script:DeferredIdentityCandidates.Clear()
   if ($ownsMutex -and $null -ne $mutex) {
     try { $mutex.ReleaseMutex() } catch {}
   }

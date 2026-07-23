@@ -17,6 +17,19 @@ function Exit-AuraOperationLock {
   try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
 }
 
+function Test-AuraUiHostRunning {
+  $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $probe = $null
+  try {
+    $probe = [System.Threading.Mutex]::OpenExisting("Local\ClaudeAura.$sid.Ui")
+    return $true
+  } catch [System.Threading.WaitHandleCannotBeOpenedException] {
+    return $false
+  } finally {
+    if ($null -ne $probe) { $probe.Dispose() }
+  }
+}
+
 function Test-AuraPathEqual {
   param([string]$Left, [string]$Right)
   if (-not $Left -or -not $Right) { return $false }
