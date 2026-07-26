@@ -735,8 +735,21 @@
         const fs = Number.parseFloat(window.getComputedStyle?.(n)?.fontSize ?? "");
         if (!nr || nr.top < mr.top - 2 || nr.bottom > sr.top + 2 || nr.height > 160
             || (!sem && (n.children.length || fs < 24 || nr.width < 48 || nr.height < 20 || nr.height > 96))) continue;
-        let w = n;
-        if (!sem) for (let p = n.parentElement, d = 0; p && p !== gr && p !== ma && d++ < 2; p = p.parentElement) {
+        let w = n, k;
+        if (sem) {
+          const p = n.parentElement, a = [...(p?.children ?? [])], i = a.indexOf(n);
+          k = [a[i - 1], a[i + 1]].find((c) => {
+            const r = !excluded(c, n) && visibleRect(c), s = r && Math.min(r.width, r.height);
+            const overlap = r && Math.max(0, Math.min(r.bottom, nr.bottom) - Math.max(r.top, nr.top));
+            const gap = r && Math.max(0, r.left - nr.right, nr.left - r.right);
+            return s >= 10 && s <= 64 && Math.abs(r.width - r.height) < 16
+              && overlap >= Math.min(r.height, nr.height) * 0.45 && gap <= 48;
+          });
+          const r = visibleRect(p);
+          if (!k || !r || r.height > 128 || r.width > nr.width + 112
+              || Math.abs(r.left + r.right - nr.left - nr.right) > 64 || p.querySelector?.(q)) k = null;
+          else w = p;
+        } else for (let p = n.parentElement, d = 0; p && p !== gr && p !== ma && d++ < 2; p = p.parentElement) {
           const r = visibleRect(p);
           if (!r || r.height > 128 || r.width > nr.width + 112
               || Math.abs(r.left + r.right - nr.left - nr.right) > 64 || p.querySelector?.(q)) break;
@@ -744,7 +757,7 @@
         }
         const r = visibleRect(w), ov = r && Math.max(0, Math.min(r.right, sr.right) - Math.max(r.left, sr.left));
         if (!r || ov < Math.min(r.width, sr.width) * 0.55) continue;
-        const k = [...w.children].find((c) => {
+        k ??= [...w.children].find((c) => {
           const z = !c.contains?.(n) && visibleRect(c), s = z && Math.min(z.width, z.height);
           return s >= 10 && s <= 64 && Math.abs(z.width - z.height) < 16;
         });

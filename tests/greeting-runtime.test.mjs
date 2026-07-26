@@ -278,6 +278,7 @@ async function runtime(options = {}) {
     nativeStyle = null,
     headingTag = null,
     semanticLevel = null,
+    semanticSiblingMark = false,
     controlDecoys = false,
     greetingX = 0.1,
     greetingY = 0.05,
@@ -294,6 +295,9 @@ async function runtime(options = {}) {
   });
   body.appendChild(main);
   const greetings = Array.from({ length: count }, (_, index) => makeGreetingBranch(260 + index * 4));
+  if (semanticSiblingMark) for (const { text } of greetings) {
+    text.tagName = text.nodeName = "H1";
+  }
   for (const { row } of greetings) {
     if (headingTag) row.tagName = row.nodeName = headingTag.toUpperCase();
     if (semanticLevel) {
@@ -866,6 +870,28 @@ test("custom greeting copies a bounded native semantic heading level", async () 
     assert.equal(app.ownerCount(), 1);
     app.window.__CLAUDE_AURA_STATE__.cleanup();
   }
+});
+
+test("semantic heading beside Claude's native mark binds the shared row", async () => {
+  const app = await runtime({ mark: true, semanticSiblingMark: true });
+  app.flushFrame();
+  app.flushFrame();
+  const { row, mark, text } = app.greetings[0];
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "custom");
+  assert.equal(row.getAttribute(G), "native-mark",
+    "the renderer left an adjacent live Claude mark outside its greeting owner");
+  assert.equal(text.getAttribute(H), "true");
+  assert.equal(mark.getAttribute(K), "native",
+    "the adjacent native mark was not selected for compact-mark replacement");
+  const decoration = app.document.querySelector(`[${G}="decoration"]`);
+  assert.equal(decoration?.style.getPropertyValue("left"), `${mark.getBoundingClientRect().left}px`,
+    "the registered compact mark did not replace Claude's native mark in place");
+  assert.equal(app.ownerCount(), 1);
+  app.window.__CLAUDE_AURA_STATE__.cleanup();
+  assert.equal(row.getAttribute(G), null);
+  assert.equal(text.getAttribute(H), null);
+  assert.equal(mark.getAttribute(K), null);
+  assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
 });
 
 await runIfMain(import.meta.url);
