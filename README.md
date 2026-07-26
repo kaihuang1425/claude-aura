@@ -34,6 +34,11 @@
 </p>
 
 <p align="center">
+  If Claude Aura is useful to you,
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>star the project on GitHub</strong></a>.
+</p>
+
+<p align="center">
   <img src="./docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -141,7 +146,7 @@ Claude Desktop is optional and remains a separate application.
 ### Installation
 
 1. Download the
-   [latest release ZIP](https://github.com/erichuang1425/claude-aura/releases).
+   [latest release ZIP](https://github.com/kaihuang1425/claude-aura/releases).
 2. In File Explorer, right-click the ZIP and select **Extract All**.
 3. Open the extracted folder and double-click **Install Claude Aura.cmd**.
 4. Wait for the installer to close and the **Claude Aura** window to open.
@@ -418,7 +423,7 @@ and the separate sign-in profile erased.
 
 See the
 [implementation report](./docs/IMPLEMENTATION_REPORT.md) and
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) for
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) for
 public status. A reference preview never substitutes for required live Aura
 acceptance evidence.
 
@@ -429,7 +434,7 @@ acceptance evidence.
 
 Start with [Troubleshooting](./docs/TROUBLESHOOTING.md). For a reproducible bug
 or feature request, use the
-[repository's Issues page](https://github.com/erichuang1425/claude-aura/issues).
+[repository's Issues page](https://github.com/kaihuang1425/claude-aura/issues).
 
 When reporting a bug, include the Windows, Node.js, and WebView2 versions, the
 active theme ID, and the steps that reproduce the problem. Review logs before
@@ -451,7 +456,7 @@ described in [SECURITY.md](./SECURITY.md).
 - [Implementation report](./docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](./docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -497,6 +502,9 @@ Kingdom under [Student route conditions](https://www.gov.uk/guidance/immigration
 which prohibit self-employment or business activity except in limited
 circumstances. To avoid any potential conflict with those conditions, the owner
 cannot accept project-linked donations or tips while they apply.
+
+If Claude Aura is useful to you, the simplest non-financial way to support it
+is to [star the repository](https://github.com/kaihuang1425/claude-aura).
 
 <details>
 <summary><strong>Student-route context, independent nonprofits, and donation boundaries</strong></summary>

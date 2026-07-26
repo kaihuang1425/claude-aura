@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  如果 Claude Aura 对您有帮助，欢迎<a href="https://github.com/kaihuang1425/claude-aura"><strong>在 GitHub 上为项目加星</strong></a>。
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="日式电影编辑风深色新聊天参考预览"
        width="900"><br>
@@ -138,7 +142,7 @@ Claude Aura 在专用的 Microsoft Edge WebView2 窗口中打开真实的
 ### 安装
 
 1. 下载
-   [最新发布版 ZIP](https://github.com/erichuang1425/claude-aura/releases)。
+   [最新发布版 ZIP](https://github.com/kaihuang1425/claude-aura/releases)。
 2. 在文件资源管理器中右键单击 ZIP，然后选择 **全部解压缩**。
 3. 打开解压后的文件夹，双击 **Install Claude Aura.cmd**。
 4. 等待安装程序关闭并打开 **Claude Aura** 窗口。
@@ -404,7 +408,7 @@ Aura 会分别存储应用程序、设置、主题、草稿和浏览器配置文
 
 公开进度请参阅
 [实施报告](../docs/IMPLEMENTATION_REPORT.md)和
-[仓库 Issues](https://github.com/erichuang1425/claude-aura/issues)。
+[仓库 Issues](https://github.com/kaihuang1425/claude-aura/issues)。
 参考预览绝不能替代规定的 Aura 实时验收证据。
 
 <p align="right">(<a href="#readme-top">返回顶部</a>)</p>
@@ -413,7 +417,7 @@ Aura 会分别存储应用程序、设置、主题、草稿和浏览器配置文
 ## 支持与文档
 
 请先查看[故障排除](../docs/TROUBLESHOOTING.md)。如需提交可复现的故障或功能建议，
-请使用[仓库的 Issues 页面](https://github.com/erichuang1425/claude-aura/issues)。
+请使用[仓库的 Issues 页面](https://github.com/kaihuang1425/claude-aura/issues)。
 
 报告故障时，请提供 Windows、Node.js 和 WebView2 版本、当前主题 ID，
 以及复现问题的步骤。共享日志前请先检查内容；Aura 的界面日志存储在：
@@ -433,7 +437,7 @@ Aura 会分别存储应用程序、设置、主题、草稿和浏览器配置文
 - [实施报告](../docs/IMPLEMENTATION_REPORT.md)
 - [文件清单](../docs/FILE_MANIFEST.md)
 - [贡献指南](./CONTRIBUTING.md)
-- [仓库 Issues](https://github.com/erichuang1425/claude-aura/issues)
+- [仓库 Issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -477,6 +481,9 @@ Claude Aura 不接受向项目所有者支付的个人捐款、小费、赞助�
 [Student 路线签证条件](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student)
 约束；除少数例外情况外，该条件禁止自雇或从事商业活动。为避免与这些条件发生
 任何潜在冲突，在其适用期间，所有者无法接受与项目相关的捐款或小费。
+
+如果 Claude Aura 对您有帮助，最简单且不涉及资金的支持方式就是
+[为仓库加星](https://github.com/kaihuang1425/claude-aura)。
 
 <details>
 <summary><strong>Student 路线背景、独立非营利组织与捐款边界</strong></summary>

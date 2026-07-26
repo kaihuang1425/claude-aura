@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  如果 Claude Aura 對你有幫助，歡迎<a href="https://github.com/kaihuang1425/claude-aura"><strong>在 GitHub 上幫專案按個 Star</strong></a>。
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="日系電影編輯風深色新對話參考預覽"
        width="900"><br>
@@ -138,7 +142,7 @@ Claude Desktop 為選用程式，會繼續以獨立應用程式執行。
 ### 安裝
 
 1. 下載
-   [最新發行版 ZIP](https://github.com/erichuang1425/claude-aura/releases)。
+   [最新發行版 ZIP](https://github.com/kaihuang1425/claude-aura/releases)。
 2. 在檔案總管中按 ZIP 檔案右鍵，選擇 **全部解壓縮**。
 3. 開啟解壓縮後的資料夾，按兩下 **Install Claude Aura.cmd**。
 4. 等待安裝程式關閉並開啟 **Claude Aura** 視窗。
@@ -406,7 +410,7 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 
 公開進度請參閱
 [實作報告](../docs/IMPLEMENTATION_REPORT.md)與
-[儲存庫 Issues](https://github.com/erichuang1425/claude-aura/issues)。
+[儲存庫 Issues](https://github.com/kaihuang1425/claude-aura/issues)。
 參考預覽絕不能取代規定的 Aura 即時驗收證據。
 
 <p align="right">(<a href="#readme-top">回到頂端</a>)</p>
@@ -415,7 +419,7 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 ## 支援與說明文件
 
 請先查看[疑難排解](../docs/TROUBLESHOOTING.md)。若有可重現的 Bug 或功能需求，
-請使用[儲存庫的 Issues 頁面](https://github.com/erichuang1425/claude-aura/issues)。
+請使用[儲存庫的 Issues 頁面](https://github.com/kaihuang1425/claude-aura/issues)。
 
 回報 Bug 時，請附上 Windows、Node.js 與 WebView2 版本、目前使用的主題 ID，
 以及重現問題的步驟。分享記錄檔前請先檢查內容；Aura 的 UI 記錄檔位於：
@@ -436,7 +440,7 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 - [實作報告](../docs/IMPLEMENTATION_REPORT.md)
 - [檔案清單](../docs/FILE_MANIFEST.md)
 - [貢獻指南](./CONTRIBUTING.md)
-- [儲存庫 Issues](https://github.com/erichuang1425/claude-aura/issues)
+- [儲存庫 Issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -481,6 +485,9 @@ Claude Aura 不接受支付給專案所有者的個人捐款、小費、贊助�
 [Student 路線簽證條件](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student)
 約束；除少數例外情況外，該條件禁止自僱或從事商業活動。為避免與這些條件
 發生任何潛在衝突，在條件適用期間，所有者無法接受與專案相關的捐款或小費。
+
+覺得 Claude Aura 實用的話，[替儲存庫按個 Star](https://github.com/kaihuang1425/claude-aura)，
+就是最簡單的非金錢支持方式。
 
 <details>
 <summary><strong>Student 路線背景、獨立非營利組織與捐款界線</strong></summary>

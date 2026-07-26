@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Se o Claude Aura for útil para você, dê uma estrela ao projeto no GitHub.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -142,7 +146,7 @@ separado.
 ### Instalação
 
 1. Baixe o
-   [ZIP da release mais recente](https://github.com/erichuang1425/claude-aura/releases).
+   [ZIP da release mais recente](https://github.com/kaihuang1425/claude-aura/releases).
 2. No File Explorer, clique com botão direito no ZIP e selecione **Extract All**.
 3. Abra a pasta extraída e clique duas vezes em **Install Claude Aura.cmd**.
 4. Aguarde o instalador encerrar e a janela **Claude Aura** abrir.
@@ -409,7 +413,7 @@ configurações locais, temas e o perfil de login separado.
 
 Veja o
 [relatório de implementação](../docs/IMPLEMENTATION_REPORT.md) e
-[issues do repositório](https://github.com/erichuang1425/claude-aura/issues)
+[issues do repositório](https://github.com/kaihuang1425/claude-aura/issues)
 para status público. Uma pré-visualização de referência não substitui a evidência de aceitação live do Aura.
 
 <p align="right">(<a href="#readme-top">voltar ao topo</a>)</p>
@@ -418,7 +422,7 @@ para status público. Uma pré-visualização de referência não substitui a ev
 ## Suporte e documentação
 
 Comece por [Troubleshooting](../docs/TROUBLESHOOTING.md). Para um bug reproduzível
-ou solicitação de recurso, use a [página de Issues](https://github.com/erichuang1425/claude-aura/issues).
+ou solicitação de recurso, use a [página de Issues](https://github.com/kaihuang1425/claude-aura/issues).
 
 Ao reportar um bug, inclua versões de Windows, Node.js e WebView2, o ID do tema ativo e os passos para reproduzir.
 Revise os logs antes de compartilhá-los; o log da UI do Aura fica em:
@@ -440,7 +444,7 @@ Reportar problemas de segurança via advisory privado de segurança do repositó
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -485,6 +489,8 @@ em condições no Reino Unido, que proíbem autoemprego ou atividade empresarial
 exceto em circunstâncias limitadas.
 Para evitar qualquer conflito com essas condições, o proprietário não pode aceitar doações
 de projeto ou gorjetas vinculadas enquanto elas se aplicarem.
+
+[Se o Claude Aura for útil para você, a maneira mais simples e sem custos de apoiá-lo é dar uma estrela ao repositório no GitHub.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Contexto de Student-route, nonprofits independentes e limites de doação</strong></summary>

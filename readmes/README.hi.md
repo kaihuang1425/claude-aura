@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>अगर Claude Aura आपके लिए उपयोगी है, तो GitHub पर इस परियोजना को स्टार करें।</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -128,7 +132,7 @@ WebView2 अधिकांश वर्तमान Windows कंप्यू�
 ### इंस्टॉलेशन
 
 1. डाउनलोड करें
-   [latest release ZIP](https://github.com/erichuang1425/claude-aura/releases).
+   [latest release ZIP](https://github.com/kaihuang1425/claude-aura/releases).
 2. File Explorer में ZIP पर right-click करें और **Extract All** चुनें।
 3. निकाले गए फ़ोल्डर को खोलें और **Install Claude Aura.cmd** पर दो बार क्लिक करें।
 4. इंस्टॉलर बंद होने और **Claude Aura** विंडो खुलने तक प्रतीक्षा करें।
@@ -367,14 +371,14 @@ Aura अपने application, settings, themes, drafts, और browser profile 
 
 देखें
 [implementation report](../docs/IMPLEMENTATION_REPORT.md) और
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) सार्वजनिक स्थिति के लिए। संदर्भ पूर्वावलोकन आवश्यक live Aura acceptance evidence का विकल्प नहीं है।
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) सार्वजनिक स्थिति के लिए। संदर्भ पूर्वावलोकन आवश्यक live Aura acceptance evidence का विकल्प नहीं है।
 
 <p align="right">(<a href="#readme-top">शीर्ष पर वापस</a>)</p>
 <a id="support"></a>
 ## समर्थन और दस्तावेज़ीकरण
 
 [Troubleshooting](../docs/TROUBLESHOOTING.md) से शुरू करें। किसी reproducible bug या feature request के लिए
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) का उपयोग करें.
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) का उपयोग करें.
 
 जब bug रिपोर्ट करें, Windows, Node.js, और WebView2 versions, active theme ID, और समस्या दोहराने के steps शामिल करें। Logs साझा करने से पहले review करें; Aura UI log यहाँ रहता है:
 
@@ -394,7 +398,7 @@ Aura अपने application, settings, themes, drafts, और browser profile 
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -431,6 +435,8 @@ node scripts/theme-cli.mjs qa <id>
 
 Claude Aura किसी व्यक्तिगत donation, tip, sponsorship, referral payment या किसी अन्य वित्तीय सहायता को स्वीकार नहीं करता। मालिक अभी वर्तमान में United Kingdom में [Student route conditions](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student)
  के अंतर्गत है, जो सीमित परिस्थितियों में ही self-employment या business activity की अनुमति देता है। संभावित किसी conflict से बचने हेतु, जब यह स्थिति लागू हो, मालिक परियोजना-संबंधित donation या tip स्वीकार नहीं कर सकता.
+
+[यदि Claude Aura आपके लिए उपयोगी है, तो इसका समर्थन करने का सबसे आसान गैर-वित्तीय तरीका है कि आप रिपॉज़िटरी को GitHub पर स्टार करें।](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Student-route context, independent nonprofits, and donation boundaries</strong></summary>

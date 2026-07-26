@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Jika Claude Aura berguna untuk Anda, berikan bintang pada proyek ini di GitHub.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -146,7 +150,7 @@ coba lagi. Claude Desktop opsional dan tetap aplikasi terpisah.
 ### Instalasi
 
 1. Unduh
-   [release ZIP terbaru](https://github.com/erichuang1425/claude-aura/releases).
+   [release ZIP terbaru](https://github.com/kaihuang1425/claude-aura/releases).
 2. Di File Explorer, klik kanan ZIP lalu pilih **Extract All**.
 3. Buka folder hasil ekstrak lalu klik dua kali **Install Claude Aura.cmd**.
 4. Tunggu instalasi selesai dan jendela **Claude Aura** terbuka.
@@ -418,7 +422,7 @@ dengan export terminal-theme yang sesuai
 - [ ] Jalankan sweep verifikasi rilis akhir
 
 Lihat [implementation report](../docs/IMPLEMENTATION_REPORT.md) dan
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) untuk status
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) untuk status
 publik. Preview referensi bukan pengganti bukti penerimaan live Aura yang diwajibkan.
 
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)</p>
@@ -428,7 +432,7 @@ publik. Preview referensi bukan pengganti bukti penerimaan live Aura yang diwaji
 
 Mulai dari [Troubleshooting](../docs/TROUBLESHOOTING.md). Untuk bug yang bisa direproduksi
 atau request fitur, pakai
-[halaman Issues repositori](https://github.com/erichuang1425/claude-aura/issues).
+[halaman Issues repositori](https://github.com/kaihuang1425/claude-aura/issues).
 
 Saat melaporkan bug, sertakan versi Windows, Node.js, dan WebView2, ID tema aktif,
 dan langkah yang mereproduksi masalah. Tinjau log sebelum dibagikan; log UI Aura berada di:
@@ -450,7 +454,7 @@ di [SECURITY.md](./SECURITY.md).
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -494,6 +498,8 @@ bantuan finansial lain. Pemilik saat ini berada di United Kingdom dengan
 yang melarang self-employment atau aktivitas bisnis kecuali kondisi tertentu.
 Untuk menghindari konflik dengan kondisi tersebut, pemilik tidak dapat menerima
 donasi atau tips terkait proyek selama berlaku.
+
+[Jika Claude Aura berguna bagi Anda, cara paling sederhana dan non-finansial untuk mendukungnya adalah memberi bintang pada repositori di GitHub.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Konteks Student-route, nonprofit independen, dan batas donasi</strong></summary>

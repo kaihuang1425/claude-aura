@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Se Claude Aura ti è utile, lascia una stella al progetto su GitHub.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -138,7 +142,7 @@ installa o ripara Evergreen WebView2 Runtime e riprova. Claude Desktop è opzion
 ### Installazione
 
 1. Scarica il
-   [ZIP release più recente](https://github.com/erichuang1425/claude-aura/releases).
+   [ZIP release più recente](https://github.com/kaihuang1425/claude-aura/releases).
 2. Nel File Explorer fai clic destro sullo ZIP e seleziona **Extract All**.
 3. Apri la cartella estratta e fai doppio clic su **Install Claude Aura.cmd**.
 4. Attendi che l’installatore si chiuda e si apra la finestra **Claude Aura**.
@@ -402,7 +406,7 @@ a sola quando vuoi anche cancellare impostazioni locali, temi e profilo di acces
 
 Consulta l’
 [implementation report](../docs/IMPLEMENTATION_REPORT.md) e
-[issues del repository](https://github.com/erichuang1425/claude-aura/issues) per lo stato pubblico.
+[issues del repository](https://github.com/kaihuang1425/claude-aura/issues) per lo stato pubblico.
 Una anteprima di riferimento non sostituisce la prova di accettazione live richiesta da Aura.
 
 <p align="right">(<a href="#readme-top">torna su</a>)</p>
@@ -412,7 +416,7 @@ Una anteprima di riferimento non sostituisce la prova di accettazione live richi
 
 Inizia con [Troubleshooting](../docs/TROUBLESHOOTING.md). Per un bug riproducibile o una richiesta funzione,
 usare la
-[pagina Issues del repository](https://github.com/erichuang1425/claude-aura/issues).
+[pagina Issues del repository](https://github.com/kaihuang1425/claude-aura/issues).
 
 Quando segnali un bug, includi versioni di Windows, Node.js, WebView2, ID del tema attivo e passaggi di riproduzione.
 Controlla i log prima di condividerli; il log UI di Aura si trova in:
@@ -434,7 +438,7 @@ Segnala problemi di sicurezza tramite advisory security privata del repository, 
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -480,6 +484,8 @@ Il proprietario è attualmente nel Regno Unito secondo
 che vieta attività imprenditoriali o di business salvo casi limitati.
 Per evitare possibili conflitti, il proprietario non può ricevere donazioni o tip legati al progetto
 finché tali condizioni sono in vigore.
+
+[Se Claude Aura ti è utile, il modo più semplice e non economico per sostenerlo è assegnare una stella al repository su GitHub.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Contesto Student-route, nonprofit indipendenti e limiti delle donazioni</strong></summary>

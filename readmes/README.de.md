@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Wenn Claude Aura für dich nützlich ist, gib dem Projekt auf GitHub einen Stern.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -143,7 +147,7 @@ Claude Desktop ist optional und bleibt eine separate Anwendung.
 ### Installation
 
 1. Laden Sie das
-   [aktuellste Release-ZIP](https://github.com/erichuang1425/claude-aura/releases) herunter.
+   [aktuellste Release-ZIP](https://github.com/kaihuang1425/claude-aura/releases) herunter.
 2. Klicken Sie im File Explorer mit der rechten Maustaste auf die ZIP und wählen Sie **Extract All**.
 3. Öffnen Sie den entpackten Ordner und doppelklicken Sie **Install Claude Aura.cmd**.
 4. Warten Sie, bis der Installer schließt und das Fenster **Claude Aura** öffnet.
@@ -409,7 +413,7 @@ wenn du lokale Einstellungen, Themes und das separate Login-Profil ebenfalls lö
 
 Sehen Sie den
 [implementation report](../docs/IMPLEMENTATION_REPORT.md) und die
-[Repository-Issues](https://github.com/erichuang1425/claude-aura/issues) für den öffentlichen Status an.
+[Repository-Issues](https://github.com/kaihuang1425/claude-aura/issues) für den öffentlichen Status an.
 Eine Referenzvorschau ersetzt keinen erforderlichen Live-Aura-Akzeptanzbeleg.
 
 <p align="right">(<a href="#readme-top">nach oben</a>)</p>
@@ -419,7 +423,7 @@ Eine Referenzvorschau ersetzt keinen erforderlichen Live-Aura-Akzeptanzbeleg.
 
 Starten Sie mit [Troubleshooting](../docs/TROUBLESHOOTING.md). Für reproduzierbare Fehlerberichte
 oder Feature-Requests nutzen Sie die
-[Issue- Seite des Repos](https://github.com/erichuang1425/claude-aura/issues).
+[Issue- Seite des Repos](https://github.com/kaihuang1425/claude-aura/issues).
 
 Bei Fehlerberichten geben Sie Windows-, Node.js- und WebView2-Versionen, die aktive Theme-ID und die
 nachvollziehbaren Schritte an. Prüfen Sie Logs vor dem Teilen. Der Aura UI-Log liegt hier:
@@ -441,7 +445,7 @@ Sicherheitsprobleme bitte über ein private security advisory im Repo melden, wi
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -486,6 +490,8 @@ United Kingdom unter den
 die außer in eng begrenzten Fällen keine Selbständigkeit oder Geschäftstätigkeit erlauben.
 Um mögliche Konflikte mit diesen Bedingungen zu vermeiden, kann der Eigentümer während ihrer Gültigkeit
 keine projektbezogenen Spenden oder Tips annehmen.
+
+[Wenn Claude Aura für dich nützlich ist, ist der einfachste nicht-monetäre Weg, es zu unterstützen, dem Repository auf GitHub einen Stern zu geben.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Student-route-Kontext, unabhängige Nonprofits und Spendenregeln</strong></summary>

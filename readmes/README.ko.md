@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Claude Aura가 유용하다면, GitHub에서 이 프로젝트에 별표를 눌러주세요.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -127,7 +131,7 @@ Claude Desktop은 선택 사항이며 별도 애플리케이션입니다.
 <a id="installation"></a>
 ### 설치
 
-1. [최신 릴리스 ZIP](https://github.com/erichuang1425/claude-aura/releases)을 다운로드합니다.
+1. [최신 릴리스 ZIP](https://github.com/kaihuang1425/claude-aura/releases)을 다운로드합니다.
 2. 파일 탐색기에서 ZIP을 오른쪽 클릭하고 **Extract All**을 선택합니다.
 3. 압축 해제한 폴더를 열고 **Install Claude Aura.cmd**를 두 번 클릭합니다.
 4. 설치 프로그램이 닫히고 **Claude Aura** 창이 열릴 때까지 기다립니다.
@@ -377,7 +381,7 @@ Aura는 앱, 설정, 테마, 초안, 브라우저 프로필을 분리합니다:
 - [ ] 최종 릴리스 검증 스윕 실행
 
 자세한 공개 상태는 [implementation report](../docs/IMPLEMENTATION_REPORT.md)와
-[repository issues](https://github.com/erichuang1425/claude-aura/issues)에서 확인하세요.
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues)에서 확인하세요.
 참조 미리보기는 필수 실시간 Aura 승인 증거를 대체하지 않습니다.
 
 <p align="right">(<a href="#readme-top">맨 위로</a>)</p>
@@ -386,7 +390,7 @@ Aura는 앱, 설정, 테마, 초안, 브라우저 프로필을 분리합니다:
 ## 지원 및 문서
 
 [문제 해결](../docs/TROUBLESHOOTING.md)로 시작하세요. 재현 가능한 버그나 기능 요청은
-[저장소 Issue 페이지](https://github.com/erichuang1425/claude-aura/issues)로 제출하세요.
+[저장소 Issue 페이지](https://github.com/kaihuang1425/claude-aura/issues)로 제출하세요.
 
 버그 리포트에는 Windows, Node.js, WebView2 버전, 현재 활성 테마 ID 및 재현 단계가 필요합니다.
 공유 전 로그를 확인하세요. Aura UI 로그는 다음 위치에 있습니다:
@@ -407,7 +411,7 @@ Aura는 앱, 설정, 테마, 초안, 브라우저 프로필을 분리합니다:
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -450,6 +454,8 @@ Claude Aura는 개인 기부, 팁, 스폰서십, 추천 결제 또는 기타 금
 [Student route conditions](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student)
 의 적용을 받고 있으며, 제한된 조건이 아닌 한 자영업이나 비즈니스 활동이 금지됩니다.
 이 조건이 적용되는 동안 프로젝트 관련 기부나 팁은 받을 수 없습니다.
+
+[Claude Aura가 유용하다면, 이를 지원하는 가장 간단한 비금전적 방법은 GitHub에서 저장소에 별을 주는 것입니다.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Student-route 맥락, 독립 비영리단체, 기부 경계</strong></summary>

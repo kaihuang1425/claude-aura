@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Nếu Claude Aura hữu ích với bạn, hãy gắn sao cho dự án trên GitHub.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -126,7 +130,7 @@ Claude Desktop là tuỳ chọn và vẫn là một ứng dụng riêng biệt.
 ### Cài đặt
 
 1. Tải về
-   [phiên bản release mới nhất](https://github.com/erichuang1425/claude-aura/releases).
+   [phiên bản release mới nhất](https://github.com/kaihuang1425/claude-aura/releases).
 2. Trong File Explorer, chuột phải vào file ZIP và chọn **Extract All**.
 3. Mở thư mục đã giải nén rồi nhấp đúp **Install Claude Aura.cmd**.
 4. Chờ trình cài đặt đóng và cửa sổ **Claude Aura** mở ra.
@@ -377,7 +381,7 @@ và hồ sơ đăng nhập riêng đó.
 - [ ] Thực hiện đợt kiểm tra phê duyệt phát hành cuối cùng
 
 Xem [implementation report](../docs/IMPLEMENTATION_REPORT.md) và
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) để biết trạng thái công khai. Một bản xem trước không thay thế được cho chứng cứ chấp nhận trực tiếp cần thiết của Aura.
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) để biết trạng thái công khai. Một bản xem trước không thay thế được cho chứng cứ chấp nhận trực tiếp cần thiết của Aura.
 
 <p align="center">(<a href="#readme-top">quay về đầu trang</a>)</p>
 
@@ -385,7 +389,7 @@ Xem [implementation report](../docs/IMPLEMENTATION_REPORT.md) và
 ## Hỗ trợ và tài liệu
 
 Bắt đầu với [Troubleshooting](../docs/TROUBLESHOOTING.md). Để báo lỗi hoặc đề xuất tính năng, hãy dùng
-[Issues của repository](https://github.com/erichuang1425/claude-aura/issues).
+[Issues của repository](https://github.com/kaihuang1425/claude-aura/issues).
 
 Khi báo lỗi, bao gồm phiên bản Windows, Node.js, WebView2, ID theme đang dùng và các
 bước tái hiện vấn đề. Xem trước khi chia sẻ logs; log UI của Aura được lưu tại:
@@ -405,7 +409,7 @@ Báo cáo lỗ hổng bảo mật qua private security advisory như mô tả tr
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contribution guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -446,6 +450,8 @@ Claude Aura không nhận tài trợ cá nhân, tip, tài trợ, hoa hồng gi�
 Chủ sở hữu hiện đang tại Vương quốc Anh theo [điều kiện Student route](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student),
 ngăn cản tự doanh hoặc hoạt động kinh doanh trừ một số trường hợp hạn chế. Để tránh xung đột với
 những điều kiện này, chủ sở hữu không nhận được quyên góp hay tip liên quan dự án khi quy định còn hiệu lực.
+
+[Nếu Claude Aura hữu ích với bạn, cách đơn giản và không tốn chi phí nhất để hỗ trợ nó là gắn sao cho repository trên GitHub.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Bối cảnh student-route, tổ chức phi lợi nhuận độc lập và giới hạn quyên góp</strong></summary>

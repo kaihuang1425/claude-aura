@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Claude Aura があなたに役立つなら、GitHub でこのプロジェクトにスターを付けてください。</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -131,7 +135,7 @@ Evergreen WebView2 Runtime をインストールまたは修復して再試行�
 <a id="installation"></a>
 ### インストール
 
-1. [最新版のリリース ZIP](https://github.com/erichuang1425/claude-aura/releases)をダウンロードします。
+1. [最新版のリリース ZIP](https://github.com/kaihuang1425/claude-aura/releases)をダウンロードします。
 2. エクスプローラーで ZIP を右クリックし、**Extract All** を選択します。
 3. 展開したフォルダーを開き、**Install Claude Aura.cmd** をダブルクリックします。
 4. インストーラーが閉じ、**Claude Aura** ウィンドウが開くのを待ちます。
@@ -383,7 +387,7 @@ Aura はアプリ、設定、テーマ、下書き、ブラウザープロファ
 - [ ] 最終リリース検証スイープの実行
 
 公開状況は [implementation report](../docs/IMPLEMENTATION_REPORT.md) と
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) で確認してください。参照プレビューは、必要なライブ Aura 受け入れ証跡の代替にはなりません。
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) で確認してください。参照プレビューは、必要なライブ Aura 受け入れ証跡の代替にはなりません。
 
 <p align="right">(<a href="#readme-top">先頭へ戻る</a>)</p>
 
@@ -392,7 +396,7 @@ Aura はアプリ、設定、テーマ、下書き、ブラウザープロファ
 
 はじめに [Troubleshooting](../docs/TROUBLESHOOTING.md) から参照してください。
 再現可能なバグや機能要求は、
-[repository の Issues ページ](https://github.com/erichuang1425/claude-aura/issues) を使って送信してください。
+[repository の Issues ページ](https://github.com/kaihuang1425/claude-aura/issues) を使って送信してください。
 
 バグ報告時には、Windows・Node.js・WebView2 のバージョン、アクティブなテーマ ID、
 問題再現手順を含めてください。共有前にログを確認してください。Aura の UI ログは以下にあります:
@@ -413,7 +417,7 @@ Aura はアプリ、設定、テーマ、下書き、ブラウザープロファ
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -456,6 +460,8 @@ Claude Aura は個人的な寄付、チップ、スポンサー、紹介料、�
 (英国)のもとにあり、限定的な条件を除いて自営業や事業活動は許可されていません。
 これらの条件が適用されている間、プロジェクト関連の寄付やチップを受け取ることは
 衝突防止のためにできません。
+
+[Claude Aura があなたにとって役立つものであれば、これを支援する最もシンプルで非金銭的な方法は、GitHub のこのリポジトリにスターを付けることです。](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Student-route の背景、独立非営利団体、寄付の境界</strong></summary>

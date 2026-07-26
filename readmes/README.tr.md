@@ -34,6 +34,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaihuang1425/claude-aura"><strong>Claude Aura sizin için faydalıysa, GitHub'da projeye yıldız verin.</strong></a>
+</p>
+
+<p align="center">
   <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
        alt="Japanese Film Editorial dark new-chat reference preview"
        width="900"><br>
@@ -139,7 +143,7 @@ Claude Desktop isteğe bağlıdır ve ayrı bir uygulama olarak kalır.
 
 ### Kurulum
 
-1. [en son sürüm ZIP’i](https://github.com/erichuang1425/claude-aura/releases) indirin.
+1. [en son sürüm ZIP’i](https://github.com/kaihuang1425/claude-aura/releases) indirin.
 2. File Explorer’da ZIP’e sağ tıklayıp **Extract All** seçeneğini seçin.
 3. Çıkarılan klasörü açın ve **Install Claude Aura.cmd** dosyasına çift tıklayın.
 4. Kurucunun kapanmasını ve **Claude Aura** penceresinin açılmasını bekleyin.
@@ -409,7 +413,7 @@ silmek istediğinizde kullanın.
 
 Yayınlanmış referans önizleme, gerekli canlı Aura kabul kanıtının yerine geçmez.
 Detaylar için [implementation report](../docs/IMPLEMENTATION_REPORT.md) ve
-[repository issues](https://github.com/erichuang1425/claude-aura/issues) sayfalarını inceleyin.
+[repository issues](https://github.com/kaihuang1425/claude-aura/issues) sayfalarını inceleyin.
 
 <p align="right">(<a href="#readme-top">başa dön</a>)</p>
 
@@ -418,7 +422,7 @@ Detaylar için [implementation report](../docs/IMPLEMENTATION_REPORT.md) ve
 
 Önce [Troubleshooting](../docs/TROUBLESHOOTING.md) ile başlayın. Tekrarlanabilir bir hata
 veya özellik isteği için
-[repository issues sayfasını](https://github.com/erichuang1425/claude-aura/issues) kullanın.
+[repository issues sayfasını](https://github.com/kaihuang1425/claude-aura/issues) kullanın.
 
 Bir hata bildirirken Windows, Node.js ve WebView2 sürümlerini, aktif tema ID’sini ve
 yeniden oluşturma adımlarını ekleyin. Paylaşmadan önce günlükleri inceleyin; Aura’nın UI
@@ -440,7 +444,7 @@ da belirtildiği üzere özel repository güvenlik danışmanlığıyla bildirin
 - [Implementation report](../docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](../docs/FILE_MANIFEST.md)
 - [Katkı kılavuzu](./CONTRIBUTING.md)
-- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+- [Repository issues](https://github.com/kaihuang1425/claude-aura/issues)
 
 <a id="contributing"></a>
 <details>
@@ -483,6 +487,8 @@ mali destekleri kabul etmez. Sahibi şu anda Birleşik Krallık’ta
 [Student route koşulları](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student)
 nedeniyle özgeçim veya ticari faaliyetleri sınırlayan bir durumda bulunmaktadır.
 Bu koşullar geçerli olduğundan, proje ile ilişkili bağış veya bahşiş kabul edilemez.
+
+[Claude Aura size faydalıysa, ona destek olmanın en basit ve parasal olmayan yolu, depoyu GitHub'da yıldızlamaktır.](https://github.com/kaihuang1425/claude-aura)
 
 <details>
 <summary><strong>Student-route bağlamı, bağımsız sivil toplum kuruluşları ve bağış sınırları</strong></summary>
