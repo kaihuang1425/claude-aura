@@ -991,7 +991,8 @@ try {
     )
     foreach ($folder in @($desktop, $menuRoot)) {
       foreach ($definition in $shortcutDefinitions) {
-        $shortcut = $shell.CreateShortcut((Join-Path $folder $definition.Name))
+        $shortcutPath = Join-Path $folder $definition.Name
+        $shortcut = $shell.CreateShortcut($shortcutPath)
         $shortcut.TargetPath = $powershell
         $shortcut.Arguments = $definition.Arguments
         $shortcut.WorkingDirectory = $installRoot
@@ -999,6 +1000,7 @@ try {
         $shortcut.IconLocation = "$iconPath,0"
         $shortcut.Description = $definition.Description
         $shortcut.Save()
+        Set-AuraShortcutAppUserModelId -Path $shortcutPath
       }
     }
     $uninstallShortcut = $shell.CreateShortcut((Join-Path $menuRoot 'Uninstall Claude Aura.lnk'))

@@ -2369,6 +2369,74 @@ function Test-AuraUiOwnedShortcutTarget {
   } catch { return $false }
 }
 
+function Get-AuraUiPinnedTaskbarShortcuts {
+  param(
+    [Parameter(Mandatory = $true)][object]$Shell,
+    [Parameter(Mandatory = $true)][string]$ExpectedPowerShell,
+    [Parameter(Mandatory = $true)][string]$ExpectedScript,
+    [Parameter(Mandatory = $true)][string]$MainArguments,
+    [Parameter(Mandatory = $true)][string]$StudioArguments
+  )
+  $pinned = [Collections.Generic.List[object]]::new()
+  $appDataFull = [IO.Path]::GetFullPath($env:APPDATA).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $taskbarRoot = [IO.Path]::GetFullPath((Join-Path $appDataFull `
+    'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar')).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  if (-not $taskbarRoot.StartsWith($appDataFull + [IO.Path]::DirectorySeparatorChar,
+      [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The pinned taskbar shortcut directory is outside AppData.'
+  }
+  if (-not (Test-Path -LiteralPath $taskbarRoot -PathType Container)) { return @() }
+  $rootItem = Get-Item -LiteralPath $taskbarRoot -Force
+  if (($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'The pinned taskbar shortcut directory is redirected.'
+  }
+
+  $inspected = 0
+  foreach ($candidate in [IO.Directory]::EnumerateFiles(
+      $taskbarRoot, '*.lnk', [IO.SearchOption]::TopDirectoryOnly)) {
+    $inspected++
+    if ($inspected -gt 256) {
+      throw 'The pinned taskbar shortcut inventory exceeded its safe bound.'
+    }
+    $candidateFull = [IO.Path]::GetFullPath($candidate)
+    if (-not $candidateFull.StartsWith($taskbarRoot + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'A pinned taskbar shortcut resolved outside its expected directory.'
+    }
+    $item = Get-Item -LiteralPath $candidateFull -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
+    $shortcut = $null
+    try {
+      $shortcut = $Shell.CreateShortcut($candidateFull)
+      $matchesMain = Test-AuraUiOwnedShortcutTarget -Shortcut $shortcut `
+        -ExpectedPowerShell $ExpectedPowerShell -ExpectedScript $ExpectedScript `
+        -ExpectedArguments $MainArguments
+      $matchesStudio = Test-AuraUiOwnedShortcutTarget -Shortcut $shortcut `
+        -ExpectedPowerShell $ExpectedPowerShell -ExpectedScript $ExpectedScript `
+        -ExpectedArguments $StudioArguments
+      if (-not $matchesMain -and -not $matchesStudio) { continue }
+      $existingAppId = Get-AuraShortcutAppUserModelId -Path $candidateFull
+      if ($existingAppId -and
+          -not [string]::Equals($existingAppId, $AuraAppUserModelId,
+            [StringComparison]::Ordinal)) {
+        Write-AuraUiLog -Message "Pinned shortcut uses another AppUserModelID and was left unchanged: $candidateFull"
+        continue
+      }
+      $pinned.Add([PSCustomObject]@{
+        Path = $candidateFull
+        Arguments = if ($matchesStudio) { $StudioArguments } else { $MainArguments }
+      })
+    } finally {
+      if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
+        try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) } catch {}
+      }
+    }
+  }
+  return @($pinned)
+}
+
 function Update-AuraUiOwnedShortcuts {
   param([AllowNull()][string]$IconPath)
   if (-not $IconPath -or -not ('AuraWindow' -as [type]) -or
@@ -2385,19 +2453,20 @@ function Update-AuraUiOwnedShortcuts {
     $baseArguments = "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installedScript`""
     $desktop = [Environment]::GetFolderPath('Desktop')
     $menuRoot = Join-Path ([Environment]::GetFolderPath('Programs')) 'Claude Aura'
-    # This explicit allowlist is the complete mutation surface: two app-owned
-    # names in each of the two installer-owned locations.
-    $ownedShortcuts = @(
+    # These four installer-owned links are the fixed mutation surface. A
+    # top-level taskbar copy joins the same transaction only after its exact
+    # PowerShell target and arguments are independently revalidated.
+    $installedShortcuts = @(
       [PSCustomObject]@{ Path = (Join-Path $desktop 'Claude Aura.lnk'); Arguments = $baseArguments },
       [PSCustomObject]@{ Path = (Join-Path $desktop 'Claude Aura Studio.lnk'); Arguments = "$baseArguments -OpenStudio" },
       [PSCustomObject]@{ Path = (Join-Path $menuRoot 'Claude Aura.lnk'); Arguments = $baseArguments },
       [PSCustomObject]@{ Path = (Join-Path $menuRoot 'Claude Aura Studio.lnk'); Arguments = "$baseArguments -OpenStudio" }
     )
-    $present = @($ownedShortcuts | Where-Object { Test-Path -LiteralPath $_.Path -PathType Leaf })
+    $present = @($installedShortcuts | Where-Object { Test-Path -LiteralPath $_.Path -PathType Leaf })
     if ($present.Count -eq 0) {
       return [PSCustomObject]@{ Success = $true; Managed = $false; Changes = @() }
     }
-    if ($present.Count -ne $ownedShortcuts.Count) {
+    if ($present.Count -ne $installedShortcuts.Count) {
       Write-AuraUiLog -Message 'Owned shortcut identity was not changed because only part of the four-shortcut set exists.'
       return $null
     }
@@ -2406,6 +2475,10 @@ function Update-AuraUiOwnedShortcuts {
     $validated = [Collections.Generic.List[object]]::new()
     $changed = [Collections.Generic.List[object]]::new()
     try {
+      $pinnedShortcuts = @(Get-AuraUiPinnedTaskbarShortcuts -Shell $shell `
+        -ExpectedPowerShell $powershell -ExpectedScript $installedScript `
+        -MainArguments $baseArguments -StudioArguments "$baseArguments -OpenStudio")
+      $ownedShortcuts = @($installedShortcuts) + $pinnedShortcuts
       foreach ($owned in $ownedShortcuts) {
         $item = Get-Item -LiteralPath $owned.Path -Force
         if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
@@ -2418,10 +2491,17 @@ function Update-AuraUiOwnedShortcuts {
               -ExpectedScript $installedScript -ExpectedArguments $owned.Arguments)) {
             throw "Owned shortcut target does not match the installed Aura host: $($owned.Path)"
           }
+          $previousAppUserModelId = Get-AuraShortcutAppUserModelId -Path $owned.Path
+          if ($previousAppUserModelId -and
+              -not [string]::Equals($previousAppUserModelId, $AuraAppUserModelId,
+                [StringComparison]::Ordinal)) {
+            throw "Owned shortcut has an unexpected AppUserModelID: $($owned.Path)"
+          }
           $validated.Add([PSCustomObject]@{
             Path = $owned.Path
             Arguments = $owned.Arguments
             PreviousIcon = "$($shortcut.IconLocation)"
+            PreviousAppUserModelId = $previousAppUserModelId
           })
         } finally {
           if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
@@ -2432,14 +2512,21 @@ function Update-AuraUiOwnedShortcuts {
 
       $nextIconLocation = "$IconPath,0"
       foreach ($entry in $validated) {
-        if ([string]::Equals($entry.PreviousIcon, $nextIconLocation, [StringComparison]::OrdinalIgnoreCase)) {
+        $iconCurrent = [string]::Equals(
+          $entry.PreviousIcon, $nextIconLocation, [StringComparison]::OrdinalIgnoreCase)
+        $appIdCurrent = [string]::Equals(
+          "$($entry.PreviousAppUserModelId)", $AuraAppUserModelId, [StringComparison]::Ordinal)
+        if ($iconCurrent -and $appIdCurrent) {
           continue
         }
         $shortcut = $null
         try {
-          $shortcut = $shell.CreateShortcut($entry.Path)
-          $shortcut.IconLocation = $nextIconLocation
-          $shortcut.Save()
+          if (-not $iconCurrent) {
+            $shortcut = $shell.CreateShortcut($entry.Path)
+            $shortcut.IconLocation = $nextIconLocation
+            $shortcut.Save()
+          }
+          Set-AuraShortcutAppUserModelId -Path $entry.Path
           $changed.Add($entry)
         } catch {
           # Save can write a .lnk and still report an error. Restore the complete
@@ -2452,6 +2539,8 @@ function Update-AuraUiOwnedShortcuts {
               $rollback = $shell.CreateShortcut($validated[$rollbackIndex].Path)
               $rollback.IconLocation = $validated[$rollbackIndex].PreviousIcon
               $rollback.Save()
+              Set-AuraShortcutAppUserModelId -Path $validated[$rollbackIndex].Path `
+                -AppUserModelId $validated[$rollbackIndex].PreviousAppUserModelId
             } catch {
               $rollbackComplete = $false
               Write-AuraUiLog -Message "Owned shortcut rollback failed for $($validated[$rollbackIndex].Path): $($_.Exception.Message)"
@@ -2507,6 +2596,8 @@ function Restore-AuraUiOwnedShortcuts {
         $shortcut = $shell.CreateShortcut($entry.Path)
         $shortcut.IconLocation = $entry.PreviousIcon
         $shortcut.Save()
+        Set-AuraShortcutAppUserModelId -Path $entry.Path `
+          -AppUserModelId $entry.PreviousAppUserModelId
         [AuraWindow]::SHChangeNotify(0x00002000, 0x0005, $entry.Path, $null)
       } catch {
         $restored = $false
@@ -7542,7 +7633,7 @@ public static class AuraLayered {
   # Give the process a stable taskbar identity so it stops grouping under the
   # generic PowerShell host. This is also the prerequisite for attaching a
   # taskbar Jump List to the running window in a later pass.
-  try { [void][AuraWindow]::SetCurrentProcessExplicitAppUserModelID('ClaudeAura') } catch {}
+  try { [void][AuraWindow]::SetCurrentProcessExplicitAppUserModelID($AuraAppUserModelId) } catch {}
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
   $mainSignalCreatedNew = $false
   $script:MainOpenSignal = [System.Threading.EventWaitHandle]::new(

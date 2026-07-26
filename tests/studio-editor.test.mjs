@@ -269,8 +269,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The tray balloon hint is replaced by the launcher hint card");
   assert.match(ui, /add_AcceleratorKeyPressed/,
     "A keyboard accelerator must provide a second route to Studio");
-  assert.match(ui, /SetCurrentProcessExplicitAppUserModelID\(\s*'ClaudeAura'\s*\)/,
-    "The process must claim a stable taskbar identity rather than the generic PowerShell host");
+  assert.match(common, /\$AuraAppUserModelId\s*=\s*['"]ClaudeAura['"]/,
+    "The shared Windows shortcut helpers must define Aura's stable AppUserModelID once");
+  assert.match(ui, /SetCurrentProcessExplicitAppUserModelID\(\s*\$AuraAppUserModelId\s*\)/,
+    "The running process must use the same stable taskbar identity as Aura shortcuts");
   assert.match(ui, /function Register-AuraUiJumpList[\s\S]{0,900}?System\.Windows\.Shell\.JumpList/,
     "The taskbar Jump List must use the managed WPF JumpList, never hand-written COM interop");
   assert.match(ui, /function Register-AuraUiJumpList[\s\S]{0,900}?-OpenStudio/,
@@ -3492,6 +3494,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(install, /\$shortcut\.IconLocation\s*=\s*"\$iconPath,0"/,
     "Aura-owned shortcuts must use the selected installed theme icon");
   assert.match(install,
+    /\$shortcut\.Save\(\)[\s\S]{0,120}?Set-AuraShortcutAppUserModelId -Path \$shortcutPath/,
+    "Installer-created Aura shortcuts must receive the process AppUserModelID before they can be pinned");
+  assert.match(install,
     /\$canonicalThemeIds\s+-ccontains\s+\$installedConfig\.theme[\s\S]{0,320}?Get-AuraInstalledThemeIconPath\s+-InstallRoot\s+\$installRoot\s+-ThemeId\s+\$selectedBuiltInTheme/,
     "Installer shortcuts must initialize from the enabled selected built-in theme only");
   assert.match(install,
@@ -3511,22 +3516,37 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Claude Aura Studio.lnk",
     "Claude Aura.lnk",
     "Claude Aura Studio.lnk",
-  ], "Theme changes may update only the four Desktop/Start-menu Aura shortcuts");
+  ], "Theme changes must retain the exact four installed Desktop/Start-menu Aura shortcuts");
   assert.match(ownedShortcutUpdater,
     /\$installedScript[\s\S]*?\$currentScript[\s\S]*?Equals\(\$currentScript,\s*\$installedScript/,
     "Shortcut refresh must run only from the exact installed aura-ui.ps1");
   assert.match(ownedShortcutUpdater,
-    /\$present\s*=\s*@\(\$ownedShortcuts \| Where-Object[\s\S]{0,240}?\$present\.Count -eq 0[\s\S]{0,220}?Managed = \$false[\s\S]{0,180}?\$present\.Count -ne \$ownedShortcuts\.Count[\s\S]{0,220}?return \$null/,
+    /\$present\s*=\s*@\(\$installedShortcuts \| Where-Object[\s\S]{0,240}?\$present\.Count -eq 0[\s\S]{0,220}?Managed = \$false[\s\S]{0,180}?\$present\.Count -ne \$installedShortcuts\.Count[\s\S]{0,220}?return \$null/,
     "Shortcut refresh may skip a machine with no Aura links, but must reject a partial four-link set");
+  const pinnedShortcutScanner = powershellFunction("Get-AuraUiPinnedTaskbarShortcuts");
+  assert.match(pinnedShortcutScanner,
+    /Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar[\s\S]{0,700}?ReparsePoint[\s\S]{0,500}?TopDirectoryOnly[\s\S]{0,180}?\$inspected -gt 256/,
+    "Pinned shortcut discovery must be top-level, bounded, contained in AppData, and reparse-safe");
+  assert.equal((pinnedShortcutScanner.match(/Test-AuraUiOwnedShortcutTarget/g) ?? []).length, 2,
+    "A taskbar pin must match the exact installed main or Studio launch contract");
+  assert.match(pinnedShortcutScanner,
+    /Get-AuraShortcutAppUserModelId -Path \$candidateFull[\s\S]{0,260}?\$AuraAppUserModelId[\s\S]{0,220}?continue/,
+    "A taskbar pin carrying another AppUserModelID must be left unchanged");
+  assert.match(ownedShortcutUpdater,
+    /Get-AuraUiPinnedTaskbarShortcuts[\s\S]{0,220}?\$ownedShortcuts = @\(\$installedShortcuts\) \+ \$pinnedShortcuts/,
+    "Target-validated pinned copies must join the installed shortcut transaction");
   const shortcutValidationIndex = ownedShortcutUpdater.indexOf("foreach ($owned in $ownedShortcuts)");
   const shortcutValidatedIndex = ownedShortcutUpdater.indexOf("$validated.Add(", shortcutValidationIndex);
   const shortcutMutationIndex = ownedShortcutUpdater.indexOf("foreach ($entry in $validated)", shortcutValidatedIndex);
   assert(shortcutValidationIndex >= 0 && shortcutValidatedIndex > shortcutValidationIndex
       && shortcutMutationIndex > shortcutValidatedIndex,
-  "All four owned shortcuts must be validated before the first shortcut is mutated");
+  "All installed and pinned Aura shortcuts must be validated before the first shortcut is mutated");
   assert.match(ownedShortcutUpdater,
-    /foreach \(\$owned in \$ownedShortcuts\)[\s\S]{0,300}?ReparsePoint[\s\S]{0,500}?Test-AuraUiOwnedShortcutTarget[\s\S]{0,400}?\$validated\.Add\(/,
-    "Every shortcut must be non-redirected and match Aura's exact installed target before mutation");
+    /foreach \(\$owned in \$ownedShortcuts\)[\s\S]{0,300}?ReparsePoint[\s\S]{0,500}?Test-AuraUiOwnedShortcutTarget[\s\S]{0,500}?Get-AuraShortcutAppUserModelId[\s\S]{0,500}?\$validated\.Add\(/,
+    "Every shortcut must be non-redirected and match Aura's exact target and AppUserModelID contract before mutation");
+  assert.match(ownedShortcutUpdater,
+    /\$iconCurrent[\s\S]{0,220}?\$appIdCurrent[\s\S]{0,500}?Set-AuraShortcutAppUserModelId -Path \$entry\.Path[\s\S]{0,100}?\$changed\.Add\(\$entry\)/,
+    "Each changed shortcut must commit both its current theme icon and Aura AppUserModelID");
   const rollbackSnapshotIndex = ownedShortcutUpdater.indexOf(
     "for ($rollbackIndex = $validated.Count - 1; $rollbackIndex -ge 0; $rollbackIndex--)");
   const rollbackIconIndex = ownedShortcutUpdater.indexOf(
@@ -3537,6 +3557,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && rollbackSaveIndex > rollbackIconIndex && rollbackThrowIndex > rollbackSaveIndex,
   "A shortcut Save that writes and then throws must roll back the complete prevalidated snapshot");
   assert.match(ownedShortcutUpdater,
+    /\$rollback\.Save\(\)[\s\S]{0,120}?Set-AuraShortcutAppUserModelId -Path \$validated\[\$rollbackIndex\]\.Path[\s\S]{0,140}?PreviousAppUserModelId/,
+    "Internal rollback must restore the prior shortcut AppUserModelID with its icon");
+  assert.match(ownedShortcutUpdater,
     /\$rollbackComplete = \$false[\s\S]{0,700}?if \(-not \$rollbackComplete\)\s*\{[\s\S]{0,220}?Success = \$false[\s\S]{0,180}?RollbackIncomplete = \$true/,
     "An incomplete internal shortcut rollback must be reported distinctly, never collapsed to an ordinary candidate miss");
   assert.match(ownedShortcutUpdater,
@@ -3544,16 +3567,87 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Explorer must be notified after owned shortcut icons change");
   assert.match(ownedShortcutUpdater,
     /return \[PSCustomObject\]@\{\s*Success = \$true;\s*Managed = \$true;\s*Changes = @\(\$changed\)\s*\}/,
-    "A successful four-shortcut transaction must return the exact rollback snapshot");
+    "A successful shell-shortcut transaction must return the exact rollback snapshot");
   const ownedShortcutRollback = powershellFunction("Restore-AuraUiOwnedShortcuts");
   assert.match(ownedShortcutRollback,
-    /\$null -eq \$Snapshot[\s\S]{0,180}?\$Snapshot\.Managed[\s\S]{0,180}?\$Snapshot\.Changes[\s\S]{0,500}?foreach \(\$entry in @\(\$Snapshot\.Changes\)\)[\s\S]{0,300}?\$shortcut\.IconLocation = \$entry\.PreviousIcon[\s\S]{0,120}?\$shortcut\.Save\(\)/,
-    "Coordinator rollback must restore every changed shortcut from the returned snapshot");
+    /\$null -eq \$Snapshot[\s\S]{0,180}?\$Snapshot\.Managed[\s\S]{0,180}?\$Snapshot\.Changes[\s\S]{0,500}?foreach \(\$entry in @\(\$Snapshot\.Changes\)\)[\s\S]{0,300}?\$shortcut\.IconLocation = \$entry\.PreviousIcon[\s\S]{0,120}?\$shortcut\.Save\(\)[\s\S]{0,160}?PreviousAppUserModelId/,
+    "Coordinator rollback must restore every changed shortcut icon and AppUserModelID");
   assert.match(ownedShortcutRollback,
     /\$restored = \$false[\s\S]{0,500}?return \$restored/,
     "Shortcut rollback must report incomplete restoration instead of claiming success");
   assert(!/ExtractAssociatedIcon|Claude\.exe|Get-AuraClaudeInstall/i.test(ownedShortcutUpdater),
     "Dynamic shortcut identity must never borrow a Claude executable icon");
+  assert.match(common,
+    /9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3["']\),\s*5\)/,
+    "Shortcut identity must use the documented System.AppUserModel.ID property key");
+  assert.match(common,
+    /IPropertyStore[\s\S]{0,2600}?SetValue\(ref key, ref value\)[\s\S]{0,180}?persist\.Save\(path, true\)/,
+    "Shortcut AppUserModelID writes must use the Shell property store and persist the link");
+  if (process.platform === "win32") {
+    const shortcutProbeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aura-shortcut-appid-"));
+    try {
+      const commonPath = path.join(PROJECT_ROOT, "windows", "common.ps1").replaceAll("'", "''");
+      const probePath = shortcutProbeRoot.replaceAll("'", "''");
+      const shortcutIdentityRegression = [
+        "$ErrorActionPreference='Stop'",
+        `. '${commonPath}'`,
+        powershellFunction("Test-AuraUiOwnedShortcutTarget"),
+        pinnedShortcutScanner,
+        "function Write-AuraUiLog { param([string]$Message); $script:ProbeLogs.Add($Message) }",
+        `$testRoot='${probePath}'`,
+        "$env:APPDATA=Join-Path $testRoot 'AppData'",
+        "$taskbarRoot=Join-Path $env:APPDATA 'Microsoft\\Internet Explorer\\Quick Launch\\User Pinned\\TaskBar'",
+        "[void][IO.Directory]::CreateDirectory($taskbarRoot)",
+        "$expectedPowerShell=[IO.Path]::GetFullPath((Get-Command powershell.exe -ErrorAction Stop).Source)",
+        "$expectedScript=Join-Path $testRoot 'app\\windows\\aura-ui.ps1'",
+        "$baseArguments='-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File \"' + $expectedScript + '\"'",
+        "$studioArguments=\"$baseArguments -OpenStudio\"",
+        "$shell=New-Object -ComObject WScript.Shell",
+        "$shortcut=$null",
+        "try {",
+        "  $pinPath=Join-Path $taskbarRoot 'Claude Aura.lnk'",
+        "  $shortcut=$shell.CreateShortcut($pinPath)",
+        "  $shortcut.TargetPath=$expectedPowerShell",
+        "  $shortcut.Arguments=$baseArguments",
+        "  $shortcut.IconLocation=\"$expectedPowerShell,0\"",
+        "  $shortcut.Save()",
+        "  [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)",
+        "  $shortcut=$null",
+        "  $otherPath=Join-Path $taskbarRoot 'Claude Aura custom.lnk'",
+        "  $shortcut=$shell.CreateShortcut($otherPath)",
+        "  $shortcut.TargetPath=$expectedPowerShell",
+        "  $shortcut.Arguments=$baseArguments",
+        "  $shortcut.IconLocation=\"$expectedPowerShell,0\"",
+        "  $shortcut.Save()",
+        "  [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)",
+        "  $shortcut=$null",
+        "  Initialize-AuraShortcutPropertyStore",
+        "  [AuraShortcutPropertyStore]::SetAppUserModelId($otherPath,'Other.Product')",
+        "  $script:ProbeLogs=[Collections.Generic.List[string]]::new()",
+        "  $found=@(Get-AuraUiPinnedTaskbarShortcuts -Shell $shell -ExpectedPowerShell $expectedPowerShell -ExpectedScript $expectedScript -MainArguments $baseArguments -StudioArguments $studioArguments)",
+        "  if($found.Count -ne 1 -or -not [string]::Equals($found[0].Path,$pinPath,[StringComparison]::OrdinalIgnoreCase)){throw 'Pinned Aura shortcut discovery mismatch'}",
+        "  if($script:ProbeLogs.Count -ne 1){throw 'Foreign AppUserModelID pin was not explicitly skipped'}",
+        "  Set-AuraShortcutAppUserModelId -Path $pinPath",
+        "  if((Get-AuraShortcutAppUserModelId -Path $pinPath) -cne $AuraAppUserModelId){throw 'Aura AppUserModelID assignment mismatch'}",
+        "  Set-AuraShortcutAppUserModelId -Path $pinPath -AppUserModelId $null",
+        "  if(Get-AuraShortcutAppUserModelId -Path $pinPath){throw 'Aura AppUserModelID rollback mismatch'}",
+        "} finally {",
+        "  if($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)}",
+        "  if([Runtime.InteropServices.Marshal]::IsComObject($shell)){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)}",
+        "}",
+      ].join("\n");
+      run("powershell.exe", [
+        "-NoProfile",
+        "-STA",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-EncodedCommand",
+        Buffer.from(shortcutIdentityRegression, "utf16le").toString("base64"),
+      ]);
+    } finally {
+      await fs.rm(shortcutProbeRoot, { recursive: true, force: true });
+    }
+  }
 
   const customShortcutIcon = powershellFunction("New-AuraUiCustomShortcutIcon");
   assert.match(customShortcutIcon,

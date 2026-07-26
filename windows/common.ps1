@@ -1,4 +1,166 @@
 $ErrorActionPreference = 'Stop'
+$AuraAppUserModelId = 'ClaudeAura'
+
+function Initialize-AuraShortcutPropertyStore {
+  if ('AuraShortcutPropertyStore' -as [type]) { return }
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+
+public static class AuraShortcutPropertyStore
+{
+    [ComImport]
+    [Guid("00021401-0000-0000-C000-000000000046")]
+    private class ShellLink
+    {
+    }
+
+    [ComImport]
+    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint propertyCount);
+        [PreserveSig] int GetAt(uint propertyIndex, out PropertyKey key);
+        [PreserveSig] int GetValue(ref PropertyKey key, out PropVariant value);
+        [PreserveSig] int SetValue(ref PropertyKey key, ref PropVariant value);
+        [PreserveSig] int Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    private struct PropertyKey
+    {
+        public Guid FormatId;
+        public uint PropertyId;
+
+        public PropertyKey(Guid formatId, uint propertyId)
+        {
+            FormatId = formatId;
+            PropertyId = propertyId;
+        }
+    }
+
+    [StructLayout(LayoutKind.Explicit, Size = 16)]
+    private struct PropVariant
+    {
+        [FieldOffset(0)] public ushort ValueType;
+        [FieldOffset(8)] public IntPtr PointerValue;
+    }
+
+    private const ushort VariantEmpty = 0;
+    private const ushort VariantUnicodeString = 31;
+    private const int StorageRead = 0;
+    private const int StorageReadWrite = 2;
+    private static readonly PropertyKey AppUserModelIdKey =
+        new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PropVariant value);
+
+    private static void ThrowIfFailed(int result)
+    {
+        if (result < 0) Marshal.ThrowExceptionForHR(result);
+    }
+
+    private static string ReadAppUserModelId(IPropertyStore store)
+    {
+        PropVariant value;
+        PropertyKey key = AppUserModelIdKey;
+        ThrowIfFailed(store.GetValue(ref key, out value));
+        try
+        {
+            if (value.ValueType == VariantEmpty) return null;
+            if (value.ValueType != VariantUnicodeString)
+            {
+                throw new InvalidOperationException(
+                    "The shortcut contains an unsupported AppUserModelID property type.");
+            }
+            return Marshal.PtrToStringUni(value.PointerValue);
+        }
+        finally
+        {
+            PropVariantClear(ref value);
+        }
+    }
+
+    public static string GetAppUserModelId(string path)
+    {
+        object link = new ShellLink();
+        try
+        {
+            ((IPersistFile)link).Load(path, StorageRead);
+            return ReadAppUserModelId((IPropertyStore)link);
+        }
+        finally
+        {
+            Marshal.FinalReleaseComObject(link);
+        }
+    }
+
+    public static void SetAppUserModelId(string path, string appUserModelId)
+    {
+        object link = new ShellLink();
+        PropVariant value = new PropVariant();
+        try
+        {
+            IPersistFile persist = (IPersistFile)link;
+            IPropertyStore store = (IPropertyStore)link;
+            persist.Load(path, StorageReadWrite);
+            if (!String.IsNullOrEmpty(appUserModelId))
+            {
+                value.ValueType = VariantUnicodeString;
+                value.PointerValue = Marshal.StringToCoTaskMemUni(appUserModelId);
+            }
+            PropertyKey key = AppUserModelIdKey;
+            ThrowIfFailed(store.SetValue(ref key, ref value));
+            persist.Save(path, true);
+        }
+        finally
+        {
+            PropVariantClear(ref value);
+            Marshal.FinalReleaseComObject(link);
+        }
+    }
+}
+'@
+}
+
+function Get-AuraShortcutAppUserModelId {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "The shortcut does not exist: $Path"
+  }
+  Initialize-AuraShortcutPropertyStore
+  return [AuraShortcutPropertyStore]::GetAppUserModelId([IO.Path]::GetFullPath($Path))
+}
+
+function Set-AuraShortcutAppUserModelId {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [AllowNull()][AllowEmptyString()][string]$AppUserModelId = $AuraAppUserModelId
+  )
+  $normalizedAppUserModelId = if ([string]::IsNullOrEmpty($AppUserModelId)) {
+    $null
+  } else { $AppUserModelId }
+  if ($null -ne $normalizedAppUserModelId -and
+      $normalizedAppUserModelId -cne $AuraAppUserModelId) {
+    throw 'Claude Aura shortcuts may use only the Claude Aura AppUserModelID.'
+  }
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "The shortcut does not exist: $Path"
+  }
+  Initialize-AuraShortcutPropertyStore
+  $fullPath = [IO.Path]::GetFullPath($Path)
+  [AuraShortcutPropertyStore]::SetAppUserModelId($fullPath, $normalizedAppUserModelId)
+  $actual = [AuraShortcutPropertyStore]::GetAppUserModelId($fullPath)
+  if ($null -eq $normalizedAppUserModelId) {
+    if ($actual) { throw 'The shortcut AppUserModelID could not be cleared.' }
+  } elseif (-not [string]::Equals(
+      $actual, $normalizedAppUserModelId, [StringComparison]::Ordinal)) {
+    throw 'The shortcut AppUserModelID could not be verified.'
+  }
+}
 
 function Enter-AuraOperationLock {
   $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
