@@ -564,16 +564,8 @@ export async function generateAssetAudit(themeId, { cwd = process.cwd() } = {}) 
     if (!layered && assets.length === 1 && (!usesLegacyArtwork || layerCount !== 0)) {
       throw new Error(`${mode} payload did not compile the registered artwork`);
     }
-    const embeddedArtworkBytes = (bundle.settings.artLayers ?? [])
-      .reduce((total, layer) => total + Buffer.byteLength(layer.dataUrl, "utf8"), 0)
-      + (bundle.settings.artDataUrl ? Buffer.byteLength(bundle.settings.artDataUrl, "utf8") : 0)
-      + (bundle.settings.brandWordmark
-        ? Buffer.byteLength(bundle.settings.brandWordmark.lightDataUrl, "utf8")
-          + Buffer.byteLength(bundle.settings.brandWordmark.darkDataUrl, "utf8")
-        : 0);
     const payloadBytes = Buffer.byteLength(bundle.payload, "utf8");
-    const chromeBytes = payloadBytes - embeddedArtworkBytes;
-    const budgetPass = chromeBytes < CHROME_PAYLOAD_LIMIT && embeddedArtworkBytes < EMBEDDED_ARTWORK_LIMIT;
+    const { embeddedArtworkBytes, chromeBytes, pass: budgetPass } = bundle.payloadBudget;
     if (!budgetPass) throw new Error(`${mode} payload exceeds the theme byte budget`);
     payloads.push({
       mode,

@@ -43,6 +43,11 @@ import {
 } from "./support/context.mjs";
 test("compiled payload uses one stable root attribute and active-theme-only artwork", async () => {
   const rendererSource = await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8");
+  const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
+  assert.match(baseCss, /\[data-claude-aura-prompt="authored"\]\s*\{[^}]*inline-size:\s*var\(--aura-prompt-width\)/s,
+    "Only an authored prompt marker may own Aura's width");
+  assert(!/\[data-claude-aura-prompt="native"\]\s*\{[^}]*inline-size:/s.test(baseCss),
+    "The native measurement marker must not reset Claude's prompt width");
   assert.match(rendererSource, /const imageCssValue =/);
   assert.match(rendererSource, /const artCssValue =/);
   assert.match(rendererSource, /attributeFilter:/);
@@ -451,7 +456,7 @@ test("built-in wordmark swaps only after decode and fails back to the native log
     getComputedStyle: (element) => ({
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
-      translate: "none",
+      translate: element.style.getPropertyValue("translate") || "none",
       color: brandLabelColor,
     }),
     addEventListener(type, listener) {
@@ -887,7 +892,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     getComputedStyle: (element) => ({
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
-      translate: "none",
+      translate: element.style.getPropertyValue("translate") || "none",
       backgroundColor: element.style.getPropertyValue("background-color") || "rgba(0, 0, 0, 0)",
       backgroundImage: element.style.getPropertyValue("background-image") || "none",
     }),
@@ -1180,8 +1185,16 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     ? (hasConversationMessage ? new FakeElement("article") : null)
     : FakeElement.prototype.querySelector.call(main, selector);
 
-  const nativeLayoutBundle = await buildPayload({
+  const nativeLayoutCompiled = await compileTheme({
     config: { ...DEFAULT_CONFIG, theme: "japanese-film-editorial" },
+  });
+  const nativeLayoutBundle = await buildPayloadFromCompiled({
+    ...nativeLayoutCompiled,
+    settings: {
+      ...nativeLayoutCompiled.settings,
+      newChatLayout: null,
+      digest: "native-layout-regression",
+    },
   });
   assert.equal(nativeLayoutBundle.settings.newChatLayout, null);
   const injectNativeLayout = new Function(
@@ -1191,7 +1204,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   injectNativeLayout(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
   assert.equal(document.documentElement.dataset.claudeAuraContext, "new-chat");
   assert.equal(main["data-claude-aura-main-canvas"], "true");
-  assert.equal(promptRoot["data-claude-aura-prompt"], "new-chat",
+  assert.equal(promptRoot["data-claude-aura-prompt"], "native",
     "A native new-chat composer must remain measurable before Studio authors a layout");
   assert.equal(composer["data-aura-role"], "composer-shell");
   assert.equal(editor["data-aura-role"], "composer-editor");
@@ -1299,12 +1312,20 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   for (const listener of forcedColorListeners) listener({ matches: false });
   assert.equal(primaryAction["data-aura-role"], "sidebar-primary");
   assert.equal(composer["data-aura-role"], "composer-shell");
-  assert.equal(promptRoot["data-claude-aura-prompt"], "new-chat");
+  assert.equal(promptRoot["data-claude-aura-prompt"], "native");
 
+  promptRoot.style.setProperty("translate", "7px 0px");
   reinjectKorean(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
   window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(document.documentElement.dataset.claudeAuraContext, "new-chat");
-  assert.equal(promptRoot["data-claude-aura-prompt"], "new-chat");
+  assert.equal(promptRoot["data-claude-aura-prompt"], "native",
+    "An authored recipe must fail open when Claude already owns a translation");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-x"), "");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-y"), "");
+  promptRoot.style.removeProperty("translate");
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(promptRoot["data-claude-aura-prompt"], "authored");
   assert.equal(composer["data-claude-aura-prompt"], undefined,
     "Prompt placement must move the complete composer shell, not its inner field row");
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "904.4px");
@@ -1312,6 +1333,16 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert(placed.left >= 266 && placed.right <= 1424, "Korean Idol prompt escaped the measured main canvas");
   assert.equal(composer.style.getPropertyValue("position"), "");
   assert.equal(composer.style.getPropertyValue("transform"), "");
+  injectNativeLayout(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(promptRoot["data-claude-aura-prompt"], "native",
+    "Switching back to a native recipe did not retain the measurement marker");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "",
+    "Switching back to native left a stale authored width");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-x"), "");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-y"), "");
+  reinjectKorean(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  window.__CLAUDE_AURA_STATE__.ensure();
   const activeBackdrop = document.getElementById("claude-aura-backdrop");
   const koreanLayers = activeBackdrop.children
     .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer"));

@@ -1,5 +1,7 @@
 // theme-cli tests. Extracted from the former monolithic tests/run-tests.mjs.
 import { test, runIfMain } from "./support/harness.mjs";
+import { validateRegistryEntry, validateStudioLayer } from "../scripts/theme-core/validation.mjs";
+import { createBuiltinAuthoringTestHarness } from "../scripts/theme-core/studio.mjs";
 import {
   AURA_VERSION,
   BUILTIN_BRAND_WORDMARK_ASSETS,
@@ -41,6 +43,773 @@ import {
   writeConfig,
   zipEntryNames,
 } from "./support/context.mjs";
+
+test("built-in registry layers accept exact Studio frames without weakening kit isolation", async () => {
+  const registryDocument = JSON.parse(await fs.readFile(
+    path.join(PROJECT_ROOT, "themes", "registry.json"),
+    "utf8",
+  ));
+  const baseEntry = structuredClone(
+    registryDocument.themes.find((entry) => entry.id === "anime-twilight"),
+  );
+  const framedLayer = {
+    id: `layer-${"0".repeat(32)}`,
+    path: "assets/theme-art/anime-twilight/background.webp",
+    role: "corner",
+    appearance: "dark",
+    context: "other",
+    viewport: "wide",
+    visible: false,
+    opacity: 0.73,
+    mask: "soft-right",
+    mobile: "hide",
+    frames: {
+      normal: {
+        anchor: "top-left",
+        positionX: -12.5,
+        positionY: 8.25,
+        focalX: 22.5,
+        focalY: 61.75,
+        scale: 0.8,
+      },
+      wide: {
+        anchor: "bottom-right",
+        positionX: 14.75,
+        positionY: -6.5,
+        focalX: 77.5,
+        focalY: 42.25,
+        scale: 1.35,
+      },
+    },
+  };
+  const legacyLayer = {
+    path: "assets/theme-art/anime-twilight/background.webp",
+    position: "center",
+    size: "cover",
+    mobile: "keep",
+    opacity: 0.62,
+    mask: "none",
+    role: "background",
+    appearance: "light",
+    contextOverrides: { conversation: { hidden: true } },
+  };
+  const normalized = validateRegistryEntry({
+    ...baseEntry,
+    artwork: null,
+    artworkLayers: [framedLayer, legacyLayer],
+  }, "framed-builtin");
+  assert.deepEqual(normalized.artworkLayers[0], framedLayer,
+    "Built-in frame validation did not preserve the exact stable layer document");
+  assert.deepEqual(normalized.artworkLayers[1], legacyLayer,
+    "Adding framed layers changed the normalized legacy layer contract");
+  assert.throws(() => validateStudioLayer({
+    ...framedLayer,
+    path: `artwork/layer-${"1".repeat(32)}.webp`,
+  }, "ordinary-user-layer"), /context has an unsupported value/,
+  "The internal built-in context capability broadened the ordinary Studio kit schema");
+
+  const invalidFramedLayers = [
+    [{ ...framedLayer, position: "center" }, /unsupported property shape/],
+    [{ ...framedLayer, note: "layout draft" }, /unsupported property shape/],
+    [{ ...framedLayer, id: "layer-not-hex" }, /32 lowercase hexadecimal/],
+    [{
+      ...framedLayer,
+      frames: { normal: framedLayer.frames.normal },
+    }, /frames.*unsupported property shape/],
+    [{
+      ...framedLayer,
+      frames: {
+        ...framedLayer.frames,
+        wide: { ...framedLayer.frames.wide, scale: 3.01 },
+      },
+    }, /scale must be a number between 0\.25 and 3/],
+  ];
+  for (const [layer, expected] of invalidFramedLayers) {
+    assert.throws(() => validateRegistryEntry({
+      ...baseEntry,
+      artwork: null,
+      artworkLayers: [layer],
+    }, "invalid-framed-builtin"), expected);
+  }
+  assert.throws(() => validateRegistryEntry({
+    ...baseEntry,
+    artwork: null,
+    artworkLayers: [framedLayer, structuredClone(framedLayer)],
+  }, "duplicate-framed-builtin"), /artworkLayers ids must be unique/);
+
+  const userEntry = {
+    ...baseEntry,
+    file: undefined,
+    studioPreview: null,
+    studioPreviewFrame: null,
+    artwork: null,
+    artworkLayers: [{
+      path: framedLayer.path,
+      role: "background",
+    }],
+  };
+  assert.throws(
+    () => validateRegistryEntry(userEntry, "isolated-user-kit", { source: "user" }),
+    /not a supported theme-kit slot path/,
+    "A standalone user kit was allowed to resolve a project artwork path",
+  );
+  assert.throws(() => validateRegistryEntry({
+    ...baseEntry,
+    artwork: null,
+    artworkLayers: [{ ...legacyLayer, extra: true }],
+  }, "legacy-extra"), /unsupported property shape/);
+});
+
+test("built-in source publication keeps crash remnants inside .git", async () => {
+  const studioCore = await fs.readFile(
+    path.join(PROJECT_ROOT, "scripts", "theme-core", "studio.mjs"),
+    "utf8",
+  );
+  const builder = await fs.readFile(
+    path.join(PROJECT_ROOT, "scripts", "build-studio-themes.mjs"),
+    "utf8",
+  );
+  const sourcePublisher = studioCore.slice(
+    studioCore.indexOf("async function atomicWriteBuiltinSourceText"),
+    studioCore.indexOf("function validateBuiltinLockOwner"),
+  );
+  const generatedPublisher = builder.slice(
+    builder.indexOf("async function sourcePublicationTempRoot"),
+    builder.indexOf("function studioMode"),
+  );
+  assert.match(sourcePublisher,
+    /path\.join\(\s*authority\.gitPath,\s*`\.claude-aura-source-/,
+    "Registry publication did not stage below the authorized .git directory");
+  assert.match(sourcePublisher, /renameStudioPath\(temporary, target\)/,
+    "Registry publication lost its single atomic rename point");
+  assert(!sourcePublisher.includes("`${target}.tmp"),
+    "Registry publication can still orphan a temporary beside a deliverable");
+  assert.match(generatedPublisher,
+    /path\.join\(PROJECT_ROOT,\s*["']\.git["']\)[\s\S]*?path\.join\(\s*temporaryRoot,\s*`\.claude-aura-generated-/,
+    "Generated Studio metadata did not stage below the real .git directory");
+  assert(!generatedPublisher.includes("`${filePath}.tmp"),
+    "Generated Studio metadata can still orphan a temporary beside a deliverable");
+  assert.match(studioCore,
+    /atomicWriteBuiltinSourceText\(authority, authority\.registryPath, nextRegistryText\)/,
+    "Forward registry publication bypassed the .git-contained writer");
+  assert.match(studioCore,
+    /restoreStudioFileIfOwned\(\s*authority,\s*authority\.registryPath,[\s\S]*?restoreStudioFileIfOwned\(\s*authority,\s*generatedPath,/,
+    "Registry or generated-metadata rollback bypassed the .git-contained writer");
+});
+
+test("guarded built-in layout authoring saves only source layout fields", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-builtin-author-"));
+  const sourceRoot = path.join(temporary, "source");
+  const editorRoot = path.join(temporary, "editor");
+  const userThemesDir = path.join(temporary, "user-themes");
+  const configPath = path.join(temporary, "config.json");
+  const themeId = "anime-twilight";
+  try {
+    await Promise.all([
+      fs.mkdir(path.join(sourceRoot, ".git"), { recursive: true }),
+      fs.mkdir(path.join(sourceRoot, "themes"), { recursive: true }),
+      fs.mkdir(path.join(sourceRoot, "assets", "theme-art"), { recursive: true }),
+      fs.mkdir(path.join(sourceRoot, "studio"), { recursive: true }),
+      fs.mkdir(userThemesDir, { recursive: true }),
+    ]);
+    await Promise.all([
+      fs.copyFile(
+        path.join(PROJECT_ROOT, "themes", "registry.json"),
+        path.join(sourceRoot, "themes", "registry.json"),
+      ),
+      fs.copyFile(
+        path.join(PROJECT_ROOT, "themes", `${themeId}.json`),
+        path.join(sourceRoot, "themes", `${themeId}.json`),
+      ),
+      fs.cp(
+        path.join(PROJECT_ROOT, "assets", "theme-art", themeId),
+        path.join(sourceRoot, "assets", "theme-art", themeId),
+        { recursive: true },
+      ),
+    ]);
+    await writeConfig(configPath, { ...DEFAULT_CONFIG });
+    const generatedPath = path.join(sourceRoot, "studio", "generated-themes.js");
+    await fs.writeFile(generatedPath, "test-generated:initial\n", "utf8");
+    const configBefore = await fs.readFile(configPath, "utf8");
+    const registryPath = path.join(sourceRoot, "themes", "registry.json");
+    const registryBefore = await fs.readFile(registryPath, "utf8");
+    const registryDocumentBefore = JSON.parse(registryBefore);
+    const request = (message, options = {}) => executeStudioRequest({
+      request: message,
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      ...options,
+    });
+    let regenerationCount = 0;
+    const regenerateStudioThemes = async (authority) => {
+      regenerationCount += 1;
+      const registryBytes = await fs.readFile(authority.registryPath);
+      const output = `test-generated:${crypto.createHash("sha256").update(registryBytes).digest("hex")}\n`;
+      const temporaryOutput = path.join(
+        authority.gitPath,
+        `.test-generated-${crypto.randomBytes(4).toString("hex")}.tmp`,
+      );
+      await fs.writeFile(temporaryOutput, output, "utf8");
+      await fs.rename(temporaryOutput, generatedPath);
+      return {
+        outputPath: generatedPath,
+        sha256: crypto.createHash("sha256").update(output).digest("hex"),
+      };
+    };
+    const authoringHarness = createBuiltinAuthoringTestHarness(
+      sourceRoot,
+      { regenerateStudioThemes, generatedPath },
+    );
+    const authorized = (message, options = {}) => authoringHarness.execute({
+      request: message,
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+      ...options,
+    });
+
+    await assert.rejects(
+      () => request({ type: "begin-theme-edit", theme: themeId, reset: false }),
+      /Built-in themes must be duplicated|not authorized/,
+      "Ordinary Studio unexpectedly opened a frozen built-in directly",
+    );
+    await assert.rejects(
+      () => request(
+        { type: "begin-theme-edit", theme: themeId, reset: false },
+        {
+          builtinAuthoringRoot: sourceRoot,
+          __testBuiltinAuthoringExpectedRoot: sourceRoot,
+        },
+      ),
+      /canonical source checkout/,
+      "A non-canonical source root gained built-in authoring authority",
+    );
+    let result = await authorized({
+      type: "begin-theme-edit",
+      theme: themeId,
+      reset: false,
+    });
+    assert.equal(result.state.editKind, "builtin-layout");
+    assert.equal(result.state.source, "builtin");
+    assert.equal(result.state.id, themeId);
+    assert(!Object.hasOwn(result.state, "registrySha256"));
+    assert(!JSON.stringify(result.state).includes(sourceRoot),
+      "Public Studio state disclosed the authoring source path");
+    const statePath = path.join(editorRoot, "active", ".editor-state.json");
+    const themePath = path.join(editorRoot, "active", "theme.json");
+    const privateState = JSON.parse(await fs.readFile(statePath, "utf8"));
+    const privateTheme = JSON.parse(await fs.readFile(themePath, "utf8"));
+    assert.match(privateState.registrySha256, /^[a-f0-9]{64}$/);
+    assert.equal(privateState.editKind, "builtin-layout");
+    assert.match(privateTheme.artworkLayers[0].id, /^layer-[a-f0-9]{32}$/);
+    await assert.rejects(() => authorized({
+      type: "begin-theme-edit",
+      theme: themeId,
+      reset: false,
+      builtinAuthoringRoot: sourceRoot,
+    }), /must contain only reset, theme, type/,
+    "A page request was allowed to supply the authoring path");
+
+    const stateBeforeUnauthorizedHydration = await fs.readFile(statePath, "utf8");
+    const paused = await hydrateStudioDraft({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+    });
+    assert.deepEqual(paused, {
+      state: { active: false },
+      payload: null,
+      themesChanged: false,
+      configChanged: false,
+      apply: "none",
+    });
+    assert.equal(await fs.readFile(statePath, "utf8"), stateBeforeUnauthorizedHydration,
+      "Unauthorized hydration modified the preserved built-in draft");
+
+    const forbiddenState = await fs.readFile(statePath, "utf8");
+    await assert.rejects(() => authorized({
+      type: "set-theme-token",
+      session: result.state.session,
+      revision: result.state.revision,
+      mode: "light",
+      token: "canvas",
+      value: "#112233",
+    }), /complete layout/);
+    await assert.rejects(() => authorized({
+      type: "apply-theme-patch",
+      session: result.state.session,
+      revision: result.state.revision,
+      changes: [{
+        kind: "metadata",
+        field: "label",
+        locale: "en",
+        value: "Forged built-in label",
+      }],
+    }), /non-layout change/);
+    assert.equal(await fs.readFile(statePath, "utf8"), forbiddenState,
+      "A forbidden built-in mutation changed private editor state");
+
+    const greetingFrame = {
+      ...result.state.shared.greeting.frames.light.standard,
+      xRatio: -0.02,
+    };
+    result = await authorized({
+      type: "apply-theme-patch",
+      session: result.state.session,
+      revision: result.state.revision,
+      changes: [
+        { kind: "token", mode: "shared", token: "promptWidth", value: 0.69 },
+        { kind: "token", mode: "shared", token: "promptX", value: 0.02 },
+        { kind: "token", mode: "shared", token: "promptY", value: -0.01 },
+        {
+          kind: "greeting",
+          operation: "set-frame",
+          appearance: "light",
+          frame: "standard",
+          value: greetingFrame,
+        },
+        {
+          kind: "layer",
+          index: 0,
+          preset: "wide",
+          property: "positionX",
+          value: 3.5,
+        },
+      ],
+    });
+    assert.equal(result.state.actionSucceeded, true);
+    assert.equal(result.state.shared.prompt.width, 0.69);
+    const editedTheme = JSON.parse(await fs.readFile(themePath, "utf8"));
+    assert.equal(editedTheme.artworkLayers[0].legacy, undefined,
+      "First frame edit did not adopt the legacy built-in layer");
+    assert.equal(editedTheme.artworkLayers[0].frames.wide.positionX, 3.5);
+    assert.equal(editedTheme.newChatGreetingStyle.light.standard.xRatio, greetingFrame.xRatio);
+
+    const stateBeforeConflict = await fs.readFile(statePath, "utf8");
+    const lockPath = path.join(
+      sourceRoot,
+      ".git",
+      "claude-aura-builtin-authoring.lock",
+    );
+    const orphanedLockCandidate = `${lockPath}.candidate-${process.pid}-${"f".repeat(32)}`;
+    await fs.writeFile(orphanedLockCandidate, "{", "utf8");
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }, {
+      faultInjector: async (stage) => {
+        if (stage === "before-builtin-registry") {
+          throw new Error("forced failure after crash-safe lock publication");
+        }
+      },
+    }), /forced failure after crash-safe lock publication/,
+    "An orphaned unpublished lock candidate permanently blocked authoring");
+    assert.equal(await fs.readFile(orphanedLockCandidate, "utf8"), "{",
+      "Lock acquisition treated another process's unpublished candidate as a live owner");
+    await fs.rm(orphanedLockCandidate);
+
+    const liveOwnerText = `${JSON.stringify({
+      schemaVersion: 1,
+      pid: process.pid,
+      token: `${process.pid}-${"e".repeat(32)}`,
+      createdAt: new Date().toISOString(),
+    })}\n`;
+    await fs.writeFile(lockPath, liveOwnerText, { encoding: "utf8", flag: "wx" });
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }), /Another built-in layout save is already in progress/,
+    "A valid live lock owner was not respected");
+    assert.equal(await fs.readFile(lockPath, "utf8"), liveOwnerText,
+      "Lock contention deleted or rewrote a valid live owner");
+    await fs.rm(lockPath);
+    assert.equal(await fs.readFile(statePath, "utf8"), stateBeforeConflict,
+      "Lock crash/contender checks changed the private draft");
+
+    const markerPath = path.join(
+      sourceRoot,
+      ".git",
+      "claude-aura-builtin-authoring-transaction.json",
+    );
+    const registryBeforeSha256 = crypto.createHash("sha256").update(registryBefore).digest("hex");
+    await fs.writeFile(markerPath, `${JSON.stringify({
+      schemaVersion: 1,
+      transactionId: crypto.randomBytes(16).toString("hex"),
+      registryBeforeSha256,
+      intendedRegistrySha256: registryBeforeSha256,
+      createdAt: new Date().toISOString(),
+    }, null, 2)}\n`, "utf8");
+    await fs.writeFile(generatedPath, "test-generated:interrupted\n", "utf8");
+    const recoveryCountBefore = regenerationCount;
+    const recoveredHydration = await authoringHarness.hydrate({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    });
+    assert.equal(recoveredHydration.state.editKind, "builtin-layout");
+    assert.equal(regenerationCount, recoveryCountBefore + 1,
+      "Authorization did not rebuild generated metadata for an interrupted transaction");
+    assert.equal(await fs.readFile(markerPath, "utf8").then(() => true, (error) => {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    }), false, "Interrupted transaction marker was not cleared after recovery");
+    assert.match(await fs.readFile(generatedPath, "utf8"), new RegExp(registryBeforeSha256),
+      "Interrupted transaction recovery did not rebuild from the current registry");
+
+    const sourceThemePath = path.join(sourceRoot, "themes", `${themeId}.json`);
+    const sourceThemeBefore = await fs.readFile(sourceThemePath, "utf8");
+    await fs.writeFile(sourceThemePath, `${sourceThemeBefore}\n`, "utf8");
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }), /source or artwork changed.*draft was preserved/i);
+    await fs.writeFile(sourceThemePath, sourceThemeBefore, "utf8");
+    assert.equal(await fs.readFile(statePath, "utf8"), stateBeforeConflict,
+      "Theme-source conflict changed the private draft");
+
+    const sourceArtworkPath = path.join(
+      sourceRoot,
+      registryDocumentBefore.themes.find((entry) => entry.id === themeId).artworkLayers[0].path,
+    );
+    const sourceArtworkBefore = await fs.readFile(sourceArtworkPath);
+    await fs.writeFile(sourceArtworkPath, Buffer.concat([sourceArtworkBefore, Buffer.from([0])]));
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }), /source or artwork changed.*draft was preserved/i);
+    await fs.writeFile(sourceArtworkPath, sourceArtworkBefore);
+    assert.equal(await fs.readFile(statePath, "utf8"), stateBeforeConflict,
+      "Artwork-source conflict changed the private draft");
+
+    await fs.writeFile(registryPath, `${registryBefore}\n`, "utf8");
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }), /registry changed.*draft was preserved/i);
+    assert.equal(await fs.readFile(statePath, "utf8"), stateBeforeConflict,
+      "Registry conflict discarded or rewrote the active draft");
+    await fs.writeFile(registryPath, registryBefore, "utf8");
+
+    const externalRegistryText = `${registryBefore}\n`;
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }, {
+      faultInjector: async (stage) => {
+        if (stage === "before-builtin-registry") {
+          await fs.writeFile(registryPath, externalRegistryText, "utf8");
+        }
+      },
+    }), (error) => error?.code === "STUDIO_ROLLBACK_INCOMPLETE"
+      && /concurrent pre-publication edit was preserved/.test(
+        error.errors?.map((item) => item.message).join("\n") ?? "",
+      ));
+    assert.equal(await fs.readFile(registryPath, "utf8"), externalRegistryText,
+      "The pre-publication conflict was overwritten");
+    await fs.writeFile(registryPath, registryBefore, "utf8");
+    await authoringHarness.hydrate({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    });
+
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }, {
+      faultInjector: async (stage) => {
+        if (stage === "after-builtin-registry") throw new Error("forced built-in publication failure");
+      },
+    }), /forced built-in publication failure/);
+    assert.equal(await fs.readFile(registryPath, "utf8"), registryBefore,
+      "Failed built-in publication did not roll the registry back byte-for-byte");
+    assert.equal(await fs.readFile(statePath, "utf8"), stateBeforeConflict,
+      "Failed built-in publication did not preserve the private draft");
+
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }, {
+      faultInjector: async (stage) => {
+        if (stage === "after-builtin-registry") {
+          await fs.writeFile(registryPath, externalRegistryText, "utf8");
+          throw new Error("forced conflict after built-in publication");
+        }
+      },
+    }), (error) => error?.code === "STUDIO_ROLLBACK_INCOMPLETE"
+      && /later external edit was preserved/.test(
+        error.errors?.map((item) => item.message).join("\n") ?? "",
+      ));
+    assert.equal(await fs.readFile(registryPath, "utf8"), externalRegistryText,
+      "Conditional rollback clobbered a later registry edit");
+    await fs.writeFile(registryPath, registryBefore, "utf8");
+    await authoringHarness.hydrate({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    });
+
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }, {
+      faultInjector: async (stage) => {
+        if (stage === "after-builtin-studio-metadata") {
+          await fs.writeFile(registryPath, externalRegistryText, "utf8");
+        }
+      },
+    }), (error) => error?.code === "STUDIO_ROLLBACK_INCOMPLETE"
+      && /registry changed after publication/.test(
+        error.errors?.map((item) => item.message).join("\n") ?? "",
+      )
+      && /later external edit was preserved/.test(
+        error.errors?.map((item) => item.message).join("\n") ?? "",
+      ));
+    assert.equal(await fs.readFile(registryPath, "utf8"), externalRegistryText,
+      "The final success check clobbered a post-metadata registry edit");
+    await fs.writeFile(registryPath, registryBefore, "utf8");
+    await authoringHarness.hydrate({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    });
+
+    const externalGeneratedText = "test-generated:later-external-edit\n";
+    await assert.rejects(() => authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    }, {
+      faultInjector: async (stage) => {
+        if (stage === "after-builtin-studio-metadata") {
+          await fs.writeFile(generatedPath, externalGeneratedText, "utf8");
+        }
+      },
+    }), (error) => error?.code === "STUDIO_ROLLBACK_INCOMPLETE"
+      && /generated metadata changed after publication/.test(
+        error.errors?.map((item) => item.message).join("\n") ?? "",
+      )
+      && /later external edit was preserved/.test(
+        error.errors?.map((item) => item.message).join("\n") ?? "",
+      ));
+    assert.equal(await fs.readFile(registryPath, "utf8"), registryBefore,
+      "Generated-metadata conflict did not roll the owned registry back");
+    assert.equal(await fs.readFile(generatedPath, "utf8"), externalGeneratedText,
+      "Conditional rollback clobbered a later generated-metadata edit");
+    await authoringHarness.hydrate({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    });
+
+    result = await authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    });
+    assert.equal(result.state.editKind, "builtin-layout");
+    assert.equal(result.state.dirty, false);
+    assert.equal(result.themesChanged, true);
+    assert.equal(result.configChanged, false);
+    assert.equal(result.apply, "saved");
+    new Function(result.payload);
+    assert.equal(await fs.readFile(configPath, "utf8"), configBefore,
+      "Built-in layout save changed the user config");
+    assert.deepEqual(await fs.readdir(userThemesDir), [],
+      "Built-in layout save wrote a user theme");
+    for (const deliverableDirectory of ["themes", "studio"]) {
+      const names = await fs.readdir(path.join(sourceRoot, deliverableDirectory));
+      assert(!names.some((name) => /\.tmp-|^\.claude-aura-/u.test(name)),
+        `Built-in publication left a crash-sensitive temporary in ${deliverableDirectory}`);
+    }
+
+    const registryAfter = JSON.parse(await fs.readFile(registryPath, "utf8"));
+    assert.deepEqual(registryAfter.legacyAliases, registryDocumentBefore.legacyAliases);
+    assert.deepEqual(
+      registryAfter.themes.map((entry) => entry.id),
+      registryDocumentBefore.themes.map((entry) => entry.id),
+      "Built-in layout save changed registry theme order or identity",
+    );
+    for (let index = 0; index < registryAfter.themes.length; index += 1) {
+      if (registryAfter.themes[index].id === themeId) continue;
+      assert.deepEqual(registryAfter.themes[index], registryDocumentBefore.themes[index],
+        `Built-in layout save changed unrelated registry theme ${registryAfter.themes[index].id}`);
+    }
+    const savedEntry = registryAfter.themes.find((entry) => entry.id === themeId);
+    const originalEntry = registryDocumentBefore.themes.find((entry) => entry.id === themeId);
+    assert.deepEqual(savedEntry.newChatLayout, {
+      widthRatio: 0.69,
+      offsetXRatio: 0.02,
+      offsetYRatio: -0.01,
+    });
+    assert.equal(savedEntry.newChatGreetingStyle.light.standard.xRatio, greetingFrame.xRatio);
+    assert.equal(savedEntry.artworkLayers[0].path, originalEntry.artworkLayers[0].path);
+    assert.match(savedEntry.artworkLayers[0].id, /^layer-[a-f0-9]{32}$/);
+    assert.deepEqual(Object.keys(savedEntry.artworkLayers[0]), [
+      "id", "path", "role", "appearance", "context", "viewport", "visible",
+      "opacity", "mask", "mobile", "frames",
+    ]);
+    const authorizedHydration = await authoringHarness.hydrate({
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    });
+    assert.equal(authorizedHydration.state.editKind, "builtin-layout");
+    assert.equal(authorizedHydration.apply, "draft");
+
+    await authorized({
+      type: "discard-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    });
+    const preservedFramedId = `layer-${"a".repeat(32)}`;
+    const framedRegistry = JSON.parse(await fs.readFile(registryPath, "utf8"));
+    const framedEntry = framedRegistry.themes.find((entry) => entry.id === themeId);
+    framedEntry.artworkLayers[0].id = preservedFramedId;
+    framedEntry.artworkLayers[0].context = "other";
+    await fs.writeFile(registryPath, `${JSON.stringify(framedRegistry, null, 2)}\n`, "utf8");
+    result = await authorized({
+      type: "begin-theme-edit",
+      theme: themeId,
+      reset: false,
+    });
+    assert.equal(result.state.layers[0].id, preservedFramedId);
+    assert.equal(result.state.layers[0].context, "other");
+    result = await authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    });
+    const preservedRegistry = JSON.parse(await fs.readFile(registryPath, "utf8"));
+    const preservedLayer = preservedRegistry.themes
+      .find((entry) => entry.id === themeId).artworkLayers[0];
+    assert.equal(preservedLayer.id, preservedFramedId,
+      "Saving rewrote an existing stable framed layer id");
+    assert.equal(preservedLayer.context, "other",
+      "Saving changed the built-in-only other-page context");
+
+    await authorized({
+      type: "discard-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    });
+    const singularRegistry = JSON.parse(await fs.readFile(registryPath, "utf8"));
+    const singularEntry = singularRegistry.themes.find((entry) => entry.id === themeId);
+    singularEntry.artwork = {
+      path: originalEntry.artworkLayers[0].path,
+      position: originalEntry.artworkLayers[0].position,
+      size: originalEntry.artworkLayers[0].size,
+      mobile: originalEntry.artworkLayers[0].mobile,
+    };
+    singularEntry.artworkLayers = null;
+    await fs.writeFile(registryPath, `${JSON.stringify(singularRegistry, null, 2)}\n`, "utf8");
+    result = await authorized({
+      type: "begin-theme-edit",
+      theme: themeId,
+      reset: false,
+    });
+    assert.equal(result.state.layers[0].role, "background");
+    result = await authorized({
+      type: "set-theme-layer",
+      session: result.state.session,
+      revision: result.state.revision,
+      index: 0,
+      preset: "normal",
+      property: "positionX",
+      value: 1.25,
+    });
+    result = await authorized({
+      type: "save-theme-edit",
+      session: result.state.session,
+      revision: result.state.revision,
+    });
+    const singularSaved = JSON.parse(await fs.readFile(registryPath, "utf8")).themes
+      .find((entry) => entry.id === themeId);
+    assert.equal(singularSaved.artwork, null);
+    assert.equal(singularSaved.artworkLayers[0].role, "background",
+      "Singular built-in artwork adoption used the layered decoration default");
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("built-in authoring rejects artwork that escapes through an intermediate link", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-builtin-link-"));
+  const sourceRoot = path.join(temporary, "source");
+  const outsideRoot = path.join(temporary, "outside-art");
+  const editorRoot = path.join(temporary, "editor");
+  const userThemesDir = path.join(temporary, "user-themes");
+  const configPath = path.join(temporary, "config.json");
+  const themeId = "anime-twilight";
+  try {
+    await Promise.all([
+      fs.mkdir(path.join(sourceRoot, ".git"), { recursive: true }),
+      fs.mkdir(path.join(sourceRoot, "themes"), { recursive: true }),
+      fs.mkdir(path.join(sourceRoot, "assets", "theme-art"), { recursive: true }),
+      fs.mkdir(outsideRoot, { recursive: true }),
+      fs.mkdir(userThemesDir, { recursive: true }),
+    ]);
+    await Promise.all([
+      fs.copyFile(
+        path.join(PROJECT_ROOT, "themes", "registry.json"),
+        path.join(sourceRoot, "themes", "registry.json"),
+      ),
+      fs.copyFile(
+        path.join(PROJECT_ROOT, "themes", `${themeId}.json`),
+        path.join(sourceRoot, "themes", `${themeId}.json`),
+      ),
+      fs.copyFile(
+        path.join(PROJECT_ROOT, "assets", "theme-art", themeId, "background.webp"),
+        path.join(outsideRoot, "background.webp"),
+      ),
+    ]);
+    await fs.symlink(
+      outsideRoot,
+      path.join(sourceRoot, "assets", "theme-art", themeId),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    await writeConfig(configPath, { ...DEFAULT_CONFIG });
+    const harness = createBuiltinAuthoringTestHarness(sourceRoot);
+    await assert.rejects(() => harness.execute({
+      request: { type: "begin-theme-edit", theme: themeId, reset: false },
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      builtinAuthoringRoot: sourceRoot,
+    }), /escaped its authorized source root/,
+    "An intermediate artwork junction escaped the authorized source checkout");
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("theme-cli scaffolds a complete starter kit and validates it", async () => {
   const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-"));
   const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");

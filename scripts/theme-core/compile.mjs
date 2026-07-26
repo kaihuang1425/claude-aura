@@ -4,13 +4,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   AURA_VERSION,
-  BUILTIN_BRAND_MARK_ASSETS,
+  BUILTIN_GREETING_MARK_ASSETS,
   DEFAULT_CONFIG,
   PROJECT_ROOT,
   STUDIO_FONT_DISPLAY_STACKS,
 } from "./constants.mjs";
 import {
   cloneJson,
+  detectImageMime,
   enforcePayloadBudget,
   finiteNumber,
   isPlainObject,
@@ -270,7 +271,7 @@ function greetingUsesCompactMark(style) {
 
 export function hasRegisteredGreetingCompactMark(theme) {
   const recipeId = theme?.sourceRecipe || theme?.variant || theme?.name;
-  return typeof recipeId === "string" && Object.hasOwn(BUILTIN_BRAND_MARK_ASSETS, recipeId);
+  return typeof recipeId === "string" && Object.hasOwn(BUILTIN_GREETING_MARK_ASSETS, recipeId);
 }
 
 export async function resolveGreetingCompactMark(theme) {
@@ -281,9 +282,14 @@ export async function resolveGreetingCompactMark(theme) {
       `${theme.name} greeting requests a compact mark without an approved registered asset`,
     );
   }
-  const relativePath = BUILTIN_BRAND_MARK_ASSETS[recipeId];
+  const relativePath = BUILTIN_GREETING_MARK_ASSETS[recipeId];
   const bytes = await fs.readFile(path.join(PROJECT_ROOT, relativePath));
-  return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
+  const extension = path.extname(relativePath).toLowerCase();
+  const mime = extension === ".svg" ? "image/svg+xml" : detectImageMime(bytes);
+  if (!["image/svg+xml", "image/png"].includes(mime)) {
+    throw new Error(`${theme.name} greeting mark has an unsupported registered asset`);
+  }
+  return `data:${mime};base64,${bytes.toString("base64")}`;
 }
 
 const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
@@ -462,6 +468,26 @@ const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
   ["greetingMarkFor", "N6"],
   ["greetingRoots", "N7"],
   ["createBinding", "N8"],
+  ["visibleRect", "M0"],
+  ["inside", "M1"],
+  ["excluded", "M2"],
+  ["bound", "M3"],
+  ["unwatch", "M4"],
+  ["watch", "M5"],
+  ["geometry", "M6"],
+  ["within", "M7"],
+  ["anchored", "M8"],
+  ["place", "M9"],
+  ["decorate", "N9"],
+  ["custom", "L0"],
+  ["placed", "L1"],
+  ["onPopState", "L2"],
+  ["restore", "L3"],
+  ["box", "L4"],
+  ["greetingMemory", "L5"],
+  ["prompt", "L6"],
+  ["sidebar", "L7"],
+  ["control", "L8"],
 ]);
 
 export function compactRendererIdentifiers(source) {
@@ -715,6 +741,7 @@ export async function compileTheme({
   locale = "en",
   userThemesDir = null,
   themeKitDirectory = null,
+  builtinLayoutCapability = null,
   onWarning = null,
 } = {}) {
   const resolvedConfigPath = path.resolve(configPath ?? path.join(PROJECT_ROOT, "config.example.json"));
@@ -730,7 +757,7 @@ export async function compileTheme({
   }
   let themeResolution;
   if (themeKitDirectory !== null) {
-    const kit = await readThemeKit(path.resolve(themeKitDirectory));
+    const kit = await readThemeKit(path.resolve(themeKitDirectory), { builtinLayoutCapability });
     const theme = await readRegisteredTheme(kit.entry, normalizeLocale(locale));
     themeResolution = {
       theme,

@@ -182,6 +182,31 @@
     sidebar: ["sidebar-text"],
     border: [],
   });
+  const BUILTIN_LAYOUT_TARGETS = new Set([
+    "interface.new-chat-area", "interface.greeting", "background.layer",
+  ]);
+  const BUILTIN_LAYOUT_LAYER_PROPERTIES = new Set([
+    "anchor", "focalX", "focalY", "positionX", "positionY", "scale",
+  ]);
+  const BUILTIN_LAYOUT_PROMPT_TOKENS = new Set(Object.values(STAGE_PROMPT_TOKENS));
+  const BUILTIN_LAYOUT_MESSAGES = new Set([
+    "begin-theme-edit", "apply-theme-patch", "undo-theme-edit", "redo-theme-edit",
+    "save-theme-edit", "discard-theme-edit",
+  ]);
+  const builtInLayoutChangeAllowed = (change) => {
+    if (!plainRecord(change)) return false;
+    if (change.kind === "token") {
+      return change.mode === "shared" && BUILTIN_LAYOUT_PROMPT_TOKENS.has(change.token);
+    }
+    if (change.kind === "greeting") {
+      return ["set-frame", "reset"].includes(change.operation);
+    }
+    if (change.kind === "layer") {
+      return ["normal", "wide"].includes(change.preset)
+        && BUILTIN_LAYOUT_LAYER_PROPERTIES.has(change.property);
+    }
+    return false;
+  };
 
   // Shared by the stage and the state matrix so every scene uses one geometry.
   const promptRect = (logicalWidth, logicalHeight, widthRatio, xRatio, yRatio) => {
@@ -246,7 +271,7 @@
     "interface.theme": Object.freeze({ branch: "interface", labelKey: "targetInterfaceTheme" }),
     "interface.new-chat-area": Object.freeze({ branch: "interface", labelKey: "targetNewChatArea" }),
     "interface.greeting": Object.freeze({ branch: "interface", labelKey: "targetGreeting" }),
-    "background.canvas": Object.freeze({ branch: "background", labelKey: "targetBackgroundCanvas" }),
+    "background.canvas": Object.freeze({ branch: "background", labelKey: "branchBackground" }),
     "background.layer": Object.freeze({ branch: "background", labelKey: "targetBackgroundLayer" }),
     "widgets.app-identity": Object.freeze({ branch: "widgets", labelKey: "targetAppIdentity" }),
   });
@@ -682,11 +707,17 @@
       "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
       "launcherStylePreviewUrl", "shared", "greetingPreferences", "layers", "feedback",
     ];
-    if (!exactShape(value, required, optional) || !ID_PATTERN.test(value.id)
+    const activeOptional = [...optional, "editKind"];
+    if (!exactShape(value, required, activeOptional) || !ID_PATTERN.test(value.id)
         || !ID_PATTERN.test(value.sourceId) || !enumValue(value.source, ["user", "builtin"])
         || typeof value.isNew !== "boolean" || typeof value.session !== "string" || !SESSION_PATTERN.test(value.session)
         || !integer(value.revision, 0, Number.MAX_SAFE_INTEGER) || typeof value.dirty !== "boolean"
         || typeof value.canUndo !== "boolean" || typeof value.canRedo !== "boolean") return undefined;
+    const editKind = value.editKind ?? null;
+    if (editKind !== null && editKind !== "builtin-layout") return undefined;
+    if (editKind === "builtin-layout"
+        && (value.source !== "builtin" || value.isNew || value.id !== value.sourceId)) return undefined;
+    if (editKind === null && value.source === "builtin" && !value.isNew) return undefined;
     const label = safeText(value.label, 80);
     if (!label || !exactShape(value.tokens, ["light", "dark"])) return undefined;
     const metadata = normalizeMetadata(value.metadata);
@@ -723,6 +754,7 @@
       greetingPreferences,
       layers,
       feedback,
+      editKind,
     };
   }
 
@@ -755,16 +787,19 @@
     const editorControls = editor.querySelector(".editor-controls");
     const title = document.getElementById("editor-title");
     const summary = document.getElementById("editor-summary");
+    const builtInAuthoringPill = document.getElementById("editor-built-in-authoring");
     const dirtyPill = document.getElementById("editor-dirty");
     const validPill = document.getElementById("editor-valid");
     const live = document.getElementById("editor-live");
     const errorSummary = document.getElementById("editor-error-summary");
-    const livePausedNote = document.getElementById("editor-live-paused");
     const tokenGroups = document.getElementById("editor-token-groups");
     const layerList = document.getElementById("editor-layer-list");
     const feedbackRoot = document.getElementById("editor-feedback");
     const quickFeedback = document.getElementById("editor-quick-feedback");
     const inspectorHead = editor.querySelector(".editor-inspector-head");
+    const inspectorBody = editor.querySelector(".editor-inspector-body");
+    const inspectorContent = editor.querySelector(".editor-inspector-content");
+    const sectionProgress = document.getElementById("editor-section-progress");
     const promptContextSection = editor.querySelector(".editor-prompt-context");
     const promptContextUnavailable = editor.querySelector(".editor-prompt-unavailable");
     const confirmDialog = document.getElementById("editor-confirm-dialog");
@@ -828,6 +863,7 @@
     const greetingUpdateStatus = document.getElementById("editor-greeting-update-status");
     const greetingUpdateStatusText = document.getElementById("editor-greeting-update-status-text");
     const greetingPhrasesStatus = document.getElementById("editor-greeting-phrases-status");
+    const greetingPersonalSection = editor.querySelector(".editor-greeting-personal");
     const greetingMarkInput = document.getElementById("editor-greeting-mark");
     const greetingContextSection = editor.querySelector(".editor-greeting-context");
     const greetingContextUnavailable = editor.querySelector(".editor-greeting-unavailable");
@@ -860,6 +896,10 @@
       }
     }
     let state = null;
+    const isBuiltInLayoutEdit = () => state?.editKind === "builtin-layout";
+    const targetAllowedInCurrentEdit = (target) => (
+      !isBuiltInLayoutEdit() || BUILTIN_LAYOUT_TARGETS.has(target)
+    );
     let greetingPreferenceDraft = null;
     let greetingPreferenceDraftDirty = false;
     let greetingPreferenceInputDirty = false;
@@ -1000,6 +1040,17 @@
     };
 
     const post = (message) => {
+      if (isBuiltInLayoutEdit()) {
+        const allowed = BUILTIN_LAYOUT_MESSAGES.has(message.type)
+          && (message.type !== "apply-theme-patch"
+            || (Array.isArray(message.changes)
+              && message.changes.length > 0
+              && message.changes.every(builtInLayoutChangeAllowed)));
+        if (!allowed) {
+          announce(tr("editorActionFailed"), "error");
+          return false;
+        }
+      }
       if (message.type !== "apply-theme-patch" && (stageKeyPaths.size || stageKeyTimer)) {
         if (actionAfterPatch) return false;
         actionAfterPatch = { ...message };
@@ -1025,6 +1076,10 @@
     };
 
     const mutationBase = () => state ? { session: state.session, revision: state.revision } : null;
+    const requestLauncherMark = () => {
+      const base = mutationBase();
+      if (base) post({ type: "pick-theme-launcher-mark", ...base });
+    };
     const greetingFrameId = () => stageViewport === "wide" ? "wide" : "standard";
     const activeGreetingFrame = () => state?.shared?.greeting?.frames?.[selectedMode]?.[greetingFrameId()] ?? null;
     const themeChangeKey = (change) => change.kind === "token"
@@ -1076,11 +1131,18 @@
       reflectButtonStates();
     };
     const queueThemeChanges = (changes, { immediate = false } = {}) => {
+      const permittedChanges = isBuiltInLayoutEdit()
+        ? changes.filter(builtInLayoutChangeAllowed)
+        : changes;
+      if (!permittedChanges.length) {
+        if (changes.length) announce(tr("editorActionFailed"), "error");
+        return;
+      }
       for (const [key, change] of deferredChanges) {
         if (!coalescedChanges.has(key)) coalescedChanges.set(key, change);
       }
       deferredChanges.clear();
-      for (const change of changes) coalescedChanges.set(themeChangeKey(change), change);
+      for (const change of permittedChanges) coalescedChanges.set(themeChangeKey(change), change);
       if (changeFlushTimer) clearTimeout(changeFlushTimer);
       if (immediate && !pendingAction) flushThemeChanges();
       else changeFlushTimer = setTimeout(flushThemeChanges, 60);
@@ -1157,7 +1219,7 @@
     const branchHelpKey = (branch) => ({
       interface: "branchInterfaceHelp",
       background: "branchBackgroundHelp",
-      widgets: "branchWidgetsHelp",
+      widgets: "appIdentityHelp",
     })[branch] ?? "branchInterfaceHelp";
     const stageSelectionTarget = (selection) => selection?.kind === "prompt"
       ? "interface.new-chat-area"
@@ -1203,7 +1265,9 @@
       }
     };
     const syncTargetPicker = () => {
-      const entries = EDITOR_CAPABILITY_REGISTRY.filter((entry) => entry.branch === inspectorBranch);
+      const entries = EDITOR_CAPABILITY_REGISTRY.filter((entry) => (
+        entry.branch === inspectorBranch && targetAllowedInCurrentEdit(entry.id)
+      ));
       targetPicker.replaceChildren(...entries.map((entry) => {
         const option = document.createElement("option");
         option.value = entry.id;
@@ -1342,6 +1406,124 @@
       const delta = inspectorRevealDelta(target.getBoundingClientRect(), visibleTop, visibleBottom);
       if (delta) editorControls.scrollTop += delta;
     };
+    const alignInspectorSection = (target) => {
+      if (!target || !editorControls || !inspectorHead) return;
+      const visibleTop = Math.max(
+        editorControls.getBoundingClientRect().top,
+        inspectorHead.getBoundingClientRect().bottom,
+      ) + 12;
+      editorControls.scrollTop += target.getBoundingClientRect().top - visibleTop;
+    };
+    let sectionProgressFrame = 0;
+    const visibleInspectorSections = () => [...(inspectorContent?.querySelectorAll(
+      ":scope > .editor-section",
+    ) ?? [])].filter((section) => {
+      if (section.hidden || section.inert) return false;
+      const branch = section.dataset.editorBranch;
+      if (branch && branch !== inspectorBranch) return false;
+      return window.getComputedStyle?.(section)?.display !== "none";
+    });
+    const inspectorSectionHeading = (section) => {
+      const labelledBy = section?.getAttribute("aria-labelledby");
+      return (labelledBy ? document.getElementById(labelledBy) : null)
+        ?? section?.querySelector(":scope > h2, :scope > h3, :scope > .editor-section-head h2, :scope > .editor-section-head h3")
+        ?? null;
+    };
+    const inspectorSectionTarget = (section) => {
+      const targets = String(section?.dataset.editorTargets ?? "")
+        .split(/\s+/)
+        .filter((target) => CAPABILITY_BY_ID.get(target)?.branch === inspectorBranch);
+      return targets.length === 1 ? targets[0] : null;
+    };
+    const updateSectionProgressCurrent = () => {
+      if (!sectionProgress || sectionProgress.hidden || !inspectorHead) return;
+      const sections = visibleInspectorSections();
+      if (!sections.length) return;
+      const readingLine = inspectorHead.getBoundingClientRect().bottom + 18;
+      const atBottom = editorControls.scrollTop + editorControls.clientHeight
+        >= editorControls.scrollHeight - 2;
+      let active = atBottom ? sections.at(-1) : sections[0];
+      if (!atBottom) {
+        for (const section of sections) {
+          if (section.getBoundingClientRect().top <= readingLine) active = section;
+          else break;
+        }
+      }
+      const activeHeading = inspectorSectionHeading(active);
+      for (const button of sectionProgress.querySelectorAll("button")) {
+        if (button.dataset.sectionHeading === activeHeading?.id) {
+          button.setAttribute("aria-current", "step");
+        } else {
+          button.removeAttribute("aria-current");
+        }
+      }
+    };
+    const scheduleSectionProgressCurrent = () => {
+      if (sectionProgressFrame) return;
+      sectionProgressFrame = requestAnimationFrame(() => {
+        sectionProgressFrame = 0;
+        updateSectionProgressCurrent();
+      });
+    };
+    const syncInspectorHeadHeight = () => {
+      if (!editorControls || !inspectorHead) return;
+      const height = Math.ceil(inspectorHead.getBoundingClientRect().height);
+      if (height > 0) editorControls.style.setProperty("--editor-inspector-head-height", `${height}px`);
+    };
+    const syncSectionProgress = () => {
+      if (!sectionProgress || !inspectorBody) return;
+      syncInspectorHeadHeight();
+      const entries = visibleInspectorSections().map((section) => ({
+        section,
+        heading: inspectorSectionHeading(section),
+      })).filter((entry) => entry.heading?.id && entry.heading.textContent.trim());
+      for (const { heading } of entries) heading.tabIndex = -1;
+      sectionProgress.setAttribute(
+        "aria-label",
+        entries.map(({ heading }) => heading.textContent.trim()).join(" · "),
+      );
+      sectionProgress.hidden = entries.length < 2;
+      const signature = entries.map(({ heading }) => `${heading.id}:${heading.textContent.trim()}`).join("|");
+      if (sectionProgress.dataset.signature !== signature) {
+        sectionProgress.dataset.signature = signature;
+        sectionProgress.replaceChildren(...entries.map(({ section, heading }, index) => {
+          const button = document.createElement("button");
+          const label = heading.textContent.trim();
+          const target = inspectorSectionTarget(section);
+          button.type = "button";
+          button.dataset.sectionHeading = heading.id;
+          if (target) button.dataset.editorTarget = target;
+          button.textContent = String(index + 1).padStart(2, "0");
+          button.title = label;
+          button.setAttribute("aria-label", `${index + 1}. ${label}`);
+          button.addEventListener("click", () => {
+            if (target) {
+              setInspectorTarget(target);
+              reflectStageSelectionForTarget(target);
+              renderStage();
+            }
+            heading.focus({ preventScroll: true });
+            alignInspectorSection(heading);
+            updateSectionProgressCurrent();
+          });
+          return button;
+        }));
+      }
+      scheduleSectionProgressCurrent();
+    };
+    editorControls?.addEventListener("scroll", scheduleSectionProgressCurrent, { passive: true });
+    if (typeof ResizeObserver === "function" && inspectorHead) {
+      const inspectorHeadObserver = new ResizeObserver(() => {
+        syncInspectorHeadHeight();
+        scheduleSectionProgressCurrent();
+      });
+      inspectorHeadObserver.observe(inspectorHead);
+    } else {
+      window.addEventListener("resize", () => {
+        syncInspectorHeadHeight();
+        scheduleSectionProgressCurrent();
+      }, { passive: true });
+    }
     const setDocumentDetailsOpen = (
       open, { reveal = false, returnFocus = false, focusPanel = false } = {},
     ) => {
@@ -1362,7 +1544,7 @@
     };
     const setInspectorTarget = (target, { focusBranch = false, reveal = false } = {}) => {
       const capability = CAPABILITY_BY_ID.get(target);
-      if (!capability) return false;
+      if (!capability || !targetAllowedInCurrentEdit(target)) return false;
       if (inspectorTargetForField(inspectorField) !== target) {
         inspectorField = defaultInspectorField(target);
       }
@@ -1371,9 +1553,9 @@
       targetByBranch[inspectorBranch] = target;
       editor.dataset.inspectorBranch = inspectorBranch;
       editor.dataset.inspectorTarget = inspectorTarget;
-      launcherPreview?.setAttribute(
-        "aria-pressed", String(inspectorTarget === "widgets.app-identity"),
-      );
+      if (launcherPreview) {
+        launcherPreview.dataset.selected = String(inspectorTarget === "widgets.app-identity");
+      }
       for (const tab of branchTabs) {
         const selected = tab.dataset.editorBranchTarget === inspectorBranch;
         tab.setAttribute("aria-pressed", String(selected));
@@ -1383,6 +1565,7 @@
       syncTargetPicker();
       refreshInspectorContext();
       syncStageSelectionMode();
+      requestAnimationFrame(syncSectionProgress);
       if (reveal) requestAnimationFrame(() => {
         const firstSection = editor.querySelector(
           `[data-editor-targets~="${CSS.escape(target)}"]:not([hidden])`,
@@ -1392,6 +1575,81 @@
         revealWithinInspector(heading);
       });
       return true;
+    };
+    const syncBuiltInLayoutPresentation = ({ entering = false } = {}) => {
+      const builtInLayout = isBuiltInLayoutEdit();
+      editor.classList.toggle("is-builtin-layout-authoring", builtInLayout);
+      if (builtInLayout) {
+        editor.dataset.editKind = "builtin-layout";
+        editor.dataset.layoutLayers = String(Boolean(state?.layers?.length));
+      } else {
+        delete editor.dataset.editKind;
+        delete editor.dataset.layoutLayers;
+      }
+      if (studioShell) {
+        if (builtInLayout) studioShell.dataset.editorKind = "builtin-layout";
+        else delete studioShell.dataset.editorKind;
+      }
+      if (builtInAuthoringPill) builtInAuthoringPill.hidden = !builtInLayout;
+      saveButton.setAttribute(
+        "aria-describedby",
+        builtInLayout
+          ? "editor-built-in-authoring editor-quick-feedback editor-error-summary"
+          : "editor-quick-feedback editor-error-summary",
+      );
+      saveButton.textContent = builtInLayout
+        ? `${tr("saveTheme")} · ${tr("builtInTheme")}`
+        : tr("saveTheme");
+      if (documentDetailsToggle) {
+        documentDetailsToggle.hidden = builtInLayout;
+        documentDetailsToggle.disabled = builtInLayout;
+      }
+      if (greetingPersonalSection) {
+        greetingPersonalSection.hidden = builtInLayout;
+        greetingPersonalSection.inert = builtInLayout;
+      }
+      const levelControl = editor.querySelector(".editor-level");
+      if (levelControl) {
+        levelControl.hidden = builtInLayout;
+        levelControl.inert = builtInLayout;
+      }
+      for (const section of editor.querySelectorAll(
+        '[data-editor-targets~="interface.theme"],'
+        + '[data-editor-targets~="background.canvas"],'
+        + '[data-editor-targets~="widgets.app-identity"],'
+        + ".editor-guide-section, .editor-add-artwork, .layer-shared-controls",
+      )) {
+        section.inert = builtInLayout;
+      }
+      for (const tab of branchTabs) {
+        const branch = tab.dataset.editorBranchTarget;
+        const unavailable = builtInLayout
+          && (branch === "widgets" || (branch === "background" && !state?.layers?.length));
+        tab.hidden = unavailable;
+        tab.disabled = unavailable;
+      }
+      if (!builtInLayout) {
+        syncTargetPicker();
+        return;
+      }
+      editor.dataset.level = "advanced";
+      for (const input of document.querySelectorAll('input[name="editor-level"]')) {
+        input.checked = input.value === "advanced";
+      }
+      setDocumentDetailsOpen(false);
+      if (entering || !BUILTIN_LAYOUT_TARGETS.has(targetByBranch.interface)) {
+        targetByBranch.interface = "interface.new-chat-area";
+      }
+      targetByBranch.background = "background.layer";
+      if (entering || !targetAllowedInCurrentEdit(inspectorTarget)
+          || (inspectorTarget === "background.layer" && !state?.layers?.length)) {
+        inspectorField = "shared.prompt";
+        setInspectorTarget("interface.new-chat-area");
+        stageSelection = { kind: "prompt" };
+      } else {
+        syncTargetPicker();
+      }
+      stageOpacityWrap.hidden = true;
     };
     setInspectorTarget(inspectorTarget);
     const reflectStageSelectionForTarget = (target) => {
@@ -1414,17 +1672,20 @@
       reflectStageSelectionForTarget(target);
       renderStage();
     }));
-    branchTabs.forEach((tab, index) => tab.addEventListener("keydown", (event) => {
+    branchTabs.forEach((tab) => tab.addEventListener("keydown", (event) => {
       const previous = event.key === "ArrowLeft" || event.key === "ArrowUp";
       const next = event.key === "ArrowRight" || event.key === "ArrowDown";
       const boundary = event.key === "Home" || event.key === "End";
       if (!previous && !next && !boundary) return;
       event.preventDefault();
+      const availableTabs = branchTabs.filter((candidate) => !candidate.hidden && !candidate.disabled);
+      const index = availableTabs.indexOf(tab);
+      if (index < 0 || !availableTabs.length) return;
       const nextIndex = event.key === "Home" ? 0
-        : event.key === "End" ? branchTabs.length - 1
-          : (index + (previous ? -1 : 1) + branchTabs.length) % branchTabs.length;
-      branchTabs[nextIndex].focus();
-      branchTabs[nextIndex].click();
+        : event.key === "End" ? availableTabs.length - 1
+          : (index + (previous ? -1 : 1) + availableTabs.length) % availableTabs.length;
+      availableTabs[nextIndex].focus();
+      availableTabs[nextIndex].click();
     }));
     targetPicker.addEventListener("change", () => {
       const target = targetPicker.value;
@@ -1445,19 +1706,28 @@
       inspectorField = "launcher";
       setInspectorTarget("widgets.app-identity", { reveal: true });
       syncStageHud();
-      announce(format(tr("stageSelectedAnnounce"), targetLabel("widgets.app-identity")));
+      requestLauncherMark();
     });
     const trackInspectorField = (event) => {
       const control = event.target.closest?.("[data-editor-field]");
-      if (!control || !editorControls?.contains(control)) return;
-      const field = control.dataset.editorField;
-      if (inspectorTargetForField(field) !== inspectorTarget) return;
-      inspectorField = field;
+      const section = event.target.closest?.(".editor-section[data-editor-branch][data-editor-targets]");
+      if ((!control && !section) || !editorControls?.contains(event.target)) return;
+      const field = control?.dataset.editorField ?? null;
+      const target = (field ? inspectorTargetForField(field) : null)
+        ?? inspectorSectionTarget(section);
+      if (!target || CAPABILITY_BY_ID.get(target)?.branch !== inspectorBranch) return;
+      if (field) inspectorField = field;
+      if (target !== inspectorTarget) {
+        setInspectorTarget(target);
+        reflectStageSelectionForTarget(target);
+        renderStage();
+      }
       refreshInspectorContext();
     };
     editorControls?.addEventListener("focusin", trackInspectorField);
     editorControls?.addEventListener("input", trackInspectorField);
     editorControls?.addEventListener("change", trackInspectorField);
+    editorControls?.addEventListener("click", trackInspectorField);
     documentDetailsToggle?.addEventListener("click", () => {
       setDocumentDetailsOpen(documentDetailsPanel.hidden, { reveal: true, focusPanel: true });
     });
@@ -1498,6 +1768,7 @@
     const hideEditor = (action = "") => {
       editor.hidden = true;
       studioShell?.removeAttribute("data-editor-active");
+      syncBuiltInLayoutPresentation();
       for (const section of ordinarySections) section.hidden = false;
       setCurrentNavigation(false);
       resetStudioViewport("#themes");
@@ -1779,10 +2050,22 @@
       const adoptsNativePrompt = Boolean(state?.shared?.prompt?.native
         && STAGE_PROMPT_PATHS.some((path) => paths.includes(path) && stageOverrides.has(path)
           && Math.abs(Number(stageOverrides.get(path)) - Number(promptStateValue(path.split(".").at(-1)))) >= 0.00005));
+      const completesBuiltInPrompt = Boolean(isBuiltInLayoutEdit()
+        && STAGE_PROMPT_PATHS.some((path) => paths.includes(path) && stageOverrides.has(path)
+          && Math.abs(Number(stageOverrides.get(path)) - Number(promptStateValue(path.split(".").at(-1)))) >= 0.00005));
+      if (completesBuiltInPrompt) {
+        for (const path of STAGE_PROMPT_PATHS) {
+          const key = path.split(".").at(-1);
+          const value = stageOverrides.has(path) ? stageOverrides.get(path) : promptStateValue(key);
+          messages.push(messageForStagePath(path, value));
+          stageOverrides.delete(path);
+        }
+      }
       for (const path of paths) {
         if (!stageOverrides.has(path)) continue;
         const value = stageOverrides.get(path);
         const promptKey = /^shared\.prompt\.(width|x|y)$/.exec(path)?.[1];
+        if (completesBuiltInPrompt && promptKey) continue;
         const saved = promptKey ? promptStateValue(promptKey) : statePath(path);
         if (!(adoptsNativePrompt && promptKey)
             && typeof value === "number" && typeof saved === "number"
@@ -1816,6 +2099,10 @@
     stageBackdropImg.hidden = true;
     const stageArt = document.createElement("div");
     stageArt.className = "stage-art";
+    const stageBackgroundSelection = document.createElement("div");
+    stageBackgroundSelection.className = "stage-background-selection";
+    stageBackgroundSelection.setAttribute("aria-hidden", "true");
+    stageBackgroundSelection.hidden = true;
     const stageSidebarEl = document.createElement("div");
     stageSidebarEl.className = "stage-sidebar";
     const stageContentHost = document.createElement("div");
@@ -1883,14 +2170,14 @@
     stageOpacityWrap.appendChild(stageOpacityInput);
     stageHud.appendChild(stageOpacityWrap);
     stageOpacityInput.addEventListener("input", () => {
-      if (isBlockingAction() || stageSelection?.kind !== "layer") return;
+      if (isBuiltInLayoutEdit() || isBlockingAction() || stageSelection?.kind !== "layer") return;
       const index = layerIndexForId(stageSelection.id);
       if (index < 0) return;
       setStageOverride(`layers[${index}].opacity`, stageOpacityInput.valueAsNumber / 100);
       applyStageLayout();
     });
     stageOpacityInput.addEventListener("change", () => {
-      if (isBlockingAction() || stageSelection?.kind !== "layer") return;
+      if (isBuiltInLayoutEdit() || isBlockingAction() || stageSelection?.kind !== "layer") return;
       const index = layerIndexForId(stageSelection.id);
       if (index < 0) return;
       queueStageMutations([{
@@ -1965,16 +2252,23 @@
     stageGreetingMark.setAttribute("aria-hidden", "true");
     const stageGreetingText = document.createElement("span");
     stageGreetingText.className = "stage-greeting-text";
+    const stageGreetingAnchor = document.createElement("span");
+    stageGreetingAnchor.className = "stage-greeting-anchor";
     // Claude's native starburst trails the greeting. Keep the schematic in
-    // that order; a live capture supplies the exact native artwork.
-    stageGreetingEl.append(stageGreetingText, stageGreetingMark);
+    // that order without letting the mark change the greeting's placement.
+    // A live capture supplies the exact native artwork.
+    stageGreetingAnchor.append(stageGreetingText, stageGreetingMark);
+    stageGreetingEl.append(stageGreetingAnchor);
     const stageStripA = document.createElement("div");
     stageStripA.className = "stage-strip";
     const stageStripB = document.createElement("div");
     stageStripB.className = "stage-strip stage-strip-alt";
     const stageComposerEl = document.createElement("div");
     stageComposerEl.className = "stage-composer";
-    stageCanvas.append(stageBackdropImg, stageArt, stageSidebarEl, stageContentHost, stageZonesHost);
+    stageCanvas.append(
+      stageBackdropImg, stageArt, stageSidebarEl, stageContentHost, stageZonesHost,
+      stageBackgroundSelection,
+    );
     stageFrame.append(stageCanvas, stageHud, stageEmptyNote, stageLayersPanel);
     stageRoot.appendChild(stageFrame);
     const stageContextHint = document.createElement("p");
@@ -2015,6 +2309,7 @@
       if (greetingContextUnavailable) greetingContextUnavailable.hidden = newChat;
       refreshInspectorContext();
       syncStageSelectionMode();
+      syncSectionProgress();
     };
 
     const renderStageLayersPanel = () => {
@@ -2062,7 +2357,8 @@
         eye.setAttribute("aria-pressed", String(!stageHiddenLayers.has(layer.id)));
         eye.setAttribute("aria-label", format(tr("stageEyeToggle"), layer.index + 1, tr(`role${currentRole[0].toUpperCase()}${currentRole.slice(1)}`)));
         eye.textContent = tr(stageHiddenLayers.has(layer.id) ? "stageEyeShowShort" : "stageEyeHideShort");
-        eye.disabled = gated;
+        eye.hidden = isBuiltInLayoutEdit();
+        eye.disabled = gated || isBuiltInLayoutEdit();
         eye.addEventListener("click", () => {
           if (stageHiddenLayers.has(layer.id)) stageHiddenLayers.delete(layer.id);
           else {
@@ -2232,7 +2528,7 @@
         node.setAttribute("aria-valuenow", String(Math.round(value * 100) / 100));
         node.setAttribute("aria-valuetext", `${Math.round(value * 100) / 100}%`);
       }
-      if (prompt || greeting) {
+      if (prompt || greeting || isBuiltInLayoutEdit()) {
         stageOpacityWrap.hidden = true;
       } else {
         const index = layerIndexForId(stageSelection.id);
@@ -2292,14 +2588,17 @@
       stageCanvas.style.height = `${logicalHeight}px`;
       stageCanvas.style.transform = `scale(${scale || 1})`;
       const tokenValue = (key) => stageValue(`tokens.${selectedMode}.${key}`);
-      // Over a live capture, an uncommitted colour edit stays invisible until the
-      // host re-renders and pushes a fresh capture. While one is pending, dim the
-      // capture and let the schematic fills preview the change immediately; it
-      // clears itself the moment the override commits and the recapture lands.
-      const colorPreview = captureActive && [...stageOverrides.keys()].some((path) =>
-        (path.startsWith(`tokens.${selectedMode}.`)
-          || path === "shared.radius" || path === "shared.blur" || path === "shared.shadow")
-          && String(stageOverrides.get(path)) !== String(statePath(path)));
+      // Aura's capture must remain last-valid, but the editor canvas must keep
+      // showing the current draft while a colour check is failing. Otherwise
+      // every intermediate two-colour adjustment appears to snap back and the
+      // user cannot see the value that remains editable in the controls.
+      const invalidColorDraft = !state.feedback.valid && state.feedback.errors.some((error) =>
+        error.code.includes("contrast") && error.field.startsWith(`${selectedMode}.`));
+      const colorPreview = captureActive && (invalidColorDraft
+        || [...stageOverrides.keys()].some((path) =>
+          (path.startsWith(`tokens.${selectedMode}.`)
+            || path === "shared.radius" || path === "shared.blur" || path === "shared.shadow")
+            && String(stageOverrides.get(path)) !== String(statePath(path))));
       stageFrame.dataset.colorPreview = colorPreview ? "true" : "";
       stageSidebarEl.hidden = captureActive && !colorPreview;
       const scope = stageValue("shared.backgroundScope");
@@ -2309,6 +2608,16 @@
       stageCanvas.style.background = tokenValue("canvas") ?? "#808080";
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
       stageArt.style.left = scope === "content" ? `${mainMetrics.left}px` : "0";
+      const backgroundSelected = inspectorTarget === "background.canvas";
+      stageBackgroundSelection.hidden = !backgroundSelected;
+      if (backgroundSelected) {
+        const contentOnly = scope === "content";
+        stageBackgroundSelection.dataset.scope = contentOnly ? "content" : "full-window";
+        stageBackgroundSelection.style.left = `${contentOnly ? mainMetrics.left : 0}px`;
+        stageBackgroundSelection.style.top = "0";
+        stageBackgroundSelection.style.width = `${contentOnly ? mainMetrics.width : logicalWidth}px`;
+        stageBackgroundSelection.style.height = `${logicalHeight}px`;
+      }
       const sidebarColor = tokenValue("sidebar") ?? "#808080";
       const sidebarAlpha = Number(tokenValue("sidebarAlpha")) || 1;
       stageSidebarEl.style.width = `${mainMetrics.left}px`;
@@ -2422,7 +2731,8 @@
             ? "0 0 18px color-mix(in srgb, var(--accent) 35%, transparent)"
             : "none";
           stageGreetingMark.hidden = greeting.markSource === "none";
-          stageGreetingMark.style.fontSize = `${greeting.fontSize * greeting.markScale
+          stageGreetingMark.style.fontSize = `${Number(stageValue(`${greetingStagePrefix()}fontSize`))
+            * greeting.markScale
             * (greeting.markSource === "compact" ? 0.6 : 0.85)}px`;
         } else {
           stageGreetingEl.hidden = true;
@@ -2521,11 +2831,17 @@
     };
     const selectStageBranchSurface = () => {
       if (inspectorBranch === "widgets") {
-        announce(tr("branchWidgetsHelp"));
+        announce(tr("appIdentityHelp"));
         return false;
       }
-      const target = inspectorBranch === "interface" ? "interface.theme"
-        : "background.canvas";
+      const target = isBuiltInLayoutEdit()
+        ? (inspectorBranch === "interface" ? "interface.new-chat-area" : "background.layer")
+        : (inspectorBranch === "interface" ? "interface.theme" : "background.canvas");
+      if (!targetAllowedInCurrentEdit(target)
+          || (target === "background.layer" && !state?.layers?.length)) return false;
+      if (target === "background.layer" && !selectedLayerId) {
+        selectedLayerId = state?.layers?.[0]?.id ?? null;
+      }
       stageSelection = null;
       inspectorField = defaultInspectorField(target);
       setInspectorTarget(target, { reveal: true });
@@ -3985,7 +4301,7 @@
         actions.append(replace, up, down, copyWide, copyNormal, remove);
 
         const sharedGrid = document.createElement("div");
-        sharedGrid.className = "layer-grid";
+        sharedGrid.className = "layer-grid layer-shared-controls";
         sharedGrid.append(
           layerSelect({ layer, property: "role", labelKey: "layerRole", quick: true, values: ROLE_IDS.map((value) => [value, `role${value[0].toUpperCase()}${value.slice(1)}`]) }),
           layerSelect({ layer, property: "appearance", labelKey: "appearanceUse", values: [["all", "appearanceAll"], ["light", "appearanceLight"], ["dark", "appearanceDark"]] }),
@@ -4121,29 +4437,9 @@
     const renderFeedback = () => {
       feedbackRoot.replaceChildren();
       quickFeedback.replaceChildren();
+      quickFeedback.hidden = false;
       errorSummary.replaceChildren();
       errorSummary.hidden = true;
-      // An invalid draft keeps Aura on the last valid payload, so every later edit —
-      // colour, greeting, artwork — stops reaching the running app until it is fixed.
-      // Say that plainly; a failed check in a list does not explain a frozen preview.
-      if (livePausedNote) {
-        const blocking = [];
-        for (const mode of ["light", "dark"]) {
-          for (const check of state.feedback.contrast[mode] ?? []) {
-            if (!check.pass) {
-              blocking.push(`${tr(mode === "light" ? "lightMode" : "darkMode")} ${tr(CONTRAST_LABEL_KEYS[check.id])}`);
-            }
-          }
-        }
-        const budget = state.feedback.budget;
-        if (budget.chromeBytes >= budget.chromeLimit) blocking.push(tr("budgetChrome"));
-        if (budget.embeddedArtworkBytes >= budget.embeddedArtworkLimit) blocking.push(tr("budgetArtwork"));
-        if (budget.sourceArtworkBytes >= budget.sourceArtworkLimit) blocking.push(tr("budgetSourceArtwork"));
-        livePausedNote.hidden = state.feedback.valid;
-        livePausedNote.textContent = state.feedback.valid
-          ? ""
-          : format(tr("livePausedNotice"), blocking.slice(0, 3).join(" · ") || tr("feedbackInvalid"));
-      }
       const list = document.createElement("ul");
       list.className = "editor-feedback-list";
       const addItem = (label, value, pass) => {
@@ -4176,7 +4472,7 @@
       const quickText = document.createElement("span");
       quickText.textContent = state.feedback.valid
         ? tr("quickFeedbackValid")
-        : `${format(tr("quickFeedbackInvalid"), validationMessageFor(state.feedback.errors[0]))} ${tr("studioLastValid")}`;
+        : format(tr("quickFeedbackInvalid"), validationMessageFor(state.feedback.errors[0]));
       quickFeedback.dataset.pass = String(state.feedback.valid);
       quickFeedback.appendChild(quickText);
       if (state.feedback.errors.length) {
@@ -4193,8 +4489,8 @@
         jump.textContent = tr("firstIssue");
         jump.addEventListener("click", () => focusError(first.field));
         errorSummary.append(message, jump);
-        errorSummary.hidden = false;
       }
+      syncSectionProgress();
     };
 
     const reflectButtonStates = () => {
@@ -4203,7 +4499,9 @@
       const busy = Boolean(pendingAction || coalescedChanges.size || changeFlushTimer
         || stageKeyTimer || stageKeyPaths.size);
       const blocked = deferredChanges.size > 0;
-      const localGreetingWork = greetingPreferenceDraftDirty || greetingPreferenceInputDirty;
+      const builtInLayout = isBuiltInLayoutEdit();
+      const localGreetingWork = !builtInLayout
+        && (greetingPreferenceDraftDirty || greetingPreferenceInputDirty);
       undoButton.disabled = busy || blocked || (!state.canUndo && !localGreetingWork);
       redoButton.disabled = busy || blocked || localGreetingWork || !state.canRedo;
       resetButton.disabled = busy || blocked || (!state.dirty && !localGreetingWork);
@@ -4214,20 +4512,23 @@
       // blocking structural action (which briefly replaces state) holds it.
       cancelButton.disabled = isBlockingAction();
       backButton.disabled = isBlockingAction();
-      addLayerButton.disabled = busy || blocked || state.layers.length >= 8;
-      stageOpacityInput.disabled = isBlockingAction() || blocked;
-      if (replaceLauncherMarkButton) replaceLauncherMarkButton.disabled = busy || blocked;
-      if (greetingResetButton) greetingResetButton.disabled = busy || blocked;
+      addLayerButton.disabled = builtInLayout || busy || blocked || state.layers.length >= 8;
+      stageOpacityInput.disabled = builtInLayout || isBlockingAction() || blocked;
+      if (replaceLauncherMarkButton) {
+        replaceLauncherMarkButton.disabled = builtInLayout || busy || blocked;
+      }
+      if (greetingResetButton) greetingResetButton.disabled = builtInLayout || busy || blocked;
       if (greetingUpdateButton) {
         const personal = greetingDraft();
         const editable = Boolean(personal?.enabled && personal.source === "custom");
-        greetingUpdateButton.disabled = busy || blocked || !editable
+        greetingUpdateButton.disabled = builtInLayout || busy || blocked || !editable
           || greetingPreferenceInputInvalid || !localGreetingWork;
       }
       reflectGreetingCompletion();
       addLayerButton.dataset.layerStructure = "";
       for (const button of editor.querySelectorAll("[data-layer-structure]")) {
-        button.disabled = busy || blocked || (button === addLayerButton && state.layers.length >= 8)
+        button.disabled = builtInLayout || busy || blocked
+          || (button === addLayerButton && state.layers.length >= 8)
           || button.dataset.layerBoundary === "true";
       }
     };
@@ -4246,6 +4547,7 @@
       reflectLauncher();
       reflectMetadata();
       renderLayers(focusKey);
+      syncBuiltInLayoutPresentation();
       renderFeedback();
       reflectButtonStates();
       renderStage();
@@ -4389,6 +4691,7 @@
         if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
       }
       state = normalized;
+      syncBuiltInLayoutPresentation({ entering });
       selectStageMirror();
       onStudioStyleChange?.(
         normalized.studioStyle,
@@ -4516,10 +4819,7 @@
         input.addEventListener("change", () => queueTokenChange("shared", launcherToken(key), input.valueAsNumber));
       }
     }
-    replaceLauncherMarkButton?.addEventListener("click", () => {
-      const base = editorMessageBase();
-      if (base) post({ type: "pick-theme-launcher-mark", ...base });
-    });
+    replaceLauncherMarkButton?.addEventListener("click", requestLauncherMark);
     scopeInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
       setStageOverride("shared.backgroundScope", input.value);
@@ -4804,7 +5104,8 @@
 
     const performUndo = () => {
       if (undoButton.disabled) return;
-      if ((greetingPreferenceDraftDirty || greetingPreferenceInputDirty) && state) {
+      if (!isBuiltInLayoutEdit()
+          && (greetingPreferenceDraftDirty || greetingPreferenceInputDirty) && state) {
         greetingPreferenceDraft = structuredClone(state.greetingPreferences);
         greetingPreferenceDraftDirty = false;
         greetingPreferenceInputDirty = false;
@@ -4830,12 +5131,13 @@
       const personal = greetingPreferenceInputDirty
         ? updateGreetingPreferenceDraft()
         : greetingDraft();
-      if (!state?.feedback.valid
-          || greetingPreferenceInputInvalid
-          || !greetingPreferenceDraftValid(personal)) {
-        if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
+      const builtInLayout = isBuiltInLayoutEdit();
+      if (!state?.feedback.valid || (!builtInLayout
+          && (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)))) {
+        if (!builtInLayout && (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal))) {
           showGreetingInputError();
         }
+        quickFeedback.hidden = true;
         errorSummary.hidden = false;
         focusBelowInspector(errorSummary);
         announce(tr("saveBlocked"), "error");
@@ -4843,7 +5145,7 @@
       }
       const base = mutationBase();
       if (!base) return;
-      if (greetingPreferenceDraftDirty) {
+      if (!builtInLayout && greetingPreferenceDraftDirty) {
         actionAfterPatch = { type: "save-theme-edit", ...base };
         postGreetingPreferences(personal, base);
         return;
@@ -4954,7 +5256,7 @@
     });
 
     const requestDelete = (theme, label, opener) => {
-      if (!ID_PATTERN.test(theme)) return false;
+      if (isBuiltInLayoutEdit() || !ID_PATTERN.test(theme)) return false;
       showConfirm({
         titleText: format(tr("confirmDeleteTitle"), label), bodyText: tr("confirmDeleteBody"),
         actionText: tr("confirmDeleteAction"), destructive: true, opener,

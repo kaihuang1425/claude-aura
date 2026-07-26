@@ -38,6 +38,21 @@
       <h1 id="themes-title" data-i18n="themesTitle">Choose a look</h1>
       <p class="lede" data-i18n="themesLede">Selection applies to Claude Aura and Studio immediately and is saved on this device.</p>
 
+      <div id="built-in-authoring-banner" class="built-in-authoring-banner" role="status" hidden>
+        <span class="built-in-authoring-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 5.5h16v13H4zM4 9h16M9 9v9.5"></path>
+          </svg>
+        </span>
+        <strong>
+          <span data-editor-i18n="editTheme">Edit</span>
+          <span aria-hidden="true">·</span>
+          <span data-editor-i18n="builtInTheme">Built-in</span>
+          <span aria-hidden="true">·</span>
+          <span data-editor-i18n="branchInterfaceDetail">Surfaces &amp; layout</span>
+        </strong>
+      </div>
+
       <fieldset id="appearance-mode" class="appearance-mode" aria-describedby="appearance-help">
         <legend data-i18n="appearanceMode">Appearance mode</legend>
         <div class="appearance-options">
@@ -276,6 +291,11 @@
           <button type="button" id="editor-back" class="ghost-button editor-back" data-editor-i18n="backToThemes">Back to themes</button>
           <div class="editor-inspector-title-copy">
             <h2 data-editor-i18n="inspectorTitle">Edit theme</h2>
+            <p id="editor-built-in-authoring" class="editor-authoring-pill" role="status" hidden>
+              <span data-editor-i18n="builtInTheme">Built-in</span>
+              <span aria-hidden="true">·</span>
+              <span data-editor-i18n="branchInterfaceDetail">Surfaces &amp; layout</span>
+            </p>
             <div class="editor-state" aria-live="polite">
               <span id="editor-dirty" class="editor-state-pill"></span>
               <span id="editor-valid" class="editor-state-pill"></span>
@@ -352,6 +372,9 @@
         </div>
       </div>
 
+      <div class="editor-inspector-body">
+      <nav id="editor-section-progress" class="editor-section-progress" aria-label="Theme editor sections" hidden></nav>
+      <div class="editor-inspector-content">
       <section id="editor-document-details" class="editor-document-details-panel" role="region" aria-labelledby="editor-document-details-title" hidden>
         <h3 id="editor-document-details-title" data-editor-i18n="documentDetails">Document details</h3>
         <p class="help" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
@@ -384,7 +407,6 @@
           </label>
         </div>
       </section>
-      <p id="editor-live-paused" class="editor-live-paused" role="status" aria-live="polite" hidden></p>
       <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
       <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
       <p id="editor-advanced-notice" class="editor-advanced-notice" data-editor-i18n="advancedValuesNotice">This target has additional values in Advanced.</p>
@@ -430,7 +452,7 @@
       <section class="editor-section" data-editor-branch="widgets" data-editor-targets="widgets.app-identity" aria-labelledby="editor-app-identity-title">
         <h2 id="editor-app-identity-title" data-editor-i18n="appIdentity">App identity</h2>
         <p class="help" data-editor-i18n="appIdentityHelp">Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.</p>
-        <button type="button" id="editor-launcher-preview" class="editor-launcher-preview" data-editor-i18n-aria-label="selectAppIdentityPreview" aria-label="Select app identity">
+        <button type="button" id="editor-launcher-preview" class="editor-launcher-preview" data-editor-i18n-aria-label="replaceAppMark" aria-label="Replace mark">
           <img id="editor-launcher-mark" alt="" draggable="false">
           <span data-editor-i18n="railSubtitle">Studio</span>
           <i aria-hidden="true"></i>
@@ -489,7 +511,7 @@
         <div class="editor-section-head">
           <div>
             <h2 id="editor-layers-title" data-editor-i18n="artworkLayers">Images</h2>
-            <p class="help advanced-only" data-editor-i18n="layersHelp">Add up to eight pointer-inert images. Each layer can target an appearance, page context, and window size.</p>
+            <p class="help advanced-only layer-management-help" data-editor-i18n="layersHelp">Add up to eight pointer-inert images. Each layer can target an appearance, page context, and window size.</p>
           </div>
           <div class="editor-add-artwork">
             <label class="editor-add-role" for="editor-add-layer-role">
@@ -501,10 +523,10 @@
                 <option value="decoration" data-editor-i18n="roleDecoration">Decoration</option>
               </select>
             </label>
-            <button type="button" id="editor-add-layer" class="ghost-button add-image-button" data-editor-i18n="addArtwork">Add image…</button>
+            <button type="button" id="editor-add-layer" class="ghost-button add-image-button" data-layer-structure data-editor-i18n="addArtwork">Add image…</button>
           </div>
         </div>
-        <p class="help" data-editor-i18n="artworkVisibilityHelp">Show in theme changes Aura. Hide in the preview is temporary.</p>
+        <p class="help layer-management-help" data-editor-i18n="artworkVisibilityHelp">Show in theme changes Aura. Hide in the preview is temporary.</p>
         <div id="editor-layer-list" class="editor-layer-list"></div>
       </section>
 
@@ -552,50 +574,52 @@
           <p id="editor-greeting-sample" data-editor-i18n="greetingPreviewSample" data-greeting-preview-ready="false">Good evening</p>
         </figure>
 
-        <h3 data-editor-i18n="greetingWords">Greeting words</h3>
-        <p class="help" data-editor-i18n="greetingWordsHelp">Saved only on this device, never inside the theme. Use one shared list or choose theme-specific words; Aura picks one line for each new chat.</p>
-        <label class="editor-toggle-field" for="editor-greeting-personal-enabled">
-          <input type="checkbox" id="editor-greeting-personal-enabled" data-editor-focus="greeting-personal-enabled">
-          <span data-editor-i18n="greetingPersonalEnable">Use personalized greeting words</span>
-        </label>
-        <div class="editor-greeting-source" role="group" aria-labelledby="editor-greeting-source-label">
-          <span id="editor-greeting-source-label" class="sr-only" data-editor-i18n="greetingWords">Greeting words</span>
-          <label><input type="radio" name="greeting-source" value="claude" data-editor-focus="greeting-source-claude"> <span data-editor-i18n="greetingSourceClaude">Use Claude's greeting</span></label>
-          <label><input type="radio" name="greeting-source" value="custom" data-editor-focus="greeting-source-custom"> <span data-editor-i18n="greetingSourceCustom">Use my own words</span></label>
+        <div class="editor-greeting-personal">
+          <h3 data-editor-i18n="greetingWords">Greeting words</h3>
+          <p class="help" data-editor-i18n="greetingWordsHelp">Saved only on this device, never inside the theme. Use one shared list or choose theme-specific words; Aura picks one line for each new chat.</p>
+          <label class="editor-toggle-field" for="editor-greeting-personal-enabled">
+            <input type="checkbox" id="editor-greeting-personal-enabled" data-editor-focus="greeting-personal-enabled">
+            <span data-editor-i18n="greetingPersonalEnable">Use personalized greeting words</span>
+          </label>
+          <div class="editor-greeting-source" role="group" aria-labelledby="editor-greeting-source-label">
+            <span id="editor-greeting-source-label" class="sr-only" data-editor-i18n="greetingWords">Greeting words</span>
+            <label><input type="radio" name="greeting-source" value="claude" data-editor-focus="greeting-source-claude"> <span data-editor-i18n="greetingSourceClaude">Use Claude's greeting</span></label>
+            <label><input type="radio" name="greeting-source" value="custom" data-editor-focus="greeting-source-custom"> <span data-editor-i18n="greetingSourceCustom">Use my own words</span></label>
+          </div>
+          <div class="editor-control-grid editor-greeting-words">
+            <label class="editor-field" for="editor-greeting-name">
+              <span data-editor-i18n="greetingName">Your name</span>
+              <input id="editor-greeting-name" type="text" maxlength="80" autocomplete="off" data-editor-focus="greeting-name">
+              <small class="help" data-editor-i18n="greetingNameHelp">Used wherever a line contains {name}. Lines with {name} are skipped while this is empty.</small>
+            </label>
+            <label class="editor-field" for="editor-greeting-phrases">
+              <span data-editor-i18n="greetingPhrases">Your lines</span>
+              <textarea id="editor-greeting-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-phrases"></textarea>
+              <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-override">
+              <span data-editor-i18n="greetingOverride">Words for this theme</span>
+              <select id="editor-greeting-override" data-editor-focus="greeting-override">
+                <option value="global" data-editor-i18n="greetingOverrideGlobal">Use the global list</option>
+                <option value="claude" data-editor-i18n="greetingSourceClaude">Use Claude's greeting</option>
+                <option value="custom" data-editor-i18n="greetingOverrideCustom">Use a list for this theme</option>
+              </select>
+            </label>
+            <label id="editor-greeting-override-phrases-field" class="editor-field advanced-only" for="editor-greeting-override-phrases" hidden>
+              <span data-editor-i18n="greetingOverrideCustom">Use a list for this theme</span>
+              <textarea id="editor-greeting-override-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-override-phrases"></textarea>
+              <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
+            </label>
+          </div>
+          <div id="editor-greeting-completion" class="editor-greeting-completion" data-state="updated" hidden>
+            <button type="button" id="editor-greeting-update" class="primary-button" aria-describedby="editor-greeting-update-status" data-editor-i18n="saveChanges">Save</button>
+            <p id="editor-greeting-update-status" class="editor-greeting-update-status" role="status" aria-live="polite" data-state="updated">
+              <span class="editor-greeting-update-mark" aria-hidden="true"></span>
+              <span id="editor-greeting-update-status-text"></span>
+            </p>
+          </div>
+          <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" hidden></p>
         </div>
-        <div class="editor-control-grid editor-greeting-words">
-          <label class="editor-field" for="editor-greeting-name">
-            <span data-editor-i18n="greetingName">Your name</span>
-            <input id="editor-greeting-name" type="text" maxlength="80" autocomplete="off" data-editor-focus="greeting-name">
-            <small class="help" data-editor-i18n="greetingNameHelp">Used wherever a line contains {name}. Lines with {name} are skipped while this is empty.</small>
-          </label>
-          <label class="editor-field" for="editor-greeting-phrases">
-            <span data-editor-i18n="greetingPhrases">Your lines</span>
-            <textarea id="editor-greeting-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-phrases"></textarea>
-            <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-override">
-            <span data-editor-i18n="greetingOverride">Words for this theme</span>
-            <select id="editor-greeting-override" data-editor-focus="greeting-override">
-              <option value="global" data-editor-i18n="greetingOverrideGlobal">Use the global list</option>
-              <option value="claude" data-editor-i18n="greetingSourceClaude">Use Claude's greeting</option>
-              <option value="custom" data-editor-i18n="greetingOverrideCustom">Use a list for this theme</option>
-            </select>
-          </label>
-          <label id="editor-greeting-override-phrases-field" class="editor-field advanced-only" for="editor-greeting-override-phrases" hidden>
-            <span data-editor-i18n="greetingOverrideCustom">Use a list for this theme</span>
-            <textarea id="editor-greeting-override-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-override-phrases"></textarea>
-            <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
-          </label>
-        </div>
-        <div id="editor-greeting-completion" class="editor-greeting-completion" data-state="updated" hidden>
-          <button type="button" id="editor-greeting-update" class="primary-button" aria-describedby="editor-greeting-update-status" data-editor-i18n="saveChanges">Save</button>
-          <p id="editor-greeting-update-status" class="editor-greeting-update-status" role="status" aria-live="polite" data-state="updated">
-            <span class="editor-greeting-update-mark" aria-hidden="true"></span>
-            <span id="editor-greeting-update-status-text"></span>
-          </p>
-        </div>
-        <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" hidden></p>
         <div class="editor-control-grid editor-greeting-controls">
           <label class="editor-field" for="editor-greeting-font">
             <span data-editor-i18n="greetingFont">Font</span>
@@ -656,16 +680,16 @@
         </div>
       </section>
 
-      <section class="editor-section editor-greeting-unavailable" data-editor-branch="interface" data-editor-targets="interface.greeting" aria-labelledby="editor-greeting-unavailable-title" hidden>
-        <h2 id="editor-greeting-unavailable-title" data-editor-i18n="greetingPanel">Greeting</h2>
-        <p class="help" data-editor-i18n="contextNewChat">New chat only</p>
-        <button type="button" id="editor-greeting-switch-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
-      </section>
-
       <section class="editor-section editor-prompt-unavailable" data-editor-branch="interface" data-editor-targets="interface.new-chat-area" aria-labelledby="editor-conversation-layout-title" hidden>
         <h2 id="editor-conversation-layout-title" data-editor-i18n="conversationLayout">Conversation layout</h2>
         <p class="help" data-editor-i18n="conversationLayoutHelp">Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.</p>
         <button type="button" id="editor-switch-supported-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
+      </section>
+
+      <section class="editor-section editor-greeting-unavailable" data-editor-branch="interface" data-editor-targets="interface.greeting" aria-labelledby="editor-greeting-unavailable-title" hidden>
+        <h2 id="editor-greeting-unavailable-title" data-editor-i18n="greetingPanel">Greeting</h2>
+        <p class="help" data-editor-i18n="contextNewChat">New chat only</p>
+        <button type="button" id="editor-greeting-switch-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
       </section>
 
       <section class="editor-section editor-guide-section advanced-only" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="asset-guide-title">
@@ -714,6 +738,8 @@
         <div id="editor-feedback" tabindex="-1"></div>
       </section>
 
+      </div>
+      </div>
       </div>
       </div>
     </section>

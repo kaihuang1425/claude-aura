@@ -187,6 +187,10 @@ export const BUILTIN_BRAND_MARK_ASSETS = Object.freeze({
   "korean-prestige": "assets/theme-art/korean-prestige/brand-mark.svg",
   "japanese-idol": "assets/theme-art/japanese-idol/brand-mark.svg",
 });
+export const BUILTIN_GREETING_MARK_ASSETS = Object.freeze({
+  ...BUILTIN_BRAND_MARK_ASSETS,
+  "study-library": "assets/theme-art/study-library/launcher-mark.png",
+});
 export const BUILTIN_BRAND_WORDMARK_ASSETS = Object.freeze({
   ...Object.fromEntries([...FROZEN_BUILTIN_THEME_IDS].map((themeId) => [
     themeId,

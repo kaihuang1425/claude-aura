@@ -16,13 +16,84 @@
   min-height: 34px;
   padding: 6px 10px;
   font-size: 12px;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .theme-source-badge {
-  margin-right: auto;
   align-self: center;
+  margin-right: auto;
   color: var(--ink-muted);
   font-size: 11.5px;
+}
+
+.theme-card-actions.is-builtin-authoring {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.theme-card-actions.is-builtin-authoring .theme-source-badge {
+  justify-self: start;
+  margin-right: 0;
+}
+
+.theme-card-actions.is-builtin-authoring button {
+  width: 100%;
+}
+
+.theme-card-actions.is-builtin-authoring .theme-builtin-layout-action {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.built-in-authoring-banner {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--border));
+  border-radius: var(--shell-card-radius);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--ink);
+}
+
+.built-in-authoring-banner[hidden] {
+  display: none;
+}
+
+.built-in-authoring-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 54%, var(--border));
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.built-in-authoring-mark svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.built-in-authoring-banner strong {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12.5px;
+  line-height: 1.35;
 }
 
 .editor-view {
@@ -125,6 +196,49 @@
 
 .editor-state-pill[data-state="invalid"] {
   color: #a23530;
+}
+
+.editor-authoring-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  margin: 0 auto 0 0;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--branch-interface) 52%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--branch-interface) 10%, var(--surface));
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.editor-view[data-edit-kind="builtin-layout"] #editor-document-details-toggle,
+.editor-view[data-edit-kind="builtin-layout"] #editor-document-details,
+.editor-view[data-edit-kind="builtin-layout"] .editor-level,
+.editor-view[data-edit-kind="builtin-layout"] [data-editor-targets~="interface.theme"],
+.editor-view[data-edit-kind="builtin-layout"] [data-editor-targets~="background.canvas"],
+.editor-view[data-edit-kind="builtin-layout"] [data-editor-targets~="widgets.app-identity"],
+.editor-view[data-edit-kind="builtin-layout"] [data-editor-branch-target="widgets"],
+.editor-view[data-edit-kind="builtin-layout"] .editor-greeting-personal,
+.editor-view[data-edit-kind="builtin-layout"] #editor-greeting-reset,
+.editor-view[data-edit-kind="builtin-layout"] .editor-add-artwork,
+.editor-view[data-edit-kind="builtin-layout"] .layer-management-help,
+.editor-view[data-edit-kind="builtin-layout"] .editor-guide-section,
+.editor-view[data-edit-kind="builtin-layout"] .layer-shared-controls,
+.editor-view[data-edit-kind="builtin-layout"] [data-layer-structure],
+.editor-view[data-edit-kind="builtin-layout"] .stage-opacity,
+.editor-view[data-edit-kind="builtin-layout"] .stage-eye {
+  display: none !important;
+}
+
+.editor-view[data-edit-kind="builtin-layout"][data-layout-layers="true"] .editor-inspector-nav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.editor-view[data-edit-kind="builtin-layout"][data-layout-layers="false"] .editor-inspector-nav {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .editor-live {
@@ -331,7 +445,7 @@
   background: var(--editor-launcher-hover) !important;
 }
 
-.editor-launcher-preview[aria-pressed="true"] {
+.editor-launcher-preview[data-selected="true"] {
   outline: 2px solid var(--active-branch-tool);
   outline-offset: 3px;
 }
@@ -980,6 +1094,86 @@
   container: theme-inspector / inline-size;
 }
 
+.editor-inspector-body {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editor-inspector-body:has(> .editor-section-progress[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.editor-inspector-content {
+  min-width: 0;
+}
+
+.editor-section-progress {
+  position: sticky;
+  z-index: 9;
+  top: calc(var(--editor-inspector-head-height, 210px) + 10px);
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 4px 0;
+}
+
+.editor-section-progress[hidden] {
+  display: none;
+}
+
+.editor-section-progress::before {
+  position: absolute;
+  z-index: -1;
+  top: 13px;
+  bottom: 13px;
+  left: 50%;
+  width: 1px;
+  background: color-mix(in srgb, var(--active-branch-tool) 34%, var(--border-soft));
+  content: "";
+}
+
+.editor-section-progress button {
+  display: grid;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--active-branch-tool) 32%, var(--border));
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.editor-section-progress button:hover {
+  border-color: var(--active-branch-tool);
+  color: var(--ink);
+}
+
+.editor-section-progress button[aria-current="step"] {
+  border-color: var(--active-branch-tool);
+  background: var(--active-branch-tool);
+  color: #ffffff;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.editor-inspector-content > .editor-section > :is(h2, h3) {
+  scroll-margin-top: calc(var(--editor-inspector-head-height, 210px) + 14px);
+}
+
+.editor-inspector-content > .editor-section :is(h2, h3):focus-visible {
+  outline: 2px solid var(--active-branch-tool);
+  outline-offset: 4px;
+}
+
 .stage-panel {
   position: static;
   padding: 0;
@@ -1167,6 +1361,16 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+
+.stage-background-selection {
+  position: absolute;
+  z-index: 8;
+  box-sizing: border-box;
+  border: 2px solid var(--active-branch-tool);
+  background: color-mix(in srgb, var(--active-branch-tool) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 52%, transparent);
+  pointer-events: none;
 }
 
 .stage-backdrop {
@@ -1742,12 +1946,9 @@
   display: none;
 }
 
-.editor-view[data-inspector-target="interface.theme"] [data-editor-targets~="interface.theme"],
-.editor-view[data-inspector-target="interface.new-chat-area"] [data-editor-targets~="interface.new-chat-area"],
-.editor-view[data-inspector-target="interface.greeting"] [data-editor-targets~="interface.greeting"],
-.editor-view[data-inspector-target="background.canvas"] [data-editor-targets~="background.canvas"],
-.editor-view[data-inspector-target="background.layer"] [data-editor-targets~="background.layer"],
-.editor-view[data-inspector-target="widgets.app-identity"] [data-editor-targets~="widgets.app-identity"] {
+.editor-view[data-inspector-branch="interface"] [data-editor-branch="interface"],
+.editor-view[data-inspector-branch="background"] [data-editor-branch="background"],
+.editor-view[data-inspector-branch="widgets"] [data-editor-branch="widgets"] {
   display: block;
 }
 
@@ -2448,6 +2649,9 @@
   .editor-error-summary,
   .editor-quick-feedback,
   .editor-state-pill,
+  .editor-authoring-pill,
+  .built-in-authoring-banner,
+  .built-in-authoring-mark,
   .editor-mode,
   .editor-inline-fieldset,
   .editor-section,
@@ -2470,7 +2674,10 @@
   .editor-inspector-nav,
   .editor-branch-glyph,
   .editor-context-strip,
-  .editor-document-details-panel {
+  .editor-document-details-panel,
+  .editor-authoring-pill,
+  .built-in-authoring-banner,
+  .built-in-authoring-mark {
     background: Canvas;
     color: CanvasText;
     backdrop-filter: none;
@@ -2491,8 +2698,25 @@
     color: HighlightText;
   }
 
-  .editor-launcher-preview[aria-pressed="true"] {
+  .editor-launcher-preview[data-selected="true"] {
     outline-color: Highlight;
+  }
+
+  .editor-section-progress::before {
+    background: CanvasText;
+  }
+
+  .editor-section-progress button {
+    border-color: ButtonText;
+    background: Canvas;
+    color: ButtonText;
+  }
+
+  .editor-section-progress button[aria-current="step"] {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+    box-shadow: 0 0 0 2px Canvas;
   }
 
   .editor-toolbar .ghost-button,
@@ -2545,6 +2769,12 @@
 
   .stage-hud-ring {
     border-color: Highlight;
+    box-shadow: none;
+  }
+
+  .stage-background-selection {
+    border-color: Highlight;
+    background: transparent;
     box-shadow: none;
   }
 
@@ -2737,13 +2967,13 @@
 .stage-greeting {
   position: absolute;
   display: flex;
-  align-items: baseline;
-  gap: 0.35em;
+  align-items: center;
   min-height: 1.1em;
   pointer-events: auto;
   cursor: grab;
   user-select: none;
   overflow-wrap: anywhere;
+  overflow: visible;
 }
 
 .stage-greeting:focus-visible {
@@ -2760,23 +2990,23 @@
   visibility: hidden;
 }
 
+.stage-greeting-anchor {
+  position: relative;
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .stage-greeting-mark {
-  flex: none;
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 0.35em);
   line-height: 1;
   opacity: 0.9;
+  transform: translateY(-50%);
 }
 
 .stage-greeting-text {
+  display: block;
   min-width: 0;
-}
-
-/* An invalid draft freezes the live payload; say so where the user is working. */
-.editor-live-paused {
-  margin: 8px 0 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--control-radius, 10px);
-  font-size: 13px;
-  line-height: 1.45;
 }

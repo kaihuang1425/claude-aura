@@ -29,6 +29,11 @@
         "text": "#242238"
       },
       "artwork": null,
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
           "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 500, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
@@ -62,6 +67,11 @@
       },
       "studioPreview": "assets/studio-previews/masters/japanese-film-editorial.png",
       "studioPreviewFrame": { "x": 77.76, "y": 8.98, "zoom": 3.651 },
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
           "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.14, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.12, "yRatio": -0.04, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } },
@@ -146,6 +156,11 @@
       },
       "studioPreview": "assets/studio-previews/masters/korean-prestige.png",
       "studioPreviewFrame": { "x": 82.34, "y": 8.61, "zoom": 3.274 },
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
           "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 32, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.62, "xRatio": -0.06, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
@@ -230,6 +245,11 @@
       },
       "studioPreview": "assets/studio-previews/masters/cartoon-studio.png",
       "studioPreviewFrame": { "x": 92.79, "y": 10.48, "zoom": 3.651 },
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
           "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 38, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.8 } },
@@ -299,6 +319,11 @@
       },
       "studioPreview": "assets/studio-previews/masters/anime-twilight.png",
       "studioPreviewFrame": { "x": 96.1, "y": 8.25, "zoom": 3.374 },
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
           "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 36, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": -0.03, "yRatio": -0.03, "decoration": "glow", "mark": { "source": "native", "scale": 0.75 } },
@@ -344,14 +369,19 @@
       },
       "studioPreview": "assets/studio-previews/masters/study-library.png",
       "studioPreviewFrame": { "x": 50, "y": 55, "zoom": 1 },
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } }
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.9 } }
         },
         "dark": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } }
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.9 } }
         }
       },
       "artwork": null,
@@ -409,6 +439,11 @@
       },
       "studioPreview": "assets/studio-previews/masters/japanese-idol.png",
       "studioPreviewFrame": { "x": 86.85, "y": 9.49, "zoom": 3.194 },
+      "newChatLayout": {
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
+        "offsetYRatio": 0
+      },
       "newChatGreetingStyle": {
         "light": {
           "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 37, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },

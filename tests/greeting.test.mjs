@@ -71,6 +71,14 @@ test("renderer identifier compaction never rewrites contract literals", () => {
   assert(!compacted.includes("const mark="), "code identifiers were not compacted");
   assert(!compacted.includes("settings.theme"), "runtime setting access was not compacted");
   new Function(compacted);
+  const stateCompacted = compactRendererIdentifiers(
+    'let greetingMemory={};const state={"greetingMemory":greetingMemory};',
+  );
+  assert(stateCompacted.includes('"greetingMemory":'),
+    "the persisted greeting-memory state key was rewritten");
+  assert(!stateCompacted.includes(":greetingMemory"),
+    "the private greeting-memory binding was not compacted");
+  new Function(stateCompacted);
 });
 
 test("renderer CSS dictionary round-trips exactly and escapes by declining unsafe input", () => {
@@ -252,7 +260,7 @@ const BUILTIN_IDS = [
   "anime-twilight", "study-library", "japanese-idol", "korean-idol",
 ];
 const COMPACT_MARK_IDS = new Set([
-  "japanese-film-editorial", "korean-prestige", "japanese-idol",
+  "japanese-film-editorial", "korean-prestige", "study-library", "japanese-idol",
 ]);
 
 // Independent acceptance oracle copied from docs/recipes/RECIPES.md § WO-21.
@@ -311,9 +319,9 @@ const EXPECTED_BUILTIN_GREETING_RECIPES = Object.freeze({
   },
   "study-library": sharedAppearanceRecipe(
     recipeFrame("editorial-serif", "primary", 34, 600, false, -0.01, 1.2, "start",
-      0.6, -0.1, -0.02, "hairline", "none", 1),
+      0.6, -0.1, -0.02, "hairline", "compact", 0.85),
     recipeFrame("editorial-serif", "primary", 40, 600, false, -0.015, 1.17, "start",
-      0.56, -0.14, -0.01, "hairline", "none", 1),
+      0.56, -0.14, -0.01, "hairline", "compact", 0.9),
   ),
   "japanese-idol": {
     light: {
@@ -366,6 +374,18 @@ test("all built-ins compile exact four-frame greeting recipes and registered mar
       }
       assert.equal(Boolean(compiled.settings.greeting.markDataUrl), COMPACT_MARK_IDS.has(theme),
         `${theme} ${compiledAppearance} compact mark registration differs from its recipe`);
+      if (theme === "study-library") {
+        assert.match(compiled.settings.greeting.markDataUrl, /^data:image\/png;base64,/,
+          "Study Library must reuse its approved book launcher mark");
+        const encoded = compiled.settings.greeting.markDataUrl.split(",", 2)[1];
+        assert.deepEqual(
+          Buffer.from(encoded, "base64"),
+          await fs.readFile(path.join(
+            PROJECT_ROOT, "assets", "theme-art", "study-library", "launcher-mark.png",
+          )),
+          "Study Library greeting mark differs from its audited launcher artwork",
+        );
+      }
       const bundle = await buildPayloadFromCompiled(compiled);
       new Function(bundle.payload);
       assert(bundle.payload.includes("data-claude-aura-greeting"),

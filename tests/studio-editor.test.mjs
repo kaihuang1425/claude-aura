@@ -314,16 +314,50 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(loadingMarkResolver,
     /Get-AuraUiPermanentThemeIds[\s\S]{0,500}?StartsWith[\s\S]{0,500}?\$source\.Width\s+-ne\s+96[\s\S]{0,100}?\$source\.Height\s+-ne\s+96/,
     "Loading marks must be frozen-theme, root-contained, validated 96px local assets");
+  assert.match(loadingMarkResolver,
+    /\$cropByTheme\s*=\s*@\{[\s\S]{0,1200}?78\.0\s*\/\s*\$sourceBounds\.Width[\s\S]{0,900}?\[Drawing\.Bitmap\]::new\(88,\s*88/,
+    "Loading marks must be optically normalized without modifying their shipped assets");
+  const loadingScale = powershellFunction("Get-AuraUiLoadingScale");
+  assert.match(loadingScale,
+    /LoadingMark\.Width\s*\/\s*88\.0[\s\S]{0,300}?DeviceDpi\s*\/\s*96\.0/,
+    "Loading portal geometry must follow the host's effective DPI scale");
   const loadingPainter = powershellFunction("Paint-AuraUiLoadingPanel");
-  assert.match(loadingPainter,
-    /switch\s+-CaseSensitive[\s\S]{0,4200}?['"]orbit['"][\s\S]{0,4200}?['"]capsule['"]/,
-    "The host must paint all eight bounded loading cues without theme-supplied drawing code");
+  assert.match(loadingPainter, /switch\s+-CaseSensitive/,
+    "The host must select loading portals from its fixed cue allowlist");
+  for (const cue of [
+    "orbit", "editorial-rule", "facet", "ink-frame",
+    "horizon", "folio", "ribbon", "capsule",
+  ]) {
+    assert(loadingPainter.includes(`'${cue}' {`),
+      `The host painter is missing the bounded ${cue} loading portal`);
+  }
+  assert(!/Invoke-Expression|ScriptBlock/.test(loadingPainter),
+    "Loading portals must not accept theme-supplied drawing code");
   const loadingAnimationPreference = powershellFunction("Test-AuraUiLoadingAnimationEnabled");
   assert.match(loadingAnimationPreference,
     /HighContrast[\s\S]{0,500}?WindowMetrics[\s\S]{0,300}?MinAnimate[\s\S]{0,180}?-ceq\s+['"]0['"]/,
     "The loading indicator must honor Windows high contrast and reduced animation");
   assert.match(ui, /\$script:LoadingMark\s*=\s*\[System\.Windows\.Forms\.PictureBox\]::new\(\)/,
     "The loading cover must display the selected permanent theme mark");
+  assert.match(ui,
+    /\$script:LoadingPanel\.Controls\.AddRange\s*\(\s*@\([\s\S]{0,160}?\$script:LoadingMark[\s\S]{0,400}?\)\s*\)/,
+    "The loading mark must sit directly in the painted theme portal");
+  assert(!ui.includes("$script:LoadingMarkPlate"),
+    "A generic circular mark plate must not flatten the eight loading identities");
+  assert.match(ui,
+    /function Update-AuraUiLoadingBackground[\s\S]{0,1000}?BackgroundImage\s*=\s*\$nextBackground[\s\S]{0,300}?\$previousBackground\.Dispose\(\)/,
+    "The painted cover must back transparent controls with one owned bitmap");
+  const loadingLayout = powershellFunction("Set-AuraUiLoadingLayout");
+  assert(loadingLayout.includes(
+    "Set-AuraUiRoundedControlRegion -Control $script:LoadingProgress")
+      && loadingLayout.includes(
+        "Set-AuraUiRoundedControlRegion -Control $script:LoadingProgressIndicator"),
+  "The loading track and moving segment must retain rounded bounds");
+  assert.match(powershellFunction("Update-AuraUiLoadingTheme"),
+    /null\s+-eq\s+\$nextMark[\s\S]{0,180}?Get-AuraUiLoadingProfile\s+-ThemeIdOverride\s+['"]default['"][\s\S]{0,140}?New-AuraUiLoadingMarkBitmap\s+-ThemeId\s+['"]default['"]/,
+    "A missing selected mark must restore the complete Default loading presentation");
+  assert(!loadingPainter.includes("$height * 0.68"),
+    "The Japanese Idol ribbon must not cross the status row");
   assert.match(ui,
     /\$script:LoadingProgress\s*=\s*\[System\.Windows\.Forms\.Panel\]::new\(\)[\s\S]{0,700}?\$script:LoadingProgressIndicator/,
     "The native generic marquee must be replaced by the theme-coloured host indicator");
@@ -342,12 +376,22 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /function Set-AuraUiPreferredColorScheme[\s\S]{0,1800}?Update-AuraUiLoadingTheme/,
     "Appearance changes must refresh the Light/Dark loading presentation");
   for (const cue of [
-    "centred crossing orbital ellipses", "left editorial rule", "tailored diamond facet",
-    "offset double ink frame", "paired dusk arcs", "folio margin",
-    "asymmetric ribbon curve", "offset capsule outlines",
+    "orbital aperture", "offset editorial sheet", "split tailored facets",
+    "inked skew panel", "eclipse disc", "open folio",
+    "asymmetric ribbon field", "layered capsule portal",
   ]) {
     assert(visualRecipes.includes(cue), `The permanent loading recipe is missing ${cue}`);
   }
+  const launcherPosition = powershellFunction("Update-AuraUiLauncherPosition");
+  assert.match(launcherPosition,
+    /LoadingPanel[\s\S]{0,180}?Visible[\s\S]{0,220}?Launcher\.Hide\(\)[\s\S]{0,120}?Hide-AuraUiLauncherTip/,
+    "The floating launcher must stay out of the host-owned loading composition");
+  assert.match(powershellFunction("Show-AuraUiLoading"),
+    /LoadingPanel\.Visible\s*=\s*\$true[\s\S]{0,180}?Update-AuraUiLauncherPosition/,
+    "Showing the cover must suppress the floating launcher immediately");
+  assert.match(powershellFunction("Hide-AuraUiLoading"),
+    /LoadingPanel\.Visible\s*=\s*\$false[\s\S]{0,360}?Update-AuraUiLauncherPosition/,
+    "Revealing the page must restore normal launcher positioning");
   assert.match(screenshotPlan,
     /### Permanent themed loading covers[\s\S]{0,1800}?16 whole-window states[\s\S]{0,2200}?fail-open/,
     "Checkpoint D must require actual-Aura loading-cover evidence and fail-open lifecycle proof");
@@ -387,7 +431,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /function Invoke-AuraUiStudioEditorCore[\s\S]{0,400}?Assert-AuraUiStudioEditorRoots -Create[\s\S]{0,160}?Assert-AuraUiThemeInstallRoot -Create/,
     "Every Studio editor request must reject a redirected installed-theme root before invoking Node");
   assert.match(ui,
-    /function Get-AuraUiStudioEditorCoreState[\s\S]{0,500}?['"]studio-state['"][\s\S]{0,220}?ConvertFrom-AuraUiStudioEditorResponse/,
+    /function Get-AuraUiStudioEditorCoreState[\s\S]{0,500}?['"]studio-state['"][\s\S]{0,420}?ConvertFrom-AuraUiStudioEditorResponse/,
     "Studio restart hydration must use the same validated core response boundary as editor actions");
   assert.match(ui,
     /['"]get-state['"]\s*\{[\s\S]{0,160}?Sync-AuraUiStudioEditorDraft[\s\S]{0,120}?Send-AuraUiStudioState/,
@@ -398,10 +442,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Aura startup must restore the draft payload before creating its WebView");
   const beginThemeEditFunction = ui.match(/function Invoke-AuraUiBeginThemeEdit\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
   assert.match(beginThemeEditFunction,
-    /if \(\$active\)[\s\S]*?\$Request\.reset[\s\S]*?\$activeId[\s\S]*?else\s*\{[\s\S]*?Get-AuraUiStudioKnownTheme[^\n]*-UserOnly/,
-    "Resetting an active unsaved duplicate must not require the copy to be installed first");
-  assert.match(ui, /\$StudioEditorRoot\s*=\s*Join-Path\s+\$DataRoot\s+['"]theme-drafts['"]/,
-    "Editor drafts must stay below Claude Aura app data");
+    /if \(\$active\)[\s\S]*?\$Request\.reset[\s\S]*?\$activeId[\s\S]*?else\s*\{[\s\S]*?\$knownTheme = Get-AuraUiStudioKnownTheme[\s\S]*?\$knownTheme\.source[\s\S]*?\$script:BuiltInAuthoring/,
+    "Resetting an active draft must not require installation, while direct built-in edits stay host-authorized");
+  assert.match(ui,
+    /\$StudioEditorDirectoryName\s*=\s*if\s*\(\$script:BuiltInAuthoring\)\s*\{\s*['"]theme-drafts-builtin-authoring['"]\s*\}\s*else\s*\{\s*['"]theme-drafts['"]\s*\}[\s\S]{0,120}?\$StudioEditorRoot\s*=\s*Join-Path\s+\$DataRoot\s+\$StudioEditorDirectoryName/,
+    "Ordinary and built-in authoring drafts must use separate persistent app-data roots");
+  assert.match(ui,
+    /function Assert-AuraUiStudioEditorRoots[\s\S]{0,1200}?\$expectedEditorDirectoryName\s*=\s*if\s*\(\$script:BuiltInAuthoring\)[\s\S]{0,220}?theme-drafts-builtin-authoring[\s\S]{0,120}?theme-drafts[\s\S]{0,500}?Join-Path \$dataRootPath \$expectedEditorDirectoryName/,
+    "Editor-root validation must enforce the host-selected ordinary or built-in root");
   assert.match(ui,
     /Assert-AuraUiStudioEditorPublicValue[\s\S]{0,2400}?\$propertyName\s+-cin\s+@\(['"]path['"][\s\S]{0,180}?cannot expose a filesystem property/,
     "Editor state must reject filesystem-bearing private fields before posting to the page");
@@ -827,12 +875,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     studioHtml.indexOf('data-editor-branch="background"'),
   );
   assert.match(widgetsMarkup,
-    /<button type="button" id="editor-launcher-preview"[^>]+data-editor-i18n-aria-label="selectAppIdentityPreview"/,
-    "The host-only App identity target must be keyboard-selectable in its truthful local preview");
+    /<button type="button" id="editor-launcher-preview"[^>]+data-editor-i18n-aria-label="replaceAppMark"/,
+    "The App identity preview must truthfully name the mark-replacement file action");
   const widgetSelectionCopy = (await readStudioCopy()).editor;
   for (const locale of STUDIO_LOCALES) {
-    assert(String(widgetSelectionCopy[locale]?.selectAppIdentityPreview ?? "").trim(),
-      `${locale} is missing the local Widget preview selection action`);
+    assert(String(widgetSelectionCopy[locale]?.replaceAppMark ?? "").trim(),
+      `${locale} is missing the App identity mark-replacement action`);
   }
   assert.match(studioHtml,
     /class="editor-section editor-feedback advanced-only" data-editor-global/,
@@ -888,6 +936,52 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(setInspectorTargetBlock,
     /targetByBranch\[inspectorBranch\]\s*=\s*target[\s\S]{0,120}?dataset\.inspectorBranch[\s\S]{0,100}?dataset\.inspectorTarget/,
     "Each branch must remember its last selected target");
+  assert.match(studioHtml,
+    /class="editor-inspector-body"[\s\S]{0,180}?id="editor-section-progress" class="editor-section-progress"[^>]+hidden[\s\S]{0,120}?class="editor-inspector-content"/,
+    "The inspector document must include a compact left section-progress rail");
+  const sectionProgressBlock = studioEditor.slice(
+    studioEditor.indexOf("const visibleInspectorSections"),
+    studioEditor.indexOf("const setDocumentDetailsOpen"),
+  );
+  assert.match(sectionProgressBlock,
+    /dataset\.editorBranch[\s\S]{0,140}?branch !== inspectorBranch[\s\S]{0,220}?const inspectorSectionHeading/,
+    "The section rail must derive only the visible sections in the active object family");
+  assert(sectionProgressBlock.includes('button.setAttribute("aria-current", "step")')
+      && sectionProgressBlock.includes('button.textContent = String(index + 1).padStart(2, "0")'),
+    "The section rail must expose both the current section and PDF-reader-style numbered markers");
+  assert(sectionProgressBlock.includes('button.addEventListener("click"')
+      && sectionProgressBlock.includes("setInspectorTarget(target)")
+      && sectionProgressBlock.includes("heading.focus({ preventScroll: true })")
+      && sectionProgressBlock.includes("alignInspectorSection(heading)"),
+    "Each section marker must retarget, focus, and top-align within the existing inspector scroller");
+  assert.match(sectionProgressBlock,
+    /const atBottom = editorControls\.scrollTop \+ editorControls\.clientHeight[\s\S]{0,120}?editorControls\.scrollHeight - 2[\s\S]{0,120}?sections\.at\(-1\)/,
+    "The final section marker must become current when the inspector reaches its scroll limit");
+  assert.match(sectionProgressBlock,
+    /setAttribute\(\s*"aria-label",\s*entries\.map\(\(\{ heading }\) => heading\.textContent\.trim\(\)\)\.join\(" · "\)/,
+    "The section navigation must name its localized headings instead of reusing the branch-toolbar label");
+  assert.match(studioEditorCss,
+    /\.editor-section-progress\s*\{[^}]*position:\s*sticky[^}]*top:\s*calc\(var\(--editor-inspector-head-height,[^)]+\) \+ 10px\)/,
+    "The section progress must remain visible below the measured inspector header");
+  const trackInspectorFieldBlock = studioEditor.match(
+    /const trackInspectorField\s*=\s*\(event\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(trackInspectorFieldBlock,
+    /closest\?\.\("\.editor-section\[data-editor-branch]\[data-editor-targets]"\)[\s\S]{0,300}?inspectorSectionTarget\(section\)[\s\S]{0,220}?target !== inspectorTarget[\s\S]{0,160}?setInspectorTarget\(target\)/,
+    "Using any control in a sibling section must retarget context without leaving the active branch");
+  assert.match(sectionProgressBlock,
+    /const inspectorSectionTarget[\s\S]{0,300}?targets\.length === 1 \? targets\[0] : null/,
+    "A shared Background guide must not arbitrarily replace the current exact target");
+  assert(studioEditor.includes('editorControls?.addEventListener("click", trackInspectorField)'),
+    "Section actions without a data field must still update the active inspector target");
+  const syncStageToolbarBlock = studioEditor.match(
+    /const syncStageToolbar\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(syncStageToolbarBlock,
+    /promptContextSection\.hidden = !newChat[\s\S]{0,420}?greetingContextUnavailable\.hidden = newChat[\s\S]{0,180}?syncSectionProgress\(\)/,
+    "New-chat and conversation switches must rebuild the section rail after their sections change");
+  assert(studioHtml.indexOf("editor-prompt-unavailable") < studioHtml.indexOf("editor-greeting-unavailable"),
+    "Conversation replacements must preserve New chat area before Greeting in the branch document");
   const branchNavigationBlock = studioEditor.match(
     /branchTabs\.forEach\([\s\S]*?\n\s*}\)\);/)?.[0] ?? "";
   assert.match(branchNavigationBlock,
@@ -896,8 +990,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(!/(?:stageContext|stageViewport|selectedMode|backgroundScope)\s*=/.test(branchNavigationBlock),
     "Branch changes must preserve preview context, responsive scope, and appearance");
   assert.match(studioEditor,
-    /branchTabs\.forEach\(\(tab,\s*index\)\s*=>\s*tab\.addEventListener\("keydown"[\s\S]{0,500}?(?:ArrowLeft|ArrowRight)[\s\S]{0,500}?branchTabs\[nextIndex\]\.click\(\)/,
-    "The branch toolbar must support roving arrow-key tool selection");
+    /branchTabs\.forEach\(\(tab\)\s*=>\s*tab\.addEventListener\("keydown"[\s\S]{0,500}?(?:ArrowLeft|ArrowRight)[\s\S]{0,500}?availableTabs\s*=\s*branchTabs\.filter\([\s\S]{0,500}?availableTabs\[nextIndex\]\.click\(\)/,
+    "The branch toolbar must rove only across visible enabled tools");
   assert.match(studioHtml, /class="editor-field advanced-only" for="editor-font-display"/,
     "Display typography must remain an Advanced control");
   assert.match(studioHtml, /class="editor-field advanced-only" for="editor-blur"/,
@@ -940,9 +1034,23 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && launcherPreviewNormalizer.includes("aura\\.editor\\/active\\/launcher-")
       && !launcherPreviewNormalizer.includes("aura\\.user-themes"),
   "The identity preview must accept only frozen built-in or digest-owned editor marks");
+  const requestLauncherMarkBlock = studioEditor.match(
+    /const requestLauncherMark\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(requestLauncherMarkBlock,
+    /const base = mutationBase\(\);[\s\S]{0,120}?post\(\{ type: "pick-theme-launcher-mark", \.\.\.base }\)/,
+    "App identity replacement must use the active editor session and exact host-owned picker action");
+  assert(!requestLauncherMarkBlock.includes("editorMessageBase"),
+    "App identity replacement must not call a nonexistent editor message helper");
   assert.match(studioEditor,
-    /replaceLauncherMarkButton\?\.addEventListener\("click"[\s\S]{0,300}?type:\s*"pick-theme-launcher-mark"/,
-    "Replacing the launcher mark must use the exact host-owned picker action");
+    /launcherPreview\?\.addEventListener\("click"[\s\S]{0,300}?requestLauncherMark\(\)/,
+    "Selecting the App identity preview must open the mark picker instead of reselecting an unchanged target");
+  assert.match(studioEditor,
+    /replaceLauncherMarkButton\?\.addEventListener\("click", requestLauncherMark\)/,
+    "The preview and Replace mark button must share one working picker path");
+  assert(studioEditor.includes('widgets: "appIdentityHelp"')
+      && studioEditor.includes('announce(tr("appIdentityHelp"))'),
+    "Widgets guidance must describe replacement instead of promising a no-op selection");
   assert(!studioEditor.includes("railThemeMark"),
     "The identity preview must not copy another rendered widget's potentially stale mark");
   assert.match(studioEditor, /launcherInputs[\s\S]{0,1800}?queueTokenChange\("shared", launcherToken\(key\)/,
@@ -1000,6 +1108,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /class="editor-section" data-editor-branch="background" data-editor-targets="background\.canvas" aria-labelledby="editor-background-title"/,
     "Background must expose the theme-canvas scope");
+  assert.match(studioEditor,
+    /const backgroundSelected = inspectorTarget === "background\.canvas"[\s\S]{0,420}?stageBackgroundSelection\.style\.width/,
+    "Selecting Background scope must visibly outline its effective main-area or full-window canvas");
+  assert.match(studioEditorCss,
+    /\.stage-background-selection\s*\{[^}]*border:\s*2px solid var\(--active-branch-tool\)[^}]*pointer-events:\s*none/,
+    "The Background scope outline must be visible without blocking direct canvas controls");
   assert.match(studioEditor,
     /input\.dataset\.editorMetadata === "label"[\s\S]{0,180}?input\.dataset\.editorLocale !== normalizedLocale[\s\S]{0,180}?classList\.add\("advanced-only"\)/,
     "Quick customize Style must show only the current locale name while Advanced retains every locale");
@@ -1067,8 +1181,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditor,
     /const seedNativePromptOverrides[\s\S]{0,500}?\["width",\s*"x",\s*"y"\][\s\S]{0,220}?setStageOverride/,
     "The native prompt must be adopted as one complete width-and-offset tuple");
-  assert.match(studioEditor,
-    /const adoptsNativePrompt[\s\S]{0,650}?adoptsNativePrompt\s*&&\s*promptKey/,
+  const promptCommitStagePathsBlock = studioEditor.slice(
+    studioEditor.indexOf("const commitStagePaths"),
+    studioEditor.indexOf("const flushStageKeyChanges"),
+  );
+  assert.match(promptCommitStagePathsBlock,
+    /const adoptsNativePrompt[\s\S]*?adoptsNativePrompt\s*&&\s*promptKey/,
     "A first prompt gesture must commit every measured placement scalar in one patch");
   assert.match(studioHtml, /class="editor-section editor-prompt-unavailable"[^>]+hidden[\s\S]{0,300}?data-editor-i18n="conversationLayoutHelp"/,
     "Conversation mode must replace new-chat placement controls with an explicit explanation");
@@ -1645,8 +1763,92 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   for (const action of literalPageActions) {
     assert(studioMessageTypes.includes(action), `The page emits ${action}, which the host bridge does not allow`);
   }
-  assert.match(studioApp, /source === "builtin"[\s\S]{0,260}?type:\s*"create-theme-copy"/,
-    "Built-in theme cards must expose duplicate-to-customize instead of direct editing");
+  assert.match(studioApp, /if \(source === "builtin"\)[\s\S]{0,1200}?type:\s*"create-theme-copy"/,
+    "Built-in theme cards must retain duplicate-to-customize in every mode");
+  assert.match(studioApp,
+    /builtInAuthoring:\s*false[\s\S]*?state\.builtInAuthoring\s*=\s*data\.builtInAuthoring\s*===\s*true/,
+    "Built-in authoring must default off and become available only from the host's exact boolean");
+  const builtInCardActions = studioApp.slice(
+    studioApp.indexOf('if (source === "builtin")'),
+    studioApp.indexOf("} else {", studioApp.indexOf('if (source === "builtin")')),
+  );
+  assert(
+    builtInCardActions.indexOf("theme-builtin-layout-action")
+      < builtInCardActions.indexOf("duplicateToCustomize"),
+    "Permanent layout editing must appear before the safer duplicate path in authoring mode");
+  assert.match(builtInCardActions,
+    /theme-builtin-layout-action[\s\S]*?editTheme[\s\S]*?builtInTheme[\s\S]*?branchInterfaceDetail[\s\S]*?type:\s*"begin-theme-edit",\s*theme:\s*theme\.name,\s*reset:\s*false/,
+    "A host-authorized built-in card must expose an unmistakable layout edit action");
+  assert.match(studioApp,
+    /actions\.setAttribute\("role",\s*"group"\)[\s\S]{0,320}?quickActions[\s\S]{0,140}?themeLabel/,
+    "Repeated card actions must form a group named for their theme");
+  assert.match(builtInCardActions,
+    /authorLayout\.setAttribute\("aria-label",\s*`\$\{authorLayout\.textContent\}:\s*\$\{themeLabel\}`\)[\s\S]*?action\.setAttribute\("aria-label",\s*`\$\{action\.textContent\}:\s*\$\{themeLabel\}`\)/,
+    "Built-in action names must identify the affected theme");
+  assert.match(studioHtml,
+    /id="built-in-authoring-banner"[^>]+class="built-in-authoring-banner"[^>]+role="status"[^>]+hidden[\s\S]{0,420}?data-editor-i18n="editTheme"[\s\S]*?data-editor-i18n="builtInTheme"[\s\S]*?data-editor-i18n="branchInterfaceDetail"/,
+    "The Themes gallery needs a localized source-authoring mode signal");
+  assert.match(studioApp,
+    /builtInAuthoringBanner\.hidden\s*=\s*!state\.builtInAuthoring/,
+    "Only the exact host authoring flag may reveal the gallery mode signal");
+  assert.match(studioEditorCss,
+    /\.theme-card-actions\.is-builtin-authoring\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)[^}]*\}[\s\S]*?\.theme-card-actions\.is-builtin-authoring \.theme-builtin-layout-action\s*\{/,
+    "Authoring actions must stack without ambiguous wrapping and emphasize permanent editing");
+  assert.match(studioEditorCss,
+    /@media \(forced-colors:\s*active\)[\s\S]*?\.built-in-authoring-banner[\s\S]*?background:\s*Canvas/,
+    "The authoring signal must keep system color authority");
+  assert.match(studioHtml,
+    /id="editor-built-in-authoring"[^>]+class="editor-authoring-pill"[^>]+role="status"[^>]+hidden[\s\S]{0,220}?data-editor-i18n="builtInTheme"[\s\S]{0,120}?data-editor-i18n="branchInterfaceDetail"/,
+    "Permanent-theme layout authoring needs a persistent localized mode signal");
+  assert.match(studioEditor,
+    /editor\.dataset\.editKind\s*=\s*"builtin-layout"[\s\S]{0,240}?studioShell\.dataset\.editorKind\s*=\s*"builtin-layout"/,
+    "The editor and persistent shell must both identify a built-in layout session");
+  assert.match(studioEditor,
+    /saveButton\.textContent\s*=\s*builtInLayout[\s\S]{0,120}?saveTheme[\s\S]{0,120}?builtInTheme[\s\S]{0,120}?:\s*tr\("saveTheme"\)/,
+    "Built-in saves must be unmistakable while ordinary Save theme copy remains unchanged");
+  assert.match(studioEditor,
+    /saveButton\.setAttribute\([\s\S]{0,220}?editor-built-in-authoring editor-quick-feedback editor-error-summary[\s\S]{0,160}?editor-quick-feedback editor-error-summary/,
+    "Built-in Save must describe its permanent-authoring scope without changing ordinary editing");
+  const builtInLayoutCss = studioEditorCss.slice(
+    studioEditorCss.indexOf('.editor-view[data-edit-kind="builtin-layout"]'),
+    studioEditorCss.indexOf(".editor-live", studioEditorCss.indexOf('.editor-view[data-edit-kind="builtin-layout"]')),
+  );
+  for (const forbiddenSurface of [
+    "#editor-document-details",
+    '[data-editor-targets~="interface.theme"]',
+    '[data-editor-targets~="background.canvas"]',
+    '[data-editor-targets~="widgets.app-identity"]',
+    ".editor-greeting-personal",
+    "#editor-greeting-reset",
+    ".editor-add-artwork",
+    ".layer-management-help",
+    ".editor-guide-section",
+    ".layer-shared-controls",
+    "[data-layer-structure]",
+    ".stage-opacity",
+    ".stage-eye",
+  ]) {
+    assert(builtInLayoutCss.includes(forbiddenSurface),
+      `Built-in layout mode still exposes forbidden surface ${forbiddenSurface}`);
+  }
+  assert.match(studioEditor,
+    /const BUILTIN_LAYOUT_TARGETS = new Set\(\[[\s\S]{0,180}?"interface\.new-chat-area"[\s\S]{0,120}?"interface\.greeting"[\s\S]{0,120}?"background\.layer"/,
+    "Built-in layout navigation must contain only prompt, greeting, and existing artwork framing");
+  assert.match(studioEditor,
+    /const BUILTIN_LAYOUT_LAYER_PROPERTIES = new Set\(\[[\s\S]{0,180}?"anchor"[\s\S]{0,180}?"scale"/,
+    "Built-in artwork editing must retain bounded Normal/Wide framing properties");
+  assert.match(studioEditor,
+    /const builtInLayoutChangeAllowed[\s\S]{0,700}?change\.mode === "shared"[\s\S]{0,180}?change\.kind === "greeting"[\s\S]{0,260}?\["normal", "wide"\]\.includes\(change\.preset\)/,
+    "The page-side authoring guard must admit only prompt, greeting presentation, and frame patches");
+  assert.match(studioEditor,
+    /const completesBuiltInPrompt[\s\S]{0,360}?isBuiltInLayoutEdit\(\)[\s\S]{0,360}?for \(const path of STAGE_PROMPT_PATHS\)[\s\S]{0,360}?promptStateValue\(key\)[\s\S]{0,220}?messages\.push\(messageForStagePath\(path, value\)\)/,
+    "Every built-in prompt gesture must send width and both offsets as one complete layout");
+  assert.match(studioEditor,
+    /if \(isBuiltInLayoutEdit\(\)\)[\s\S]{0,400}?message\.changes\.every\(builtInLayoutChangeAllowed\)[\s\S]{0,220}?return false/,
+    "Hidden controls must not be able to post a forbidden permanent-theme mutation");
+  assert.match(studioEditor,
+    /editor\.dataset\.level\s*=\s*"advanced"[\s\S]{0,700}?setInspectorTarget\("interface\.new-chat-area"\)[\s\S]{0,120}?stageSelection\s*=\s*\{\s*kind:\s*"prompt"\s*\}/,
+    "Built-in layout entry must open on a valid, fully exposed layout target");
   assert.match(studioApp, /type:\s*"begin-theme-edit",\s*theme:\s*theme\.name,\s*reset:\s*false/,
     "User theme cards must begin an explicit edit session");
   // The page rejects a whole theme list when one entry carries an unexpected
@@ -1949,8 +2151,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditor, /state\.layers\.length\s*>=\s*8/,
     "The editor must disable or reject a ninth artwork layer");
   assert.match(studioEditor,
-    /const localGreetingWork\s*=\s*greetingPreferenceDraftDirty\s*\|\|\s*greetingPreferenceInputDirty/,
-    "Save state must treat both valid greeting drafts and invalid greeting input as local work");
+    /const localGreetingWork\s*=\s*!builtInLayout\s*&&\s*\(greetingPreferenceDraftDirty\s*\|\|\s*greetingPreferenceInputDirty\)/,
+    "Ordinary theme saves must treat greeting drafts and invalid input as local work without leaking personal data into built-ins");
   assert.match(studioEditor,
     /saveButton\.disabled\s*=\s*busy[\s\S]{0,180}?state\.feedback\.valid[\s\S]{0,140}?!state\.dirty\s*&&\s*!localGreetingWork\s*&&\s*!state\.isNew/,
     "A fresh duplicate and an invalid draft must keep Save actionable for saving or issue recovery");
@@ -2204,7 +2406,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Canvas fitting must retain a window-resize fallback when ResizeObserver is unavailable");
   assert.match(studioHtml, /<div class="editor-inspector-head">[\s\S]*?class="editor-inspector-nav"/,
     "Quick customize and Advanced navigation must share one measured sticky inspector header with the level switch");
-  const inspectorNavRule = studioEditorCss.match(/\.editor-inspector-nav\s*\{([^}]*)\}/)?.[1] ?? "";
+  const inspectorNavRule = [
+    ...studioEditorCss.matchAll(/\.editor-inspector-nav\s*\{([^}]*)\}/g),
+  ].map((match) => match[1]).find((rule) => /repeat\(3,\s*minmax\(0,\s*1fr\)\)/.test(rule)) ?? "";
   assert(!/position:\s*sticky/.test(inspectorNavRule) && !/top:\s*108px/.test(inspectorNavRule),
     "Branch navigation must not use a second hard-coded sticky offset that can cover controls");
   assert.match(inspectorNavRule, /repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
@@ -2378,8 +2582,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /stageOpacityInput\.addEventListener\("input"[\s\S]{0,100}?isBlockingAction\(\)[\s\S]*?stageOpacityInput\.addEventListener\("change"[\s\S]{0,100}?isBlockingAction\(\)/,
     "Opacity changes must not race an artwork reorder");
   assert.match(studioEditor,
-    /const colorPreview = captureActive && \[\.\.\.stageOverrides\.keys\(\)\]\.some/,
-    "An uncommitted colour or material edit over a live capture must enter a preview state so the change is visible before recapture");
+    /const invalidColorDraft = !state\.feedback\.valid && state\.feedback\.errors\.some\(\(error\) =>[\s\S]{0,100}?error\.code\.includes\("contrast"\) && error\.field\.startsWith\(`\$\{selectedMode}\.`\)/,
+    "A settled invalid colour draft must remain visible and editable instead of snapping back to the last-valid capture");
+  assert(!/invalidColorDraft[\s\S]{0,220}?\|\| mode/.test(studioEditor),
+    "Launcher identity contrast must not dim a canvas that cannot preview launcher materials");
+  assert.match(studioEditor,
+    /const colorPreview = captureActive && \(invalidColorDraft[\s\S]{0,220}?\[\.\.\.stageOverrides\.keys\(\)\]\.some/,
+    "Both invalid drafts and uncommitted colour or material edits must enter the local preview state");
   assert.match(studioEditor, /stageFrame\.dataset\.colorPreview = colorPreview \? "true" : "";/,
     "The stage must flag the colour-preview state for styling");
   assert.match(studioEditor, /stageSidebarEl\.hidden = captureActive && !colorPreview;/,
@@ -2390,6 +2599,24 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditorCss,
     /\.stage-frame\[data-backdrop="capture"\]:not\(\[data-color-preview="true"\]\) \.stage-prompt \{/,
     "The capture-mode surface hiding must pause during a colour preview so the schematic fills show the change");
+  const renderFeedbackBlock = studioEditor.match(
+    /const renderFeedback\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(renderFeedbackBlock,
+    /quickFeedback\.hidden = false;[\s\S]{0,80}?errorSummary\.hidden = true/,
+    "A new validation render must restore the compact feedback row and hide the Save-only summary");
+  assert(!renderFeedbackBlock.includes("errorSummary.hidden = false"),
+    "Live validation must not duplicate the same blocking warning in two adjacent boxes");
+  assert(!renderFeedbackBlock.includes('tr("studioLastValid")'),
+    "The compact warning must not claim the editor canvas is showing last-valid colors while it previews the draft");
+  const performSaveBlock = studioEditor.match(
+    /const performSave\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(performSaveBlock,
+    /quickFeedback\.hidden = true;[\s\S]{0,80}?errorSummary\.hidden = false;[\s\S]{0,120}?focusBelowInspector\(errorSummary\)/,
+    "An invalid Save must replace the compact warning with one focused detailed summary");
+  assert(!studioHtml.includes("editor-live-paused"),
+    "The quick feedback row already explains last-valid behavior and must not be followed by a third warning");
   assert.match(studioEditor, /className = "help layer-placement-scope"[\s\S]{0,500}?layerPlacementShared/,
     "Shared appearance or page placement must be disclosed instead of silently leaking across preview states");
   const levelSwitchBlock = studioEditor.match(
@@ -2424,7 +2651,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(!/selectStageItem[\s\S]{0,700}?scrollIntoView/.test(studioEditor),
     "Selecting artwork on the live canvas must not scroll the inspector away from the canvas");
   assert.match(studioHtml,
-    /<div class="editor-inspector-head">[\s\S]{0,500}?id="editor-back"[\s\S]{0,500}?id="editor-dirty"[\s\S]{0,300}?id="editor-valid"[\s\S]{0,500}?id="editor-cancel"[\s\S]{0,300}?id="editor-save"/,
+    /<div class="editor-inspector-head">[\s\S]{0,500}?id="editor-back"[\s\S]{0,760}?id="editor-dirty"[\s\S]{0,300}?id="editor-valid"[\s\S]{0,500}?id="editor-cancel"[\s\S]{0,300}?id="editor-save"/,
     "Back, save status, Cancel, and Save must remain together in the persistent inspector header");
   assert.equal((studioHtml.match(/id="editor-(?:back|cancel|save)"/g) ?? []).length, 3,
     "Persistent editor actions must appear exactly once");
@@ -2447,19 +2674,20 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(editorApi.capabilityRegistry
     .find((entry) => entry.id === "interface.greeting")?.axes.includes("frame"),
     "The greeting target must retain Light/Dark and Standard/Wide edit axes");
-  // Every inspector target that owns a control section must have a matching editor.css
-  // visibility rule, or the section stays hidden in the app even though the target is
-  // selectable in the picker — exactly how the WO-21 greeting panel first regressed.
+  // Every section in the active object family stays reachable in one inspector
+  // document; the exact target still drives context and canvas manipulation.
   const sectionTargets = new Set(
     [...studioHtml.matchAll(/data-editor-targets="([^"]+)"/g)]
       .flatMap((match) => match[1].split(/\s+/)),
   );
   assert(sectionTargets.has("interface.greeting"),
     "The greeting control section must declare the interface.greeting target");
-  for (const target of sectionTargets) {
-    assert(studioEditorCss.includes(`data-inspector-target="${target}"`),
-      `editor.css has no section-visibility rule for the ${target} inspector target`);
+  for (const branch of ["interface", "background", "widgets"]) {
+    assert(studioEditorCss.includes(`data-inspector-branch="${branch}"] [data-editor-branch="${branch}"]`),
+      `editor.css has no active-branch section rule for ${branch}`);
   }
+  assert(!studioEditorCss.includes("data-inspector-target="),
+    "Exact target filtering must not hide sibling controls in the active Interface or Background branch");
   assert.deepEqual(
     editorApi.capabilityRegistry.find((entry) => entry.id === "interface.new-chat-area")?.axes,
     [],
@@ -2637,6 +2865,35 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Editor-state validation changed which shared controls still inherit the theme's original CSS");
   assert.equal(normalizedEditorState.shared.prompt.native, false,
     "Editor-state validation changed an authored prompt into a native layout");
+  const builtInLayoutState = structuredClone(validEditorState);
+  builtInLayoutState.id = "default";
+  builtInLayoutState.sourceId = "default";
+  builtInLayoutState.isNew = false;
+  builtInLayoutState.editKind = "builtin-layout";
+  const normalizedBuiltInLayout = editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(
+    builtInLayoutState,
+  );
+  assert.equal(normalizedBuiltInLayout?.editKind, "builtin-layout",
+    "The page rejected the core's exact built-in layout edit kind");
+  const ordinaryNullEditKind = structuredClone(validEditorState);
+  ordinaryNullEditKind.editKind = null;
+  assert.equal(
+    editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(ordinaryNullEditKind)?.editKind,
+    null,
+    "An ordinary duplicate must retain a null edit kind",
+  );
+  for (const [label, mutate] of [
+    ["an unknown edit kind", (candidate) => { candidate.editKind = "builtin-theme"; }],
+    ["a new built-in destination", (candidate) => { candidate.isNew = true; }],
+    ["a user source", (candidate) => { candidate.source = "user"; }],
+    ["a different source id", (candidate) => { candidate.sourceId = "korean-idol"; }],
+    ["a missing built-in edit kind", (candidate) => { delete candidate.editKind; }],
+  ]) {
+    const candidate = structuredClone(builtInLayoutState);
+    mutate(candidate);
+    assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(candidate), undefined,
+      `Editor state accepted ${label} for permanent-theme layout authoring`);
+  }
   const missingNativePromptState = structuredClone(validEditorState);
   delete missingNativePromptState.shared.prompt.native;
   assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(missingNativePromptState), undefined,
@@ -2867,7 +3124,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.deepEqual(Object.keys(studioThemes), THEME_IDS);
   const registryThemes = new Map((await listThemes()).map((theme) => [theme.name, theme]));
   const compactGreetingRecipes = new Set([
-    "japanese-film-editorial", "korean-prestige", "japanese-idol",
+    "japanese-film-editorial", "korean-prestige", "study-library", "japanese-idol",
   ]);
   for (const themeId of THEME_IDS) {
     const candidate = structuredClone(validEditorState);
@@ -3879,13 +4136,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "$tokens=$null;$errors=$null",
       "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
       "if($errors.Count){throw 'Could not parse Aura UI for loading-cover regression'}",
-      "$names=@('Get-AuraUiPropertyValue','Get-AuraUiThemeByName','Get-AuraUiSelectedThemeName','Get-AuraUiEnabled','Get-AuraUiPermanentThemeIds','Get-AuraUiLoadingThemeId','Get-AuraUiLoadingColorValue','Get-AuraUiLoadingProfile','New-AuraUiLoadingMarkBitmap','New-AuraUiRoundedRectanglePath','Paint-AuraUiLoadingPanel')",
+      "$names=@('Get-AuraUiPropertyValue','Get-AuraUiThemeByName','Get-AuraUiSelectedThemeName','Get-AuraUiEnabled','Get-AuraUiPermanentThemeIds','Get-AuraUiLoadingThemeId','Get-AuraUiLoadingColorValue','Get-AuraUiLoadingProfile','Get-AuraUiLoadingScale','New-AuraUiLoadingMarkBitmap','New-AuraUiRoundedRectanglePath','ConvertTo-AuraUiBlendedColor','Paint-AuraUiLoadingPanel','Update-AuraUiLoadingBackground','Set-AuraUiRoundedControlRegion','Set-AuraUiLoadingLayout')",
       "foreach($name in $names){",
       "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
       "  if($null -eq $definition){throw \"Missing loading-cover function $name\"}",
       "  Invoke-Expression $definition.Extent.Text",
       "}",
       "function Test-AuraUiDarkChrome { return $false }",
+      "function Test-AuraUiLoadingAnimationEnabled { return $false }",
       "function Write-AuraUiLog { param([string]$Message);throw $Message }",
       "$script:Config=[pscustomobject]@{enabled=$true;appearance='light';theme='default'}",
       "$script:StudioEditorState=[ordered]@{active=$false}",
@@ -3899,19 +4157,51 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  }",
       "  $script:Themes+=,[pscustomobject]@{name=$id;source='builtin';sourceRecipe=$null;studioStyle=$style}",
       "}",
+      "$script:LoadingPanel=[System.Windows.Forms.Panel]::new()",
+      "$script:LoadingPanel.ClientSize=[Drawing.Size]::new(1180,640)",
+      "$script:LoadingPanel.BackColor=[Drawing.ColorTranslator]::FromHtml('#F1F2F9')",
+      "$script:LoadingMark=[System.Windows.Forms.PictureBox]::new()",
+      "$script:LoadingMark.Size=[Drawing.Size]::new(88,88)",
+      "$script:LoadingLabel=[System.Windows.Forms.Label]::new()",
+      "$script:LoadingLabel.Size=[Drawing.Size]::new(500,44)",
+      "$script:LoadingProgress=[System.Windows.Forms.Panel]::new()",
+      "$script:LoadingProgress.Size=[Drawing.Size]::new(320,6)",
+      "$script:LoadingProgressIndicator=[System.Windows.Forms.Panel]::new()",
+      "$script:LoadingProgressIndicator.Size=[Drawing.Size]::new(90,6)",
+      "$script:LoadingProgress.Controls.Add($script:LoadingProgressIndicator)",
+      "$script:RetryButton=[System.Windows.Forms.Button]::new()",
+      "$script:RetryButton.Size=[Drawing.Size]::new(96,38)",
+      "$script:LoadingPanel.Controls.AddRange(@($script:LoadingMark,$script:LoadingLabel,$script:LoadingProgress,$script:RetryButton))",
       "for($index=0;$index -lt $ids.Count;$index++){",
       "  $script:ActiveThemeName=$ids[$index]",
       "  $profile=Get-AuraUiLoadingProfile",
       "  if($profile.ThemeId -cne $ids[$index] -or $profile.Cue -cne $cues[$index]){throw \"Loading profile mismatch: $($ids[$index])\"}",
       "  $mark=New-AuraUiLoadingMarkBitmap -ThemeId $ids[$index]",
-      "  if($null -eq $mark -or $mark.Width -ne 96 -or $mark.Height -ne 96){throw \"Loading mark mismatch: $($ids[$index])\"}",
+      "  if($null -eq $mark -or $mark.Width -ne 88 -or $mark.Height -ne 88){throw \"Loading mark mismatch: $($ids[$index])\"}",
       "  $mark.Dispose()",
       "  $script:LoadingProfile=$profile",
+      "  Set-AuraUiLoadingLayout",
+      "  Update-AuraUiLoadingBackground",
+      "  if($null -eq $script:LoadingPanel.BackgroundImage -or $script:LoadingPanel.BackgroundImage.Width -ne 1180 -or $script:LoadingPanel.BackgroundImage.Height -ne 640){throw \"Loading background ownership mismatch: $($ids[$index])\"}",
+      "  if($script:LoadingMark.Left -ne 546 -or $null -eq $script:LoadingProgress.Region -or $null -eq $script:LoadingProgressIndicator.Region){throw \"Loading portal layout mismatch: $($ids[$index])\"}",
       "  $bitmap=[Drawing.Bitmap]::new(1180,640)",
       "  $graphics=[Drawing.Graphics]::FromImage($bitmap)",
       "  try { Paint-AuraUiLoadingPanel -Graphics $graphics -Bounds ([Drawing.Rectangle]::new(0,0,1180,640)) }",
       "  finally { $graphics.Dispose();$bitmap.Dispose() }",
       "}",
+      "$script:LoadingPanel.ClientSize=[Drawing.Size]::new(1770,960)",
+      "$script:LoadingMark.Size=[Drawing.Size]::new(132,132)",
+      "$script:LoadingLabel.Size=[Drawing.Size]::new(750,66)",
+      "$script:LoadingProgress.Size=[Drawing.Size]::new(480,9)",
+      "$script:LoadingProgressIndicator.Size=[Drawing.Size]::new(135,9)",
+      "$script:RetryButton.Size=[Drawing.Size]::new(144,57)",
+      "Set-AuraUiLoadingLayout",
+      "Update-AuraUiLoadingBackground",
+      "if($script:LoadingMark.Left -ne 819 -or $script:LoadingLabel.Top -le $script:LoadingMark.Bottom -or $script:LoadingProgress.Top -le $script:LoadingLabel.Bottom){throw 'Loading portal lost its 150 percent DPI spacing'}",
+      "if($script:LoadingPanel.BackgroundImage.Width -ne 1770 -or $script:LoadingPanel.BackgroundImage.Height -ne 960){throw 'Loading portal lost its 150 percent DPI background'}",
+      "$script:LoadingPanel.BackgroundImage.Dispose()",
+      "$script:LoadingPanel.BackgroundImage=$null",
+      "$script:LoadingPanel.Dispose()",
       "$copyStyle=[pscustomobject]@{",
       "  light=[pscustomobject]@{canvas='#010203';raised='#111213';text='#F0F1F2';textMuted='#A0A1A2';accent='#212223';accentText='#FFFFFF';border='#313233'}",
       "  dark=[pscustomobject]@{canvas='#040506';raised='#141516';text='#E0E1E2';textMuted='#909192';accent='#242526';accentText='#FFFFFF';border='#343536'}",
@@ -4776,8 +5066,11 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /\.editor-greeting-update-status\[data-state="updated"\][\s\S]{0,180}?color:\s*#2b7a50[\s\S]{0,180}?content:\s*"✓"/,
     "Acknowledged greeting edits need unmistakable positive visual feedback");
   assert.match(editorSource,
-    /stageGreetingEl\.append\(stageGreetingText, stageGreetingMark\)/,
-    "The schematic mark must trail its text like Claude's live greeting");
+    /stageGreetingAnchor\.append\(stageGreetingText, stageGreetingMark\);[\s\S]{0,80}?stageGreetingEl\.append\(stageGreetingAnchor\)/,
+    "The schematic mark must trail its text through a separate relative anchor");
+  assert.match(editorCssSource,
+    /\.stage-greeting-anchor\s*\{[^}]*position:\s*relative[^}]*display:\s*inline-block[\s\S]{0,120}?\.stage-greeting-mark\s*\{[^}]*position:\s*absolute[^}]*left:\s*calc\(100% \+ 0\.35em\)/,
+    "The mark must follow the greeting without contributing to the greeting's measured placement");
   assert.match(editorSource,
     /greetingSample\.dataset\.greetingPreviewReady = "true"/,
     "The in-panel greeting preview never reveals after its styled render");
@@ -4833,7 +5126,7 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /greetingPreferenceInputDirty = true;\s*greetingPreferenceInputInvalid = true;[\s\S]{0,100}?showGreetingInputError\(\)/,
     "Invalid visible greeting input must remain tracked instead of falling back to the prior draft");
   assert.match(editorSource,
-    /const personal = greetingPreferenceInputDirty[\s\S]{0,260}?greetingPreferenceInputInvalid[\s\S]{0,260}?saveBlocked/,
+    /const personal = greetingPreferenceInputDirty[\s\S]{0,260}?greetingPreferenceInputInvalid[\s\S]{0,420}?saveBlocked/,
     "Save must stop on invalid visible greeting input instead of ignoring it");
   const personalHandler = coreSource.match(
     /export async function setGreetingPhrases\([\s\S]*?\n\}/,

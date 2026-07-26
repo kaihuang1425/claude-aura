@@ -60,6 +60,8 @@
   // but cannot select a bundled chrome recipe by choosing an ID.
   const bundledThemeIds = new Set(Object.keys(themes));
   const grid = document.getElementById("theme-grid");
+  const studioRoot = document.querySelector(".studio");
+  const builtInAuthoringBanner = document.getElementById("built-in-authoring-banner");
   const content = document.querySelector(".content");
   const statusBar = document.querySelector(".statusbar");
   const statusOut = document.getElementById("status");
@@ -129,6 +131,7 @@
     backgroundCrop: { ...DEFAULT_CROP },
     studioPreviewCrops: Object.create(null),
     effectiveIdentity: null,
+    builtInAuthoring: false,
   };
   const STUDIO_FONT_STACKS = Object.freeze({
     "system-sans": 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -708,7 +711,14 @@
     card.querySelector(".theme-card-actions")?.remove();
     const actions = document.createElement("div");
     actions.className = "theme-card-actions";
+    actions.setAttribute("role", "group");
+    const themeLabel = localized(theme.labels, theme.label);
+    actions.setAttribute("aria-label", `${t("quickActions")}: ${themeLabel}`);
     const source = themeSource(theme);
+    const builtInLayoutAuthoring = source === "builtin"
+      && state.builtInAuthoring
+      && bundledThemeIds.has(theme.name);
+    actions.classList.toggle("is-builtin-authoring", builtInLayoutAuthoring);
     const sourceBadge = document.createElement("span");
     sourceBadge.className = "theme-source-badge";
     sourceBadge.textContent = editorController?.translate(source === "builtin" ? "builtInTheme" : "customTheme")
@@ -718,7 +728,26 @@
     action.type = "button";
     action.className = "ghost-button";
     if (source === "builtin") {
+      if (builtInLayoutAuthoring) {
+        const authorLayout = document.createElement("button");
+        authorLayout.type = "button";
+        authorLayout.className = "primary-button theme-builtin-layout-action";
+        authorLayout.textContent = `${
+          editorController?.translate("editTheme") ?? "Edit"
+        } · ${
+          editorController?.translate("builtInTheme") ?? "Built-in"
+        } · ${
+          editorController?.translate("branchInterfaceDetail") ?? "Surfaces & layout"
+        }`;
+        authorLayout.setAttribute("aria-label", `${authorLayout.textContent}: ${themeLabel}`);
+        authorLayout.addEventListener("click", () => {
+          setStatus(t("statusApplying"), "busy");
+          send({ type: "begin-theme-edit", theme: theme.name, reset: false });
+        });
+        actions.appendChild(authorLayout);
+      }
       action.textContent = editorController?.translate("duplicateToCustomize") ?? "Duplicate to customize";
+      action.setAttribute("aria-label", `${action.textContent}: ${themeLabel}`);
       action.addEventListener("click", () => {
         setStatus(t("statusApplying"), "busy");
         send({ type: "create-theme-copy", theme: theme.name });
@@ -726,6 +755,7 @@
       actions.appendChild(action);
     } else {
       action.textContent = editorController?.translate("editTheme") ?? "Edit";
+      action.setAttribute("aria-label", `${action.textContent}: ${themeLabel}`);
       action.addEventListener("click", () => {
         setStatus(t("statusApplying"), "busy");
         send({ type: "begin-theme-edit", theme: theme.name, reset: false });
@@ -734,6 +764,7 @@
       remove.type = "button";
       remove.className = "ghost-button";
       remove.textContent = editorController?.translate("deleteTheme") ?? "Delete";
+      remove.setAttribute("aria-label", `${remove.textContent}: ${themeLabel}`);
       remove.addEventListener("click", () => editorController?.requestDelete(
         theme.name, localized(theme.labels, theme.label), remove));
       actions.append(action, remove);
@@ -880,6 +911,13 @@
     }
     return true;
   };
+  const syncBuiltInAuthoringCards = () => {
+    for (const input of grid.querySelectorAll("input[name='theme']")) {
+      const theme = themes[input.value];
+      const card = input.closest(".theme-card");
+      if (theme && card) syncThemeCardActions(card, theme);
+    }
+  };
   const send = (message) => {
     if (!message || typeof message !== "object" || !studioPageMessageTypes.has(message.type)) return false;
     if ((message.type === "set-aura-preview" || message.type === "refresh-aura-mirror")
@@ -1007,6 +1045,14 @@
       }
       if (data.type === "state") {
         state.connected = true;
+        const builtInAuthoringChanged = state.builtInAuthoring !== (data.builtInAuthoring === true);
+        state.builtInAuthoring = data.builtInAuthoring === true;
+        if (studioRoot) {
+          studioRoot.dataset.builtInAuthoring = String(state.builtInAuthoring);
+        }
+        if (builtInAuthoringBanner) {
+          builtInAuthoringBanner.hidden = !state.builtInAuthoring;
+        }
         let appearanceAcknowledged = false;
         let introductionAcknowledged = false;
         if (typeof data.locale === "string" && supportedLocales.has(data.locale)) {
@@ -1031,6 +1077,7 @@
           state.introductionRequested = data.introductionRequested;
         }
         if (Object.hasOwn(data, "themes")) syncHostThemes(data.themes);
+        if (builtInAuthoringChanged) syncBuiltInAuthoringCards();
         if (typeof data.appearance === "string" && appearanceModes.has(data.appearance)) {
           state.appearance = data.appearance;
           appearanceAcknowledged = appearancePending;

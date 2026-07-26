@@ -587,8 +587,8 @@
   const applyPromptLayout = (prompt, main) => {
     clearPromptLayout();
     if (!prompt || !main) return;
-    prompt.setAttribute(PROMPT_MARKER, "new-chat");
     const layout = settings.n;
+    prompt.setAttribute(PROMPT_MARKER, "native");
     if (!layout) return;
     const mainRect = visibleRect(main);
     if (!mainRect) return;
@@ -605,11 +605,12 @@
     if (authoredTranslate && !["none", "0px", "0px 0px"].includes(authoredTranslate)) return;
     const inset = 16;
     const width = Math.min(bounds.width - (inset * 2), Math.max(280, bounds.width * layout[0]));
+    prompt.setAttribute(PROMPT_MARKER, "authored");
     prompt.style.setProperty("--aura-prompt-width", `${Math.round(width * 100) / 100}px`);
     prompt.style.setProperty("--aura-prompt-x", "0px");
     prompt.style.setProperty("--aura-prompt-y", "0px");
     const rect = visibleRect(prompt);
-    if (!rect) return clearPromptLayout();
+    if (!rect) return clearPromptLayout(), prompt.setAttribute(PROMPT_MARKER, "native");
     const desiredCenter = bounds.left + (bounds.width / 2) + (bounds.width * layout[1]);
     const desiredLeft = Math.min(bounds.right - inset - rect.width, Math.max(bounds.left + inset, desiredCenter - (rect.width / 2)));
     const desiredTop = Math.min(bounds.bottom - inset - rect.height, Math.max(bounds.top + inset, rect.top + (bounds.height * layout[2])));
@@ -659,8 +660,8 @@
   /*__AURA_GREETING_START__*/
   if (settings.g && typeof settings.g === "object") {
     const g = settings.g, G = "data-claude-aura-greeting", H = `${G}-native`;
-    const T = `${G}-text`, K = `${G}-mark`, ps = Array.isArray(g.p) ? g.p : [];
-    const pd = typeof g.d === "string" ? g.d : "", sh = g.h, old = window[STATE_KEY]?.greetingMemory;
+    const T = `${G}-text`, K = `${G}-mark`, U = "unmeasurable", ps = Array.isArray(g.p) ? g.p : [];
+    const pd = typeof g.d === "string" ? g.d : "", sh = g.h, old = window[STATE_KEY]?.["greetingMemory"];
     const io = Array.isArray(sh?.[0]) && sh.length === 3 ? sh[0] : [];
     const ic = sh?.[1], il = sh?.[2];
     const iv = io.length === ps.length && new Set(io).size === ps.length
@@ -688,24 +689,25 @@
       const o = Number.parseFloat(c?.opacity ?? c?.getPropertyValue?.("opacity") ?? "");
       return r && (!Number.isFinite(o) || o > 0.01) ? r : null;
     };
+    const vt = () => ps.length ? visibleRect(rn) : visibleRect(bd?.u);
     const vm = () => ur(
-      vo(bd?.k),
+      ...(bd?.ks ?? []).map(vo),
       vo(dn?.querySelector?.(`[${K}="compact"]`)),
     );
-    const vg = () => ur(ps.length ? visibleRect(rn) : visibleRect(bd?.n), vm());
+    const vg = () => ur(vt(), vm());
     getGreetingProbe = () => {
-      const x = visibleRect(rn), v = vg(), n = bd?.n?.isConnected && (visibleRect(bd.n) || bd.r);
+      const x = vt(), n = bd?.n?.isConnected && (visibleRect(bd.n) || bd.r);
       return {
         version: 1, digest: settings.digest, context: currentContext, status: st,
         candidateCount: cc, "source": src, nativeConnected: Boolean(bd?.n?.isConnected),
-        replacementConnected: Boolean(rn?.isConnected), replacementVisible: Boolean(x),
+        replacementConnected: Boolean(rn?.isConnected), replacementVisible: Boolean(visibleRect(rn)),
         nativeHidden: bd?.u?.getAttribute?.(H) === "true",
         visitEpoch: greetingMemory.e,
         shuffle: ps.length && pd && greetingMemory.o.length ? {
           themeId: settings.theme, phraseDigest: pd, order: [...greetingMemory.o],
           cursor: greetingMemory.c, lastIndex: greetingMemory.l < 0 ? null : greetingMemory.l,
         } : null,
-        "rect": rr(v || x || n),
+        "rect": rr(x || n),
       };
     };
     const at = (n, a) => [n, a, n.hasAttribute?.(a), n.getAttribute?.(a)];
@@ -735,20 +737,18 @@
         const fs = Number.parseFloat(window.getComputedStyle?.(n)?.fontSize ?? "");
         if (!nr || nr.top < mr.top - 2 || nr.bottom > sr.top + 2 || nr.height > 160
             || (!sem && (n.children.length || fs < 24 || nr.width < 48 || nr.height < 20 || nr.height > 96))) continue;
-        let w = n, k;
+        const mark = (c) => {
+          const r = c !== n && !c?.contains?.(n) && !excluded(c, n) && visibleRect(c);
+          const s = r && Math.min(r.width, r.height);
+          return r && s >= 10 && s <= 64 && Math.abs(r.width - r.height) < 16;
+        };
+        let w = n;
         if (sem) {
           const p = n.parentElement, a = [...(p?.children ?? [])], i = a.indexOf(n);
-          k = [a[i - 1], a[i + 1]].find((c) => {
-            const r = !excluded(c, n) && visibleRect(c), s = r && Math.min(r.width, r.height);
-            const overlap = r && Math.max(0, Math.min(r.bottom, nr.bottom) - Math.max(r.top, nr.top));
-            const gap = r && Math.max(0, r.left - nr.right, nr.left - r.right);
-            return s >= 10 && s <= 64 && Math.abs(r.width - r.height) < 16
-              && overlap >= Math.min(r.height, nr.height) * 0.45 && gap <= 48;
-          });
+          const k = [a[i - 1], a[i + 1]].find(mark);
           const r = visibleRect(p);
-          if (!k || !r || r.height > 128 || r.width > nr.width + 112
-              || Math.abs(r.left + r.right - nr.left - nr.right) > 64 || p.querySelector?.(q)) k = null;
-          else w = p;
+          if (k && r && r.height <= 128 && r.width <= nr.width + 112
+              && Math.abs(r.left + r.right - nr.left - nr.right) <= 64 && !p.querySelector?.(q)) w = p;
         } else for (let p = n.parentElement, d = 0; p && p !== gr && p !== ma && d++ < 2; p = p.parentElement) {
           const r = visibleRect(p);
           if (!r || r.height > 128 || r.width > nr.width + 112
@@ -757,14 +757,22 @@
         }
         const r = visibleRect(w), ov = r && Math.max(0, Math.min(r.right, sr.right) - Math.max(r.left, sr.left));
         if (!r || ov < Math.min(r.width, sr.width) * 0.55) continue;
-        k ??= [...w.children].find((c) => {
-          const z = !c.contains?.(n) && visibleRect(c), s = z && Math.min(z.width, z.height);
-          return s >= 10 && s <= 64 && Math.abs(z.width - z.height) < 16;
+        const ks = [];
+        let ko;
+        for (const x of [...new Set([...w.children, ...(w.querySelectorAll?.("*") ?? [])])]) {
+          if (!mark(x) || ks.some((k) => k.contains?.(x))) continue;
+          if (ks.length > 3) { ko = 1; break; }
+          ks.push(x);
+        }
+        if (ko) continue;
+        const ka = ks.find((x) => {
+          const a = visibleRect(x);
+          return a && (a.right <= nr.left + 2 || a.left >= nr.right - 2);
         });
         const z = (sem ? 60 : Math.min(36, (fs - 18) * 3))
           + Math.max(0, 42 - ((sr.top - r.bottom) + Math.abs(r.left + r.right - sr.left - sr.right) / 2) / 8)
-          + (k ? 3 : 0);
-        const c = { n: w, t: n, k, r, z }, i = out.findIndex((x) => x.n === w);
+          + (ks.length ? 3 : 0);
+        const c = { n: w, t: n, ks, ka, r, z }, i = out.findIndex((x) => x.n === w);
         if (i < 0) out.push(c);
         else if (z > out[i].z) out[i] = c;
       }
@@ -777,10 +785,21 @@
     };
     const bind = (c) => {
       const u = c.t?.isConnected && c.t !== c.n ? c.t : c.n;
+      const tr = visibleRect(u) || c.r, ms = c.ks.map((k) => {
+        const r = visibleRect(k);
+        if (!r || !tr) return null;
+        const s = Math.abs(r.right - tr.left) <= Math.abs(r.left - tr.right) ? -1 : 1;
+        return [
+          k, r.width, r.height, s,
+          Math.max(0, Math.min(64, s < 0 ? tr.left - r.right : r.left - tr.right)),
+          ((r.top + r.bottom) - (tr.top + tr.bottom)) / 2, r.left, r.top,
+        ];
+      }).filter(Boolean);
       return {
-        ...c, p: c.n.parentElement, u,
-        a: [at(c.n, G), at(u, H), at(u, "aria-hidden"), c.k && at(c.k, K)].filter(Boolean),
-        y: [...new Set([c.n, u])].map((n) => [n, n.style["css" + "Text"]]),
+        ...c, p: c.n.parentElement, u, ms,
+        am: ms.find((m) => m[0] === c.ka) || ms[0],
+        a: [at(c.n, G), at(u, H), at(u, "aria-hidden"), ...c.ks.map((k) => at(k, K))],
+        y: [...new Set([c.n, u, ...c.ks])].map((n) => [n, n.style["css" + "Text"]]),
       };
     };
     const restore = () => {
@@ -826,32 +845,52 @@
         && r.left >= m.left - 2 && r.right <= m.right + 2
         && r.top >= m.top - 2 && r.bottom <= Math.min(m.bottom, s.top) + 2);
     };
+    const box = (n, l, t, w, h) => {
+      n.style["css" + "Text"] += `;position:fixed!important;left:${Math.round(l)}px!important;`
+        + `top:${Math.round(t)}px!important;width:${Math.round(w)}px!important;`
+        + `height:${Math.round(h)}px!important;margin:0!important;pointer-events:none!important`;
+    };
+    const anchored = (m, r, n = m[0], w = m[1], h = m[2]) => {
+      const [, , , s, g, y] = m;
+      box(n, s < 0 ? r.left - g - w : r.right + g,
+        ((r.top + r.bottom - h) / 2) + y, w, h);
+    };
+    const place = (n) => {
+      const r = visibleRect(n);
+      if (!r) return null;
+      for (const m of bd?.ms ?? []) anchored(m, r);
+      return r;
+    };
     const im = (parent) => {
       const x = document.createElement("img");
       x.setAttribute(K, "compact"); x.setAttribute("aria-hidden", "true");
       x.alt = ""; x.draggable = false;
+      x.style.setProperty("display", "block"); x.style.setProperty("width", "100%");
+      x.style.setProperty("height", "100%");
       x.onerror = () => {
         if (x.isConnected && dn?.contains?.(x)) {
-          mf = true; fail("unmeasurable");
+          mf = true; fail(U);
         }
       };
       x.src = g.m; parent.appendChild(x); return x;
     };
-    const decorate = () => {
-      if (!g.m) return;
+    const decorate = (n) => {
+      const placed = place(n);
+      if (!placed) return 0;
+      if (!g.m) return 1;
+      const m = bd.am;
+      if (!m) return 0;
       if (!dn?.isConnected) {
         dn = document.createElement("span");
         dn.setAttribute(G, "decoration"); dn.setAttribute("aria-hidden", "true");
-        dn.style.setProperty("position", "fixed"); dn.style.setProperty("pointer-events", "none");
         im(dn);
         bd.p.insertBefore(dn, bd.n);
       }
-      const r = bd.u === bd.n ? visibleRect(rn) || bd.r : visibleRect(bd.k) || bd.r;
-      const s = Math.round(Math.max(16, Math.min(48, Math.min(r.width, r.height))));
-      [["left", r.left], ["top", r.top], ["width", s], ["height", s]]
-        .forEach(([p, v]) => dn.style.setProperty(p, `${Math.round(v)}px`));
+      const s = Math.round(Math.max(16, Math.min(48, Math.min(m[1], m[2]))));
+      anchored(m, placed, dn, s, s);
+      return 1;
     };
-    let custom = () => false;
+    let custom = () => 0;
     /*__AURA_GREETING_PHRASES_START__*/
     const pick = () => {
       if (greetingMemory.s >= 0 && greetingMemory.s < ps.length) return greetingMemory.s;
@@ -872,15 +911,15 @@
     };
     custom = (ma, sh) => {
       const i = pick();
-      if (i < 0 || !bd?.n?.isConnected) return false;
+      if (i < 0 || !bd?.n?.isConnected) return 0;
       if (/^(pending|verifying|custom)$/.test(st) && rn?.isConnected) {
         if (tn && tn.textContent !== ps[i]) tn.textContent = ps[i];
         if (st === "custom") {
-          geometry(bd.u === bd.n ? rn : bd.n, ma);
-          decorate();
-          if (!within(vg(), ma, sh)) { fail("unmeasurable"); return false; }
+          geometry(rn, ma);
+          if (!decorate(rn)) { fail(U); return 0; }
+          if (!within(vg(), ma, sh)) { fail(U); return 0; }
         }
-        return true;
+        return 1;
       }
       remove();
       rn = document.createElement("div");
@@ -898,9 +937,9 @@
       const host = bd.u === bd.n ? bd.p : bd.n, siblings = [...host.children];
       host.insertBefore(rn, bd.u === bd.n ? bd.n : siblings[siblings.indexOf(bd.u) + 1] || null);
       if (g.s) {
-        if (bd.u === bd.n) geometry(rn, ma);
+        geometry(rn, ma);
       } else {
-        const c = window.getComputedStyle?.(bd.n);
+        const c = window.getComputedStyle?.(bd.u);
         for (const p of [
           "font-family", "font-size", "font-weight", "font-style",
           "letter-spacing", "line-height", "color", "text-align",
@@ -912,22 +951,21 @@
       af(() => {
         const r = rn?.getBoundingClientRect?.(), m = visibleRect(ma);
         if (!r || !m || r.width <= 0 || r.height <= 0 || r.width > m.width) {
-          fail("unmeasurable"); return;
+          fail(U); return;
         }
         bd.n.setAttribute(G, "native-mark");
-        if (bd.k?.isConnected) bd.k.setAttribute(K, "native");
-        if (bd.u !== bd.n) geometry(bd.n, ma);
-        decorate();
+        for (const k of bd.ks) k.setAttribute(K, "native");
         bd.u.setAttribute(H, "true"); bd.u.setAttribute("aria-hidden", "true");
         bd.u.style.setProperty("display", "none");
         rn.removeAttribute("aria-hidden"); rn.style.removeProperty("position"); rn.style.removeProperty("visibility");
+        if (!decorate(rn)) { fail(U); return; }
         st = "verifying";
         af(() => {
-          if (!within(vg(), ma, sh)) fail("unmeasurable");
+          if (!within(vg(), ma, sh)) fail(U);
           else st = "custom";
         });
       });
-      return true;
+      return 1;
     };
     /*__AURA_GREETING_PHRASES_END__*/
     const fail = (x, e = false, n = 0) => {
@@ -935,27 +973,30 @@
     };
     syncGreeting = (ctx, ma, sh, gr) => {
       if (forcedColors?.matches) return fail("forced-colors");
-      if (mf) return fail("unmeasurable");
+      if (mf) return fail(U);
       if (ctx !== "new-chat") return fail(ctx === "conversation" ? ctx : "other", ctx === "conversation");
       if (!ma || !sh || !gr) return fail("missing");
       greetingMemory.v = true;
       const x = find(ma, sh, gr);
       if (x[0] !== "found") return fail(x[0], false, x[1]);
-      if (!bd || bd.n !== x[2].n) { clearGreeting(); bd = bind(x[2]); }
+      if (!bd || bd.n !== x[2].n) {
+        clearGreeting(); bd = bind(x[2]);
+        for (const [n, w, h, , , , l, t] of bd.ms) box(n, l, t, w, h);
+      }
       cc = greetingMatches = x[1];
       if (ps.length) {
-        if (!custom(ma, sh)) st = "unmeasurable";
-        else watch(ma, sh, bd?.n, bd?.u, rn);
+        if (!custom(ma, sh)) st = U;
+        else watch(ma, sh, bd?.n, bd?.u, rn, ...bd.ks);
         return;
       }
       remove();
       if (!g.s) { unwatch(); return (st = "inactive"); }
       bd.n.setAttribute(G, "native");
-      if (bd.k?.isConnected) bd.k.setAttribute(K, "native");
-      geometry(bd.n, ma);
-      decorate();
-      if (!within(vg(), ma, sh)) return fail("unmeasurable");
-      st = "native"; watch(ma, sh, bd.n, bd.u);
+      for (const k of bd.ks) k.setAttribute(K, "native");
+      geometry(bd.u, ma);
+      if (!decorate(bd.u)) return fail(U);
+      if (!within(vg(), ma, sh)) return fail(U);
+      st = "native"; watch(ma, sh, bd.n, bd.u, ...bd.ks);
     };
   }
   /*__AURA_GREETING_END__*/
@@ -1288,7 +1329,7 @@
     clearBrandWordmark: clearBrand,
     clearAvatarOverlay: clearAvatar,
     cg: (endVisit = true) => clearGreeting?.(endVisit),
-    greetingMemory,
+    "greetingMemory": greetingMemory,
     getGreetingProbe,
     clearMarkedElements: clearMarks,
     version: settings.version,

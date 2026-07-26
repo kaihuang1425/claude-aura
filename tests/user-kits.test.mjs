@@ -769,6 +769,34 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     assert.equal(studioResult.state.shared.backgroundScope, "full-window",
       "Opening a schema-v1 user theme changed its legacy background scope");
     assert.equal(studioResult.apply, "draft");
+    assert.equal(studioResult.state.shared.prompt.native, true,
+      "A schema-v1 theme without authored placement did not retain Claude's native new-chat layout");
+    const nativePromptRevision = studioResult.state.revision;
+    await assert.rejects(studioRequest(mutationRequest(studioResult, "set-theme-token", {
+      mode: "shared", token: "promptX", value: 0.04,
+    })), /native new-chat area must be adopted in one complete placement change/,
+    "Studio allowed one synthetic fallback value to replace a native prompt layout");
+    assert.equal(JSON.parse(await fs.readFile(
+      path.join(studioEditorRoot, "active", ".editor-state.json"), "utf8",
+    )).revision, nativePromptRevision,
+    "A rejected partial native-prompt change advanced the editor revision");
+    studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [
+        { kind: "token", mode: "shared", token: "promptWidth", value: 0.71 },
+        { kind: "token", mode: "shared", token: "promptX", value: 0.04 },
+        { kind: "token", mode: "shared", token: "promptY", value: 0 },
+      ],
+    }));
+    assert.deepEqual(studioResult.state.shared.prompt, {
+      native: false, width: 0.71, x: 0.04, y: 0,
+    }, "A complete measured prompt adoption did not become one authored layout");
+    studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
+    assert.equal(studioResult.state.shared.prompt.native, true,
+      "Undo did not restore Claude's native new-chat layout");
+    studioResult = await studioRequest(mutationRequest(studioResult, "redo-theme-edit"));
+    assert.deepEqual(studioResult.state.shared.prompt, {
+      native: false, width: 0.71, x: 0.04, y: 0,
+    }, "Redo did not restore the complete adopted prompt layout");
     studioResult = await studioRequest(mutationRequest(studioResult, "discard-theme-edit"));
     assert.equal(studioResult.state.active, false);
     assert.equal((await readThemeKit(path.join(studioUserThemesDir, themeId))).schemaVersion, 1,
@@ -882,17 +910,9 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       revision: 0,
       apply: "draft",
     });
-    assert.equal(studioResult.state.shared.prompt.native, true,
-      "A source theme without authored placement did not retain Claude's native new-chat layout");
-    const nativePromptRevision = studioResult.state.revision;
-    await assert.rejects(studioRequest(mutationRequest(studioResult, "set-theme-token", {
-      mode: "shared", token: "promptX", value: 0.04,
-    })), /native new-chat area must be adopted in one complete placement change/,
-    "Studio allowed one synthetic fallback value to replace a native prompt layout");
-    assert.equal(JSON.parse(await fs.readFile(
-      path.join(studioEditorRoot, "active", ".editor-state.json"), "utf8",
-    )).revision, nativePromptRevision,
-    "A rejected partial native-prompt change advanced the editor revision");
+    assert.deepEqual(studioResult.state.shared.prompt, {
+      native: false, width: 0.64, x: 0, y: 0,
+    }, "Default did not seed its newly authored prompt layout");
     studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
       changes: [
         { kind: "token", mode: "shared", token: "promptWidth", value: 0.71 },
@@ -904,8 +924,9 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       native: false, width: 0.71, x: 0.04, y: 0,
     }, "A complete measured prompt adoption did not become one authored layout");
     studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
-    assert.equal(studioResult.state.shared.prompt.native, true,
-      "Undo did not restore Claude's native new-chat layout");
+    assert.deepEqual(studioResult.state.shared.prompt, {
+      native: false, width: 0.64, x: 0, y: 0,
+    }, "Undo did not restore Default's authored prompt layout");
     studioResult = await studioRequest(mutationRequest(studioResult, "redo-theme-edit"));
     assert.deepEqual(studioResult.state.shared.prompt, {
       native: false, width: 0.71, x: 0.04, y: 0,
@@ -1673,6 +1694,7 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     const lastValidStudioStyle = structuredClone(studioResult.state.studioStyle);
     const lastValidLauncherStyle = structuredClone(studioResult.state.launcherStyle);
     const canvasColor = studioResult.state.tokens.light.canvas;
+    const originalTextColor = studioResult.state.tokens.light.text;
     const invalidEdit = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
       mode: "light", token: "text", value: canvasColor,
     }));
@@ -1718,6 +1740,19 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       "Undo did not restore the exact last-valid Studio shell style");
     assert.equal(studioResult.payload, lastValidPayload,
       "Undo after an invalid mutation did not restore the exact last-valid payload");
+    const invalidThenCorrected = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
+      mode: "light", token: "text", value: canvasColor,
+    }));
+    studioResult = await studioRequest(mutationRequest(invalidThenCorrected, "set-theme-token", {
+      mode: "light", token: "text", value: originalTextColor,
+    }));
+    assert.equal(studioResult.state.feedback.valid, true,
+      "A corrective palette edit could not recover from an invalid contrast draft");
+    assert.equal(studioResult.state.tokens.light.text, originalTextColor);
+    assert.equal(studioResult.apply, "draft",
+      "A corrected palette did not resume the live draft application");
+    assert(studioResult.payload,
+      "A corrected palette did not regenerate the renderer payload");
 
     const saveRequest = mutationRequest(studioResult, "save-theme-edit");
     await fs.access(firstLauncherStoredPath);

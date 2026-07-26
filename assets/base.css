@@ -400,7 +400,7 @@ html.claude-aura :is(
   color: hsl(var(--aura-role-fg)) !important;
 }
 
-html.claude-aura [data-claude-aura-prompt="new-chat"] {
+html.claude-aura [data-claude-aura-prompt="authored"] {
   inline-size: var(--aura-prompt-width) !important;
   max-inline-size: calc(100vw - 32px) !important;
   translate: var(--aura-prompt-x) var(--aura-prompt-y) !important;

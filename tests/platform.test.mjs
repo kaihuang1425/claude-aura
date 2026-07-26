@@ -350,6 +350,9 @@ test("Studio-generated metadata preserves every theme descriptor", async () => {
     "Studio metadata generation must tolerate known transient Windows write locks");
   assert.match(builderSource, /MAX_WRITE_ATTEMPTS\s*=\s*6/,
     "Studio metadata generation must keep its Windows lock retry bounded");
+  assert.match(builderSource,
+    /if \(layered && artwork\.id\)[\s\S]{0,900}?id:\s*artwork\.id[\s\S]{0,400}?context:\s*artwork\.context[\s\S]{0,300}?viewport:\s*artwork\.viewport[\s\S]{0,300}?visible:\s*artwork\.visible[\s\S]{0,500}?normal:\s*\{\s*\.\.\.artwork\.frames\.normal\s*\}[\s\S]{0,200}?wide:\s*\{\s*\.\.\.artwork\.frames\.wide\s*\}/,
+    "Studio metadata generation must preserve the exact identity, applicability, visibility, and frames of authored built-in layers");
   run(process.execPath, ["scripts/build-studio-themes.mjs"]);
   const generated = await fs.readFile(path.join(PROJECT_ROOT, "studio", "generated-themes.js"), "utf8");
   for (const id of THEME_IDS) assert(generated.includes(`\"${id}\"`), `Studio metadata is missing ${id}`);
@@ -361,7 +364,24 @@ test("Studio-generated metadata preserves every theme descriptor", async () => {
       ? (({ path: artworkPath, position, size, mobile }) => ({ path: artworkPath, position, size, mobile }))(theme.artwork)
       : null;
     const expectedLayers = theme.artworkLayers?.length
-      ? theme.artworkLayers.map(({ path: artworkPath, position, size, mobile, opacity, mask, role, appearance, contextOverrides }) => ({
+      ? theme.artworkLayers.map((layer) => layer.id ? ({
+        id: layer.id,
+        path: layer.path,
+        role: layer.role,
+        appearance: layer.appearance,
+        context: layer.context,
+        viewport: layer.viewport,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        mask: layer.mask,
+        mobile: layer.mobile,
+        frames: {
+          normal: { ...layer.frames.normal },
+          wide: { ...layer.frames.wide },
+        },
+      }) : (({
+        path: artworkPath, position, size, mobile, opacity, mask, role, appearance, contextOverrides,
+      }) => ({
         path: artworkPath,
         position,
         size,
@@ -371,7 +391,7 @@ test("Studio-generated metadata preserves every theme descriptor", async () => {
         role,
         appearance,
         contextOverrides,
-      }))
+      }))(layer))
       : null;
     const expectedMode = (mode) => ({
       semantic: { ...mode.semantic },

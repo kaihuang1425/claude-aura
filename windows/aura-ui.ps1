@@ -5,12 +5,31 @@ param(
   [string]$Image,
   [switch]$ClearImage,
   [switch]$OpenStudio,
+  [switch]$BuiltInAuthoring,
   [switch]$RescueSession
 )
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $ThemeCli = Join-Path $Root 'scripts\theme-cli.mjs'
+$script:BuiltInAuthoring = [bool]$BuiltInAuthoring
+if ($script:BuiltInAuthoring) {
+  $sourceGit = Join-Path $Root '.git'
+  $sourceRegistry = Join-Path $Root 'themes\registry.json'
+  if (-not (Test-Path -LiteralPath $sourceGit -PathType Container) -or
+      -not (Test-Path -LiteralPath $sourceRegistry -PathType Leaf)) {
+    throw 'Built-in layout authoring is available only from the Claude Aura source checkout.'
+  }
+  foreach ($sourceItem in @(
+      (Get-Item -LiteralPath $sourceGit -Force),
+      (Get-Item -LiteralPath $sourceRegistry -Force)
+    )) {
+    if (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Built-in layout authoring refused a linked source path.'
+    }
+  }
+  $OpenStudio = $true
+}
 $VendorRoot = Join-Path $Root 'vendor\webview2'
 $PrepaintTemplatePath = Join-Path $Root 'assets\renderer-prepaint.js'
 $DataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\data'
@@ -36,7 +55,12 @@ $StudioIntroductionVersion = 1
 $StudioBackgroundMaxBytes = 16 * 1024 * 1024
 $AvatarSourceMaxBytes = 16 * 1024 * 1024
 $StudioMirrorJpegMaxBytes = 8000000
-$StudioEditorRoot = Join-Path $DataRoot 'theme-drafts'
+$StudioEditorDirectoryName = if ($script:BuiltInAuthoring) {
+  'theme-drafts-builtin-authoring'
+} else {
+  'theme-drafts'
+}
+$StudioEditorRoot = Join-Path $DataRoot $StudioEditorDirectoryName
 $StudioEditorPreviewRoot = Join-Path $StudioEditorRoot 'preview'
 $StudioEditorImportRoot = Join-Path $StudioEditorRoot 'imports'
 $StudioLocaleIds = @(
@@ -1071,12 +1095,19 @@ function Get-AuraUiLoadingColorValue {
 }
 
 function Get-AuraUiLoadingProfile {
-  $themeId = Get-AuraUiLoadingThemeId
+  param([string]$ThemeIdOverride)
+  $themeId = if ([string]::IsNullOrWhiteSpace($ThemeIdOverride)) {
+    Get-AuraUiLoadingThemeId
+  } elseif (@(Get-AuraUiPermanentThemeIds) -ccontains $ThemeIdOverride) {
+    $ThemeIdOverride
+  } else {
+    'default'
+  }
   $theme = Get-AuraUiThemeByName -Name $themeId
   if ($null -eq $theme) { $theme = Get-AuraUiThemeByName -Name 'default'; $themeId = 'default' }
   $appearance = if (Test-AuraUiDarkChrome) { 'dark' } else { 'light' }
   $studioStyle = Get-AuraUiPropertyValue -InputObject $theme -Names @('studioStyle')
-  if (Get-AuraUiEnabled) {
+  if ([string]::IsNullOrWhiteSpace($ThemeIdOverride) -and (Get-AuraUiEnabled)) {
     $permanentThemeIds = @(Get-AuraUiPermanentThemeIds)
     $selectedTheme = Get-AuraUiThemeByName -Name (Get-AuraUiSelectedThemeName)
     $selectedSourceRecipe = Get-AuraUiPropertyValue -InputObject $selectedTheme -Names @('sourceRecipe')
@@ -1181,6 +1212,17 @@ function Test-AuraUiLoadingAnimationEnabled {
   return $true
 }
 
+function Get-AuraUiLoadingScale {
+  if ($null -ne $script:LoadingMark -and -not $script:LoadingMark.IsDisposed -and
+      $script:LoadingMark.Width -gt 0) {
+    return [Math]::Max(0.75, [Math]::Min(3.0, $script:LoadingMark.Width / 88.0))
+  }
+  if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+    return [Math]::Max(0.75, [Math]::Min(3.0, $script:Form.DeviceDpi / 96.0))
+  }
+  return 1.0
+}
+
 function New-AuraUiLoadingMarkBitmap {
   param([Parameter(Mandatory = $true)][string]$ThemeId)
   if (@(Get-AuraUiPermanentThemeIds) -cnotcontains $ThemeId) { return $null }
@@ -1194,15 +1236,51 @@ function New-AuraUiLoadingMarkBitmap {
   }
   $stream = $null
   $source = $null
+  $normalized = $null
+  $graphics = $null
   try {
     $stream = [IO.File]::Open($candidate, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $source = [Drawing.Image]::FromStream($stream)
     if ($source.Width -ne 96 -or $source.Height -ne 96) { return $null }
-    return [Drawing.Bitmap]::new($source)
+    $cropByTheme = @{
+      'default' = [Drawing.Rectangle]::new(10, 10, 75, 76)
+      'japanese-film-editorial' = [Drawing.Rectangle]::new(12, 10, 72, 76)
+      'korean-prestige' = [Drawing.Rectangle]::new(21, 10, 53, 76)
+      'cartoon-studio' = [Drawing.Rectangle]::new(15, 10, 66, 76)
+      'anime-twilight' = [Drawing.Rectangle]::new(11, 11, 73, 75)
+      'study-library' = [Drawing.Rectangle]::new(10, 10, 76, 76)
+      'japanese-idol' = [Drawing.Rectangle]::new(10, 13, 76, 69)
+      'korean-idol' = [Drawing.Rectangle]::new(10, 10, 76, 75)
+    }
+    $sourceBounds = $cropByTheme[$ThemeId]
+    if ($null -eq $sourceBounds) { return $null }
+    $scale = [Math]::Min(78.0 / $sourceBounds.Width, 78.0 / $sourceBounds.Height)
+    $drawWidth = [Math]::Max(1, [int][Math]::Round($sourceBounds.Width * $scale))
+    $drawHeight = [Math]::Max(1, [int][Math]::Round($sourceBounds.Height * $scale))
+    $normalized = [Drawing.Bitmap]::new(88, 88, [Drawing.Imaging.PixelFormat]::Format32bppPArgb)
+    $graphics = [Drawing.Graphics]::FromImage($normalized)
+    $graphics.Clear([Drawing.Color]::Transparent)
+    $graphics.CompositingMode = [Drawing.Drawing2D.CompositingMode]::SourceCopy
+    $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $destination = [Drawing.Rectangle]::new(
+      [Math]::Floor((88 - $drawWidth) / 2),
+      [Math]::Floor((88 - $drawHeight) / 2),
+      $drawWidth,
+      $drawHeight)
+    $graphics.DrawImage(
+      $source, $destination, $sourceBounds.X, $sourceBounds.Y,
+      $sourceBounds.Width, $sourceBounds.Height, [Drawing.GraphicsUnit]::Pixel)
+    $result = $normalized
+    $normalized = $null
+    return $result
   } catch {
     Write-AuraUiLog -Message "Loading-screen identity could not be loaded: $($_.Exception.Message)"
     return $null
   } finally {
+    if ($null -ne $graphics) { $graphics.Dispose() }
+    if ($null -ne $normalized) { $normalized.Dispose() }
     if ($null -ne $source) { $source.Dispose() }
     if ($null -ne $stream) { $stream.Dispose() }
   }
@@ -1223,112 +1301,302 @@ function Paint-AuraUiLoadingPanel {
   }
 
   $gradient = [Drawing.Drawing2D.LinearGradientBrush]::new(
-    $Bounds, $profile.Background, $profile.Surface, [float]32)
-  $primaryPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(34, $profile.Accent), [float]1.6)
-  $secondaryPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(42, $profile.AccentSecondary), [float]1.25)
-  $secondaryBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(38, $profile.AccentSecondary))
+    $Bounds, $profile.Background, $profile.Surface, [float]28)
+  $stageColor = if ("$($profile.Appearance)" -ceq 'dark') {
+    ConvertTo-AuraUiBlendedColor -From $profile.Surface -To $profile.Text -Amount 0.22
+  } else {
+    $profile.Surface
+  }
+  $stageBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(226, $stageColor))
+  $softStageBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(72, $stageColor))
+  $primaryBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(46, $profile.Accent))
+  $secondaryBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(54, $profile.AccentSecondary))
+  $primaryPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(108, $profile.Accent), [float]2.0)
+  $secondaryPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(92, $profile.AccentSecondary), [float]1.5)
+  $quietPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(42, $profile.Border), [float]1.0)
+  $graphicsState = $null
   try {
     $Graphics.FillRectangle($gradient, $Bounds)
-    $width = [float]$Bounds.Width
-    $height = [float]$Bounds.Height
+    $scale = [double](Get-AuraUiLoadingScale)
+    $graphicsState = $Graphics.Save()
+    $Graphics.ScaleTransform([float]$scale, [float]$scale)
+    $width = [float]($Bounds.Width / $scale)
+    $height = [float]($Bounds.Height / $scale)
     $centerX = $width / 2
-    $centerY = $height / 2
+    $clusterTop = if ($null -ne $script:LoadingMark -and -not $script:LoadingMark.IsDisposed) {
+      [float](($script:LoadingMark.Top / $scale) + 10)
+    } else {
+      [float][Math]::Max(28, [Math]::Floor(($height - 206) / 2))
+    }
+    $stageHalfWidth = [float][Math]::Max(40, [Math]::Min(280, ($width - 64) / 2))
+    $stageLeft = $centerX - $stageHalfWidth
+    $stageRight = $centerX + $stageHalfWidth
+    $cueTop = [float][Math]::Max(24, $clusterTop - 48)
+    $cueBottom = [float][Math]::Min($height - 24, $clusterTop + 224)
     switch -CaseSensitive ("$($profile.Cue)") {
       'orbit' {
-        $Graphics.DrawEllipse($primaryPen, $centerX - 218, $centerY - 112, 436, 224)
-        $Graphics.DrawArc($secondaryPen, $centerX - 166, $centerY - 166, 332, 332, 205, 210)
+        $Graphics.FillEllipse($softStageBrush, $centerX - 250, $clusterTop - 72, 500, 260)
+        $Graphics.FillEllipse($stageBrush, $centerX - 78, $clusterTop - 18, 156, 96)
+        $Graphics.DrawEllipse($primaryPen, $centerX - 214, $clusterTop - 44, 428, 118)
+        $Graphics.DrawArc($secondaryPen, $centerX - 156, $clusterTop - 62, 312, 136, 194, 168)
+        $Graphics.FillEllipse($secondaryBrush, $centerX + 176, $clusterTop + 8, 11, 11)
         break
       }
       'editorial-rule' {
-        $ruleX = [float]($width * 0.17)
-        $Graphics.DrawLine($primaryPen, $ruleX, 38, $ruleX, $height - 38)
-        $Graphics.DrawLine($secondaryPen, $ruleX, $height - 74, $width * 0.46, $height - 74)
-        $Graphics.FillEllipse($secondaryBrush, $ruleX - 5, $height - 80, 10, 10)
+        $sheet = [Drawing.RectangleF]::new(
+          $centerX - 266, $cueTop, 476, [Math]::Max(1, $cueBottom - $cueTop - 20))
+        $Graphics.FillRectangle($softStageBrush, $sheet.X + 18, $sheet.Y + 18, $sheet.Width, $sheet.Height)
+        $Graphics.FillRectangle($stageBrush, $sheet)
+        $filmMarkColor = ConvertTo-AuraUiBlendedColor -From $profile.Surface -To $profile.Text -Amount 0.58
+        $filmMarkBrush = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(246, $filmMarkColor))
+        try {
+          $Graphics.FillRectangle($filmMarkBrush, $centerX - 72, $clusterTop - 20, 144, 104)
+        } finally {
+          $filmMarkBrush.Dispose()
+        }
+        $Graphics.FillRectangle($primaryBrush, $sheet.X, $sheet.Y, 8, $sheet.Height)
+        $Graphics.DrawLine($primaryPen, $sheet.X + 34, $sheet.Y + 30, $sheet.X + 34, $sheet.Bottom - 30)
+        $Graphics.DrawLine($quietPen, $sheet.X + 34, $sheet.Bottom - 30, $sheet.Right - 30, $sheet.Bottom - 30)
+        $Graphics.FillEllipse($secondaryBrush, $sheet.Right - 43, $sheet.Y + 26, 13, 13)
         break
       }
       'facet' {
-        $points = [Drawing.PointF[]]@(
-          [Drawing.PointF]::new($centerX, $centerY - 206),
-          [Drawing.PointF]::new($centerX + 246, $centerY),
-          [Drawing.PointF]::new($centerX, $centerY + 206),
-          [Drawing.PointF]::new($centerX - 246, $centerY)
+        $facetMidY = [float]($clusterTop + 82)
+        $outer = [Drawing.PointF[]]@(
+          [Drawing.PointF]::new($centerX, $cueTop - 10),
+          [Drawing.PointF]::new($stageRight, $facetMidY),
+          [Drawing.PointF]::new($centerX, $cueBottom),
+          [Drawing.PointF]::new($stageLeft, $facetMidY)
         )
-        $Graphics.DrawPolygon($primaryPen, $points)
-        $Graphics.DrawLine($secondaryPen, $points[0], $points[2])
-        $Graphics.DrawLine($secondaryPen, $points[1], $points[3])
+        $Graphics.FillPolygon($stageBrush, $outer)
+        $Graphics.FillPolygon($primaryBrush, [Drawing.PointF[]]@($outer[0], $outer[1], [Drawing.PointF]::new($centerX, $facetMidY)))
+        $Graphics.FillPolygon($secondaryBrush, [Drawing.PointF[]]@($outer[2], $outer[3], [Drawing.PointF]::new($centerX, $facetMidY)))
+        $Graphics.DrawPolygon($primaryPen, $outer)
+        $Graphics.DrawLine($secondaryPen, $outer[0], [Drawing.PointF]::new($centerX, $facetMidY))
+        $Graphics.DrawLine($quietPen, $outer[3], [Drawing.PointF]::new($centerX, $facetMidY))
+        $Graphics.DrawLine($quietPen, [Drawing.PointF]::new($centerX, $facetMidY), $outer[1])
         break
       }
       'ink-frame' {
-        $outer = [Drawing.RectangleF]::new(42, 38, [Math]::Max(1, $width - 104), [Math]::Max(1, $height - 92))
-        $inner = [Drawing.RectangleF]::new(58, 54, [Math]::Max(1, $width - 104), [Math]::Max(1, $height - 92))
-        $Graphics.DrawRectangle($primaryPen, $outer.X, $outer.Y, $outer.Width, $outer.Height)
-        $Graphics.DrawRectangle($secondaryPen, $inner.X, $inner.Y, $inner.Width, $inner.Height)
-        $Graphics.FillEllipse($secondaryBrush, $width - 92, 52, 12, 12)
+        $backFrame = [Drawing.RectangleF]::new(
+          $stageLeft + 22, $cueTop + 18, [Math]::Max(1, ($stageHalfWidth * 2) - 30), [Math]::Max(1, ($cueBottom - $cueTop) - 30))
+        $Graphics.DrawRectangle($secondaryPen, $backFrame.X, $backFrame.Y, $backFrame.Width, $backFrame.Height)
+        $panel = [Drawing.PointF[]]@(
+          [Drawing.PointF]::new($stageLeft + 10, $cueTop + 8),
+          [Drawing.PointF]::new($stageRight - 20, $cueTop),
+          [Drawing.PointF]::new($stageRight, $cueBottom - 26),
+          [Drawing.PointF]::new($stageLeft, $cueBottom - 10)
+        )
+        $inkPen = [Drawing.Pen]::new([Drawing.Color]::FromArgb(138, $profile.Accent), [float]3.0)
+        try {
+          $Graphics.FillPolygon($stageBrush, $panel)
+          $Graphics.DrawPolygon($inkPen, $panel)
+        } finally {
+          $inkPen.Dispose()
+        }
+        $Graphics.FillEllipse($secondaryBrush, $stageRight - 48, $cueTop + 24, 18, 18)
+        $Graphics.DrawLine($primaryPen, $stageLeft + 28, $cueBottom - 34, $stageLeft + 104, $cueBottom - 34)
         break
       }
       'horizon' {
-        $Graphics.DrawArc($primaryPen, $centerX - 264, $centerY - 202, 528, 404, 194, 152)
-        $Graphics.DrawArc($secondaryPen, $centerX - 204, $centerY - 150, 408, 300, 12, 154)
-        $Graphics.DrawLine($secondaryPen, 72, $centerY + 156, $width - 72, $centerY + 156)
+        $moon = [Drawing.RectangleF]::new($centerX - 125, $cueTop - 10, 250, 250)
+        $Graphics.FillEllipse($stageBrush, $moon)
+        $Graphics.FillEllipse($secondaryBrush, $centerX + 4, $cueTop - 12, 150, 150)
+        $Graphics.DrawArc($primaryPen, $centerX - 218, $cueTop - 20, 436, 270, 198, 144)
+        $Graphics.DrawArc($secondaryPen, $centerX - 176, $cueTop + 10, 352, 216, 16, 148)
+        $Graphics.DrawLine($quietPen, $stageLeft + 34, $cueBottom - 24, $stageRight - 34, $cueBottom - 24)
+        $Graphics.FillEllipse($secondaryBrush, $centerX + 180, $cueTop + 28, 10, 10)
         break
       }
       'folio' {
-        for ($line = 0; $line -lt 4; $line++) {
-          $lineY = [float]($height - 116 + ($line * 18))
-          $Graphics.DrawLine($(if ($line -eq 0) { $secondaryPen } else { $primaryPen }),
-            78, $lineY, $width - 78, $lineY)
+        $leftPage = [Drawing.PointF[]]@(
+          [Drawing.PointF]::new($centerX, $cueTop + 8),
+          [Drawing.PointF]::new($stageLeft + 18, $cueTop),
+          [Drawing.PointF]::new($stageLeft, $cueBottom - 26),
+          [Drawing.PointF]::new($centerX, $cueBottom - 12)
+        )
+        $rightPage = [Drawing.PointF[]]@(
+          [Drawing.PointF]::new($centerX, $cueTop + 8),
+          [Drawing.PointF]::new($stageRight - 18, $cueTop),
+          [Drawing.PointF]::new($stageRight, $cueBottom - 26),
+          [Drawing.PointF]::new($centerX, $cueBottom - 12)
+        )
+        $Graphics.FillPolygon($stageBrush, $leftPage)
+        $Graphics.FillPolygon($stageBrush, $rightPage)
+        $Graphics.DrawPolygon($primaryPen, $leftPage)
+        $Graphics.DrawPolygon($secondaryPen, $rightPage)
+        $Graphics.DrawLine($quietPen, $centerX, $cueTop + 16, $centerX, $clusterTop - 20)
+        $Graphics.DrawLine($quietPen, $centerX, $clusterTop + 164, $centerX, $cueBottom - 18)
+        for ($line = 0; $line -lt 2; $line++) {
+          $lineY = [float]($clusterTop + 184 + ($line * 18))
+          $Graphics.DrawLine($quietPen, $stageLeft + 52, $lineY, $centerX - 34, $lineY)
+          $Graphics.DrawLine($quietPen, $centerX + 34, $lineY, $stageRight - 52, $lineY)
         }
-        $Graphics.DrawLine($secondaryPen, 124, 42, 124, $height - 44)
+        $Graphics.DrawLine($secondaryPen, $stageLeft + 44, $cueTop + 34, $stageLeft + 44, $cueBottom - 42)
         break
       }
       'ribbon' {
         $path = [Drawing.Drawing2D.GraphicsPath]::new()
         try {
-          $path.AddBezier(54, $height * 0.68, $width * 0.24, $height * 0.24,
-            $width * 0.72, $height * 0.86, $width - 54, $height * 0.32)
+          $path.StartFigure()
+          $path.AddBezier(
+            $stageLeft + 28, $cueTop + 56,
+            $centerX - 170, $cueTop - 24,
+            $centerX + 120, $cueTop + 10,
+            $stageRight - 14, $cueTop + 52)
+          $path.AddLine(
+            $stageRight - 14, $cueTop + 52,
+            $stageRight - 66, $cueBottom - 18)
+          $path.AddBezier(
+            $stageRight - 66, $cueBottom - 18,
+            $centerX + 82, $cueBottom + 12,
+            $centerX - 122, $cueBottom - 10,
+            $stageLeft + 28, $cueTop + 56)
+          $path.CloseFigure()
+          $Graphics.FillPath($stageBrush, $path)
           $Graphics.DrawPath($primaryPen, $path)
-          $Graphics.FillEllipse($secondaryBrush, $width * 0.78, $height * 0.24, 10, 10)
+          $sash = [Drawing.PointF[]]@(
+            [Drawing.PointF]::new($centerX - 154, $cueTop + 38),
+            [Drawing.PointF]::new($centerX - 102, $cueTop + 18),
+            [Drawing.PointF]::new($centerX + 104, $cueTop + 68),
+            [Drawing.PointF]::new($centerX + 54, $cueTop + 88)
+          )
+          $Graphics.FillPolygon($secondaryBrush, $sash)
+          $sparkleX = [float]($stageRight - 54)
+          $sparkleY = [float]($cueTop + 42)
+          $Graphics.DrawLine($secondaryPen, $sparkleX - 10, $sparkleY, $sparkleX + 10, $sparkleY)
+          $Graphics.DrawLine($secondaryPen, $sparkleX, $sparkleY - 10, $sparkleX, $sparkleY + 10)
         } finally {
           $path.Dispose()
         }
         break
       }
       'capsule' {
-        foreach ($offset in @(0, 18, 36)) {
-          $capsule = [Drawing.RectangleF]::new(
-            58 + $offset, 58 + $offset,
-            [Math]::Max(1, $width - 152), [Math]::Max(1, $height - 152))
-          $capsulePath = New-AuraUiRoundedRectanglePath -Bounds $capsule -Radius 44
+        $leftOutline = [Drawing.RectangleF]::new($centerX - 165, $clusterTop - 26, 250, 80)
+        $rightOutline = [Drawing.RectangleF]::new($centerX - 85, $clusterTop, 250, 80)
+        foreach ($outlineSpec in @(
+            [PSCustomObject]@{ Bounds = $leftOutline; Pen = $primaryPen },
+            [PSCustomObject]@{ Bounds = $rightOutline; Pen = $secondaryPen }
+          )) {
+          $outlinePath = New-AuraUiRoundedRectanglePath -Bounds $outlineSpec.Bounds -Radius 40
           try {
-            $Graphics.DrawPath($(if ($offset -eq 18) { $secondaryPen } else { $primaryPen }), $capsulePath)
+            $Graphics.DrawPath($outlineSpec.Pen, $outlinePath)
           } finally {
-            $capsulePath.Dispose()
+            $outlinePath.Dispose()
           }
         }
+        $capsule = [Drawing.RectangleF]::new($centerX - 135, $clusterTop - 16, 270, 96)
+        $capsulePath = New-AuraUiRoundedRectanglePath -Bounds $capsule -Radius 48
+        try {
+          $Graphics.FillPath($stageBrush, $capsulePath)
+          $Graphics.DrawPath($quietPen, $capsulePath)
+        } finally {
+          $capsulePath.Dispose()
+        }
+        $Graphics.FillEllipse($primaryBrush, $centerX - 170, $clusterTop + 12, 18, 18)
+        $Graphics.FillEllipse($secondaryBrush, $centerX + 158, $clusterTop + 52, 12, 12)
         break
       }
     }
   } finally {
-    $secondaryBrush.Dispose()
+    if ($null -ne $graphicsState) { $Graphics.Restore($graphicsState) }
+    $quietPen.Dispose()
     $secondaryPen.Dispose()
     $primaryPen.Dispose()
+    $secondaryBrush.Dispose()
+    $primaryBrush.Dispose()
+    $softStageBrush.Dispose()
+    $stageBrush.Dispose()
     $gradient.Dispose()
+  }
+}
+
+function Update-AuraUiLoadingBackground {
+  if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
+  $width = [Math]::Max(1, [int]$script:LoadingPanel.ClientSize.Width)
+  $height = [Math]::Max(1, [int]$script:LoadingPanel.ClientSize.Height)
+  $nextBackground = $null
+  $graphics = $null
+  try {
+    $nextBackground = [Drawing.Bitmap]::new($width, $height)
+    $graphics = [Drawing.Graphics]::FromImage($nextBackground)
+    $graphics.Clear($script:LoadingPanel.BackColor)
+    Paint-AuraUiLoadingPanel -Graphics $graphics -Bounds ([Drawing.Rectangle]::new(0, 0, $width, $height))
+    $previousBackground = $script:LoadingPanel.BackgroundImage
+    $script:LoadingPanel.BackgroundImage = $nextBackground
+    $nextBackground = $null
+    if ($null -ne $previousBackground) { $previousBackground.Dispose() }
+  } catch {
+    Write-AuraUiLog -Message "Loading-screen background could not be refreshed: $($_.Exception.Message)"
+  } finally {
+    if ($null -ne $graphics) { $graphics.Dispose() }
+    if ($null -ne $nextBackground) { $nextBackground.Dispose() }
+  }
+}
+
+function Set-AuraUiRoundedControlRegion {
+  param(
+    [Parameter(Mandatory = $true)][System.Windows.Forms.Control]$Control,
+    [Parameter(Mandatory = $true)][double]$Radius
+  )
+  if ($Control.IsDisposed -or $Control.Width -lt 1 -or $Control.Height -lt 1) { return }
+  $path = New-AuraUiRoundedRectanglePath `
+    -Bounds ([Drawing.RectangleF]::new(0, 0, $Control.Width, $Control.Height)) `
+    -Radius $Radius
+  try {
+    $nextRegion = [Drawing.Region]::new($path)
+    $previousRegion = $Control.Region
+    $Control.Region = $nextRegion
+    if ($null -ne $previousRegion) { $previousRegion.Dispose() }
+  } finally {
+    $path.Dispose()
   }
 }
 
 function Set-AuraUiLoadingLayout {
   if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
+  $scale = [double](Get-AuraUiLoadingScale)
   $centerX = [Math]::Floor($script:LoadingPanel.ClientSize.Width / 2)
-  $clusterTop = [Math]::Max(28, [Math]::Floor(($script:LoadingPanel.ClientSize.Height - 196) / 2))
-  $script:LoadingMark.Location = [Drawing.Point]::new($centerX - 38, $clusterTop)
+  $centerY = [Math]::Floor($script:LoadingPanel.ClientSize.Height / 2)
+  $highContrast = $null -ne $script:LoadingProfile -and [bool]$script:LoadingProfile.HighContrast
+  $readingControlHeight = [Math]::Max($script:LoadingProgress.Height, $script:RetryButton.Height)
+  $labelGap = [Math]::Max(6, [int][Math]::Round(8 * $scale))
+  $readingGap = [Math]::Max(10, [int][Math]::Round(14 * $scale))
+  $normalContentHeight = $script:LoadingMark.Height + $labelGap +
+    $script:LoadingLabel.Height + $readingGap + $readingControlHeight
+  $labelTop = if ($highContrast) {
+    [Math]::Max(
+      [int][Math]::Round(20 * $scale),
+      [Math]::Floor($centerY - (($script:LoadingLabel.Height + $readingGap + $readingControlHeight) / 2)))
+  } else {
+    $markTop = [Math]::Max(
+      [int][Math]::Round(28 * $scale),
+      [Math]::Floor($centerY - ($normalContentHeight / 2) - (10 * $scale)))
+    $script:LoadingMark.Location = [Drawing.Point]::new(
+      $centerX - [Math]::Floor($script:LoadingMark.Width / 2), $markTop)
+    $markTop + $script:LoadingMark.Height + $labelGap
+  }
+  if ($highContrast) {
+    $script:LoadingMark.Location = [Drawing.Point]::new(
+      $centerX - [Math]::Floor($script:LoadingMark.Width / 2), $labelTop)
+  }
   $script:LoadingLabel.Location = [Drawing.Point]::new(
-    [Math]::Max(0, $centerX - [Math]::Floor($script:LoadingLabel.Width / 2)), $clusterTop + 82)
+    [Math]::Max(0, $centerX - [Math]::Floor($script:LoadingLabel.Width / 2)),
+    $labelTop)
   $script:LoadingProgress.Location = [Drawing.Point]::new(
-    $centerX - [Math]::Floor($script:LoadingProgress.Width / 2), $clusterTop + 142)
+    $centerX - [Math]::Floor($script:LoadingProgress.Width / 2),
+    $labelTop + $script:LoadingLabel.Height + $readingGap)
   $script:RetryButton.Location = [Drawing.Point]::new(
-    $centerX - [Math]::Floor($script:RetryButton.Width / 2), $clusterTop + 132)
+    $centerX - [Math]::Floor($script:RetryButton.Width / 2),
+    $labelTop + $script:LoadingLabel.Height +
+      [Math]::Max(
+        [int][Math]::Round(4 * $scale),
+        [Math]::Floor(($readingGap + $script:LoadingProgress.Height -
+          $script:RetryButton.Height) / 2)))
   $indicatorWidth = [Math]::Max(54, [Math]::Floor($script:LoadingProgress.Width * 0.28))
   $script:LoadingProgressIndicator.Size = [Drawing.Size]::new($indicatorWidth, $script:LoadingProgress.Height)
+  Set-AuraUiRoundedControlRegion -Control $script:LoadingProgress -Radius (3 * $scale)
+  Set-AuraUiRoundedControlRegion -Control $script:LoadingProgressIndicator -Radius (3 * $scale)
   if (-not (Test-AuraUiLoadingAnimationEnabled)) {
     $script:LoadingProgressIndicator.Left = [Math]::Floor(($script:LoadingProgress.Width - $indicatorWidth) / 2)
   }
@@ -1338,6 +1606,14 @@ function Update-AuraUiLoadingTheme {
   if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
   try {
     $profile = Get-AuraUiLoadingProfile
+    $nextMark = if ($profile.HighContrast) { $null } else {
+      New-AuraUiLoadingMarkBitmap -ThemeId "$($profile.ThemeId)"
+    }
+    if (-not $profile.HighContrast -and $null -eq $nextMark -and
+        "$($profile.ThemeId)" -cne 'default') {
+      $profile = Get-AuraUiLoadingProfile -ThemeIdOverride 'default'
+      $nextMark = New-AuraUiLoadingMarkBitmap -ThemeId 'default'
+    }
     $script:LoadingProfile = $profile
     Update-AuraUiWindowChrome `
       -Dark ([string]::Equals("$($profile.Appearance)", 'dark', [StringComparison]::Ordinal)) `
@@ -1356,9 +1632,6 @@ function Update-AuraUiLoadingTheme {
     $script:RetryButton.ForeColor = $profile.AccentText
     $script:RetryButton.UseVisualStyleBackColor = [bool]$profile.HighContrast
     $script:LoadingMark.Visible = -not [bool]$profile.HighContrast
-    $nextMark = if ($profile.HighContrast) { $null } else {
-      New-AuraUiLoadingMarkBitmap -ThemeId "$($profile.ThemeId)"
-    }
     $previousMark = $script:LoadingMark.Image
     $script:LoadingMark.Image = $nextMark
     if ($null -ne $previousMark) { $previousMark.Dispose() }
@@ -1369,6 +1642,7 @@ function Update-AuraUiLoadingTheme {
       $script:WebView.BackColor = $profile.Background
     }
     Set-AuraUiLoadingLayout
+    Update-AuraUiLoadingBackground
     $script:LoadingPanel.Invalidate()
     Update-AuraUiRescueWindowTheme
   } catch {
@@ -1391,13 +1665,18 @@ function Show-AuraUiLoading {
   }
   $script:LoadingPanel.Visible = $true
   $script:LoadingPanel.BringToFront()
+  Update-AuraUiLauncherPosition
 }
 
 function Hide-AuraUiLoading {
   if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Stop() }
   if ($null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed) {
     $script:LoadingPanel.Visible = $false
+    $background = $script:LoadingPanel.BackgroundImage
+    $script:LoadingPanel.BackgroundImage = $null
+    if ($null -ne $background) { $background.Dispose() }
   }
+  Update-AuraUiLauncherPosition
 }
 
 function Get-AuraUiNavigationCompletionDisposition {
@@ -3664,7 +3943,10 @@ function Save-AuraUiLauncherPosition {
 function Update-AuraUiLauncherPosition {
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
-  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized -or -not $script:Form.Visible) {
+  $loadingVisible = $null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed -and
+    $script:LoadingPanel.Visible
+  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized -or
+      -not $script:Form.Visible -or $loadingVisible) {
     if ($script:Launcher.Visible) { $script:Launcher.Hide() }
     Hide-AuraUiLauncherTip
     return
@@ -4297,8 +4579,13 @@ function Assert-AuraUiStudioEditorRoots {
     [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
   $importRootPath = [IO.Path]::GetFullPath($StudioEditorImportRoot).TrimEnd(
     [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $expectedEditorDirectoryName = if ($script:BuiltInAuthoring) {
+    'theme-drafts-builtin-authoring'
+  } else {
+    'theme-drafts'
+  }
   if (-not [string]::Equals($dataRootPath, $expectedDataRoot, [StringComparison]::OrdinalIgnoreCase) -or
-      -not [string]::Equals($editorRootPath, (Join-Path $dataRootPath 'theme-drafts'), [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals($editorRootPath, (Join-Path $dataRootPath $expectedEditorDirectoryName), [StringComparison]::OrdinalIgnoreCase) -or
       -not [string]::Equals($previewRootPath, (Join-Path $editorRootPath 'preview'), [StringComparison]::OrdinalIgnoreCase) -or
       -not [string]::Equals($importRootPath, (Join-Path $editorRootPath 'imports'), [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Aura Studio editor storage is outside Claude Aura app data.'
@@ -4508,7 +4795,7 @@ function ConvertTo-AuraUiStudioEditorState {
     throw 'Aura Studio editor state must be an object.'
   }
   $allowed = @(
-    'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
+    'active', 'id', 'sourceId', 'source', 'isNew', 'editKind', 'session', 'revision', 'dirty',
     'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
     'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'layers', 'feedback',
     'lastAction', 'actionSucceeded', 'error')
@@ -4535,6 +4822,10 @@ function ConvertTo-AuraUiStudioEditorState {
     }
     if ($State.source -isnot [string] -or $State.source -cnotin @('builtin', 'user')) {
       throw 'Aura Studio editor state has an invalid source.'
+    }
+    if ($null -ne $State.PSObject.Properties['editKind'] -and
+        $null -ne $State.editKind -and $State.editKind -cne 'builtin-layout') {
+      throw 'Aura Studio editor state has an invalid edit kind.'
     }
     if ($State.isNew -isnot [bool] -or $State.dirty -isnot [bool] -or
         $State.canUndo -isnot [bool] -or $State.canRedo -isnot [bool]) {
@@ -4667,6 +4958,9 @@ function Invoke-AuraUiStudioEditorCore {
     $ThemeCli, 'studio', '--config', $ConfigPath, '--user-themes', $UserThemesRoot,
     '--editor-root', $StudioEditorRoot, '--locale', $script:Locale,
     '--request-base64', (ConvertTo-AuraUiBase64Url -Value $requestJson))
+  if ($script:BuiltInAuthoring) {
+    $arguments += @('--builtin-authoring-root', $Root)
+  }
   if ($AssetPath) {
     $editorRoot = [IO.Path]::GetFullPath($StudioEditorRoot).TrimEnd(
       [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -4688,9 +4982,13 @@ function Invoke-AuraUiStudioEditorCore {
 function Get-AuraUiStudioEditorCoreState {
   [void](Assert-AuraUiStudioEditorRoots -Create)
   [void](Assert-AuraUiThemeInstallRoot -Create)
-  $raw = Invoke-AuraUiNode -CommandArguments @(
+  $arguments = @(
     $ThemeCli, 'studio-state', '--config', $ConfigPath, '--user-themes', $UserThemesRoot,
     '--editor-root', $StudioEditorRoot, '--locale', $script:Locale)
+  if ($script:BuiltInAuthoring) {
+    $arguments += @('--builtin-authoring-root', $Root)
+  }
+  $raw = Invoke-AuraUiNode -CommandArguments $arguments
   return ConvertFrom-AuraUiStudioEditorResponse -Raw $raw
 }
 
@@ -4870,7 +5168,10 @@ function Invoke-AuraUiBeginThemeEdit {
       throw 'Finish or discard the current Aura Studio edit first.'
     }
   } else {
-    [void](Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme) -UserOnly)
+    $knownTheme = Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme)
+    if ("$($knownTheme.source)" -cne 'user' -and -not $script:BuiltInAuthoring) {
+      throw 'Built-in themes must be duplicated before they can be edited.'
+    }
   }
   return Invoke-AuraUiStudioEditorRequest -Request $Request
 }
@@ -5301,6 +5602,7 @@ function Send-AuraUiStudioState {
       introductionPending = ($null -eq $script:StudioPreferences -or
         [int]$script:StudioPreferences.introductionVersion -lt $StudioIntroductionVersion)
       introductionRequested = [bool]$script:StudioIntroductionRequested
+      builtInAuthoring = [bool]$script:BuiltInAuthoring
       enabled = $enabled
       hasImage = ($null -ne $imageValue -and "$imageValue".Trim().Length -gt 0)
       hasAvatar = ($null -ne $avatarValue -and "$avatarValue".Trim().Length -gt 0)
@@ -7653,6 +7955,9 @@ public static class AuraLayered {
   Exit-AuraOperationLock -Mutex $startupOperationLock
   $startupOperationLock = $null
   if (-not $createdNew) {
+    if ($script:BuiltInAuthoring) {
+      throw 'Exit the running Claude Aura instance before starting built-in layout authoring.'
+    }
     if ($OpenStudio) {
       [void]$script:StudioOpenSignal.Set()
     } else {
@@ -7814,12 +8119,15 @@ public static class AuraLayered {
   $script:LoadingPanel = [System.Windows.Forms.Panel]::new()
   $script:LoadingPanel.Dock = 'Fill'
   $script:LoadingPanel.BackColor = [Drawing.ColorTranslator]::FromHtml('#F1F2F9')
+  $script:LoadingPanel.BackgroundImageLayout = [System.Windows.Forms.ImageLayout]::None
   $script:LoadingPanel.add_Paint({
     param($sender, $eventArgs)
-    Paint-AuraUiLoadingPanel -Graphics $eventArgs.Graphics -Bounds $sender.ClientRectangle
+    if ($null -eq $sender.BackgroundImage) {
+      Paint-AuraUiLoadingPanel -Graphics $eventArgs.Graphics -Bounds $sender.ClientRectangle
+    }
   })
   $script:LoadingMark = [System.Windows.Forms.PictureBox]::new()
-  $script:LoadingMark.Size = [Drawing.Size]::new(76, 76)
+  $script:LoadingMark.Size = [Drawing.Size]::new(88, 88)
   $script:LoadingMark.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
   $script:LoadingMark.BackColor = [Drawing.Color]::Transparent
   $script:LoadingMark.TabStop = $false
@@ -7878,7 +8186,10 @@ public static class AuraLayered {
     $script:LoadingProgress,
     $script:RetryButton
   ))
-  $script:LoadingPanel.add_Resize({ Set-AuraUiLoadingLayout })
+  $script:LoadingPanel.add_Resize({
+    Set-AuraUiLoadingLayout
+    if ($script:LoadingPanel.Visible) { Update-AuraUiLoadingBackground }
+  })
   Update-AuraUiLoadingTheme
 
   $content = [System.Windows.Forms.Panel]::new()
@@ -8796,6 +9107,10 @@ public static class AuraLayered {
       $script:LoadingMark.Image.Dispose()
       $script:LoadingMark.Image = $null
     }
+    if ($script:LoadingPanel -and $script:LoadingPanel.BackgroundImage) {
+      $script:LoadingPanel.BackgroundImage.Dispose()
+      $script:LoadingPanel.BackgroundImage = $null
+    }
     if ($script:TrayIcon) {
       $script:TrayIcon.Visible = $false
       $script:TrayIcon.Dispose()
@@ -8868,6 +9183,12 @@ public static class AuraLayered {
     try {
       $script:LoadingMark.Image.Dispose()
       $script:LoadingMark.Image = $null
+    } catch {}
+  }
+  if ($null -ne $script:LoadingPanel -and $null -ne $script:LoadingPanel.BackgroundImage) {
+    try {
+      $script:LoadingPanel.BackgroundImage.Dispose()
+      $script:LoadingPanel.BackgroundImage = $null
     } catch {}
   }
   foreach ($tracker in @($script:MainIconWindow, $script:StudioIconWindow, $script:LauncherDpiWindow)) {

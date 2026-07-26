@@ -21,6 +21,7 @@ import {
 } from "./constants.mjs";
 import {
   cloneJson,
+  BUILTIN_STUDIO_LAYOUT_VALIDATION,
   detectImageMime,
   isAnimatedImage,
   isPathWithin,
@@ -35,7 +36,10 @@ import {
   validateUserThemeArtwork,
 } from "./validation.mjs";
 
-export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
+export async function readThemeKit(
+  kitDirectory,
+  { expectedId = null, builtinLayoutCapability = null } = {},
+) {
   if (typeof kitDirectory !== "string" || !kitDirectory.trim()) throw new Error("Theme kit folder is required");
   const kitRoot = path.resolve(kitDirectory);
   let rootStat;
@@ -65,7 +69,11 @@ export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
   // Studio-authored kits (v2/v3) validate and normalize up to the current schema;
   // legacy hand-authored kits (v1) load through the registry-entry path.
   const entry = isStudioKit
-    ? validateStudioThemeKitDocument(raw, THEME_KIT_FILENAME)
+    ? validateStudioThemeKitDocument(raw, THEME_KIT_FILENAME, {
+      builtinLayoutCapability: builtinLayoutCapability === BUILTIN_STUDIO_LAYOUT_VALIDATION
+        ? builtinLayoutCapability
+        : null,
+    })
     : validateRegistryEntry(raw, THEME_KIT_FILENAME, { source: "user" });
   if (expectedId !== null && entry.id !== expectedId) {
     throw new Error(`${THEME_KIT_FILENAME} id "${entry.id}" must match its installed folder "${expectedId}"`);

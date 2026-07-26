@@ -238,7 +238,9 @@ Commands:
       [--user-themes <path>]
   studio --config <path> --user-themes <path> --editor-root <path>
       --locale <tag> --request-base64 <base64url-json> [--asset <absolute-host-owned-image-path>]
+      [--builtin-authoring-root <absolute-source-checkout-path>]
   studio-state --config <path> --user-themes <path> --editor-root <path> --locale <tag>
+      [--builtin-authoring-root <absolute-source-checkout-path>]
   greeting-checkpoint --config <path> --state-base64 <base64url-json>
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
       [--avatar <path>|--clear-avatar]
@@ -260,7 +262,10 @@ const runtimeOptions = { userThemesDir, onWarning: emitWarning };
 if (command === "help" || command === "--help") {
   help();
 } else if (command === "studio") {
-  const allowed = new Set(["config", "user-themes", "editor-root", "locale", "request-base64", "asset"]);
+  const allowed = new Set([
+    "config", "user-themes", "editor-root", "locale", "request-base64", "asset",
+    "builtin-authoring-root",
+  ]);
   const unsupported = Object.keys(options).find((key) => !allowed.has(key));
   if (unsupported) throw new Error(`Unsupported studio option: --${unsupported}`);
   for (const key of ["config", "user-themes", "editor-root", "locale", "request-base64"]) {
@@ -285,6 +290,10 @@ if (command === "help" || command === "--help") {
   if (options.asset !== undefined && !path.isAbsolute(options.asset)) {
     throw new Error("--asset must be an absolute host-owned path");
   }
+  if (options["builtin-authoring-root"] !== undefined
+      && !path.isAbsolute(options["builtin-authoring-root"])) {
+    throw new Error("--builtin-authoring-root must be an absolute path");
+  }
   const result = await executeStudioRequest({
     request,
     configPath: path.resolve(options.config),
@@ -292,20 +301,28 @@ if (command === "help" || command === "--help") {
     editorRoot: path.resolve(options["editor-root"]),
     locale: options.locale,
     assetPath: options.asset ?? null,
+    builtinAuthoringRoot: options["builtin-authoring-root"] ?? null,
   });
   process.stdout.write(JSON.stringify(result));
 } else if (command === "studio-state") {
-  const allowed = new Set(["config", "user-themes", "editor-root", "locale"]);
+  const allowed = new Set([
+    "config", "user-themes", "editor-root", "locale", "builtin-authoring-root",
+  ]);
   const unsupported = Object.keys(options).find((key) => !allowed.has(key));
   if (unsupported) throw new Error(`Unsupported studio-state option: --${unsupported}`);
   for (const key of ["config", "user-themes", "editor-root", "locale"]) {
     if (typeof options[key] !== "string" || !options[key]) throw new Error(`--${key} is required`);
+  }
+  if (options["builtin-authoring-root"] !== undefined
+      && !path.isAbsolute(options["builtin-authoring-root"])) {
+    throw new Error("--builtin-authoring-root must be an absolute path");
   }
   const result = await hydrateStudioDraft({
     configPath: path.resolve(options.config),
     userThemesDir: path.resolve(options["user-themes"]),
     editorRoot: path.resolve(options["editor-root"]),
     locale: options.locale,
+    builtinAuthoringRoot: options["builtin-authoring-root"] ?? null,
   });
   process.stdout.write(JSON.stringify(result));
 } else if (command === "greeting-checkpoint") {

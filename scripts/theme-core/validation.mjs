@@ -44,6 +44,11 @@ import {
   USER_LAUNCHER_ASSET_PATTERN,
 } from "./constants.mjs";
 
+// Internal-only capability used by the source-checkout built-in layout editor.
+// It is deliberately not re-exported by scripts/theme-core.mjs, so ordinary
+// theme-kit callers keep the public Studio schema unchanged.
+export const BUILTIN_STUDIO_LAYOUT_VALIDATION = Symbol("builtin-studio-layout-validation");
+
 export function payloadBudget(payload, settings) {
   if (typeof payload !== "string") throw new Error("Renderer payload must be a string");
   if (!isPlainObject(settings)) throw new Error("Renderer settings must be an object");
@@ -1070,7 +1075,7 @@ export function validateStudioLegacyLayer(value, label) {
   };
 }
 
-export function validateStudioLayer(value, label) {
+export function validateStudioLayer(value, label, { builtinLayoutCapability = null } = {}) {
   if (!isPlainObject(value)) throw new Error(`${label} must be an object`);
   const allowed = new Set([
     "id", "path", "role", "appearance", "context", "viewport", "visible", "opacity",
@@ -1091,7 +1096,13 @@ export function validateStudioLayer(value, label) {
     path: value.path,
     role: strictEnum(value.role, STUDIO_LAYER_ROLES, `${label}.role`),
     appearance: strictEnum(value.appearance, STUDIO_LAYER_APPEARANCES, `${label}.appearance`),
-    context: strictEnum(value.context, STUDIO_LAYER_CONTEXTS, `${label}.context`),
+    context: strictEnum(
+      value.context,
+      builtinLayoutCapability === BUILTIN_STUDIO_LAYOUT_VALIDATION
+        ? new Set([...STUDIO_LAYER_CONTEXTS, "other"])
+        : STUDIO_LAYER_CONTEXTS,
+      `${label}.context`,
+    ),
     viewport: strictEnum(value.viewport, STUDIO_LAYER_VIEWPORTS, `${label}.viewport`),
     visible: value.visible,
     opacity: strictNumber(value.opacity, `${label}.opacity`, 0, 1),
@@ -1132,7 +1143,11 @@ export function validateStudioThemeControls(theme, label) {
   }
 }
 
-export function validateStudioThemeKitDocument(raw, source, { enforceLauncherContrast = true } = {}) {
+export function validateStudioThemeKitDocument(
+  raw,
+  source,
+  { enforceLauncherContrast = true, builtinLayoutCapability = null } = {},
+) {
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
     "$comment", "schemaVersion", "id", "labels", "descriptions", "swatches", "preview",
@@ -1167,7 +1182,11 @@ export function validateStudioThemeKitDocument(raw, source, { enforceLauncherCon
   if (!Array.isArray(raw.artworkLayers) || raw.artworkLayers.length > STUDIO_MAX_LAYERS) {
     throw new Error(`${source}.artworkLayers must contain 0 to ${STUDIO_MAX_LAYERS} layers`);
   }
-  const artworkLayers = raw.artworkLayers.map((layer, index) => validateStudioLayer(layer, `${source}.artworkLayers[${index}]`));
+  const artworkLayers = raw.artworkLayers.map((layer, index) => validateStudioLayer(
+    layer,
+    `${source}.artworkLayers[${index}]`,
+    { builtinLayoutCapability },
+  ));
   if (new Set(artworkLayers.map((layer) => layer.id)).size !== artworkLayers.length) {
     throw new Error(`${source}.artworkLayers ids must be unique`);
   }
@@ -1279,8 +1298,62 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
   const newChatLayout = validateNewChatLayout(entry.newChatLayout, `${label}.newChatLayout`);
   const newChatGreetingStyle = validateNewChatGreetingStyle(entry.newChatGreetingStyle ?? null, `${label}.newChatGreetingStyle`);
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
-  const validateArtworkLayer = (layer, layerLabel, { allowKeep = true } = {}) => {
+  const FRAMED_ARTWORK_LAYER_KEYS = [
+    "id", "path", "role", "appearance", "context", "viewport", "visible", "opacity",
+    "mask", "mobile", "frames",
+  ];
+  const LEGACY_ARTWORK_LAYER_KEYS = [
+    "path", "position", "size", "mobile", "opacity", "mask", "role", "appearance",
+    "contextOverrides",
+  ];
+  const FRAMED_ARTWORK_DISCRIMINATORS = ["id", "frames", "context", "viewport", "visible"];
+  const hasFramedArtworkFields = (layer) =>
+    FRAMED_ARTWORK_DISCRIMINATORS.some((key) => Object.hasOwn(layer, key));
+  const validateBuiltinFramedArtworkLayer = (layer, layerLabel) => {
+    assertExactKeys(layer, FRAMED_ARTWORK_LAYER_KEYS, layerLabel);
+    if (!STUDIO_LAYER_ID_PATTERN.test(layer.id)) {
+      throw new Error(`${layerLabel}.id must be layer- followed by 32 lowercase hexadecimal characters`);
+    }
+    if (!ARTWORK_PATH_PATTERN.test(layer.path)) {
+      throw new Error(`${layerLabel}.path is not a supported project artwork path`);
+    }
+    if (typeof layer.visible !== "boolean") {
+      throw new Error(`${layerLabel}.visible must be true or false`);
+    }
+    if (!isPlainObject(layer.frames)) throw new Error(`${layerLabel}.frames must be an object`);
+    assertExactKeys(layer.frames, ["normal", "wide"], `${layerLabel}.frames`);
+    return {
+      id: layer.id,
+      path: layer.path,
+      role: strictEnum(layer.role, STUDIO_LAYER_ROLES, `${layerLabel}.role`),
+      appearance: strictEnum(layer.appearance, STUDIO_LAYER_APPEARANCES, `${layerLabel}.appearance`),
+      context: strictEnum(
+        layer.context,
+        new Set([...STUDIO_LAYER_CONTEXTS, "other"]),
+        `${layerLabel}.context`,
+      ),
+      viewport: strictEnum(layer.viewport, STUDIO_LAYER_VIEWPORTS, `${layerLabel}.viewport`),
+      visible: layer.visible,
+      opacity: strictNumber(layer.opacity, `${layerLabel}.opacity`, 0, 1),
+      mask: strictEnum(layer.mask, STUDIO_LAYER_MASKS, `${layerLabel}.mask`),
+      mobile: strictEnum(layer.mobile, STUDIO_LAYER_MOBILE, `${layerLabel}.mobile`),
+      frames: {
+        normal: validateStudioFrame(layer.frames.normal, `${layerLabel}.frames.normal`),
+        wide: validateStudioFrame(layer.frames.wide, `${layerLabel}.frames.wide`),
+      },
+    };
+  };
+  const validateArtworkLayer = (layer, layerLabel, { allowKeep = true, allowFramed = true } = {}) => {
     if (!isPlainObject(layer)) throw new Error(`${layerLabel} must be an object`);
+    if (hasFramedArtworkFields(layer)) {
+      if (source !== "builtin" || !allowFramed) {
+        throw new Error(`${layerLabel} has an unsupported property shape`);
+      }
+      return validateBuiltinFramedArtworkLayer(layer, layerLabel);
+    }
+    if (Object.keys(layer).some((key) => !LEGACY_ARTWORK_LAYER_KEYS.includes(key))) {
+      throw new Error(`${layerLabel} has an unsupported property shape`);
+    }
     const artworkPath = String(layer.path ?? "");
     const validArtworkPath = source === "builtin"
       ? ARTWORK_PATH_PATTERN.test(artworkPath)
@@ -1361,6 +1434,10 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
       throw new Error(`${label}.artworkLayers must contain 1 to ${STUDIO_MAX_LAYERS} layers`);
     }
     artworkLayers = entry.artworkLayers.map((layer, index) => validateArtworkLayer(layer, `${label}.artworkLayers[${index}]`));
+    const framedIds = artworkLayers.flatMap((layer) => layer.id ? [layer.id] : []);
+    if (new Set(framedIds).size !== framedIds.length) {
+      throw new Error(`${label}.artworkLayers ids must be unique`);
+    }
   } else if (entry.artwork !== null && entry.artwork !== undefined) {
     if (!isPlainObject(entry.artwork)) throw new Error(`${label}.artwork must be an object or null`);
     if (entry.artwork.appearance !== undefined) {
@@ -1369,7 +1446,7 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
     if (source === "user" && (entry.artwork.opacity !== undefined || entry.artwork.mask !== undefined)) {
       throw new Error(`${label}.artwork.opacity and mask are only supported in artworkLayers`);
     }
-    const validated = validateArtworkLayer(entry.artwork, `${label}.artwork`, { allowKeep: false });
+    const validated = validateArtworkLayer(entry.artwork, `${label}.artwork`, { allowKeep: false, allowFramed: false });
     artwork = { path: validated.path, position: validated.position, size: validated.size, mobile: validated.mobile === "keep" ? "reduce" : validated.mobile };
   }
   return {

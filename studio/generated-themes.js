@@ -84,7 +84,11 @@ window.CLAUDE_AURA_THEMES = {
     },
     "studioPreview": null,
     "studioPreviewFrame": null,
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": null,
     "radius": 18,
@@ -591,7 +595,11 @@ window.CLAUDE_AURA_THEMES = {
       "y": 8.98,
       "zoom": 3.651
     },
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": [
       {
@@ -1157,7 +1165,11 @@ window.CLAUDE_AURA_THEMES = {
       "y": 8.61,
       "zoom": 3.274
     },
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": [
       {
@@ -1723,7 +1735,11 @@ window.CLAUDE_AURA_THEMES = {
       "y": 10.48,
       "zoom": 3.651
     },
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": [
       {
@@ -2271,7 +2287,11 @@ window.CLAUDE_AURA_THEMES = {
       "y": 8.25,
       "zoom": 3.374
     },
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": [
       {
@@ -2790,7 +2810,11 @@ window.CLAUDE_AURA_THEMES = {
       "y": 55,
       "zoom": 1
     },
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": [
       {
@@ -3331,7 +3355,11 @@ window.CLAUDE_AURA_THEMES = {
       "y": 9.49,
       "zoom": 3.194
     },
-    "newChatLayout": null,
+    "newChatLayout": {
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
+      "offsetYRatio": 0
+    },
     "artwork": null,
     "artworkLayers": [
       {

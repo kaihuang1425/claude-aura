@@ -1,8 +1,10 @@
 // Extracted from theme-core.mjs. Public API is re-exported by scripts/theme-core.mjs.
 import crypto from "node:crypto";
+import { execFile } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   FROZEN_BUILTIN_THEME_IDS,
   GREETING_ALIGNMENTS,
@@ -14,6 +16,7 @@ import {
   MAX_CHROME_PAYLOAD_BYTES,
   MAX_USER_ARTWORK_TOTAL_BYTES,
   MAX_USER_RASTER_ARTWORK_BYTES,
+  PROJECT_ROOT,
   STUDIO_COLOR_TOKENS,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
@@ -42,6 +45,7 @@ import {
   WINDOWS_TRANSIENT_FILESYSTEM_CODES,
 } from "./constants.mjs";
 import {
+  BUILTIN_STUDIO_LAYOUT_VALIDATION,
   cloneJson,
   contrastRatio,
   detectImageMime,
@@ -80,6 +84,8 @@ import {
   resolveGreetingPhrases,
   validateGreetingPreferences,
 } from "./greeting.mjs";
+
+const execStudioFile = promisify(execFile);
 
 export function studioUuid() {
   return crypto.randomUUID().toLowerCase();
@@ -369,6 +375,88 @@ export async function pathKind(candidate, fileOperations = fs) {
     if (error.code === "ENOENT") return null;
     throw error;
   }
+}
+
+function sameStudioPath(left, right) {
+  const normalize = (value) => {
+    const resolved = path.resolve(value);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return normalize(left) === normalize(right);
+}
+
+function studioSha256(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+// This capability is created only from the host-owned CLI switch. The browser
+// request never carries a path, and every mutating request rechecks the private
+// capability stored in its server context.
+async function authorizeBuiltinAuthoringRootInternal(
+  value,
+  expectedProjectRoot,
+  { fileOperations = fs, regenerateStudioThemes = null, generatedPath = null } = {},
+) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string" || !value.trim() || !path.isAbsolute(value)) {
+    throw new Error("Built-in authoring requires an absolute source-checkout path");
+  }
+  const requestedRoot = path.resolve(value);
+  const expectedRoot = path.resolve(expectedProjectRoot);
+  if (!sameStudioPath(requestedRoot, expectedRoot)) {
+    throw new Error("Built-in authoring is restricted to the canonical source checkout");
+  }
+  const rootStat = await pathKind(requestedRoot, fileOperations);
+  if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new Error("Built-in authoring root must be a real directory");
+  }
+  const realRoot = await (fileOperations.realpath ?? fs.realpath)(requestedRoot);
+  const realExpected = await (fileOperations.realpath ?? fs.realpath)(expectedRoot);
+  if (!sameStudioPath(realRoot, realExpected)) {
+    throw new Error("Built-in authoring root does not resolve to the canonical source checkout");
+  }
+  const gitPath = path.join(requestedRoot, ".git");
+  const registryPath = path.join(requestedRoot, "themes", "registry.json");
+  const [gitStat, registryStat] = await Promise.all([
+    pathKind(gitPath, fileOperations),
+    pathKind(registryPath, fileOperations),
+  ]);
+  if (!gitStat?.isDirectory() || gitStat.isSymbolicLink()) {
+    throw new Error("Built-in authoring requires a real .git directory");
+  }
+  if (!registryStat?.isFile() || registryStat.isSymbolicLink()) {
+    throw new Error("Built-in authoring requires a real themes/registry.json file");
+  }
+  const [realGit, realRegistry] = await Promise.all([
+    (fileOperations.realpath ?? fs.realpath)(gitPath),
+    (fileOperations.realpath ?? fs.realpath)(registryPath),
+  ]);
+  if (!isPathWithin(realRoot, realGit)
+      || !isPathWithin(realRoot, realRegistry)
+      || !sameStudioPath(realRegistry, path.join(realRoot, "themes", "registry.json"))) {
+    throw new Error("Built-in authoring checkout paths are unsafe");
+  }
+  const resolvedGeneratedPath = path.resolve(
+    generatedPath ?? path.join(realRoot, "studio", "generated-themes.js"),
+  );
+  if (!isPathWithin(realRoot, resolvedGeneratedPath)) {
+    throw new Error("Built-in generated metadata path escaped the source checkout");
+  }
+  const authority = Object.freeze({
+    root: realRoot,
+    gitPath: realGit,
+    registryPath: realRegistry,
+    lockPath: path.join(realGit, "claude-aura-builtin-authoring.lock"),
+    transactionPath: path.join(realGit, "claude-aura-builtin-authoring-transaction.json"),
+    generatedPath: resolvedGeneratedPath,
+    regenerateStudioThemes,
+  });
+  await recoverBuiltinAuthoringTransaction(authority);
+  return authority;
+}
+
+export async function authorizeBuiltinAuthoringRoot(value) {
+  return authorizeBuiltinAuthoringRootInternal(value, PROJECT_ROOT);
 }
 
 export async function resolveStudioUserThemesRoot(value, { create = false } = {}) {
@@ -899,6 +987,7 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
     sourceId: internal.sourceId,
     source: internal.source,
     isNew: internal.isNew,
+    editKind: internal.editKind ?? null,
     session: internal.session,
     revision: internal.revision,
     dirty: JSON.stringify(internal.currentDocument) !== JSON.stringify(internal.baselineDocument)
@@ -1098,6 +1187,9 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
     ...internal.appliedRedo.map((document, index) => [`applied redo ${index}`, document])
       .filter(([, document]) => document !== null),
   ];
+  const builtinLayoutCapability = internal.editKind === "builtin-layout"
+    ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+    : null;
   for (const [name, document] of documents) {
     if (document?.schemaVersion === 1) {
       const upgraded = await upgradeStudioSchemaV1Document(document, `editor ${name} theme`, paths);
@@ -1109,6 +1201,7 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
       // Invalid-but-editable drafts are persisted deliberately so Studio can
       // keep the last-valid payload active while the user repairs them.
       enforceLauncherContrast: false,
+      builtinLayoutCapability,
     });
     if (document.id !== internal.id) throw new Error(`Editor ${name} theme id does not match the session`);
     changed = await upgradeStudioLegacyFrames(document, paths) || changed;
@@ -1125,6 +1218,7 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
     }
     validateStudioThemeKitDocument(document, `editor ${name} theme`, {
       enforceLauncherContrast: false,
+      builtinLayoutCapability,
     });
   }
   internal.version = 2;
@@ -1141,6 +1235,22 @@ export async function loadStudioInternal(editorRoot) {
       throw new Error("Editor state is invalid");
     }
     internal.locale = normalizeLocale(internal.locale);
+    internal.editKind = internal.editKind ?? null;
+    if (![null, "builtin-layout"].includes(internal.editKind)) {
+      throw new Error("Editor edit kind is invalid");
+    }
+    if (internal.editKind === "builtin-layout"
+        && (internal.source !== "builtin"
+          || internal.isNew !== false
+          || !FROZEN_BUILTIN_THEME_IDS.has(internal.id)
+          || typeof internal.registrySha256 !== "string"
+          || !/^[a-f0-9]{64}$/.test(internal.registrySha256)
+          || !isPlainObject(internal.sourceSnapshot))) {
+      throw new Error("Built-in layout editor state is invalid");
+    }
+    if (internal.editKind === "builtin-layout") {
+      internal.sourceSnapshot = validateBuiltinSourceSnapshot(internal.sourceSnapshot);
+    }
     internal.undo = Array.isArray(internal.undo) ? internal.undo : [];
     internal.redo = Array.isArray(internal.redo) ? internal.redo : [];
     const migrated = await validateAndUpgradeStudioDocuments(internal, paths);
@@ -1443,6 +1553,426 @@ export async function sourceThemeForStudio(themeId, userThemesDir, locale) {
   return { registry, entry, theme: await readRegisteredTheme(entry, locale) };
 }
 
+function validateBuiltinAuthoringRegistry(raw, label = "themes/registry.json") {
+  if (!isPlainObject(raw) || raw.schemaVersion !== 1) {
+    throw new Error(`${label} must use schemaVersion 1`);
+  }
+  if (!Array.isArray(raw.themes) || raw.themes.length === 0) {
+    throw new Error(`${label} must list themes`);
+  }
+  const themes = raw.themes.map((entry, index) =>
+    validateRegistryEntry(entry, `${label}.themes[${index}]`, { source: "builtin" }));
+  const ids = themes.map((entry) => entry.id);
+  if (new Set(ids).size !== ids.length) throw new Error(`${label} theme IDs must be unique`);
+  if (!ids.includes(raw.defaultTheme)) throw new Error(`${label} defaultTheme is invalid`);
+  if (raw.legacyAliases !== undefined && !isPlainObject(raw.legacyAliases)) {
+    throw new Error(`${label} legacyAliases must be an object`);
+  }
+  for (const [from, to] of Object.entries(raw.legacyAliases ?? {})) {
+    if (!THEME_ID_PATTERN.test(from) || !ids.includes(to)) {
+      throw new Error(`${label} contains an invalid legacy alias: ${from} -> ${to}`);
+    }
+  }
+  return { raw, themes };
+}
+
+async function readBuiltinAuthoringRegistry(authority) {
+  if (!authority?.registryPath) throw new Error("Built-in layout authoring is not authorized");
+  const bytes = await fs.readFile(authority.registryPath);
+  let raw;
+  try {
+    raw = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`themes/registry.json contains invalid JSON: ${error.message}`);
+  }
+  const validated = validateBuiltinAuthoringRegistry(raw);
+  return { ...validated, bytes, sha256: studioSha256(bytes) };
+}
+
+async function readStudioFileDigest(filePath) {
+  try {
+    return studioSha256(await fs.readFile(filePath));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function atomicWriteBuiltinSourceText(authority, target, contents) {
+  if (![authority.registryPath, authority.generatedPath]
+    .some((candidate) => sameStudioPath(candidate, target))) {
+    throw new Error("Built-in source publication target is not authorized");
+  }
+  const gitStat = await fs.lstat(authority.gitPath);
+  const realGit = await fs.realpath(authority.gitPath);
+  if (!gitStat.isDirectory() || gitStat.isSymbolicLink()
+      || !sameStudioPath(realGit, authority.gitPath)) {
+    throw new Error("Built-in source publication requires the authorized real .git directory");
+  }
+  const temporary = path.join(
+    authority.gitPath,
+    `.claude-aura-source-${process.pid}-${studioHex()}.tmp`,
+  );
+  try {
+    await fs.writeFile(temporary, contents, {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx",
+    });
+    await renameStudioPath(temporary, target);
+  } catch (error) {
+    try {
+      await fs.rm(temporary, { force: true });
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Built-in source publication failed and its .git temporary file could not be removed",
+      );
+    }
+    throw error;
+  }
+}
+
+function validateBuiltinLockOwner(owner) {
+  if (!isPlainObject(owner)
+      || Object.keys(owner).sort().join(",") !== "createdAt,pid,schemaVersion,token"
+      || owner.schemaVersion !== 1
+      || !Number.isInteger(owner.pid)
+      || owner.pid <= 0
+      || typeof owner.token !== "string"
+      || !new RegExp(`^${owner.pid}-[a-f0-9]{32}$`).test(owner.token)
+      || typeof owner.createdAt !== "string"
+      || !Number.isFinite(Date.parse(owner.createdAt))) {
+    throw new Error("Built-in authoring is locked by an invalid owner record");
+  }
+  return owner;
+}
+
+async function readBuiltinLockOwner(lockPath) {
+  let owner;
+  try {
+    owner = JSON.parse(await fs.readFile(lockPath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") throw error;
+    throw new Error("Built-in authoring is locked by an unreadable owner record", {
+      cause: error,
+    });
+  }
+  return validateBuiltinLockOwner(owner);
+}
+
+async function acquireBuiltinAuthoringLock(authority, { allowDeadOwnerRecovery = true } = {}) {
+  const token = `${process.pid}-${studioHex()}`;
+  const owner = {
+    schemaVersion: 1,
+    pid: process.pid,
+    token,
+    createdAt: new Date().toISOString(),
+  };
+  const candidatePath = `${authority.lockPath}.candidate-${token}`;
+  let candidateHandle = null;
+  let published = false;
+  try {
+    candidateHandle = await fs.open(candidatePath, "wx", 0o600);
+    await candidateHandle.writeFile(`${JSON.stringify(owner)}\n`, "utf8");
+    await candidateHandle.sync();
+    await candidateHandle.close();
+    candidateHandle = null;
+    try {
+      // A hard link is a true create-if-absent publication point: unlike
+      // rename, it cannot replace another process's live lock.
+      await fs.link(candidatePath, authority.lockPath);
+      published = true;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+  } finally {
+    await candidateHandle?.close().catch(() => {});
+    await fs.rm(candidatePath, { force: true }).catch(() => {});
+  }
+  if (!published) {
+    const stat = await pathKind(authority.lockPath);
+    if (!stat) {
+      return acquireBuiltinAuthoringLock(authority, { allowDeadOwnerRecovery });
+    }
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error("Built-in authoring lock path is unsafe");
+    }
+    let existingOwner;
+    try {
+      existingOwner = await readBuiltinLockOwner(authority.lockPath);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return acquireBuiltinAuthoringLock(authority, { allowDeadOwnerRecovery });
+      }
+      throw error;
+    }
+    let ownerAlive = true;
+    try {
+      process.kill(existingOwner.pid, 0);
+    } catch (probeError) {
+      ownerAlive = !["ESRCH", "EINVAL"].includes(probeError.code);
+    }
+    if (!allowDeadOwnerRecovery || ownerAlive) {
+      throw new Error("Another built-in layout save is already in progress");
+    }
+    const stalePath = `${authority.lockPath}.stale-${studioHex()}`;
+    let quarantined = false;
+    try {
+      await fs.rename(authority.lockPath, stalePath);
+      quarantined = true;
+    } catch (recoveryError) {
+      if (recoveryError.code === "ENOENT") {
+        return acquireBuiltinAuthoringLock(authority, { allowDeadOwnerRecovery });
+      }
+      throw recoveryError;
+    }
+    try {
+      const quarantinedOwner = await readBuiltinLockOwner(stalePath);
+      if (quarantinedOwner.pid !== existingOwner.pid
+          || quarantinedOwner.token !== existingOwner.token) {
+        throw new Error("Built-in authoring lock ownership changed during dead-owner recovery");
+      }
+      await fs.rm(stalePath);
+    } catch (recoveryError) {
+      if (quarantined) {
+        try {
+          await fs.link(stalePath, authority.lockPath);
+        } catch (restoreError) {
+          if (restoreError.code !== "EEXIST") {
+            throw new AggregateError(
+              [recoveryError, restoreError],
+              "Built-in authoring lock recovery could not preserve the changed owner",
+            );
+          }
+        }
+      }
+      throw recoveryError;
+    }
+    return acquireBuiltinAuthoringLock(authority, { allowDeadOwnerRecovery: false });
+  }
+  return {
+    token,
+    async release() {
+      try {
+        const current = await readBuiltinLockOwner(authority.lockPath);
+        if (current.token !== token || current.pid !== process.pid) {
+          throw new Error("Built-in authoring lock ownership changed before release");
+        }
+      } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      await fs.rm(authority.lockPath);
+    },
+  };
+}
+
+async function readBuiltinTransactionMarker(authority) {
+  const stat = await pathKind(authority.transactionPath);
+  if (!stat) return null;
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error("Built-in authoring transaction marker is unsafe");
+  }
+  const realMarker = await fs.realpath(authority.transactionPath);
+  if (!isPathWithin(authority.gitPath, realMarker)) {
+    throw new Error("Built-in authoring transaction marker escaped .git");
+  }
+  const raw = await readJson(realMarker);
+  if (!isPlainObject(raw)
+      || Object.keys(raw).sort().join(",")
+        !== "createdAt,intendedRegistrySha256,registryBeforeSha256,schemaVersion,transactionId"
+      || raw.schemaVersion !== 1
+      || typeof raw.transactionId !== "string"
+      || !/^[a-f0-9]{32}$/.test(raw.transactionId)
+      || typeof raw.createdAt !== "string"
+      || !/^[a-f0-9]{64}$/.test(raw.registryBeforeSha256)
+      || !/^[a-f0-9]{64}$/.test(raw.intendedRegistrySha256)) {
+    throw new Error("Built-in authoring transaction marker is invalid");
+  }
+  return raw;
+}
+
+async function clearBuiltinTransactionMarker(authority, transactionId) {
+  const marker = await readBuiltinTransactionMarker(authority);
+  if (!marker) return;
+  if (marker.transactionId !== transactionId) {
+    throw new Error("Built-in authoring transaction ownership changed");
+  }
+  await fs.rm(authority.transactionPath);
+}
+
+async function regenerateBuiltinStudioThemesForAuthority(authority) {
+  const regenerate = authority.regenerateStudioThemes
+    ?? (sameStudioPath(authority.root, PROJECT_ROOT) ? regenerateBuiltinStudioThemes : null);
+  if (typeof regenerate !== "function") {
+    throw new Error("Built-in Studio metadata recovery is unavailable");
+  }
+  return regenerate(authority);
+}
+
+async function recoverBuiltinAuthoringTransaction(authority) {
+  if (!(await pathKind(authority.transactionPath))) return;
+  const lock = await acquireBuiltinAuthoringLock(authority);
+  try {
+    const marker = await readBuiltinTransactionMarker(authority);
+    if (!marker) return;
+    await readBuiltinAuthoringRegistry(authority);
+    await regenerateBuiltinStudioThemesForAuthority(authority);
+    await clearBuiltinTransactionMarker(authority, marker.transactionId);
+  } finally {
+    await lock.release();
+  }
+}
+
+const BUILTIN_ARTWORK_SOURCE_PATTERN =
+  /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
+
+function validateBuiltinSourceSnapshot(value) {
+  if (!isPlainObject(value)
+      || Object.keys(value).sort().join(",") !== "artwork,themeSha256"
+      || typeof value.themeSha256 !== "string"
+      || !/^[a-f0-9]{64}$/.test(value.themeSha256)
+      || !Array.isArray(value.artwork)) {
+    throw new Error("Built-in source snapshot is invalid");
+  }
+  let previousPath = null;
+  for (const item of value.artwork) {
+    if (!isPlainObject(item)
+        || Object.keys(item).sort().join(",") !== "path,sha256"
+        || typeof item.path !== "string"
+        || !BUILTIN_ARTWORK_SOURCE_PATTERN.test(item.path)
+        || typeof item.sha256 !== "string"
+        || !/^[a-f0-9]{64}$/.test(item.sha256)
+        || (previousPath !== null && item.path <= previousPath)) {
+      throw new Error("Built-in artwork source snapshot is invalid");
+    }
+    previousPath = item.path;
+  }
+  return cloneJson(value);
+}
+
+async function readBuiltinContainedSource(authority, relativePath, allowedRoot, label) {
+  const lexicalRoot = path.resolve(allowedRoot);
+  const candidate = path.resolve(authority.root, relativePath);
+  if (!isPathWithin(lexicalRoot, candidate)) {
+    throw new Error(`${label} escaped its authorized source root`);
+  }
+  const [rootStat, candidateStat] = await Promise.all([
+    fs.lstat(lexicalRoot),
+    fs.lstat(candidate),
+  ]);
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new Error(`${label} source root must be a real directory`);
+  }
+  if (!candidateStat.isFile() || candidateStat.isSymbolicLink()) {
+    throw new Error(`${label} must be a real file`);
+  }
+  const [realRoot, realCandidate] = await Promise.all([
+    fs.realpath(lexicalRoot),
+    fs.realpath(candidate),
+  ]);
+  if (!isPathWithin(authority.root, realRoot)
+      || !isPathWithin(realRoot, realCandidate)) {
+    throw new Error(`${label} escaped its authorized source root`);
+  }
+  return fs.readFile(realCandidate);
+}
+
+async function readBuiltinSourceSnapshot(authority, rawEntry, { includeThemeBytes = false } = {}) {
+  const themeRelativePath = `themes/${rawEntry.id}.json`;
+  const themeBytes = await readBuiltinContainedSource(
+    authority,
+    themeRelativePath,
+    path.join(authority.root, "themes"),
+    "Built-in theme source",
+  );
+  const layers = rawEntry.artworkLayers ?? (rawEntry.artwork ? [rawEntry.artwork] : []);
+  const paths = [...new Set(layers.map((layer) => layer.path))].sort();
+  const artwork = await Promise.all(paths.map(async (artworkPath) => {
+    if (!BUILTIN_ARTWORK_SOURCE_PATTERN.test(artworkPath)) {
+      throw new Error("Built-in artwork path is invalid");
+    }
+    const bytes = await readBuiltinContainedSource(
+      authority,
+      artworkPath,
+      path.join(authority.root, "assets", "theme-art"),
+      `Built-in artwork ${artworkPath}`,
+    );
+    return { path: artworkPath, sha256: studioSha256(bytes) };
+  }));
+  const snapshot = validateBuiltinSourceSnapshot({
+    themeSha256: studioSha256(themeBytes),
+    artwork,
+  });
+  return includeThemeBytes ? { snapshot, themeBytes } : snapshot;
+}
+
+async function sourceThemeForBuiltinAuthoring(themeId, authority, locale) {
+  if (typeof themeId !== "string" || !THEME_ID_PATTERN.test(themeId)
+      || !FROZEN_BUILTIN_THEME_IDS.has(themeId)) {
+    throw new Error("Built-in theme id is invalid");
+  }
+  const registry = await readBuiltinAuthoringRegistry(authority);
+  const index = registry.raw.themes.findIndex((entry) => entry.id === themeId);
+  if (index < 0) throw new Error(`Theme not found: ${themeId}`);
+  const entry = registry.themes[index];
+  const themesRoot = path.join(authority.root, "themes");
+  const { snapshot: sourceSnapshot, themeBytes } = await readBuiltinSourceSnapshot(
+    authority,
+    registry.raw.themes[index],
+    { includeThemeBytes: true },
+  );
+  let rawTheme;
+  try {
+    rawTheme = JSON.parse(themeBytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`Built-in theme source contains invalid JSON: ${error.message}`);
+  }
+  const themePath = path.join(themesRoot, `${entry.id}.json`);
+  const baseTheme = validateTheme(rawTheme, themePath);
+  if (baseTheme.name !== entry.id || baseTheme.variant !== entry.id) {
+    throw new Error(`Built-in theme source does not match its frozen ID: ${entry.id}`);
+  }
+  const normalizedLocale = normalizeLocale(locale);
+  const theme = {
+    ...baseTheme,
+    label: entry.labels[normalizedLocale] ?? entry.labels.en,
+    description: entry.descriptions[normalizedLocale] ?? entry.descriptions.en,
+    labels: cloneJson(entry.labels),
+    descriptions: cloneJson(entry.descriptions),
+    swatches: cloneJson(entry.swatches),
+    preview: cloneJson(entry.preview),
+    studioPreview: entry.studioPreview,
+    studioPreviewFrame: entry.studioPreviewFrame ? cloneJson(entry.studioPreviewFrame) : null,
+    newChatLayout: entry.newChatLayout ? cloneJson(entry.newChatLayout) : null,
+    newChatGreetingStyle: entry.newChatGreetingStyle ? cloneJson(entry.newChatGreetingStyle) : null,
+    artwork: entry.artwork ? cloneJson(entry.artwork) : null,
+    artworkLayers: entry.artworkLayers ? cloneJson(entry.artworkLayers) : null,
+    schemaVersion: 1,
+    backgroundScope: "full-window",
+    sourceRecipe: null,
+    controlOverrides: [],
+    source: "builtin",
+    sourceDirectory: themesRoot,
+    artworkRoot: authority.root,
+    artworkAllowedRoot: path.join(authority.root, "assets", "theme-art"),
+  };
+  return {
+    registry,
+    index,
+    rawEntry: cloneJson(registry.raw.themes[index]),
+    entry,
+    theme,
+    sourceSnapshot,
+  };
+}
+
+export function stableBuiltinStudioLayerId(themeId, index, artworkPath) {
+  const digest = studioSha256(Buffer.from(`${themeId}\0${index}\0${artworkPath}`, "utf8"));
+  return `layer-${digest.slice(0, 32)}`;
+}
+
 async function studioDocumentFromResolvedSource({
   entry,
   theme,
@@ -1450,6 +1980,8 @@ async function studioDocumentFromResolvedSource({
   paths,
   copyLabels,
   reuseActiveFiles = false,
+  stableLayerIds = false,
+  builtinLayoutCapability = null,
 }) {
   const labels = copyLabels ? appendCopyLabel(theme.labels) : cloneJson(theme.labels);
   const document = {
@@ -1481,10 +2013,23 @@ async function studioDocumentFromResolvedSource({
     }
   }
   const sourceLayers = theme.artworkLayers ?? (theme.artwork ? [{ ...theme.artwork, role: "background" }] : []);
+  let realArtworkAllowedRoot = null;
+  if (sourceLayers.length) {
+    const artworkAllowedRoot = path.resolve(theme.artworkAllowedRoot);
+    const allowedStat = await fs.lstat(artworkAllowedRoot);
+    if (!allowedStat.isDirectory() || allowedStat.isSymbolicLink()) {
+      throw new Error("Theme artwork source root must be a real directory");
+    }
+    realArtworkAllowedRoot = await fs.realpath(artworkAllowedRoot);
+  }
   const copiedArtwork = new Map();
-  for (const sourceLayer of sourceLayers) {
+  for (let sourceIndex = 0; sourceIndex < sourceLayers.length; sourceIndex += 1) {
+    const sourceLayer = sourceLayers[sourceIndex];
     const sourcePath = path.resolve(theme.artworkRoot, sourceLayer.path);
     const sourceKey = await fs.realpath(sourcePath);
+    if (!isPathWithin(realArtworkAllowedRoot, sourceKey)) {
+      throw new Error("Theme artwork escaped its authorized source root");
+    }
     let copied = copiedArtwork.get(sourceKey);
     if (!copied) {
       const artworkPath = await materializeSourceArtwork(sourcePath, paths);
@@ -1510,7 +2055,9 @@ async function studioDocumentFromResolvedSource({
       ]),
     );
     document.artworkLayers.push({
-      id: sourceLayer.id ?? `layer-${studioHex()}`,
+      id: stableLayerIds
+        ? (sourceLayer.id ?? stableBuiltinStudioLayerId(entry.id, sourceIndex, sourceLayer.path))
+        : (sourceLayer.id ?? `layer-${studioHex()}`),
       path: copied.artworkPath,
       role: STUDIO_LAYER_ROLES.has(sourceLayer.role) ? sourceLayer.role : "decoration",
       appearance: sourceLayer.appearance ?? "all",
@@ -1530,7 +2077,7 @@ async function studioDocumentFromResolvedSource({
       }),
     });
   }
-  validateStudioThemeKitDocument(document, "editor theme");
+  validateStudioThemeKitDocument(document, "editor theme", { builtinLayoutCapability });
   return document;
 }
 
@@ -1549,7 +2096,11 @@ export async function studioDocumentFromSource({ sourceId, targetId, userThemesD
 export async function compileStudioDocument(
   document,
   context,
-  { appearance = "system", greetingPreferences = context.greetingPreferences ?? null } = {},
+  {
+    appearance = "system",
+    greetingPreferences = context.greetingPreferences ?? null,
+    builtinLayoutCapability = null,
+  } = {},
 ) {
   const paths = studioPaths(context.editorRoot);
   await atomicWriteJson(paths.theme, document);
@@ -1570,6 +2121,7 @@ export async function compileStudioDocument(
     locale: context.locale,
     userThemesDir: context.userThemesDir,
     themeKitDirectory: paths.active,
+    builtinLayoutCapability,
   });
   const bundle = await buildPayloadFromCompiled(compiled, { enforceBudget: false });
   new Function(bundle.payload);
@@ -1619,9 +2171,16 @@ export async function studioFeedback(document, context, bundle) {
   return { valid: errors.length === 0, contrast, budget, errors };
 }
 
-export async function evaluateStudioDocument(document, context, { greetingPreferences = context.greetingPreferences ?? null } = {}) {
+export async function evaluateStudioDocument(
+  document,
+  context,
+  {
+    greetingPreferences = context.greetingPreferences ?? null,
+    builtinLayoutCapability = null,
+  } = {},
+) {
   try {
-    validateStudioThemeKitDocument(document, "editor theme");
+    validateStudioThemeKitDocument(document, "editor theme", { builtinLayoutCapability });
     if (greetingPreferences !== null) {
       const greetingError = studioGreetingPreferenceError(greetingPreferences, document.id);
       if (greetingError) {
@@ -1636,7 +2195,11 @@ export async function evaluateStudioDocument(document, context, { greetingPrefer
         };
       }
     }
-    const bundle = await compileStudioDocument(document, context, { appearance: "system", greetingPreferences });
+    const bundle = await compileStudioDocument(document, context, {
+      appearance: "system",
+      greetingPreferences,
+      builtinLayoutCapability,
+    });
     const feedback = await studioFeedback(document, context, bundle);
     return { bundle, feedback, error: feedback.valid ? null : "contrast-or-budget" };
   } catch (error) {
@@ -1691,6 +2254,9 @@ export async function beginStudioDocument(document, metadata, context) {
     sourceId: metadata.sourceId,
     source: metadata.source,
     isNew: metadata.isNew,
+    editKind: metadata.editKind ?? null,
+    ...(metadata.registrySha256 ? { registrySha256: metadata.registrySha256 } : {}),
+    ...(metadata.sourceSnapshot ? { sourceSnapshot: cloneJson(metadata.sourceSnapshot) } : {}),
     baselineDocument: cloneJson(document),
     currentDocument: cloneJson(document),
     lastValidDocument: cloneJson(document),
@@ -1710,6 +2276,9 @@ export async function beginStudioDocument(document, metadata, context) {
   initializeStudioGreetingTracking(internal, await studioGreetingPreferences(context.configPath));
   const evaluated = await evaluateStudioDocument(document, context, {
     greetingPreferences: internal.greetingCurrent,
+    builtinLayoutCapability: internal.editKind === "builtin-layout"
+      ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+      : null,
   });
   internal.feedback = evaluated.feedback;
   if (!evaluated.feedback.valid) throw new Error(evaluated.error ?? "The source theme is not valid for Studio");
@@ -1744,12 +2313,126 @@ export async function createThemeCopy(context) {
   });
 }
 
+function requireBuiltinAuthoring(context) {
+  if (!context.builtinAuthoring?.root || !context.builtinAuthoring?.registryPath) {
+    throw new Error("Built-in layout authoring is not authorized");
+  }
+  return context.builtinAuthoring;
+}
+
+async function peekStudioEditKind(editorRoot) {
+  const paths = studioPaths(editorRoot);
+  if (!(await assertStudioActivePaths(paths))) return null;
+  try {
+    const raw = await readJson(paths.state);
+    return raw?.editKind ?? null;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function assertBuiltinLayoutDocumentChange(baseline, candidate) {
+  const immutable = (document) => {
+    const value = cloneJson(document);
+    delete value.newChatLayout;
+    delete value.newChatGreetingStyle;
+    value.artworkLayers = value.artworkLayers.map((layer) => {
+      const result = cloneJson(layer);
+      delete result.frames;
+      delete result.legacy;
+      return result;
+    });
+    return value;
+  };
+  if (JSON.stringify(immutable(baseline)) !== JSON.stringify(immutable(candidate))) {
+    throw new Error("Built-in authoring may change layout fields only");
+  }
+  for (let index = 0; index < baseline.artworkLayers.length; index += 1) {
+    const before = baseline.artworkLayers[index];
+    const after = candidate.artworkLayers[index];
+    if (before.legacy === undefined && after.legacy !== undefined) {
+      throw new Error("Built-in artwork cannot return to legacy framing");
+    }
+    if (after.legacy !== undefined) {
+      if (JSON.stringify(after.legacy) !== JSON.stringify(before.legacy)
+          || JSON.stringify(after.frames) !== JSON.stringify(before.frames)) {
+        throw new Error("A legacy built-in layer must be adopted before its frame can change");
+      }
+    }
+  }
+  validateStudioThemeKitDocument(candidate, "built-in layout draft", {
+    enforceLauncherContrast: false,
+    builtinLayoutCapability: BUILTIN_STUDIO_LAYOUT_VALIDATION,
+  });
+}
+
+function assertBuiltinLayoutSession(context, internal) {
+  if (internal?.editKind !== "builtin-layout") return;
+  requireBuiltinAuthoring(context);
+  if (internal.source !== "builtin" || internal.isNew !== false || internal.sourceId !== internal.id) {
+    throw new Error("Built-in layout editor identity is invalid");
+  }
+  if (internal.launcherMarkDigest !== internal.baselineLauncherMarkDigest
+      || internal.lastValidLauncherMarkDigest !== internal.baselineLauncherMarkDigest
+      || JSON.stringify(internal.greetingCurrent) !== JSON.stringify(internal.greetingBaseline)
+      || JSON.stringify(internal.greetingLastValid) !== JSON.stringify(internal.greetingBaseline)) {
+    throw new Error("Built-in layout authoring cannot change host-owned or launcher data");
+  }
+  assertBuiltinLayoutDocumentChange(internal.baselineDocument, internal.currentDocument);
+  assertBuiltinLayoutDocumentChange(internal.baselineDocument, internal.lastValidDocument);
+}
+
+async function guardBuiltinStudioRequest(context, request) {
+  if (await peekStudioEditKind(context.editorRoot) !== "builtin-layout") return;
+  requireBuiltinAuthoring(context);
+  const simpleActions = new Set([
+    "begin-theme-edit", "undo-theme-edit", "redo-theme-edit", "save-theme-edit",
+    "discard-theme-edit", "reset-greeting",
+  ]);
+  if (simpleActions.has(request.type)) return;
+  if (request.type === "set-theme-token") {
+    throw new Error("Built-in prompt placement must be changed as one complete layout");
+  }
+  if (request.type === "set-theme-layer") {
+    if (!["normal", "wide"].includes(request.preset)) {
+      throw new Error("Built-in authoring may change layer frames only");
+    }
+    return;
+  }
+  if (request.type === "apply-theme-patch") {
+    const promptChanges = Array.isArray(request.changes)
+      ? request.changes.filter((change) => change?.kind === "token")
+      : [];
+    const promptTokens = new Set(promptChanges.map((change) => change.token));
+    const incompletePrompt = promptChanges.length > 0
+      && (promptChanges.length !== 3
+        || promptTokens.size !== 3
+        || !["promptWidth", "promptX", "promptY"].every((token) => promptTokens.has(token)));
+    if (!Array.isArray(request.changes) || incompletePrompt || request.changes.some((change) => {
+      if (change?.kind === "token") {
+        return change.mode !== "shared" || !["promptWidth", "promptX", "promptY"].includes(change.token);
+      }
+      if (change?.kind === "layer") return !["normal", "wide"].includes(change.preset);
+      return change?.kind !== "greeting";
+    })) {
+      throw new Error("Built-in authoring patch contains a non-layout change");
+    }
+    return;
+  }
+  throw new Error("This action is unavailable during built-in layout authoring");
+}
+
 export async function beginThemeEdit(context) {
   const locale = normalizeLocale(context.locale);
+  if (await peekStudioEditKind(context.editorRoot) === "builtin-layout") {
+    requireBuiltinAuthoring(context);
+  }
   const existing = await loadStudioInternal(context.editorRoot);
   const greetingTrackingInitialized = existing
     ? await ensureStudioGreetingTracking(existing, context.configPath)
     : false;
+  if (existing) assertBuiltinLayoutSession(context, existing);
   if (existing && existing.id === context.theme && context.reset === true) {
     existing.currentDocument = cloneJson(existing.baselineDocument);
     existing.lastValidDocument = cloneJson(existing.baselineDocument);
@@ -1775,6 +2458,9 @@ export async function beginThemeEdit(context) {
     }
     const evaluated = await evaluateStudioDocument(existing.currentDocument, { ...context, locale }, {
       greetingPreferences: existing.greetingCurrent,
+      builtinLayoutCapability: existing.editKind === "builtin-layout"
+        ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+        : null,
     });
     if (!evaluated.feedback.valid) throw new Error("The editor baseline is no longer valid");
     existing.feedback = evaluated.feedback;
@@ -1797,6 +2483,9 @@ export async function beginThemeEdit(context) {
       bundle = await compileStudioDocument(existing.lastValidDocument, { ...context, locale }, {
         appearance: "system",
         greetingPreferences: existing.greetingLastValid,
+        builtinLayoutCapability: existing.editKind === "builtin-layout"
+          ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+          : null,
       });
     } finally {
       if (existing.launcherMarkDigest !== null) {
@@ -1814,7 +2503,40 @@ export async function beginThemeEdit(context) {
     };
   }
   const source = await sourceThemeForStudio(context.theme, context.userThemesDir, locale);
-  if (source.entry.source !== "user") throw new Error("Built-in themes must be duplicated before editing");
+  if (source.entry.source !== "user") {
+    if (!context.builtinAuthoring) {
+      throw new Error("Built-in themes must be duplicated before editing");
+    }
+    const authority = requireBuiltinAuthoring(context);
+    const builtin = await sourceThemeForBuiltinAuthoring(context.theme, authority, locale);
+    const paths = studioPaths(context.editorRoot);
+    return replaceActiveStudio(paths, async () => {
+      const document = await studioDocumentFromResolvedSource({
+        entry: { ...builtin.entry, source: "builtin" },
+        theme: builtin.theme,
+        targetId: context.theme,
+        paths,
+        copyLabels: false,
+        stableLayerIds: true,
+        builtinLayoutCapability: BUILTIN_STUDIO_LAYOUT_VALIDATION,
+      });
+      // The full built-in recipe is already materialized in this private draft.
+      // Layout authoring must not read a second recipe from a different root.
+      document.sourceRecipe = null;
+      document.controlOverrides = [];
+      validateStudioThemeKitDocument(document, "built-in layout draft", {
+        builtinLayoutCapability: BUILTIN_STUDIO_LAYOUT_VALIDATION,
+      });
+      return beginStudioDocument(document, {
+        sourceId: context.theme,
+        source: "builtin",
+        isNew: false,
+        editKind: "builtin-layout",
+        registrySha256: builtin.registry.sha256,
+        sourceSnapshot: builtin.sourceSnapshot,
+      }, { ...context, locale });
+    });
+  }
   const paths = studioPaths(context.editorRoot);
   return replaceActiveStudio(paths, async () => {
     const created = await studioDocumentFromSource({
@@ -1837,6 +2559,7 @@ export async function mutateStudio(context, action, mutate) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
   await ensureStudioGreetingTracking(internal, context.configPath);
+  assertBuiltinLayoutSession(context, internal);
   const before = cloneJson(internal.currentDocument);
   const beforeGreeting = cloneJson(internal.greetingCurrent);
   const beforeLauncherMarkDigest = internal.launcherMarkDigest;
@@ -1845,6 +2568,13 @@ export async function mutateStudio(context, action, mutate) {
   const candidateGreeting = mutation?.greetingPreferences === undefined
     ? beforeGreeting
     : validateGreetingPreferences(mutation.greetingPreferences, "editor greeting candidate");
+  if (internal.editKind === "builtin-layout") {
+    assertBuiltinLayoutDocumentChange(internal.baselineDocument, candidate);
+    if (JSON.stringify(candidateGreeting) !== JSON.stringify(internal.greetingBaseline)
+        || (mutation?.launcherMarkDigest ?? beforeLauncherMarkDigest) !== internal.baselineLauncherMarkDigest) {
+      throw new Error("Built-in layout authoring cannot change host-owned or launcher data");
+    }
+  }
   internal.undo = [...internal.undo, before].slice(-STUDIO_MAX_HISTORY);
   internal.appliedUndo = [...internal.appliedUndo, cloneJson(internal.lastValidDocument)].slice(-STUDIO_MAX_HISTORY);
   internal.launcherUndo = [...internal.launcherUndo, beforeLauncherMarkDigest].slice(-STUDIO_MAX_HISTORY);
@@ -1873,6 +2603,9 @@ export async function mutateStudio(context, action, mutate) {
   }
   const evaluated = await evaluateStudioDocument(candidate, context, {
     greetingPreferences: candidateGreeting,
+    builtinLayoutCapability: internal.editKind === "builtin-layout"
+      ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+      : null,
   });
   internal.feedback = evaluated.feedback;
   if (evaluated.feedback.valid) {
@@ -2193,6 +2926,7 @@ export async function travelStudioHistory(context, action, direction) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
   await ensureStudioGreetingTracking(internal, context.configPath);
+  assertBuiltinLayoutSession(context, internal);
   const source = direction === "undo" ? internal.undo : internal.redo;
   const appliedSource = direction === "undo" ? internal.appliedUndo : internal.appliedRedo;
   const launcherSource = direction === "undo" ? internal.launcherUndo : internal.launcherRedo;
@@ -2234,6 +2968,16 @@ export async function travelStudioHistory(context, action, direction) {
     internal.lastValidLauncherMarkDigest = historicalAppliedLauncher;
     internal.greetingLastValid = historicalAppliedGreeting;
   }
+  if (internal.editKind === "builtin-layout") {
+    assertBuiltinLayoutDocumentChange(internal.baselineDocument, internal.currentDocument);
+    assertBuiltinLayoutDocumentChange(internal.baselineDocument, internal.lastValidDocument);
+    if (JSON.stringify(internal.greetingCurrent) !== JSON.stringify(internal.greetingBaseline)
+        || JSON.stringify(internal.greetingLastValid) !== JSON.stringify(internal.greetingBaseline)
+        || internal.launcherMarkDigest !== internal.baselineLauncherMarkDigest
+        || internal.lastValidLauncherMarkDigest !== internal.baselineLauncherMarkDigest) {
+      throw new Error("Built-in layout history contains a forbidden change");
+    }
+  }
   internal.revision += 1;
   const paths = studioPaths(context.editorRoot);
   if (studioDocumentUsesLocalLauncher(internal.currentDocument)) {
@@ -2242,6 +2986,9 @@ export async function travelStudioHistory(context, action, direction) {
   }
   const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
     greetingPreferences: internal.greetingCurrent,
+    builtinLayoutCapability: internal.editKind === "builtin-layout"
+      ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+      : null,
   });
   internal.feedback = evaluated.feedback;
   let fallbackBundle = null;
@@ -2263,6 +3010,9 @@ export async function travelStudioHistory(context, action, direction) {
       fallbackBundle = await compileStudioDocument(internal.lastValidDocument, context, {
         appearance: "system",
         greetingPreferences: internal.greetingLastValid,
+        builtinLayoutCapability: internal.editKind === "builtin-layout"
+          ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+          : null,
       });
     } finally {
       if (studioDocumentUsesLocalLauncher(internal.currentDocument)) {
@@ -2360,7 +3110,10 @@ export async function stageStudioTheme(document, activeDirectory, stageDirectory
 }
 
 export async function validateStudioStage(document, stageDirectory, context) {
-  await readThemeKit(stageDirectory, { expectedId: document.id });
+  await readThemeKit(stageDirectory, {
+    expectedId: document.id,
+    builtinLayoutCapability: context.builtinLayoutCapability ?? null,
+  });
   for (const appearance of ["light", "dark"]) {
     const persisted = await readConfig(context.configPath);
     const compiled = await compileTheme({
@@ -2377,6 +3130,7 @@ export async function validateStudioStage(document, stageDirectory, context) {
       locale: context.locale,
       userThemesDir: context.userThemesDir,
       themeKitDirectory: stageDirectory,
+      builtinLayoutCapability: context.builtinLayoutCapability ?? null,
     });
     const bundle = await buildPayloadFromCompiled(compiled);
     new Function(bundle.payload);
@@ -2399,10 +3153,464 @@ export function reconcileStudioGreetingShuffle(draft, persistedValue) {
   return current;
 }
 
+function registryThemeObjectSpan(text, themeIndex) {
+  const property = text.indexOf("\"themes\"");
+  if (property < 0) throw new Error("themes/registry.json is missing themes");
+  const arrayStart = text.indexOf("[", property + 8);
+  if (arrayStart < 0) throw new Error("themes/registry.json themes must be an array");
+  let index = -1;
+  let cursor = arrayStart + 1;
+  while (cursor < text.length) {
+    while (/[\s,]/u.test(text[cursor] ?? "")) cursor += 1;
+    if (text[cursor] === "]") break;
+    if (text[cursor] !== "{") throw new Error("themes/registry.json contains a non-object theme");
+    index += 1;
+    const start = cursor;
+    let depth = 0;
+    let quoted = false;
+    let escaped = false;
+    for (; cursor < text.length; cursor += 1) {
+      const character = text[cursor];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === "\"") quoted = false;
+        continue;
+      }
+      if (character === "\"") quoted = true;
+      else if (character === "{") depth += 1;
+      else if (character === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          const end = cursor + 1;
+          if (index === themeIndex) return { start, end };
+          cursor = end;
+          break;
+        }
+      }
+    }
+  }
+  throw new Error("Built-in theme registry entry could not be located");
+}
+
+function replaceRegistryThemeEntry(text, themeIndex, entry) {
+  const { start, end } = registryThemeObjectSpan(text, themeIndex);
+  const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+  const indent = text.slice(lineStart, start);
+  const newline = text.includes("\r\n") ? "\r\n" : "\n";
+  const replacement = JSON.stringify(entry, null, 2)
+    .split("\n")
+    .map((line, index) => (index === 0 ? line : `${indent}${line}`))
+    .join(newline);
+  return `${text.slice(0, start)}${replacement}${text.slice(end)}`;
+}
+
+function builtinRegistryLayerFromDraft(
+  themeId,
+  index,
+  original,
+  draft,
+  { singularArtwork = false } = {},
+) {
+  const expectedId = original.id ?? stableBuiltinStudioLayerId(themeId, index, original.path);
+  if (draft.id !== expectedId) throw new Error("Built-in artwork layer identity is invalid");
+  const immutable = singularArtwork
+    ? {
+      role: "background",
+      appearance: "all",
+      context: "all",
+      viewport: "all",
+      visible: true,
+      opacity: 1,
+      mask: "soft-right",
+      mobile: original.mobile === "hide" ? "hide" : "reduce",
+    }
+    : {
+      role: STUDIO_LAYER_ROLES.has(original.role) ? original.role : "decoration",
+      appearance: original.appearance ?? "all",
+      context: original.context ?? studioContextFromLegacy(original.contextOverrides),
+      viewport: original.viewport ?? "all",
+      visible: original.visible ?? true,
+      opacity: original.opacity ?? 1,
+      mask: original.mask ?? "soft-right",
+      mobile: original.mobile ?? "reduce",
+    };
+  if (Object.entries(immutable).some(([key, value]) => draft[key] !== value)) {
+    throw new Error("Built-in artwork immutable attributes changed");
+  }
+  return {
+    id: expectedId,
+    path: original.path,
+    ...immutable,
+    frames: cloneJson(draft.frames),
+  };
+}
+
+function builtinRegistryEntryFromDraft(rawEntry, draft) {
+  const next = cloneJson(rawEntry);
+  next.newChatLayout = draft.newChatLayout === null ? null : cloneJson(draft.newChatLayout);
+  next.newChatGreetingStyle = draft.newChatGreetingStyle === null
+    ? null
+    : cloneJson(draft.newChatGreetingStyle);
+  const originalLayers = rawEntry.artworkLayers
+    ?? (rawEntry.artwork ? [rawEntry.artwork] : []);
+  const singularArtwork = !rawEntry.artworkLayers && Boolean(rawEntry.artwork);
+  if (originalLayers.length !== draft.artworkLayers.length) {
+    throw new Error("Built-in artwork layer count changed");
+  }
+  if (originalLayers.length) {
+    const serialized = originalLayers.map((original, index) => {
+      const layer = draft.artworkLayers[index];
+      return layer.legacy === undefined
+        ? builtinRegistryLayerFromDraft(draft.id, index, original, layer, {
+          singularArtwork,
+        })
+        : cloneJson(original);
+    });
+    if (rawEntry.artworkLayers) next.artworkLayers = serialized;
+    else if (serialized.some((layer) => Object.hasOwn(layer, "frames"))) {
+      next.artwork = null;
+      next.artworkLayers = serialized;
+    }
+  }
+  return next;
+}
+
+async function validateInstalledBuiltinPayloads(context, internal) {
+  const config = await readConfig(context.configPath);
+  for (const appearance of ["light", "dark"]) {
+    const compiled = await compileTheme({
+      configPath: context.configPath,
+      config: {
+        ...config,
+        enabled: true,
+        theme: internal.id,
+        appearance,
+        greetingPreferences: internal.greetingCurrent,
+      },
+      locale: context.locale,
+      userThemesDir: context.userThemesDir,
+    });
+    const bundle = await buildPayloadFromCompiled(compiled);
+    new Function(bundle.payload);
+  }
+}
+
+async function regenerateBuiltinStudioThemes(authority) {
+  const scriptPath = path.join(authority.root, "scripts", "build-studio-themes.mjs");
+  const outputPath = path.join(authority.root, "studio", "generated-themes.js");
+  for (const [candidate, label] of [
+    [scriptPath, "Studio metadata builder"],
+    [outputPath, "Studio generated metadata"],
+  ]) {
+    const stat = await pathKind(candidate);
+    if (!stat?.isFile() || stat.isSymbolicLink()) {
+      throw new Error(`${label} must be a real source-checkout file`);
+    }
+    const realCandidate = await fs.realpath(candidate);
+    if (!isPathWithin(authority.root, realCandidate)) {
+      throw new Error(`${label} escaped the source checkout`);
+    }
+  }
+  await execStudioFile(process.execPath, [scriptPath], {
+    cwd: authority.root,
+    windowsHide: true,
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+  });
+  const generated = await fs.readFile(outputPath, "utf8");
+  if (!/^\/\/ Generated by scripts\/build-studio-themes\.mjs\.\r?\nwindow\.CLAUDE_AURA_THEMES = /u.test(generated)) {
+    throw new Error("Studio generated metadata was not regenerated correctly");
+  }
+  return { outputPath, sha256: studioSha256(Buffer.from(generated, "utf8")) };
+}
+
+async function restoreStudioFileIfOwned(
+  authority,
+  target,
+  previousContents,
+  ownedSha256,
+  label,
+) {
+  const currentSha256 = await readStudioFileDigest(target);
+  if (currentSha256 !== ownedSha256) {
+    const error = new Error(`rollback ${label}: a later external edit was preserved`);
+    error.code = "STUDIO_CONCURRENT_CHANGE";
+    throw error;
+  }
+  if (previousContents === null) await fs.rm(target, { force: true });
+  else await atomicWriteBuiltinSourceText(authority, target, previousContents);
+}
+
+async function saveBuiltinLayoutEdit(context, internal) {
+  const authority = requireBuiltinAuthoring(context);
+  assertBuiltinLayoutSession(context, internal);
+  const paths = studioPaths(context.editorRoot);
+  const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
+    greetingPreferences: internal.greetingCurrent,
+    builtinLayoutCapability: BUILTIN_STUDIO_LAYOUT_VALIDATION,
+  });
+  if (!evaluated.feedback.valid) {
+    internal.feedback = evaluated.feedback;
+    await persistStudioInternal(paths, internal);
+    return {
+      state: withStudioResult(
+        await canonicalStudioState(internal, context.editorRoot, context.configPath),
+        "save-theme-edit",
+        false,
+        evaluated.error ?? "contrast-or-budget",
+      ),
+      payload: null,
+      themesChanged: false,
+      configChanged: false,
+      apply: "none",
+    };
+  }
+  // Validate both production appearances from the exact private draft before
+  // publishing any source file.
+  await validateStudioStage(internal.currentDocument, paths.active, {
+    ...context,
+    greetingPreferences: internal.greetingCurrent,
+    builtinLayoutCapability: BUILTIN_STUDIO_LAYOUT_VALIDATION,
+  });
+  const lock = await acquireBuiltinAuthoringLock(authority);
+  const generatedPath = authority.generatedPath;
+  let transaction = null;
+  let previousRegistryText = null;
+  let previousStateText = null;
+  let previousThemeText = null;
+  let previousGeneratedText = null;
+  let nextRegistrySha256 = null;
+  let generatedPublishedSha256 = null;
+  let publicationStarted = false;
+  try {
+    const registry = await readBuiltinAuthoringRegistry(authority);
+    if (registry.sha256 !== internal.registrySha256) {
+      throw new Error("Built-in theme registry changed since this edit began; the draft was preserved");
+    }
+    const themeIndex = registry.raw.themes.findIndex((entry) => entry.id === internal.id);
+    if (themeIndex < 0 || !FROZEN_BUILTIN_THEME_IDS.has(internal.id)) {
+      throw new Error("Built-in theme is no longer registered");
+    }
+    const sourceSnapshot = await readBuiltinSourceSnapshot(
+      authority,
+      registry.raw.themes[themeIndex],
+    );
+    if (JSON.stringify(sourceSnapshot) !== JSON.stringify(internal.sourceSnapshot)) {
+      throw new Error("Built-in theme source or artwork changed since this edit began; the draft was preserved");
+    }
+    const nextEntry = builtinRegistryEntryFromDraft(
+      registry.raw.themes[themeIndex],
+      internal.currentDocument,
+    );
+    const nextRaw = cloneJson(registry.raw);
+    nextRaw.themes[themeIndex] = cloneJson(nextEntry);
+    validateBuiltinAuthoringRegistry(nextRaw);
+    previousRegistryText = registry.bytes.toString("utf8");
+    const nextRegistryText = replaceRegistryThemeEntry(previousRegistryText, themeIndex, nextEntry);
+    const parsedNext = JSON.parse(nextRegistryText);
+    validateBuiltinAuthoringRegistry(parsedNext);
+    if (JSON.stringify(parsedNext) !== JSON.stringify(nextRaw)) {
+      throw new Error("Built-in registry patch changed data outside the selected theme");
+    }
+    nextRegistrySha256 = studioSha256(Buffer.from(nextRegistryText, "utf8"));
+    [previousStateText, previousThemeText, previousGeneratedText] = await Promise.all([
+      fs.readFile(paths.state, "utf8"),
+      fs.readFile(paths.theme, "utf8"),
+      generatedPath
+        ? fs.readFile(generatedPath, "utf8").then((value) => value, (error) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        })
+        : null,
+    ]);
+    transaction = {
+      schemaVersion: 1,
+      transactionId: studioHex(),
+      registryBeforeSha256: registry.sha256,
+      intendedRegistrySha256: nextRegistrySha256,
+      createdAt: new Date().toISOString(),
+    };
+    if (await pathKind(authority.transactionPath)) {
+      throw new Error("A built-in authoring recovery transaction is still pending");
+    }
+    await atomicWriteText(
+      authority.transactionPath,
+      `${JSON.stringify(transaction, null, 2)}\n`,
+    );
+    await callStudioFault(context, "before-builtin-registry");
+    const prePublicationRegistry = await readBuiltinAuthoringRegistry(authority);
+    if (prePublicationRegistry.sha256 !== registry.sha256) {
+      throw new Error("Built-in theme registry changed before publication; the draft was preserved");
+    }
+    const prePublicationSource = await readBuiltinSourceSnapshot(
+      authority,
+      prePublicationRegistry.raw.themes[themeIndex],
+    );
+    if (JSON.stringify(prePublicationSource) !== JSON.stringify(internal.sourceSnapshot)) {
+      throw new Error("Built-in theme source or artwork changed before publication; the draft was preserved");
+    }
+    await atomicWriteBuiltinSourceText(authority, authority.registryPath, nextRegistryText);
+    publicationStarted = true;
+    await callStudioFault(context, "after-builtin-registry");
+    const published = await readBuiltinAuthoringRegistry(authority);
+    if (JSON.stringify(published.raw) !== JSON.stringify(nextRaw)) {
+      throw new Error("Published built-in registry did not match the validated transaction");
+    }
+    // The production checkout can now be compiled through the real registry.
+    // Tests using an injected checkout already compiled the identical Studio
+    // document above and intentionally do not redirect global runtime paths.
+    if (sameStudioPath(authority.root, PROJECT_ROOT)) {
+      await validateInstalledBuiltinPayloads(context, internal);
+    }
+    const generatedResult = await regenerateBuiltinStudioThemesForAuthority(authority);
+    if (!generatedResult?.outputPath
+        || !sameStudioPath(generatedResult.outputPath, generatedPath)
+        || typeof generatedResult.sha256 !== "string"
+        || !/^[a-f0-9]{64}$/.test(generatedResult.sha256)) {
+      throw new Error("Built-in Studio metadata regeneration did not report the expected output");
+    }
+    generatedPublishedSha256 = generatedResult.sha256;
+    await callStudioFault(context, "after-builtin-studio-metadata");
+    const savedInternal = cloneJson(internal);
+    savedInternal.source = "builtin";
+    savedInternal.sourceId = savedInternal.id;
+    savedInternal.isNew = false;
+    savedInternal.editKind = "builtin-layout";
+    savedInternal.baselineDocument = cloneJson(savedInternal.currentDocument);
+    savedInternal.lastValidDocument = cloneJson(savedInternal.currentDocument);
+    savedInternal.baselineLauncherMarkDigest = savedInternal.launcherMarkDigest;
+    savedInternal.lastValidLauncherMarkDigest = savedInternal.launcherMarkDigest;
+    savedInternal.greetingBaseline = cloneJson(savedInternal.greetingCurrent);
+    savedInternal.greetingLastValid = cloneJson(savedInternal.greetingCurrent);
+    for (const property of [
+      "undo", "redo", "appliedUndo", "appliedRedo", "launcherUndo", "launcherRedo",
+      "appliedLauncherUndo", "appliedLauncherRedo", "greetingUndo", "greetingRedo",
+      "greetingAppliedUndo", "greetingAppliedRedo",
+    ]) savedInternal[property] = [];
+    savedInternal.feedback = evaluated.feedback;
+    savedInternal.revision += 1;
+    const [finalRegistry, finalSourceSnapshot, finalGeneratedSha256] = await Promise.all([
+      readBuiltinAuthoringRegistry(authority),
+      readBuiltinSourceSnapshot(authority, nextRaw.themes[themeIndex]),
+      readStudioFileDigest(generatedPath),
+    ]);
+    if (finalRegistry.sha256 !== nextRegistrySha256
+        || JSON.stringify(finalRegistry.raw) !== JSON.stringify(nextRaw)) {
+      throw new Error("Built-in theme registry changed after publication");
+    }
+    if (JSON.stringify(finalSourceSnapshot) !== JSON.stringify(internal.sourceSnapshot)) {
+      throw new Error("Built-in theme source or artwork changed during publication");
+    }
+    if (finalGeneratedSha256 !== generatedPublishedSha256) {
+      throw new Error("Built-in Studio generated metadata changed after publication");
+    }
+    savedInternal.registrySha256 = finalRegistry.sha256;
+    savedInternal.sourceSnapshot = finalSourceSnapshot;
+    await persistStudioInternal(paths, savedInternal, { collectLauncherMarks: false });
+    await callStudioFault(context, "after-builtin-editor-state");
+    await collectStudioLauncherMarksAfterCommit(paths, savedInternal);
+    await clearBuiltinTransactionMarker(authority, transaction.transactionId);
+    return {
+      state: withStudioResult(
+        await canonicalStudioState(savedInternal, context.editorRoot, context.configPath),
+        "save-theme-edit",
+        true,
+        null,
+      ),
+      payload: evaluated.bundle.payload,
+      themesChanged: true,
+      configChanged: false,
+      apply: "saved",
+    };
+  } catch (error) {
+    const recoveryErrors = [];
+    if (transaction && !publicationStarted) {
+      const currentRegistrySha256 = await readStudioFileDigest(authority.registryPath);
+      if (currentRegistrySha256 !== transaction.registryBeforeSha256) {
+        const concurrentError = new Error(
+          "rollback registry: a concurrent pre-publication edit was preserved",
+        );
+        concurrentError.code = "STUDIO_CONCURRENT_CHANGE";
+        recoveryErrors.push(concurrentError);
+      }
+    }
+    if (publicationStarted) {
+      let registryRestored = false;
+      try {
+        await restoreStudioFileIfOwned(
+          authority,
+          authority.registryPath,
+          previousRegistryText,
+          nextRegistrySha256,
+          "registry",
+        );
+        registryRestored = true;
+      } catch (recoveryError) {
+        recoveryErrors.push(recoveryError);
+      }
+      if (registryRestored && generatedPath && generatedPublishedSha256) {
+        try {
+          await restoreStudioFileIfOwned(
+            authority,
+            generatedPath,
+            previousGeneratedText,
+            generatedPublishedSha256,
+            "Studio generated metadata",
+          );
+        } catch (recoveryError) {
+          recoveryErrors.push(recoveryError);
+        }
+      }
+      for (const [label, target, contents] of [
+        ["editor state", paths.state, previousStateText],
+        ["editor theme", paths.theme, previousThemeText],
+      ]) {
+        try {
+          await atomicWriteText(target, contents);
+        } catch (recoveryError) {
+          recoveryErrors.push(new Error(`rollback ${label}: ${recoveryError.message}`, {
+            cause: recoveryError,
+          }));
+        }
+      }
+    }
+    if (transaction && recoveryErrors.length === 0) {
+      try {
+        await clearBuiltinTransactionMarker(authority, transaction.transactionId);
+      } catch (recoveryError) {
+        recoveryErrors.push(recoveryError);
+      }
+    }
+    if (recoveryErrors.length) {
+      const aggregate = new AggregateError(
+        [error, ...recoveryErrors],
+        "Built-in layout save failed and rollback was incomplete",
+      );
+      aggregate.code = "STUDIO_ROLLBACK_INCOMPLETE";
+      aggregate.cause = error;
+      aggregate.recoveryArtifacts = [
+        authority.registryPath,
+        authority.transactionPath,
+        ...(generatedPath ? [generatedPath] : []),
+        paths.state,
+        paths.theme,
+      ];
+      throw aggregate;
+    }
+    throw error;
+  } finally {
+    await lock.release();
+  }
+}
+
 export async function saveThemeEdit(context) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
   await ensureStudioGreetingTracking(internal, context.configPath);
+  if (internal.editKind === "builtin-layout") {
+    return saveBuiltinLayoutEdit(context, internal);
+  }
   const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
     greetingPreferences: internal.greetingCurrent,
   });
@@ -2633,6 +3841,7 @@ export async function clearStudioActive(editorRoot) {
 export async function discardThemeEdit(context) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
+  assertBuiltinLayoutSession(context, internal);
   const persisted = await buildPayload({
     configPath: context.configPath,
     locale: context.locale,
@@ -2761,6 +3970,7 @@ export async function setGreetingPhrases(context) {
 export async function resetGreeting(context) {
   return mutateStudio(context, "reset-greeting", (document, internal) => {
     document.newChatGreetingStyle = null;
+    if (internal.editKind === "builtin-layout") return;
     return {
       greetingPreferences: {
         ...cloneJson(internal.greetingCurrent),
@@ -2776,15 +3986,34 @@ export async function readStudioState({ editorRoot, configPath = null } = {}) {
   return canonicalStudioState(internal, editorRoot, configPath);
 }
 
-export async function hydrateStudioDraft({
+async function hydrateStudioDraftInternal({
   configPath,
   userThemesDir,
   editorRoot,
   locale = "en",
+  builtinAuthoringRoot = null,
+} = {}, {
+  expectedProjectRoot = PROJECT_ROOT,
+  regenerateStudioThemes = null,
+  generatedPath = null,
 } = {}) {
   if (typeof configPath !== "string" || !configPath.trim()) throw new Error("configPath must be a non-empty path");
   if (typeof userThemesDir !== "string" || !userThemesDir.trim()) throw new Error("userThemesDir must be a non-empty path");
   const paths = studioPaths(editorRoot);
+  const builtinAuthoring = await authorizeBuiltinAuthoringRootInternal(
+    builtinAuthoringRoot,
+    expectedProjectRoot,
+    { regenerateStudioThemes, generatedPath },
+  );
+  if (await peekStudioEditKind(paths.root) === "builtin-layout" && builtinAuthoring === null) {
+    return {
+      state: { active: false },
+      payload: null,
+      themesChanged: false,
+      configChanged: false,
+      apply: "none",
+    };
+  }
   const internal = await loadStudioInternal(paths.root);
   if (!internal) {
     return {
@@ -2800,8 +4029,10 @@ export async function hydrateStudioDraft({
     userThemesDir: path.resolve(userThemesDir),
     editorRoot: paths.root,
     locale: normalizeLocale(locale),
+    builtinAuthoring,
   };
   await ensureStudioGreetingTracking(internal, context.configPath);
+  assertBuiltinLayoutSession(context, internal);
   let bundle;
   try {
     if (internal.lastValidLauncherMarkDigest !== null) {
@@ -2810,6 +4041,9 @@ export async function hydrateStudioDraft({
     bundle = await compileStudioDocument(internal.lastValidDocument, context, {
       appearance: "system",
       greetingPreferences: internal.greetingLastValid,
+      builtinLayoutCapability: internal.editKind === "builtin-layout"
+        ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+        : null,
     });
   } finally {
     if (internal.launcherMarkDigest !== null) {
@@ -2826,6 +4060,10 @@ export async function hydrateStudioDraft({
   };
 }
 
+export async function hydrateStudioDraft(options = {}) {
+  return hydrateStudioDraftInternal(options);
+}
+
 export function assertStudioRequest(request, keys) {
   const expected = ["type", ...keys].sort();
   const actual = isPlainObject(request) ? Object.keys(request).sort() : [];
@@ -2834,32 +4072,44 @@ export function assertStudioRequest(request, keys) {
   }
 }
 
-export async function executeStudioRequest({
+async function executeStudioRequestInternal({
   request,
   configPath,
   userThemesDir,
   editorRoot,
   locale = "en",
   assetPath = null,
+  builtinAuthoringRoot = null,
   faultInjector = null,
   recoveryFaultInjector = null,
   recoveryFileOperations = null,
   recoveryWait = null,
+} = {}, {
+  expectedProjectRoot = PROJECT_ROOT,
+  regenerateStudioThemes = null,
+  generatedPath = null,
 } = {}) {
   if (!isPlainObject(request) || typeof request.type !== "string") throw new Error("Studio request must be an object with a type");
   if (typeof configPath !== "string" || !configPath.trim()) throw new Error("configPath must be a non-empty path");
   if (typeof userThemesDir !== "string" || !userThemesDir.trim()) throw new Error("userThemesDir must be a non-empty path");
   studioPaths(editorRoot);
+  const builtinAuthoring = await authorizeBuiltinAuthoringRootInternal(
+    builtinAuthoringRoot,
+    expectedProjectRoot,
+    { regenerateStudioThemes, generatedPath },
+  );
   const context = {
     configPath: path.resolve(configPath),
     userThemesDir: path.resolve(userThemesDir),
     editorRoot: path.resolve(editorRoot),
     locale: normalizeLocale(locale),
+    builtinAuthoring,
     faultInjector,
     recoveryFaultInjector,
     recoveryFileOperations,
     recoveryWait,
   };
+  await guardBuiltinStudioRequest(context, request);
   const assetRequestTypes = new Set(["pick-theme-layer-image", "pick-theme-launcher-mark"]);
   if (assetPath !== null && !assetRequestTypes.has(request.type)) {
     throw new Error("An asset is allowed only for an editor image picker action");
@@ -2927,4 +4177,34 @@ export async function executeStudioRequest({
     result.state = withStudioResult(result.state, request.type, true, null);
   }
   return result;
+}
+
+export async function executeStudioRequest(options = {}) {
+  return executeStudioRequestInternal(options);
+}
+
+// Tests need an isolated source checkout without weakening the public
+// execute/hydrate authorization contract. This direct-module helper is not
+// re-exported by scripts/theme-core.mjs.
+export function createBuiltinAuthoringTestHarness(
+  expectedProjectRoot,
+  {
+    regenerateStudioThemes = async () => null,
+    generatedPath = null,
+  } = {},
+) {
+  if (typeof expectedProjectRoot !== "string"
+      || !expectedProjectRoot.trim()
+      || !path.isAbsolute(expectedProjectRoot)) {
+    throw new Error("Built-in authoring test root must be an absolute path");
+  }
+  const options = {
+    expectedProjectRoot: path.resolve(expectedProjectRoot),
+    regenerateStudioThemes,
+    generatedPath,
+  };
+  return Object.freeze({
+    execute: (requestOptions) => executeStudioRequestInternal(requestOptions, options),
+    hydrate: (hydrateOptions) => hydrateStudioDraftInternal(hydrateOptions, options),
+  });
 }

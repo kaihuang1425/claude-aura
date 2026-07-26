@@ -39,6 +39,11 @@ Live native-chrome baseline (WO-18; fixed recipes, not user-schema fields):
   native presentation. The inner editor is transparent; the measured inner
   composer shell owns material and `:focus-within`, while only the outer
   new-chat group owns width/translation.
+- New-chat prompt placement is centered at width ratio `0.64`, X `0`, Y `0`
+  for Default, Japanese Film Editorial, Korean Prestige, Cartoon Studio, Anime
+  Twilight, Study Library, and Japanese Idol. Korean Idol keeps its wider
+  composition at width `0.76`, X `-0.07`, Y `0`. A measurement-only native
+  prompt marker never receives authored width or translation CSS.
 - Primary sidebar action: `accent-primary` base with `text-on-accent`; optional
   `accent-secondary` sheen at the theme-specific alpha below. Hover adds
   `hover-surface / 0.10`; press adds `text-primary / 0.08` inset. Use the
@@ -108,30 +113,42 @@ those host-owned interaction dimensions or semantics.
 
 Host loading cover (WO-18 fixed permanent recipes; not user-schema fields):
 
-- Fill the entire Aura content area with a 32° gradient from the effective
+- Fill the entire Aura content area with a 28° gradient from the effective
   `studioStyle.canvas` to `studioStyle.raised`. Use `studioStyle.text` for the
   localized status, `studioStyle.accent` for the 320×6 progress indicator, and
   the validated accent/text-on-accent/border combination for Retry.
-- Center the shipped 96×96 launcher mark at 76×76 above the status. Keep it
-  decorative, pointer-inert, and absent in high contrast. The progress segment
-  is 28% of its track and becomes a centered stationary segment when Windows
-  animation is disabled.
-- Draw only the row's fixed quiet cue: the primary line is
-  `studioStyle.accent / 0.13`; the secondary line is the listed colour `/ 0.16`;
-  secondary fills use the listed colour `/ 0.15`. These host-painted cues
-  contain no text, remote resource, page reconstruction, or theme-supplied
-  drawing instruction.
+- Validate the shipped 96×96 launcher mark, trim only its transparent loading
+  margin in memory, and optically fit it within a centered 88×88 loading canvas
+  above the status. Keep it decorative and pointer-inert, but place it directly
+  inside the row's painted theme portal instead of a shared badge. Light
+  portals use the validated raised surface; Dark portals blend that surface 22%
+  toward validated text so every mark remains legible without modifying the
+  shipped asset. Japanese Film Editorial adds a rectangular loading-only mark
+  inset blended 58% toward text because its black ink needs stronger Dark-mode
+  contrast. Omit the mark and portal in high contrast.
+- Make the portal a confident focal field, not edge decoration: the main field
+  uses the derived surface at 0.89, its offset echo at 0.28, primary outlines
+  use `studioStyle.accent / 0.42`, and secondary outlines use the listed colour
+  `/ 0.36`. Accent fills stay at 0.18/0.21. Geometry frames the localized status
+  and 320×6 progress row without drawing through either. The track and its 28%
+  segment use rounded ends; the segment becomes centered and stationary when
+  Windows animation is disabled. Portal geometry and spacing follow the
+  effective DPI scale and the controls' actual scaled dimensions.
+- Hide the separate bottom-right launcher while this host-owned cover is
+  visible, leaving Retry as its only interactive control. These painted
+  presentations contain no text, remote resource, page reconstruction, or
+  theme-supplied drawing instruction.
 
 | Theme | Secondary | Fixed loading cue |
 | --- | --- | --- |
-| default | `#4BC7EE` | centred crossing orbital ellipses |
-| japanese-film-editorial | `#B64B32` | left editorial rule, baseline, and registration dot |
-| korean-prestige | `#5A91E6` | centred tailored diamond facet |
-| cartoon-studio | `#EA6047` | offset double ink frame and corner dot |
-| anime-twilight | `#F0B875` | paired dusk arcs and low horizon rule |
-| study-library | `#AA884C` | folio margin plus four ruled baselines |
-| japanese-idol | `#C7B3E6` | one asymmetric ribbon curve and sparkle dot |
-| korean-idol | `#79D7E4` | three offset capsule outlines |
+| default | `#4BC7EE` | luminous orbital aperture, crossing rings, and one satellite |
+| japanese-film-editorial | `#B64B32` | offset editorial sheet, vermilion rail, baseline, and registration dot |
+| korean-prestige | `#5A91E6` | filled diamond portal with split tailored facets |
+| cartoon-studio | `#EA6047` | inked skew panel, offset frame, underline, and studio dot |
+| anime-twilight | `#F0B875` | eclipse disc, paired dusk arcs, low horizon, and one star |
+| study-library | `#AA884C` | open folio, segmented centre fold, margin, and ruled foot |
+| japanese-idol | `#C7B3E6` | filled asymmetric ribbon field, upper sash, and isolated sparkle |
+| korean-idol | `#79D7E4` | compact layered capsule portal behind the mark with two orbiting dots |
 
 Original look, unknown themes, and user themes without `sourceRecipe` use the
 Default row. Untouched user-theme copies inherit their frozen source row while
@@ -284,7 +301,8 @@ The compiler emits one full base frame and property-only deltas for Dark, Wide,
 and Dark+Wide. Validated phrases and presentation are indivisible: budget
 enforcement may not truncate a list or remove the greeting. Registered compact
 marks are limited to the audited local SVG assets for Japanese Film Editorial,
-Korean Prestige, and Japanese Idol.
+Korean Prestige, and Japanese Idol, plus Study Library's already-audited local
+launcher PNG reused as its book mark.
 
 Authored recipes (exact values):
 
@@ -315,9 +333,10 @@ Authored recipes (exact values):
   Light uses primary; Dark uses accent. Forced colors removes glow and framing.
 - **Study Library** — start-aligned book serif and quiet hairline.
   Standard: editorial-serif / primary / 34px / 600 / not italic / -0.01em /
-  1.20 / start / max 0.60 / x -0.10 / y -0.02 / hairline / no mark. Wide:
-  40px / -0.015em / 1.17 / max 0.56 / x -0.14 / y -0.01; other values
-  unchanged. Light and Dark are identical.
+  1.20 / start / max 0.60 / x -0.10 / y -0.02 / hairline / approved book
+  mark @0.85. Wide: 40px / -0.015em / 1.17 / max 0.56 / x -0.14 /
+  y -0.01 / book mark @0.90; other values unchanged. Light and Dark are
+  identical.
 - **Japanese Idol** — asymmetric italic serif, soft accent, approved flower mark.
   Light Standard: editorial-serif / accent / 37px / 600 / italic / 0.005em /
   1.12 / start / max 0.58 / x -0.10 / y -0.03 / none / compact @0.85. Light

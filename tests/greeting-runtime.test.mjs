@@ -140,6 +140,7 @@ class Element {
       }
     }
     let rect = this.rect;
+    const fixed = this.style.getPropertyValue("position") === "fixed";
     if (this.getAttribute(G) === "new-chat") {
       rect = { left: 560, top: 300, right: 880, bottom: 350, width: 320, height: 50 };
     } else if (this.getAttribute(G) === "decoration") {
@@ -151,10 +152,16 @@ class Element {
     } else if (this.getAttribute(K) === "compact"
         && this.parentElement?.getAttribute(G) === "decoration") {
       rect = this.parentElement.getBoundingClientRect();
+    } else if (fixed) {
+      const left = Number.parseFloat(this.style.getPropertyValue("left")) || 0;
+      const top = Number.parseFloat(this.style.getPropertyValue("top")) || 0;
+      const width = Number.parseFloat(this.style.getPropertyValue("width")) || this.rect.width;
+      const height = Number.parseFloat(this.style.getPropertyValue("height")) || this.rect.height;
+      rect = { left, top, right: left + width, bottom: top + height, width, height };
     }
     let dx = 0;
     let dy = 0;
-    for (let node = this; node; node = node.parentElement) {
+    for (let node = this; node; node = fixed ? null : node.parentElement) {
       const [x = "0", y = "0"] = node.style.getPropertyValue("translate").split(/\s+/);
       dx += Number.parseFloat(x) || 0;
       dy += Number.parseFloat(y) || 0;
@@ -276,13 +283,17 @@ async function runtime(options = {}) {
     styled = true,
     digest = "greeting-runtime-a",
     nativeStyle = null,
+    nativeMarkStyle = null,
     headingTag = null,
     semanticLevel = null,
     semanticSiblingMark = false,
+    parallelNativeMarks = false,
+    parallelNativeMarkCount = parallelNativeMarks ? 1 : 0,
     controlDecoys = false,
     greetingX = 0.1,
     greetingY = 0.05,
     greetingMax = 0.7,
+    greetingMarkScale = 1,
     shuffle = null,
   } = options;
   const html = new Element("html");
@@ -298,6 +309,21 @@ async function runtime(options = {}) {
   if (semanticSiblingMark) for (const { text } of greetings) {
     text.tagName = text.nodeName = "H1";
   }
+  if (parallelNativeMarkCount) for (const greeting of greetings) {
+    greeting.parallelMarks = Array.from({ length: parallelNativeMarkCount }, () => {
+      const parallelMark = new Element("span", {
+        left: 704, top: greeting.text.rect.top + 11, right: 732,
+        bottom: greeting.text.rect.top + 39, width: 28, height: 28,
+      });
+      parallelMark.appendChild(new Element("svg", {
+        left: 706, top: greeting.text.rect.top + 13, right: 730,
+        bottom: greeting.text.rect.top + 37, width: 24, height: 24,
+      }));
+      greeting.text.appendChild(parallelMark);
+      return parallelMark;
+    });
+    [greeting.parallelMark] = greeting.parallelMarks;
+  }
   for (const { row } of greetings) {
     if (headingTag) row.tagName = row.nodeName = headingTag.toUpperCase();
     if (semanticLevel) {
@@ -309,6 +335,11 @@ async function runtime(options = {}) {
     if (nativeStyle.ariaHidden !== undefined) row.setAttribute("aria-hidden", nativeStyle.ariaHidden);
     for (const [property, value, priority = ""] of nativeStyle.properties ?? []) {
       row.style.setProperty(property, value, priority);
+    }
+  }
+  if (nativeMarkStyle) for (const { mark } of greetings) {
+    for (const [property, value, priority = ""] of nativeMarkStyle.properties ?? []) {
+      mark.style.setProperty(property, value, priority);
     }
   }
   greetings.forEach(({ outer }) => main.appendChild(outer));
@@ -424,6 +455,7 @@ async function runtime(options = {}) {
           if (name === "--aura-greeting-x") return String(greetingX);
           if (name === "--aura-greeting-y") return String(greetingY);
           if (name === "--aura-greeting-max-ratio") return String(greetingMax);
+          if (name === "--aura-greeting-mark-scale") return String(greetingMarkScale);
           return element.style.getPropertyValue(name);
         },
       };
@@ -544,6 +576,8 @@ test("plain-div greeting binds outside the composer group and swaps with exactly
   assert.equal(app.ownerCount(), 1);
   assert.equal(app.replacements()[0].parentElement, app.greetings[0].row,
     "native mark and Aura text must remain in Claude's original flex/grid row");
+  assert.equal(app.greetings[0].mark.style.getPropertyValue("position"), "fixed",
+    "the native mark still participates in the greeting row layout");
   assert.equal(app.replacements()[0].style.getPropertyValue("font-family"), "",
     "native computed typography overrode the compiled greeting style");
   assert.equal(app.replacements()[0].style.getPropertyValue("overflow-wrap"), "anywhere",
@@ -591,8 +625,8 @@ test("plain-div greeting binds outside the composer group and swaps with exactly
       state.getGreetingProbe().rect.width,
       state.getGreetingProbe().rect.height,
     ],
-    [669, 325, 330, 70],
-    "the mirror rect did not include both custom text and Claude's active native mark",
+    [679, 345, 320, 50],
+    "the mirror rect must describe only the independently positioned greeting text",
   );
   app.setForced(true);
   assert.equal(state.getGreetingProbe().status, "forced-colors");
@@ -633,6 +667,42 @@ test("plain-div greeting binds outside the composer group and swaps with exactly
   assert.equal(remounted.getAttribute("aria-hidden"), null);
   assert.equal(remounted.style.getPropertyValue("display"), "");
   assert.equal(app.replacements().length, 0);
+});
+
+test("native and compact marks follow text without changing greeting geometry", async () => {
+  for (const phrases of [null, ["Only phrase"]]) {
+    const options = { phrases, greetingX: 0, greetingY: 0 };
+    const unmarked = await runtime({ ...options, mark: false });
+    const anchored = await runtime({ ...options, mark: true });
+    const moved = await runtime({
+      ...options, mark: true, greetingX: 0.12, greetingY: 0.04,
+    });
+    const scaled = await runtime({
+      ...options, mark: true, greetingMarkScale: 1.5,
+    });
+    for (const app of [unmarked, anchored, moved, scaled]) {
+      app.flushFrame();
+      app.flushFrame();
+    }
+    const unmarkedRect = unmarked.window.__CLAUDE_AURA_STATE__.getGreetingProbe().rect;
+    const anchoredRect = anchored.window.__CLAUDE_AURA_STATE__.getGreetingProbe().rect;
+    const movedRect = moved.window.__CLAUDE_AURA_STATE__.getGreetingProbe().rect;
+    const scaledRect = scaled.window.__CLAUDE_AURA_STATE__.getGreetingProbe().rect;
+    assert.deepEqual(anchoredRect, unmarkedRect,
+      "adding a compact mark changed the greeting text geometry");
+    assert.deepEqual(scaledRect, unmarkedRect,
+      "changing mark size changed the greeting text geometry");
+    const anchoredMark = anchored.document.querySelector(`[${G}="decoration"]`).getBoundingClientRect();
+    const movedMark = moved.document.querySelector(`[${G}="decoration"]`).getBoundingClientRect();
+    assert.equal(movedMark.left - anchoredMark.left, movedRect.left - anchoredRect.left,
+      "the mark did not follow the greeting's horizontal movement");
+    assert.equal(movedMark.top - anchoredMark.top, movedRect.top - anchoredRect.top,
+      "the mark did not follow the greeting's vertical movement");
+    assert.equal(anchored.greetings[0].mark.style.getPropertyValue("position"), "fixed");
+    for (const app of [unmarked, anchored, moved, scaled]) {
+      app.window.__CLAUDE_AURA_STATE__.cleanup();
+    }
+  }
 });
 
 test("custom wording without a portable style keeps native typography and safe wrapping", async () => {
@@ -837,12 +907,21 @@ test("native greeting styles and compact decoration restore Claude state exactly
         ["max-width", "444px", "important"],
       ],
     },
+    nativeMarkStyle: {
+      properties: [
+        ["position", "relative", "important"],
+        ["left", "7px"],
+        ["margin", "2px 3px"],
+      ],
+    },
   });
   const { row, mark } = app.greetings[0];
   const probe = app.window.__CLAUDE_AURA_STATE__.getGreetingProbe();
   assert.equal(probe.status, "native");
   assert.equal(row.getAttribute(G), "native");
   assert.equal(mark.getAttribute(K), "native");
+  assert.equal(mark.style.getPropertyValue("position"), "fixed");
+  assert.equal(mark.style.getPropertyPriority("position"), "important");
   assert(app.document.querySelector(`[${G}="decoration"]`)?.querySelector(`[${K}="compact"]`),
     "native words did not receive an inert compact-mark alternative");
   app.window.__CLAUDE_AURA_STATE__.cleanup();
@@ -855,6 +934,10 @@ test("native greeting styles and compact decoration restore Claude state exactly
   assert.equal(row.style.getPropertyPriority("translate"), "important");
   assert.equal(row.style.getPropertyValue("max-width"), "444px");
   assert.equal(row.style.getPropertyPriority("max-width"), "important");
+  assert.equal(mark.style.getPropertyValue("position"), "relative");
+  assert.equal(mark.style.getPropertyPriority("position"), "important");
+  assert.equal(mark.style.getPropertyValue("left"), "7px");
+  assert.equal(mark.style.getPropertyValue("margin"), "2px 3px");
   assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
 });
 
@@ -884,13 +967,61 @@ test("semantic heading beside Claude's native mark binds the shared row", async 
   assert.equal(mark.getAttribute(K), "native",
     "the adjacent native mark was not selected for compact-mark replacement");
   const decoration = app.document.querySelector(`[${G}="decoration"]`);
-  assert.equal(decoration?.style.getPropertyValue("left"), `${mark.getBoundingClientRect().left}px`,
-    "the registered compact mark did not replace Claude's native mark in place");
+  const decorationRect = decoration?.getBoundingClientRect();
+  const replacementRect = app.replacements()[0].getBoundingClientRect();
+  assert(decorationRect.right <= replacementRect.left || decorationRect.left >= replacementRect.right,
+    "the registered compact mark was not anchored outside the replacement text");
   assert.equal(app.ownerCount(), 1);
   app.window.__CLAUDE_AURA_STATE__.cleanup();
   assert.equal(row.getAttribute(G), null);
   assert.equal(text.getAttribute(H), null);
   assert.equal(mark.getAttribute(K), null);
+  assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
+});
+
+test("compact greeting owns every bounded native mark and restores them together", async () => {
+  const app = await runtime({
+    mark: true,
+    semanticSiblingMark: true,
+    parallelNativeMarks: true,
+  });
+  app.flushFrame();
+  app.flushFrame();
+  const { row, mark, parallelMark } = app.greetings[0];
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "custom");
+  assert.equal(row.getAttribute(G), "native-mark");
+  assert.equal(app.greetings[0].text.getAttribute(H), "true");
+  assert.equal(mark.getAttribute(K), "native");
+  assert.equal(parallelMark.getAttribute(K), "native",
+    "a nested parallel Claude mark escaped Greeting ownership");
+  assert.equal(app.document.querySelectorAll(`[${G}="decoration"]`).length, 1,
+    "compact mode rendered more than one Aura decoration");
+  const decoration = app.document.querySelector(`[${G}="decoration"]`);
+  const decorationRect = decoration.getBoundingClientRect();
+  const textRect = app.replacements()[0].getBoundingClientRect();
+  assert(decorationRect.right <= textRect.left || decorationRect.left >= textRect.right,
+    "the compact mark was anchored on top of the greeting wording");
+  app.window.__CLAUDE_AURA_STATE__.cleanup();
+  assert.equal(row.getAttribute(G), null);
+  assert.equal(mark.getAttribute(K), null);
+  assert.equal(parallelMark.getAttribute(K), null);
+  assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
+});
+
+test("a fifth bounded native mark fails open instead of escaping ownership", async () => {
+  const app = await runtime({
+    phrases: ["Good evening, {name}"],
+    mark: true,
+    semanticSiblingMark: true,
+    parallelNativeMarkCount: 4,
+  });
+  const { row, mark, text, parallelMarks } = app.greetings[0];
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "missing");
+  assert.equal(app.ownerCount(), 1);
+  assert.equal(row.getAttribute(G), null);
+  assert.equal(text.getAttribute(H), null);
+  assert.equal(mark.getAttribute(K), null);
+  assert(parallelMarks.every((parallelMark) => parallelMark.getAttribute(K) === null));
   assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
 });
 
