@@ -1075,6 +1075,31 @@ fieldset.settings-card {
 }
 
 .crop-stage[data-kind="card"] { aspect-ratio: 3 / 2; }
+.crop-stage[data-kind="avatar"] {
+  aspect-ratio: 1;
+  max-width: 320px;
+  margin-inline: auto;
+  background-color: var(--crop-backdrop, var(--raised));
+}
+
+/* With no backdrop chosen, a checkerboard makes the see-through areas obvious. */
+.crop-stage[data-kind="avatar"][data-backdrop="none"] {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #d3d5e4 25%, transparent 25% 75%, #d3d5e4 75%),
+    linear-gradient(45deg, #d3d5e4 25%, transparent 25% 75%, #d3d5e4 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 9px 9px;
+}
+
+/* The overlay renders as a circle, so preview the circle rather than thirds. */
+.crop-stage[data-kind="avatar"] .crop-guides {
+  background: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / .72), 0 0 0 9999px rgb(24 22 18 / .34);
+  filter: none;
+}
+
 .crop-stage.is-dragging { cursor: grabbing; }
 .crop-stage.is-busy { cursor: wait; }
 .crop-stage > img {
@@ -1095,6 +1120,77 @@ fieldset.settings-card {
     linear-gradient(to bottom, transparent calc(33.333% - .5px), rgb(255 255 255 / .62) calc(33.333% - .5px) calc(33.333% + .5px), transparent calc(33.333% + .5px) calc(66.667% - .5px), rgb(255 255 255 / .62) calc(66.667% - .5px) calc(66.667% + .5px), transparent calc(66.667% + .5px));
   filter: drop-shadow(0 1px 1px rgb(0 0 0 / .34));
   pointer-events: none;
+}
+
+.crop-background {
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.crop-background legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.crop-background-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.crop-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px 6px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--control-radius);
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.crop-swatch input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.crop-swatch:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.crop-swatch:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.crop-swatch-chip {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(33 36 59 / .38);
+}
+
+.crop-swatch.is-transparent .crop-swatch-chip {
+  background:
+    linear-gradient(45deg, #d3d5e4 25%, #ffffff 25% 75%, #d3d5e4 75%),
+    linear-gradient(45deg, #d3d5e4 25%, #ffffff 25% 75%, #d3d5e4 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 5px 5px;
+}
+
+.crop-swatch-custom { background: var(--crop-custom-color, #4721a1); }
+
+#crop-background-color {
+  width: 38px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  cursor: pointer;
 }
 
 .crop-drag-hint {

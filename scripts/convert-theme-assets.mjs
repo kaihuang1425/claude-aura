@@ -38,11 +38,11 @@ const THEMES = {
       },
       {
         src: "provisional/selected/hero-no-sun.png",
-        out: "light-hero.webp", width: 720, cropLeft: 0, quality: 0.82,
+        out: "light-hero.webp", width: 720, height: 1018, cropLeft: 0, quality: 0.82,
       },
       {
         src: "provisional/selected/dark-hero.png",
-        out: "dark-hero.webp", width: 720, cropLeft: 0, quality: 0.82,
+        out: "dark-hero.webp", width: 720, height: 1018, cropLeft: 0, quality: 0.82,
       },
     ],
     copies: [],

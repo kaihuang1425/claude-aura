@@ -9,12 +9,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Default",
       "zh-CN": "默认",
-      "zh-TW": "預設"
+      "zh-HKTW": "預設"
     },
     "descriptions": {
       "en": "Claude Aura’s familiar indigo foundation with calm, balanced controls.",
       "zh-CN": "保留 Claude Aura 熟悉的靛蓝基调，界面清晰克制。",
-      "zh-TW": "保留 Claude Aura 熟悉的靛藍基調，畫面清楚、操作沉穩。"
+      "zh-HKTW": "保留 Claude Aura 熟悉的靛藍基調，畫面清楚、操作沉穩。"
     },
     "swatches": [
       "#F7F7FC",
@@ -37,7 +37,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#D66D4B",
       "border": "#655C70",
       "radius": 16,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {
@@ -512,12 +512,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Japanese Film Editorial",
       "zh-CN": "日式电影编辑风",
-      "zh-TW": "日系電影編輯風"
+      "zh-HKTW": "日系電影編輯風"
     },
     "descriptions": {
       "en": "Warm paper, charcoal ink, muted indigo, and restrained vermilion.",
       "zh-CN": "暖象牙色纸张、墨线与朱红焦点，呈现沉静的电影编辑感。",
-      "zh-TW": "暖象牙紙、墨線與朱紅焦點，營造安靜的電影編輯質感。"
+      "zh-HKTW": "暖象牙紙、墨線與朱紅焦點，營造安靜的電影編輯質感。"
     },
     "swatches": [
       "#F2E8D5",
@@ -540,7 +540,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#B64B32",
       "border": "#8E7B62",
       "radius": 12,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {
@@ -1078,12 +1078,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Korean Prestige",
       "zh-CN": "韩式精品",
-      "zh-TW": "韓系精品"
+      "zh-HKTW": "韓系精品"
     },
     "descriptions": {
       "en": "Midnight navy, silver structure, and precise architectural glass.",
       "zh-CN": "午夜蓝配合银灰玻璃表面，结构利落，层次清晰。",
-      "zh-TW": "午夜藍搭配銀灰玻璃表面，結構俐落、層次清楚。"
+      "zh-HKTW": "午夜藍搭配銀灰玻璃表面，結構俐落、層次清楚。"
     },
     "swatches": [
       "#071426",
@@ -1106,7 +1106,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#5A91E6",
       "border": "#66758B",
       "radius": 14,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {
@@ -1644,12 +1644,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Cartoon Studio",
       "zh-CN": "卡通工作室",
-      "zh-TW": "卡通工作室"
+      "zh-HKTW": "卡通工作室"
     },
     "descriptions": {
       "en": "Cream, coral, teal, and sunny yellow with friendly inked details.",
       "zh-CN": "奶油色、珊瑚色和青绿色搭配手绘轮廓，轻松但不失秩序。",
-      "zh-TW": "奶油色、珊瑚色與青綠色搭配手繪輪廓，輕鬆又有秩序。"
+      "zh-HKTW": "奶油色、珊瑚色與青綠色搭配手繪輪廓，輕鬆又有秩序。"
     },
     "swatches": [
       "#FFF6E7",
@@ -2192,12 +2192,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Anime Twilight",
       "zh-CN": "动漫暮色",
-      "zh-TW": "動畫暮光"
+      "zh-HKTW": "動畫暮光"
     },
     "descriptions": {
       "en": "Twilight blue glass, pale cyan, violet, and warm window light.",
       "zh-CN": "暮蓝与紫色玻璃面板，配合柔和窗光和星空线条。",
-      "zh-TW": "暮藍與紫色玻璃面板，搭配柔和窗光與星空線條。"
+      "zh-HKTW": "暮藍與紫色玻璃面板，搭配柔和窗光與星空線條。"
     },
     "swatches": [
       "#111A49",
@@ -2220,7 +2220,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#F0B875",
       "border": "#756FC0",
       "radius": 18,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {
@@ -2711,12 +2711,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Study Library",
       "zh-CN": "自习图书馆",
-      "zh-TW": "自習圖書館"
+      "zh-HKTW": "自習圖書館"
     },
     "descriptions": {
       "en": "Ivory paper, forest green, oxblood, graphite, and quiet brass.",
       "zh-CN": "象牙纸、森林绿和牛血红，营造安静的研究与阅读氛围。",
-      "zh-TW": "象牙紙、森林綠與牛血紅，營造安靜的研究與閱讀氛圍。"
+      "zh-HKTW": "象牙紙、森林綠與牛血紅，營造安靜的研究與閱讀氛圍。"
     },
     "swatches": [
       "#F4EEDC",
@@ -2739,7 +2739,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#AA884C",
       "border": "#1F523F",
       "radius": 10,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {
@@ -3252,12 +3252,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Japanese Idol",
       "zh-CN": "日式偶像",
-      "zh-TW": "日系偶像"
+      "zh-HKTW": "日系偶像"
     },
     "descriptions": {
       "en": "Warm cream, blush, rose, and pearlescent lilac with fine ribbons.",
       "zh-CN": "暖奶油色与柔粉色，辅以克制的丝带和舞台光元素。",
-      "zh-TW": "暖奶油色與柔粉色，點綴節制的緞帶與舞台光。"
+      "zh-HKTW": "暖奶油色與柔粉色，點綴節制的緞帶與舞台光。"
     },
     "swatches": [
       "#FFF5F1",
@@ -3280,7 +3280,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#DA6F8D",
       "border": "#C7B3E6",
       "radius": 20,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {
@@ -3825,12 +3825,12 @@ window.CLAUDE_AURA_THEMES = {
     "labels": {
       "en": "Korean Idol",
       "zh-CN": "韩式偶像",
-      "zh-TW": "韓系偶像"
+      "zh-HKTW": "韓系偶像"
     },
     "descriptions": {
       "en": "Cool white, periwinkle, holographic silver, and structured music glass.",
       "zh-CN": "冷白与薰衣草色结合全息玻璃，采用利落的几何布局。",
-      "zh-TW": "冷白與薰衣草色結合全像玻璃，採用俐落的幾何編排。"
+      "zh-HKTW": "冷白與薰衣草色結合全像玻璃，採用俐落的幾何編排。"
     },
     "swatches": [
       "#F7F6FF",
@@ -3853,7 +3853,7 @@ window.CLAUDE_AURA_THEMES = {
       "accent": "#79D7E4",
       "border": "#8F78DF",
       "radius": 16,
-      "borderWidth": 1
+      "borderWidth": 2
     },
     "studioStyle": {
       "light": {

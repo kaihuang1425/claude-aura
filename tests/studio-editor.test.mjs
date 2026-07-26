@@ -7,6 +7,7 @@ import {
   REQUIRED_SEMANTIC_TOKENS,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
+  STUDIO_LOCALES,
   STUDIO_MAX_LAYERS,
   STUDIO_PREVIEW_MASTERS,
   STUDIO_SHADOWS,
@@ -31,7 +32,9 @@ import {
   normalizeLocale,
   os,
   path,
+  readHostCopy,
   readPayloadSettings,
+  readStudioCopy,
   readThemeKit,
   readThemeRegistry,
   resolveArtwork,
@@ -41,6 +44,13 @@ import {
   writeConfig,
   zipEntryNames,
 } from "./support/context.mjs";
+import {
+  defaultStudioGreetingStyle,
+  mutateStudioGreetingDocument,
+  studioGreetingCompactMarkAvailable,
+  studioGreetingPreferenceError,
+  studioGreetingState,
+} from "../scripts/theme-core/studio.mjs";
 test("Windows uses a content-only WebView2 window with Aura Studio and tray controls", async () => {
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
@@ -96,7 +106,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The launch wrapper must not pass parameter-name strings positionally");
   assert(!start.includes("@arguments"), "The launch wrapper must not array-splat named parameters");
   const assetConverter = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "convert-theme-assets.mjs"), "utf8");
-  const uiCopy = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "ui-copy.json"), "utf8"));
+  const uiCopy = await readHostCopy();
   for (const [name, source] of [["start", start], ["UI", ui], ["installer", install]]) {
     assert(!/remote-debugging-(?:port|pipe)/i.test(source), `${name} still launches a debugging endpoint`);
     assert(!/45\s+seconds/i.test(source), `${name} still contains the old startup wait`);
@@ -149,9 +159,16 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /\$script:StudioForm\.FormBorderStyle\s*=\s*\[System\.Windows\.Forms\.FormBorderStyle\]::Sizable/,
     "The Studio window must keep its native resizable frame");
+  // The caption still reads as untitled, but it stays untitled by painting the
+  // title in the caption color rather than by leaving the window text empty --
+  // an empty caption made Aura invisible to every window-capture picker.
+  assert.match(ui, /DwmSetWindowAttribute\(Handle,\s*36,\s*ref textColor/,
+    "The retained native caption must hide the title via DWMWA_TEXT_COLOR, not an empty title");
+  assert.match(ui, /int textColor = captionColor;/,
+    "The caption title must be painted in the caption's own color");
   for (const form of ["Form", "StudioForm"]) {
-    assert.match(ui, new RegExp(`\\$script:${form}\\.Text\\s*=\\s*''`),
-      `${form} must reserve native caption space without painting an app title`);
+    assert.doesNotMatch(ui, new RegExp(`\\$script:${form}\\.Text\\s*=\\s*''`),
+      `${form} must not blank its window text; recorders skip zero-length titles`);
     assert.match(ui, new RegExp(`\\$script:${form}\\.ShowIcon\\s*=\\s*\\$false`),
       `${form} must hide only the caption icon`);
     for (const control of ["ControlBox", "MinimizeBox", "MaximizeBox"]) {
@@ -311,9 +328,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /\$script:LoadingAnimationTimer\.Interval\s*=\s*30[\s\S]{0,1200}?\$script:LoadingProgressIndicator\.Left\s*=\s*\$nextLeft/,
     "Loading motion must remain bounded to one host UI timer");
-  assert.match(ui,
-    /function Set-AuraUiPayloadState[\s\S]{0,1000}?Update-AuraUiLoadingTheme/,
+  const payloadState = powershellFunction("Set-AuraUiPayloadState");
+  assert.match(payloadState,
+    /Update-AuraUiLoadingTheme/,
     "Theme changes must refresh the host loading presentation");
+  assert.match(payloadState, /"\(\?:theme\|t\)"/,
+    "Payload identity must accept the compiler's compact theme key");
+  assert.match(payloadState, /"\(\?:digest\|x\)"/,
+    "Payload identity must accept the compiler's compact digest key");
   assert.match(ui,
     /function Set-AuraUiPreferredColorScheme[\s\S]{0,1800}?Update-AuraUiLoadingTheme/,
     "Appearance changes must refresh the Light/Dark loading presentation");
@@ -333,9 +355,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui, /\$script:RetryButton\.add_Click\(\s*\{/,
     "The loading-panel retry control must remain wired");
   assert.match(ui, /Get-AuraUiCopy/);
-  assert.match(ui, /ui-copy\.json/);
+  assert.match(ui, /Join-Path \$PSScriptRoot 'locales'/);
   assert.match(ui, /\$script:StudioForm\.AccessibleName\s*=\s*"\$\(\$script:UiCopy\.studioTitle\)"/,
-    "The titleless Studio window's accessible name must come from localized UI copy");
+    "The Studio window's accessible name must come from localized UI copy");
+  // Screen recorders and the Chromium/Electron screen pickers drop any window
+  // whose GetWindowTextLength is 0, so both primary windows need real captions.
+  assert.match(ui, /\$script:Form\.Text\s*=\s*'Claude Aura'/,
+    "The main Aura window needs a non-empty caption to appear in window-capture pickers");
+  assert.match(ui, /\$script:StudioForm\.Text\s*=\s*"\$\(\$script:UiCopy\.studioTitle\)"/,
+    "The Studio window needs a non-empty caption to appear in window-capture pickers");
+  assert.match(ui,
+    /function Update-AuraUiLocalizedChrome[\s\S]{0,400}?\$script:StudioForm\.Text\s*=\s*"\$\(\$script:UiCopy\.studioTitle\)"/,
+    "A locale change must retitle the Studio window, not just its accessible name");
   assert.match(ui,
     /SetVirtualHostNameToFolderMapping\(\s*['"]aura\.studio['"]\s*,[\s\S]{0,300}?CoreWebView2HostResourceAccessKind\]::Allow\s*\)/,
     "Studio must use the allowlisted aura.studio virtual host mapping");
@@ -434,6 +465,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "complete-studio-introduction",
     "set-image",
     "clear-image",
+    "set-avatar",
+    "clear-avatar",
+    "set-avatar-framing",
     "set-image-framing",
     "set-card-preview-crop",
     "set-enabled",
@@ -454,6 +488,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "save-theme-edit",
     "discard-theme-edit",
     "delete-user-theme",
+    "set-greeting-phrases",
+    "reset-greeting",
     "set-aura-preview",
     "set-aura-topmost",
     "refresh-aura-mirror",
@@ -498,6 +534,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "save-theme-edit": ["type", "session", "revision"],
     "discard-theme-edit": ["type", "session", "revision"],
     "delete-user-theme": ["type", "theme"],
+    "set-greeting-phrases": [
+      "type", "session", "revision", "enabled", "source", "displayName",
+      "globalPhrases", "overrideMode", "overridePhrases",
+    ],
+    "reset-greeting": ["type", "session", "revision"],
   };
   for (const [action, expectedShape] of Object.entries(expectedEditorMessageShapes)) {
     const escapedAction = action.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -506,6 +547,45 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     assert.deepEqual([...shapeMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]), expectedShape,
       `${action} accepts missing, reordered, or extra page properties`);
   }
+  const greetingShuffleValidator = powershellFunction("ConvertTo-AuraUiGreetingShuffleCheckpoint");
+  assert.match(greetingShuffleValidator,
+    /'themeId',\s*'phraseDigest',\s*'order',\s*'cursor',\s*'lastIndex'/,
+    "The host must accept only the privacy-bounded greeting shuffle shape");
+  assert.match(greetingShuffleValidator, /ExpectedTheme[\s\S]*?\[StringComparison\]::Ordinal/,
+    "The host must bind a greeting checkpoint to the exact active theme");
+  const greetingShuffleWriter = powershellFunction("Invoke-AuraUiGreetingShuffleCheckpoint");
+  assert.match(greetingShuffleWriter,
+    /\$ThemeCli,\s*'greeting-checkpoint',\s*'--config',\s*\$ConfigPath,\s*'--state-base64'/,
+    "The host must persist renderer shuffle progress through the bounded CLI command");
+  assert(!/(?:Set-AuraUiPayloadState|Apply-AuraUiTheme|Send-AuraUiStudioState)/.test(greetingShuffleWriter),
+    "Checkpoint persistence must not compile, apply, reroll, or echo personal greeting state");
+  const greetingProbeUpdater = powershellFunction("Update-AuraUiGreetingProbe");
+  assert.match(greetingProbeUpdater,
+    /'nativeHidden',\s*'visitEpoch',\s*'shuffle',\s*'rect'/,
+    "The renderer probe contract must include only the bounded shuffle checkpoint");
+  assert.match(greetingProbeUpdater,
+    /Invoke-AuraUiGreetingShuffleCheckpoint\s+-Shuffle\s+\$shuffleCheckpoint/,
+    "A settled custom greeting probe must checkpoint its advanced shuffle state");
+  const rejectedMessageHandler = ui.slice(
+    ui.indexOf("$studioCore.add_WebMessageReceived({"),
+    ui.indexOf("$studioCore.add_NewWindowRequested({"),
+  );
+  for (const action of Object.keys(expectedEditorMessageShapes)) {
+    const escapedAction = action.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert((rejectedMessageHandler.match(new RegExp(`'${escapedAction}'`, "g")) ?? []).length >= 2,
+      `${action} rejection must be recognized and acknowledged immediately`);
+  }
+  for (const cropAction of ["set-image-framing", "set-avatar-framing", "set-card-preview-crop"]) {
+    assert(rejectedMessageHandler.includes(`'${cropAction}'`),
+      `${cropAction} rejection must release the crop-save pending state`);
+  }
+  const resetGreetingBridge = powershellFunction("Invoke-AuraUiResetGreeting");
+  assert.match(resetGreetingBridge,
+    /Assert-AuraUiStudioEditorSession[\s\S]*Invoke-AuraUiStudioEditorRequest/,
+    "Reset greeting must validate the active revision and reach the Node editor core");
+  assert.match(ui,
+    /'reset-greeting'\s*\{\s*\[void\]\(Invoke-AuraUiResetGreeting -Request \$message\);\s*break\s*\}/,
+    "The reset-greeting host action must dispatch instead of being accepted as a no-op");
   const patchValidation = ui.match(/'apply-theme-patch'\s*\{([\s\S]*?)\n\s*'pick-theme-layer-image'\s*\{/)?.[1] ?? "";
   assert.match(patchValidation, /\$Message\.changes\s+-isnot\s+\[System\.Array\]/,
     "Theme patches must require a JSON array instead of coercing a scalar change");
@@ -515,6 +595,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     token: ["kind", "mode", "token", "value"],
     layer: ["kind", "index", "preset", "property", "value"],
     metadata: ["kind", "field", "locale", "value"],
+    greeting: ["kind", "operation", "appearance", "frame", "value"],
   })) {
     const kindBlock = patchValidation.match(new RegExp(`'${kind}'\\s*\\{([\\s\\S]*?)(?=\\n\\s*'|\\n\\s*default)`))?.[1] ?? "";
     for (const property of exactProperties) {
@@ -523,7 +604,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   }
   assert.match(patchValidation, /\$change\.field\s+-cnotin\s+@\('label',\s*'description'\)/,
     "Metadata patches must expose only localized names and descriptions");
-  assert.match(patchValidation, /\$change\.locale\s+-cnotin\s+@\('en',\s*'zh-CN',\s*'zh-TW'\)/,
+  assert.match(patchValidation, /\$change\.locale\s+-cnotin\s+@\('en',\s*'zh-CN',\s*'zh-HKTW'\)/,
     "Metadata patches must use exactly the three supported locales");
   assert.match(patchValidation, /\$maximum\s*=\s*if\s*\(\$change\.field\s+-ceq\s*'label'\)\s*\{\s*80\s*\}\s*else\s*\{\s*220\s*\}/,
     "Metadata patch limits must match the theme-kit label and description contracts");
@@ -580,14 +661,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The mirror pump must poll capture tasks without blocking the UI thread");
   assert.match(ui, /data-claude-aura-main-canvas[\s\S]{0,240}?data-claude-aura-prompt/,
     "The mirror probe must read the renderer's marked live layout");
+  assert.match(ui, /const viewport = root\.dataset\.claudeAuraViewport;/,
+    "The mirror probe must read the renderer's effective viewport marker");
   assert.match(ui,
-    /claudeAuraViewport[\s\S]{0,180}?viewport === "normal" \|\| viewport === "wide" \? viewport : null/,
+    /viewport:\s*viewport === "normal" \|\| viewport === "wide" \? viewport : null/,
     "The mirror probe must carry the renderer's effective normal/wide viewport without inferring it from width");
   assert.match(ui, /\$script:MirrorProbeTask = \$script:WebView\.CoreWebView2\.ExecuteScriptAsync\(\$probe\)/,
     "Mirror geometry must come from a non-blocking layout probe of the live page");
-  assert.match(ui, /\$core\.add_SourceChanged\(\{\s*Request-AuraUiContextMirror\s*}\)/,
+  assert.match(ui,
+    /\$core\.add_SourceChanged\(\{[\s\S]{0,160}?Request-AuraUiContextMirror[\s\S]{0,160}?}\)/,
     "Aura source changes must refresh the active editor's private mirror");
-  assert.match(ui, /\$core\.add_HistoryChanged\(\{\s*Request-AuraUiContextMirror\s*}\)/,
+  assert.match(ui,
+    /\$core\.add_HistoryChanged\(\{[\s\S]{0,160}?Request-AuraUiContextMirror[\s\S]{0,160}?}\)/,
     "Aura SPA history changes must refresh the active editor's private mirror");
   assert.match(ui,
     /function Request-AuraUiContextMirror[\s\S]{0,420}?MirrorSemanticRetries\s*=\s*3[\s\S]{0,120}?MirrorSemanticPreviousContext/,
@@ -616,7 +701,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   const startMirrorCapture = ui.match(/function Start-AuraUiMirrorCapture\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
   const updateMirrorCapture = ui.match(/function Update-AuraUiMirror\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
   assert.match(updateMirrorCapture,
-    /\$mirrorViewport[\s\S]{0,160}?-in\s+@\('normal',\s*'wide'\)[\s\S]{0,1200}?viewport\s*=\s*\$mirrorViewport/,
+    /\$mirrorViewport[\s\S]{0,160}?-in\s+@\('normal',\s*'wide'\)[\s\S]{0,4000}?viewport\s*=\s*\$mirrorViewport/,
     "The host must omit measured geometry unless the renderer supplied an allowlisted effective viewport");
   assert.match(startMirrorCapture, /MirrorCaptureSession\s*=\s*\[string\][\s\S]{0,160}?StudioEditorState[\s\S]{0,100}?['"]session['"]/,
     "A private capture must be bound to the editor session that requested it");
@@ -670,13 +755,16 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /data-editor-i18n="levelSimple">Quick customize<\/span>[\s\S]{0,160}?data-editor-i18n="levelAdvanced">Advanced<\/span>/,
     "The fallback document must use the approved Quick customize and Advanced labels");
-  assert(studioEditor.includes('levelSimple: "Quick customize"')
-      && studioEditor.includes('levelAdvanced: "Advanced"')
-      && studioEditor.includes('levelSimple: "快速自定义"')
-      && studioEditor.includes('levelAdvanced: "高级"')
-      && studioEditor.includes('levelSimple: "快速自訂"')
-      && studioEditor.includes('levelAdvanced: "進階"'),
-  "Every supported locale must name Quick customize and Advanced independently");
+  const editorLocaleCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    const copy = editorLocaleCopy[locale];
+    assert(typeof copy?.levelSimple === "string" && copy.levelSimple.trim()
+        && typeof copy?.levelAdvanced === "string" && copy.levelAdvanced.trim()
+        && copy.levelSimple !== copy.levelAdvanced,
+    `${locale} must name Quick customize and Advanced independently`);
+  }
+  assert.equal(editorLocaleCopy.en.levelSimple, "Quick customize");
+  assert.equal(editorLocaleCopy.en.levelAdvanced, "Advanced");
   assert.match(studioEditorCss, /\.editor-view\[data-level="simple"\]\s+\.advanced-only\s*\{[^}]*display:\s*none/,
     "Quick customize must hide only controls explicitly classified as Advanced");
   const simpleVisibilityRules = [...studioEditorCss.matchAll(/\.editor-view\[data-level="simple"\][^{]*\{[^}]*display:\s*none[^}]*\}/g)]
@@ -700,17 +788,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The three branches must behave as one compact editing-tool toolbar");
   assert.equal((studioHtml.match(/class="editor-branch-glyph"/g) ?? []).length, 3,
     "Each branch tool must have its own recognizable object-family glyph");
-  for (const value of [
-    'branchInterfaceDetail: "Surfaces & layout"',
-    'branchBackgroundDetail: "Canvas & images"',
-    'branchWidgetsDetail: "Aura controls"',
-    'branchInterfaceDetail: "外观与布局"',
-    'branchBackgroundDetail: "画布与图片"',
-    'branchWidgetsDetail: "Aura 控件"',
-    'branchInterfaceDetail: "外觀與版面"',
-    'branchBackgroundDetail: "畫布與圖片"',
-    'branchWidgetsDetail: "Aura 控制項"',
-  ]) assert(studioEditor.includes(value), `Missing native branch-tool copy: ${value}`);
+  const branchToolCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    for (const key of ["branchInterfaceDetail", "branchBackgroundDetail", "branchWidgetsDetail"]) {
+      assert(String(branchToolCopy[locale]?.[key] ?? "").trim(),
+        `${locale} is missing native branch-tool copy for ${key}`);
+    }
+  }
   assert.match(studioHtml, /id="editor-branch-help"[^>]+aria-live="polite"/,
     "The active selection tool must explain what the canvas can select");
   assert(!/class="editor-inspector-tab[^"]*advanced-only[^"]*"[^>]+data-editor-branch-target/.test(studioHtml),
@@ -736,15 +820,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(widgetsMarkup,
     /<button type="button" id="editor-launcher-preview"[^>]+data-editor-i18n-aria-label="selectAppIdentityPreview"/,
     "The host-only App identity target must be keyboard-selectable in its truthful local preview");
-  assert(studioEditor.includes('selectAppIdentityPreview: "Select app identity"')
-      && studioEditor.includes('selectAppIdentityPreview: "选择应用标识"')
-      && studioEditor.includes('selectAppIdentityPreview: "選取 App 識別"'),
-  "The local Widget preview selection action must have independent native copy");
-  assert.match(studioEditor,
-    /launcherPreview\?\.addEventListener\("click"[\s\S]{0,180}?inspectorBranch !== "widgets"[\s\S]{0,220}?setInspectorTarget\("widgets\.app-identity"/,
-    "The App identity preview must never route selection outside Widgets");
-  assert(!/(?:coming soon|phase 2|quick.?prompt|prompt card)/i.test(widgetsMarkup),
-    "Widgets must not advertise unavailable Phase 2 controls");
+  const widgetSelectionCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    assert(String(widgetSelectionCopy[locale]?.selectAppIdentityPreview ?? "").trim(),
+      `${locale} is missing the local Widget preview selection action`);
+  }
   assert.match(studioHtml,
     /class="editor-section editor-feedback advanced-only" data-editor-global/,
     "Validation and budgets must remain one global Advanced section, not a fourth branch");
@@ -760,9 +840,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Shared material provenance must follow the selected field rather than unrelated draft edits");
   assert(!inspectorContextBlock.includes("hasUnsavedEdits()"),
     "Source must not make every target Customized because an unrelated field is dirty");
+  assert.match(inspectorContextBlock, /const tokenMode[\s\S]*?contextApplies\.textContent/,
+    "Applies-to text must derive the active color mode from the selected field");
+  for (const target of ["background.layer", "interface.new-chat-area", "interface.greeting"]) {
+    assert(inspectorContextBlock.includes(`inspectorTarget === "${target}"`),
+      `Applies-to text does not describe ${target}`);
+  }
   assert.match(inspectorContextBlock,
-    /const tokenMode[\s\S]{0,220}?contextApplies\.textContent[\s\S]{0,180}?background\.layer[\s\S]{0,220}?interface\.new-chat-area[\s\S]{0,260}?tokenMode/,
-    "Applies-to text must follow the selected property family, including mode-specific colors");
+    /: tokenMode\s*\?\s*`\$\{tr\(tokenMode === "dark" \? "appearanceDark" : "appearanceLight"\)}/,
+    "Mode-specific colors must name their selected appearance");
   const layerScopeBlock = studioEditor.match(
     /const layerScopeLabel\s*=\s*\(layer\)\s*=>\s*\{[\s\S]*?\n\s*};/,
   )?.[0] ?? "";
@@ -770,8 +856,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /stageOverrides\.get\(`layers\[\$\{layer\.index}]\.\$\{property}`\) \?\? layer\[property\]/,
     "Layer Applies to must reflect a staged scope immediately, including while host sync is deferred");
   assert.match(inspectorContextBlock,
-    /const fieldFrame\s*=\s*\/\^layers[\s\S]{0,180}?contextFrameRow\.hidden\s*=\s*!fieldFrame/,
-    "Only a responsive image-frame property may show the Standard or Wide edit target");
+    /const fieldFrame\s*=\s*\/\^layers[\s\S]{0,300}?shared\\\.greeting\\\.frames[\s\S]{0,180}?contextFrameRow\.hidden\s*=\s*!fieldFrame/,
+    "Only a responsive image or greeting-frame property may show the Standard or Wide edit target");
   assert.match(inspectorContextBlock,
     /const editFrameLabel[\s\S]{0,140}?const previewFrameLabel\s*=\s*tr\(stageViewport[\s\S]{0,320}?editFrameLabel[\s\S]{0,120}?customFrameUses"\), previewFrameLabel/,
     "A custom preview must name its resolved saved set without replacing the field's edit target");
@@ -814,10 +900,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && studioEditor.includes("option.disabled = true;")
       && studioEditor.includes('if (input.value === THEME_ORIGINAL) return;'),
   "Inherited font and shadow choices must use a selected presentation-only option that cannot be sent");
-  assert(studioEditor.includes('themeOriginal: "Theme original"')
-      && studioEditor.includes('themeOriginal: "主题原有设置"')
-      && studioEditor.includes('themeOriginal: "沿用主題設定"'),
-  "Theme-original controls must use independently written labels in every supported locale");
+  const themeOriginalCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    assert(String(themeOriginalCopy[locale]?.themeOriginal ?? "").trim(),
+      `${locale} must name the inherited theme-original setting`);
+  }
   assert.match(studioEditorCss, /\.editor-inherited-note\s*\{[^}]*color:\s*var\(--ink-muted\)/,
     "Inherited values must be disclosed with a quiet inline note instead of another boxed widget");
   assert.match(studioHtml,
@@ -886,7 +973,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /function Get-AuraUiLauncherAssetPath[\s\S]{0,4500}?expectedEditorDigest[\s\S]{0,1800}?SHA256[\s\S]{0,500}?ComputeHash[\s\S]{0,600}?actualDigest/,
     "The Windows host must verify editor preview bytes against the digest in their exact URL");
-  for (const locale of ["en", "zh-CN", "zh-TW"]) {
+  for (const locale of ["en", "zh-CN", "zh-HKTW"]) {
     assert(uiCopy[locale].chooseThemeLauncherMarkTitle
       && uiCopy[locale].themeLauncherMarkImported
       && uiCopy[locale].themeLauncherMarkFailed
@@ -933,10 +1020,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /id="editor-prompt-native"[^>]+data-editor-i18n="nativePromptHelp"[^>]+hidden/,
     "A native Claude layout must be identified before Studio authors placement values");
-  assert(studioEditor.includes('nativePromptHelp: "Using Claude\'s current layout.')
-      && studioEditor.includes('nativePromptHelp: "正在沿用 Claude 当前布局。')
-      && studioEditor.includes('nativePromptHelp: "目前沿用 Claude 的版面。'),
-  "Native-layout guidance must be independently authored in all three locales");
+  const nativePromptCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    assert(String(nativePromptCopy[locale]?.nativePromptHelp ?? "").trim(),
+      `${locale} must explain the native Claude layout`);
+  }
   assert.match(studioEditor,
     /const measuredNativePrompt[\s\S]{0,1500}?prompt\.width\s*\/\s*mainMetrics\.width[\s\S]{0,500}?prompt\.left\s*\+\s*\(prompt\.width\s*\/\s*2\)/,
     "The first authored layout must seed from the measured live prompt rather than a guessed width");
@@ -994,12 +1082,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /id="editor-switch-supported-preview"[^>]+data-editor-i18n="switchPreview"/,
     "A mismatched new-chat target must offer an explicit supported-preview action");
   const switchPreviewBlock = studioEditor.match(
-    /switchSupportedPreviewButton\?\.addEventListener\("click"[\s\S]*?\n\s*}\);/)?.[0] ?? "";
+    /const switchToNewChatPreview\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
   assert.match(switchPreviewBlock,
     /stageContext\s*=\s*"new-chat"[\s\S]{0,180}?selectStageMirror\(\)[\s\S]{0,100}?renderStage\(\)/,
     "The explicit preview action must return a mismatched target to New chat");
   assert(!/(?:queueThemeChange|queueTokenChange|setStageOverride|apply-theme-patch|revision\s*\+\+)/.test(switchPreviewBlock),
     "The explicit preview action must remain preview-only");
+  assert.match(studioEditor,
+    /switchSupportedPreviewButton\?\.addEventListener\("click", switchToNewChatPreview\)/,
+    "The general unavailable-target action must use the preview-only switch");
+  assert.match(studioEditor,
+    /greetingSwitchPreviewButton\?\.addEventListener\("click", switchToNewChatPreview\)/,
+    "Greeting's New-chat-only action must use the preview-only switch");
   assert.match(studioEditor,
     /type:\s*"pick-theme-layer-image"[\s\S]{0,180}?index:\s*-1[\s\S]{0,140}?appearance:\s*selectedMode[\s\S]{0,100}?context:\s*stageContext/,
     "New images must default to the exact Light\/Dark and New chat\/Conversation state being edited");
@@ -1128,16 +1222,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioApp,
     /if \(!input\.checked\s*\|\|\s*appearancePending\s*\|\|\s*!state\.enabled\s*\|\|\s*!appearanceModes\.has\(input\.value\)\) return/,
     "A stale or scripted appearance change must not leave Studio while Original look is active");
-  for (const copy of ["Appearance mode", "外观模式", "外觀模式", "跟随系统", "跟隨系統"]) {
-    assert(studioApp.includes(copy), `Studio appearance copy is missing ${copy}`);
-  }
-  for (const copy of [
-    "System follows Windows. Light and Dark apply to Claude Aura and Studio.",
-    "“跟随系统”会使用 Windows 的外观设置；选择“浅色”或“深色”后，Claude Aura 和 Studio 会同步切换。",
-    "「跟隨系統」會使用 Windows 的外觀設定；選擇「淺色」或「深色」後，Claude Aura 和 Studio 會一起切換。",
-  ]) {
-    assert(studioApp.includes(`appearanceHelp: "${copy}"`),
-      `Studio appearance help does not explain the shared Aura/Studio effect: ${copy}`);
+  const appearanceCopy = (await readStudioCopy()).shell;
+  for (const locale of STUDIO_LOCALES) {
+    for (const key of ["appearanceMode", "appearanceSystem", "appearanceLight", "appearanceDark", "appearanceHelp"]) {
+      assert(String(appearanceCopy[locale]?.[key] ?? "").trim(),
+        `${locale} is missing Studio appearance copy for ${key}`);
+    }
   }
   const applyStudioStyleStart = studioApp.indexOf("const applyStudioStyle = () => {");
   const applyStudioStyleEnd = studioApp.indexOf("railThemeMark.addEventListener", applyStudioStyleStart);
@@ -1387,8 +1477,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioApp,
     /document\.getElementById\("open-aura"\)\.addEventListener\("click",\s*\(\)\s*=>\s*send\(\{\s*type:\s*"open-aura"\s*\}\)\)/,
     "Studio must send a type-only open-aura bridge message");
-  for (const copy of ["Back to Claude Aura", "返回 Claude Aura", "回到 Claude Aura"]) {
-    assert(studioApp.includes(`auraWindow: "${copy}"`), `Studio back-navigation copy is missing ${copy}`);
+  const auraNavigationCopy = (await readStudioCopy()).shell;
+  for (const locale of STUDIO_LOCALES) {
+    assert(String(auraNavigationCopy[locale]?.auraWindow ?? "").trim(),
+      `${locale} is missing the Studio back-navigation label`);
   }
   const documentFrameRule = studioCss.match(/html,\s*\nbody\s*\{([^}]*)\}/)?.[1] ?? "";
   assert.match(documentFrameRule, /width:\s*100%/);
@@ -1548,14 +1640,38 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Built-in theme cards must expose duplicate-to-customize instead of direct editing");
   assert.match(studioApp, /type:\s*"begin-theme-edit",\s*theme:\s*theme\.name,\s*reset:\s*false/,
     "User theme cards must begin an explicit edit session");
+  // The page rejects a whole theme list when one entry carries an unexpected
+  // key, so a saved duplicate silently never reaches the gallery if the host
+  // and the page disagree on this shape. Keep both sides of the wire in step.
+  const themeMetadataBody = powershellFunction("ConvertTo-AuraUiThemeMetadata");
+  const hostMetadataKeys = [...themeMetadataBody
+    .slice(themeMetadataBody.indexOf("[PSCustomObject]@{"))
+    .matchAll(/^\s{4}([A-Za-z][A-Za-z0-9]*)\s*=/gm)].map((match) => match[1]);
+  assert(hostMetadataKeys.length > 0, "The host theme metadata shape could not be read");
+  const pageThemeKeys = [...(studioApp.match(/const hostThemeKeys = new Set\(\[[\s\S]*?\]\)/) ?? [""])[0]
+    .matchAll(/"([a-zA-Z]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(hostMetadataKeys.slice().sort(), pageThemeKeys.slice().sort(),
+    "Every theme field the host posts must be one the Studio page accepts, and vice versa");
+  assert.match(studioApp,
+    /value\.studioPreview !== null && !studioPreviewUrl[\s\S]{0,400}?value\.studioPreviewFrame !== undefined && value\.studioPreviewFrame !== null/,
+    "A theme with no card preview must normalize as unframed instead of invalidating the whole posted list");
   assert.match(studioEditor, /send\(\{\s*type:\s*"delete-user-theme",\s*theme\s*\}\)/,
     "User theme deletion must send only the validated theme id");
   assert.match(studioEditor, /\["launcher-mark",\s*"slotLauncherMark"\]/,
     "The local customization prompt builder must offer the app and launcher mark slot");
-  assert.match(studioEditor, /launcherPromptTemplate[\s\S]{0,420}?96×96[\s\S]{0,260}?72×72/,
-    "The launcher prompt must name the exact output size and compact safe area");
-  assert.match(studioEditor, /promptRuleLauncher[\s\S]{0,280}?(?:title bar|标题栏|標題列)/,
-    "The launcher prompt must explain that one theme mark serves the complete app identity");
+  const localizedLauncherCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    const launcherPrompt = String(localizedLauncherCopy[locale]?.launcherPromptTemplate ?? "");
+    assert(/96\u00d796/.test(launcherPrompt) && /72\u00d772/.test(launcherPrompt),
+      `${locale} launcher prompt must name the exact output size and compact safe area`);
+  }
+  for (const locale of STUDIO_LOCALES) {
+    const launcherRule = String(localizedLauncherCopy[locale]?.promptRuleLauncher ?? "");
+    assert(launcherRule.trim(), `${locale} launcher prompt must explain its app-identity role`);
+  }
+  assert.match(String(localizedLauncherCopy.en?.promptRuleLauncher ?? ""), /title bar/i,
+    "The English launcher prompt must explain that one theme mark serves the complete app identity");
+
   assert(!/(?:fetch\s*\(|XMLHttpRequest|WebSocket|EventSource|chrome\s*\.\s*webview|postMessage\s*\()/i.test(studioEditor),
     "The editor module must not own network or host-bridge access");
   assert(!/(?:dragstart|dragend|ondrop|dataTransfer)/i.test(studioEditor),
@@ -1646,13 +1762,30 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     Object.keys(expectedEditorMessageShapes),
   "The editor page and Windows host must share the exact editor action allowlist");
 
-  const editorStringsMatch = studioEditor.match(/const STRINGS\s*=\s*(\{[\s\S]*?\r?\n  \});\r?\n\r?\n  const ID_PATTERN/);
-  assert(editorStringsMatch, "Editor locale dictionaries could not be isolated");
-  const editorStrings = new Function(`return (${editorStringsMatch[1]});`)();
-  assert.deepEqual(Object.keys(editorStrings).sort(), ["en", "zh-CN", "zh-TW"]);
+  // A lost host reply used to strand `pendingAction` forever, and flushThemeChanges
+  // then queued every later edit without ever sending it: the editor looked alive
+  // while silently discarding the user's work. The watchdog must recover the session.
+  const pendingWatchdogBlock = studioEditor.match(/const setPending = \([\s\S]*?\n    \};/)?.[0] ?? "";
+  assert(pendingWatchdogBlock, "the editor pending-action gate could not be isolated");
+  assert.match(pendingWatchdogBlock, /pendingWatchdog = setTimeout\(/,
+    "a pending editor action must arm a watchdog so a lost reply cannot strand the session");
+  assert.match(pendingWatchdogBlock, /requeueInFlightChanges\(\)[\s\S]{0,120}?flushThemeChanges\(\)/,
+    "a timed-out action must requeue its in-flight changes and flush them again");
+  assert.match(pendingWatchdogBlock, /WATCHDOG_EXEMPT_ACTIONS\.has\(action\)/,
+    "file-picker actions wait on the user and must be exempt from the watchdog");
+  assert.match(studioEditor,
+    /WATCHDOG_EXEMPT_ACTIONS = new Set\(\["pick-theme-layer-image", "pick-theme-launcher-mark"\]\)/,
+    "only the two picker actions may skip the pending-action watchdog");
+
+  assert.match(studioEditor,
+    /const STRINGS = Object\.fromEntries\(\s*Object\.entries\(window\.CLAUDE_AURA_STRINGS \?\? \{\}\)/,
+    "Editor copy must come from the per-language files in studio/locales");
+  const studioCopy = await readStudioCopy();
+  const editorStrings = studioCopy.editor;
+  assert.deepEqual(studioCopy.locales.sort(), STUDIO_LOCALES.slice().sort());
   const editorCopyKeys = Object.keys(editorStrings.en).sort();
   assert(editorCopyKeys.length >= 180, "The editor locale surface is unexpectedly incomplete");
-  for (const locale of ["zh-CN", "zh-TW"]) {
+  for (const locale of STUDIO_LOCALES.filter((locale) => locale !== "en")) {
     assert.deepEqual(Object.keys(editorStrings[locale]).sort(), editorCopyKeys,
       `${locale} editor copy does not cover the same UI states as English`);
     for (const key of editorCopyKeys) assert(String(editorStrings[locale][key]).trim(), `${locale}.${key} is empty`);
@@ -1661,15 +1794,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.equal(editorStrings["zh-CN"].addLayer, "添加图层");
   assert.equal(editorStrings["zh-CN"].saveTheme, "保存主题");
   assert.equal(editorStrings["zh-CN"].fullWindow, "整个窗口");
-  assert.equal(editorStrings["zh-TW"].interfaceFont, "介面字體");
-  assert.equal(editorStrings["zh-TW"].addLayer, "新增圖層");
-  assert.equal(editorStrings["zh-TW"].saveTheme, "儲存主題");
-  assert.equal(editorStrings["zh-TW"].fullWindow, "整個視窗");
-  assert.notEqual(editorStrings["zh-CN"].guideOnlyNotice, editorStrings["zh-TW"].guideOnlyNotice,
+  assert.equal(editorStrings["zh-HKTW"].interfaceFont, "介面字體");
+  assert.equal(editorStrings["zh-HKTW"].addLayer, "新增圖層");
+  assert.equal(editorStrings["zh-HKTW"].saveTheme, "儲存主題");
+  assert.equal(editorStrings["zh-HKTW"].fullWindow, "整個視窗");
+  assert.notEqual(editorStrings["zh-CN"].guideOnlyNotice, editorStrings["zh-HKTW"].guideOnlyNotice,
     "Simplified and Traditional Chinese editor guidance must remain independently authored");
   assert.match(editorStrings.en.stageContextMismatch, /Open \{0} in Aura once[\s\S]*editing session/);
   assert.match(editorStrings["zh-CN"].stageContextMismatch, /Aura[\s\S]*打开一次\{0}[\s\S]*本次编辑/);
-  assert.match(editorStrings["zh-TW"].stageContextMismatch, /Aura[\s\S]*開啟一次\{0}[\s\S]*這次編輯/);
+  assert.match(editorStrings["zh-HKTW"].stageContextMismatch, /Aura[\s\S]*開啟一次\{0}[\s\S]*這次編輯/);
 
   assert.match(studioHtml, /id="nav-editor"[^>]+href="#editor"[^>]+hidden/,
     "The editor navigation destination must appear only during an active edit session");
@@ -1710,11 +1843,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface\.new-chat-area"/,
     "Canvas selection must route the new-chat area to its Interface target in both editor levels");
-  for (const [id, locale] of [["editor-label-en", "en"], ["editor-label-zh-cn", "zh-CN"], ["editor-label-zh-tw", "zh-TW"]]) {
+  for (const [id, locale] of [["editor-label-en", "en"], ["editor-label-zh-cn", "zh-CN"], ["editor-label-zh-HKTW", "zh-HKTW"]]) {
     assert.match(studioHtml, new RegExp(`id="${id}"[^>]+maxlength="80"[^>]+data-editor-metadata="label"[^>]+data-editor-locale="${locale}"`),
       `${locale} theme names must use the localized 80-character metadata contract`);
   }
-  for (const [id, locale] of [["editor-description-en", "en"], ["editor-description-zh-cn", "zh-CN"], ["editor-description-zh-tw", "zh-TW"]]) {
+  for (const [id, locale] of [["editor-description-en", "en"], ["editor-description-zh-cn", "zh-CN"], ["editor-description-zh-HKTW", "zh-HKTW"]]) {
     assert.match(studioHtml, new RegExp(`id="${id}"[^>]+maxlength="220"[^>]+data-editor-metadata="description"[^>]+data-editor-locale="${locale}"`),
       `${locale} theme descriptions must use the localized 220-character metadata contract`);
   }
@@ -1807,7 +1940,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditor, /state\.layers\.length\s*>=\s*8/,
     "The editor must disable or reject a ninth artwork layer");
   assert.match(studioEditor,
-    /saveButton\.disabled\s*=\s*busy\s*\|\|\s*\(state\.feedback\.valid\s*&&\s*\(blocked\s*\|\|\s*\(!state\.dirty\s*&&\s*!state\.isNew\)\)\)/,
+    /const localGreetingWork\s*=\s*greetingPreferenceDraftDirty\s*\|\|\s*greetingPreferenceInputDirty/,
+    "Save state must treat both valid greeting drafts and invalid greeting input as local work");
+  assert.match(studioEditor,
+    /saveButton\.disabled\s*=\s*busy[\s\S]{0,180}?state\.feedback\.valid[\s\S]{0,140}?!state\.dirty\s*&&\s*!localGreetingWork\s*&&\s*!state\.isNew/,
     "A fresh duplicate and an invalid draft must keep Save actionable for saving or issue recovery");
   assert.match(studioHtml,
     /id="editor-save"[^>]+aria-describedby="editor-quick-feedback editor-error-summary"/,
@@ -1817,7 +1953,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditor, /saveButton\.addEventListener\("click",\s*performSave\)/,
     "The Save button must invoke the shared save handler so click and keyboard save behave identically");
   assert.match(saveHandlerBlock,
-    /!state\?\.feedback\.valid[\s\S]{0,180}?focusBelowInspector\(errorSummary\)[\s\S]{0,120}?announce\(tr\("saveBlocked"\),\s*"error"\)/,
+    /!state\?\.feedback\.valid[\s\S]{0,500}?focusBelowInspector\(errorSummary\)[\s\S]{0,120}?announce\(tr\("saveBlocked"\),\s*"error"\)/,
     "Activating Save on an invalid draft must focus and announce its recovery summary");
   assert.match(studioEditor, /const performUndo = \(\) => \{\s*if \(undoButton\.disabled\) return;/,
     "Undo must share one guarded handler so the button and keyboard obey the same disabled state");
@@ -1889,7 +2025,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /exactShape\(value,\s*\["type",\s*"image",\s*"width",\s*"height",\s*"revision",\s*"request"\]/,
     "Studio must reject mirror messages that omit the accepted editor revision or preview request id");
   assert.match(studioEditor,
-    /exactShape\(value\.geometry,\s*\["context",\s*"mode",\s*"viewport",\s*"main",\s*"prompt"\]\)[\s\S]{0,260}?enumValue\(value\.geometry\.viewport,\s*\["normal",\s*"wide"\]\)/,
+    /exactShape\(value\.geometry,\s*\["context",\s*"mode",\s*"viewport",\s*"main",\s*"prompt",\s*"greeting"\]\)[\s\S]{0,360}?enumValue\(value\.geometry\.viewport,\s*\["normal",\s*"wide"\]\)/,
     "Studio must require an exact renderer-provided normal/wide viewport on measured geometry");
   assert.match(receiveMirrorBlock,
     /mirror\.revision\s*!==\s*state\?\.revision[\s\S]{0,180}?mirror\.request\s*!==\s*previewExpectedRequest[\s\S]{0,180}?previewSizeEditing[\s\S]{0,260}?mirror\.width\s*!==\s*previewSizeIntent\[0\]/,
@@ -1945,13 +2081,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && stageEvidence[2].includes("not a Claude preview")
       && stageEvidence[2].includes("acceptance evidence"),
   "Quick and Advanced must both show the compact not-Claude/not-evidence stage caveat");
-  for (const copy of [
-    "Placement aid · not a Claude preview or acceptance evidence",
-    "构图辅助 · 不是 Claude 预览或验收证据",
-    "構圖輔助 · 不是 Claude 預覽或驗收依據",
-  ]) {
-    assert(studioEditor.includes(`stageEvidence: "${copy}"`),
-      `The visible stage caveat is missing native locale copy: ${copy}`);
+  const stageEvidenceCopy = (await readStudioCopy()).editor;
+  for (const locale of STUDIO_LOCALES) {
+    assert(String(stageEvidenceCopy[locale]?.stageEvidence ?? "").trim(),
+      `${locale} is missing the visible stage caveat`);
   }
   assert.match(studioHtml, /Nothing is sent to a model or network service/,
     "The local prompt builder must disclose its offline behavior");
@@ -2193,8 +2326,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   const stageSelectionModeBlock = studioEditor.match(
     /const syncStageSelectionMode\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
   assert.match(stageSelectionModeBlock,
-    /dataset\.selectionBranch\s*=\s*inspectorBranch[\s\S]{0,240}?inspectorBranch === "interface"[\s\S]{0,260}?inspectorBranch === "background"/,
-    "The active branch must control both prompt and artwork keyboard hit-testing");
+    /dataset\.selectionBranch\s*=\s*inspectorBranch[\s\S]{0,260}?setStageNodeInteractive\(prompt,\s*inspectorBranch === "interface"[\s\S]{0,200}?setStageNodeInteractive\(greeting,\s*inspectorBranch === "interface"[\s\S]{0,220}?setStageNodeInteractive\(item,\s*inspectorBranch === "background"/,
+    "The active branch must control prompt, greeting, and artwork keyboard hit-testing");
   assert.match(stageSelectionModeBlock,
     /palette\.hidden\s*=\s*inspectorBranch !== "background"/,
     "The image palette must not offer cross-branch selection while Interface or Widgets is active");
@@ -2216,9 +2349,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The host-only App identity may be selected only through its local preview");
   assert(!studioEditor.includes("stage-chip-prompt"),
     "The Background image palette must not expose an Interface target");
-  assert.match(studioEditorCss,
-    /\.editor-stage\[data-selection-branch="interface"\]\s+\.stage-layer\s+\.stage-item,[\s\S]{0,320}?\.editor-stage\[data-selection-branch="background"\]\s+\.stage-prompt[\s\S]{0,180}?\{[^}]*pointer-events:\s*none/,
-    "Non-matching visible objects must remain click-through for the active selection tool");
+  const clickThroughRule = studioEditorCss.match(
+    /\.editor-stage\[data-selection-branch="interface"\]\s+\.stage-layer\s+\.stage-item,[\s\S]*?\{[^}]*pointer-events:\s*none;[^}]*\}/,
+  )?.[0] ?? "";
+  for (const selector of [
+    '.editor-stage[data-selection-branch="background"] .stage-prompt',
+    '.editor-stage[data-selection-branch="background"] .stage-greeting',
+    '.editor-stage[data-selection-branch="widgets"] .stage-prompt',
+    '.editor-stage[data-selection-branch="widgets"] .stage-greeting',
+  ]) {
+    assert(clickThroughRule.includes(selector),
+      `${selector} must remain click-through for the active selection tool`);
+  }
   const stageKeyboardBlock = studioEditor.match(
     /stageRoot\.addEventListener\("keydown"[\s\S]*?\n\s*}\);/)?.[0] ?? "";
   assert.match(stageKeyboardBlock, /!state \|\| isBlockingAction\(\)/,
@@ -2286,16 +2428,43 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     [
       "interface.theme",
       "interface.new-chat-area",
+      "interface.greeting",
       "background.canvas",
       "background.layer",
       "widgets.app-identity",
     ],
-    "The host-owned capability registry must contain only WO-18 targets",
+    "The host-owned capability registry must contain the WO-18 targets plus the WO-21 greeting",
   );
+  assert(editorApi.capabilityRegistry
+    .find((entry) => entry.id === "interface.greeting")?.axes.includes("frame"),
+    "The greeting target must retain Light/Dark and Standard/Wide edit axes");
+  // Every inspector target that owns a control section must have a matching editor.css
+  // visibility rule, or the section stays hidden in the app even though the target is
+  // selectable in the picker — exactly how the WO-21 greeting panel first regressed.
+  const sectionTargets = new Set(
+    [...studioHtml.matchAll(/data-editor-targets="([^"]+)"/g)]
+      .flatMap((match) => match[1].split(/\s+/)),
+  );
+  assert(sectionTargets.has("interface.greeting"),
+    "The greeting control section must declare the interface.greeting target");
+  for (const target of sectionTargets) {
+    assert(studioEditorCss.includes(`data-inspector-target="${target}"`),
+      `editor.css has no section-visibility rule for the ${target} inspector target`);
+  }
   assert.deepEqual(
     editorApi.capabilityRegistry.find((entry) => entry.id === "interface.new-chat-area")?.axes,
     [],
     "Shared new-chat placement must not claim separate Standard and Wide saved values",
+  );
+  assert.equal(
+    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.new-chat-area")?.selectionBehavior,
+    "stage-prompt",
+    "New-chat-area selection must route to the prompt geometry",
+  );
+  assert.equal(
+    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.greeting")?.selectionBehavior,
+    "stage-greeting",
+    "Greeting selection must route to the greeting geometry",
   );
   assert(editorApi.capabilityRegistry
     .find((entry) => entry.id === "background.layer")?.axes.includes("frame"),
@@ -2329,6 +2498,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     assert.equal(editorApi.normalizeCapabilityRegistry(candidate), null,
       `Capability registry accepted ${label}`);
   }
+  const greetingFrame = {
+    font: "editorial-serif", color: "primary", fontSize: 34, weight: 500,
+    italic: false, align: "center", letterSpacing: -0.01, lineHeight: 1.15,
+    maxWidthRatio: 0.72, xRatio: 0, yRatio: 0, decoration: "none",
+    markSource: "native", markScale: 1,
+  };
   const validEditorState = {
     active: true,
     id: "studio-copy",
@@ -2342,8 +2517,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     canRedo: false,
     label: "Studio Copy",
     metadata: {
-      labels: { en: "Studio Copy", "zh-CN": "Studio 副本", "zh-TW": "Studio 副本" },
-      descriptions: { en: "Custom theme", "zh-CN": "自定义主题", "zh-TW": "自訂主題" },
+      labels: { en: "Studio Copy", "zh-CN": "Studio 副本", "zh-HKTW": "Studio 副本" },
+      descriptions: { en: "Custom theme", "zh-CN": "自定义主题", "zh-HKTW": "自訂主題" },
     },
     tokens: {
       light: { canvas: "#F8F8F8", sidebar: "#EFEFEF", surface: "#FFFFFF", text: "#202020", accent: "#805AD5", border: "#777777", surfaceAlpha: 0.9, sidebarAlpha: 0.8 },
@@ -2381,7 +2556,29 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     shared: {
       fontUi: "system-sans", fontDisplay: "editorial-serif", radius: 12, blur: 16,
       shadow: "soft", backgroundScope: "content", prompt: { native: false, width: 0.7, x: 0, y: 0 },
+      greeting: {
+        native: false,
+        compactMarkAvailable: false,
+        frames: {
+          light: {
+            standard: { ...greetingFrame },
+            wide: { ...greetingFrame, maxWidthRatio: 0.66 },
+          },
+          dark: {
+            standard: { ...greetingFrame, color: "accent" },
+            wide: { ...greetingFrame, color: "accent", xRatio: -0.05 },
+          },
+        },
+      },
       inherited: { fontUi: false, fontDisplay: false, radius: false, shadow: false },
+    },
+    greetingPreferences: {
+      enabled: true,
+      source: "custom",
+      displayName: "Eric",
+      globalPhrases: ["Hey, early bird", "Welcome back, {name}"],
+      themeOverrides: { "studio-copy": { mode: "global", phrases: [] } },
+      shuffle: null,
     },
     layers: [{
       id: "layer-00000000000000000000000000000000", index: 0,
@@ -2447,6 +2644,134 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   extraInheritedState.shared.inherited.blur = true;
   assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(extraInheritedState), undefined,
     "Editor state accepted an uncontracted inherited-control flag");
+  // WO-21 greeting: the shared state carries the exact independent
+  // Light/Dark x Standard/Wide matrix. Every frame round-trips unchanged and
+  // rejects unknown fields plus every out-of-bounds control value.
+  const greetingFrameKeys = [
+    "align", "color", "decoration", "font", "fontSize", "italic", "letterSpacing",
+    "lineHeight", "markScale", "markSource", "maxWidthRatio", "weight", "xRatio", "yRatio",
+  ];
+  assert.deepEqual(Object.keys(normalizedEditorState.shared.greeting).sort(),
+    ["compactMarkAvailable", "frames", "native"],
+    "Editor state changed the exact greeting DTO shape");
+  assert.deepEqual(Object.keys(normalizedEditorState.shared.greeting.frames).sort(), ["dark", "light"]);
+  for (const appearance of ["light", "dark"]) {
+    assert.deepEqual(
+      Object.keys(normalizedEditorState.shared.greeting.frames[appearance]).sort(),
+      ["standard", "wide"],
+    );
+    for (const frame of ["standard", "wide"]) {
+      assert.deepEqual(
+        Object.keys(normalizedEditorState.shared.greeting.frames[appearance][frame]).sort(),
+        greetingFrameKeys,
+      );
+    }
+  }
+  assert.deepEqual(normalizedEditorState.shared.greeting, validEditorState.shared.greeting,
+    "Editor-state validation changed the projected greeting style");
+  const emojiNameState = structuredClone(validEditorState);
+  emojiNameState.greetingPreferences.displayName = "😀".repeat(40);
+  assert(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(emojiNameState),
+    "Editor state rejected a valid 40-scalar supplementary-plane display name");
+  const overlongEmojiNameState = structuredClone(validEditorState);
+  overlongEmojiNameState.greetingPreferences.displayName = "😀".repeat(41);
+  assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(overlongEmojiNameState), undefined,
+    "Editor state counted a display name by UTF-16 code units instead of Unicode scalars");
+  const completeGreetingState = structuredClone(validEditorState);
+  completeGreetingState.shared.greeting.frames.light.standard.weight = 650;
+  completeGreetingState.shared.greeting.frames.light.standard.decoration = "glow";
+  assert(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(completeGreetingState),
+    "Editor state rejected core-supported weight 650 or glow decoration");
+  const unavailableCompactState = structuredClone(validEditorState);
+  unavailableCompactState.shared.greeting.frames.light.standard.markSource = "compact";
+  assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(unavailableCompactState), undefined,
+    "Editor state accepted a compact mark without a registered recipe capability");
+  const availableCompactState = structuredClone(unavailableCompactState);
+  availableCompactState.shared.greeting.compactMarkAvailable = true;
+  assert(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(availableCompactState),
+    "Editor state rejected a compact mark for a registered recipe");
+  for (const [label, mutate] of [
+    ["a missing greeting projection", (state) => { delete state.shared.greeting; }],
+    ["an extra greeting field", (state) => { state.shared.greeting.uppercase = true; }],
+    ["a non-boolean native marker", (state) => { state.shared.greeting.native = "false"; }],
+    ["a missing frame", (state) => { delete state.shared.greeting.frames.dark.wide; }],
+    ["a non-boolean italic flag", (state) => { state.shared.greeting.frames.light.standard.italic = 1; }],
+    ["an out-of-range size", (state) => { state.shared.greeting.frames.light.standard.fontSize = 200; }],
+    ["an unknown font category", (state) => { state.shared.greeting.frames.light.standard.font = "comic-sans"; }],
+    ["an unknown colour role", (state) => { state.shared.greeting.frames.light.standard.color = "muted"; }],
+    ["an unsupported weight", (state) => { state.shared.greeting.frames.light.standard.weight = 450; }],
+    ["an out-of-range offset", (state) => { state.shared.greeting.frames.light.standard.xRatio = 5; }],
+    ["an unknown mark source", (state) => { state.shared.greeting.frames.light.standard.markSource = "hero"; }],
+  ]) {
+    const candidate = structuredClone(validEditorState);
+    mutate(candidate);
+    assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(candidate), undefined,
+      `Editor state accepted ${label}`);
+  }
+  // Greeting controls emit one complete bounded frame for the selected
+  // appearance/viewport, route it through one history mutation, and project
+  // the full matrix back into canonical state.
+  assert.match(studioEditor,
+    /kind:\s*"greeting",\s*operation:\s*"set-frame",\s*appearance:\s*selectedMode,\s*frame:\s*greetingFrameId\(\),\s*value:\s*frame/,
+    "Greeting controls must emit one complete scoped greeting frame");
+  assert.match(studioCore,
+    /greeting:\s*\["kind",\s*"operation",\s*"appearance",\s*"frame",\s*"value"\]/,
+    "The host must accept the exact greeting patch shape");
+  assert.match(corePatchBlock, /change\.kind === "greeting"\)\s*mutateStudioGreetingDocument/,
+    "One atomic patch must route greeting changes to the greeting mutator");
+  assert.match(studioCore,
+    /greeting:\s*studioGreetingState\([\s\S]{0,120}?studioGreetingCompactMarkAvailable\(document\)/,
+    "Canonical Studio state must project greeting frames and compact-mark capability together");
+  assert.match(studioCore, /document\.newChatGreetingStyle\s*=\s*validateNewChatGreetingStyle\(/,
+    "Greeting edits must re-validate the exact newChatGreetingStyle shape before persisting");
+
+  // WO-21 personal greeting words. This envelope is host-owned config, never
+  // theme data. It round-trips with an aligned private history so theme and
+  // personal drafts save or cancel as one transaction.
+  assert.deepEqual(Object.keys(normalizedEditorState.greetingPreferences).sort(),
+    ["displayName", "enabled", "globalPhrases", "shuffle", "source", "themeOverrides"],
+    "The personal greeting envelope changed its exact DTO shape");
+  assert.deepEqual(normalizedEditorState.greetingPreferences, validEditorState.greetingPreferences,
+    "Editor-state validation changed the personal greeting envelope");
+  for (const [label, mutate] of [
+    ["a missing personal envelope", (state) => { delete state.greetingPreferences; }],
+    ["an extra personal field", (state) => { state.greetingPreferences.rawHtml = "<b>x</b>"; }],
+    ["a non-boolean enabled marker", (state) => { state.greetingPreferences.enabled = "true"; }],
+    ["an unknown greeting source", (state) => { state.greetingPreferences.source = "random"; }],
+    ["an over-long display name", (state) => { state.greetingPreferences.displayName = "n".repeat(41); }],
+    ["too many phrases", (state) => { state.greetingPreferences.globalPhrases = Array.from({ length: 13 }, (_, i) => `p${i}`); }],
+    ["a duplicate phrase", (state) => { state.greetingPreferences.globalPhrases = ["same", "same"]; }],
+    ["an over-long phrase", (state) => { state.greetingPreferences.globalPhrases = ["p".repeat(121)]; }],
+    ["a repeated name token", (state) => { state.greetingPreferences.globalPhrases = ["{name} and {name}"]; }],
+    ["an unknown token", (state) => { state.greetingPreferences.globalPhrases = ["Hi, {account}"]; }],
+    ["an invalid override mode", (state) => { state.greetingPreferences.themeOverrides["studio-copy"].mode = "inherit"; }],
+    ["an empty custom override", (state) => {
+      state.greetingPreferences.themeOverrides["studio-copy"] = { mode: "custom", phrases: [] };
+    }],
+    ["an invalid shuffle digest", (state) => {
+      state.greetingPreferences.shuffle = {
+        themeId: "studio-copy", phraseDigest: "nope", order: [0], cursor: 0, lastIndex: null,
+      };
+    }],
+  ]) {
+    const candidate = structuredClone(validEditorState);
+    mutate(candidate);
+    assert.equal(editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(candidate), undefined,
+      `Editor state accepted ${label}`);
+  }
+  const greetingPhrasesBlock = studioCore.match(
+    /export async function setGreetingPhrases\([\s\S]*?\n\}/)?.[0] ?? "";
+  assert(greetingPhrasesBlock, "The host personal greeting handler is missing");
+  assert.match(greetingPhrasesBlock, /mutateStudio\(/,
+    "Personal greeting words must participate in the aligned Studio history");
+  assert(!/writeConfig\(/.test(greetingPhrasesBlock),
+    "Personal words must remain staged until the atomic Save");
+  assert.match(greetingPhrasesBlock, /cloneJson\(internal\.greetingCurrent\.themeOverrides/,
+    "A per-theme greeting edit must preserve every other local override");
+  assert.match(studioCore, /greetingPreferences:\s*cloneJson\(internal\.greetingCurrent\)/,
+    "Canonical Studio state must project the current host-owned greeting draft");
+  assert.match(studioEditor, /stageContext === "new-chat"\s*\?\s*\[stageGreetingEl, stagePromptEl\]/,
+    "The stage must draw the greeting above the new-chat prompt so placement controls have an effect");
   for (const property of ["launcherPreviewUrl", "launcherStylePreviewUrl"]) {
     const unsafePreviewState = structuredClone(validEditorState);
     unsafePreviewState[property] = "https://example.com/launcher.png";
@@ -2532,6 +2857,20 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   const studioThemes = JSON.parse(generatedMatch[1]);
   assert.deepEqual(Object.keys(studioThemes), THEME_IDS);
   const registryThemes = new Map((await listThemes()).map((theme) => [theme.name, theme]));
+  const compactGreetingRecipes = new Set([
+    "japanese-film-editorial", "korean-prestige", "japanese-idol",
+  ]);
+  for (const themeId of THEME_IDS) {
+    const candidate = structuredClone(validEditorState);
+    candidate.shared.greeting = studioGreetingState(
+      registryThemes.get(themeId).newChatGreetingStyle,
+      compactGreetingRecipes.has(themeId),
+    );
+    const normalized = editorWindow.CLAUDE_AURA_EDITOR.normalizeEditorState(candidate);
+    assert(normalized, `${themeId} greeting recipe was rejected by the browser-state validator`);
+    assert.equal(normalized.shared.greeting.compactMarkAvailable, compactGreetingRecipes.has(themeId),
+      `${themeId} projected the wrong compact-mark capability`);
+  }
   let selectorPreviewCount = 0;
   for (const themeId of THEME_IDS) {
     const expectedPath = themeId === "default" ? null : `assets/studio-previews/masters/${themeId}.png`;
@@ -2850,6 +3189,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(identityCandidateBuilder,
     /New-AuraUiMultiFramePngIconBytes -SourceBytes \$assetBytes[\s\S]{0,260}?Get-AuraUiShortcutIconPath -Style \$Style[\s\S]{0,180}?-LauncherAssetBytes \$assetBytes -ExpectedIconBytes \$expectedIconBytes[\s\S]{0,260}?Test-AuraUiOwnedShortcutIconPath -Path \$shortcutIconPath/,
     "The candidate ICO must resolve through the contained Aura-owned shortcut path");
+  // A duplicated theme is a user theme carrying a built-in mark. Rebuilding an
+  // ICO from the 96 px PNG can never match the authored multi-frame file, so
+  // that identity must take the built-in branch instead of failing to Default.
+  assert.match(identityCandidateBuilder,
+    /\$builtInThemeId = Get-AuraUiBuiltInLauncherThemeId -Style \$Style\s*\$expectedIconBytes = if \(-not \$builtInThemeId -and "\$\(\$Style\.source\)" -cin @\('user', 'editor'\)\)/,
+    "Only a genuinely custom mark may have its Windows identity rebuilt from the launcher PNG");
+  const builtInBranchIndex = identityCandidateBuilder.indexOf("if ($builtInThemeId) {");
+  assert(builtInBranchIndex > identityCandidateBuilder.indexOf("$builtInThemeId = Get-AuraUiBuiltInLauncherThemeId"),
+    "The built-in identity branch must reuse the same resolved theme id as the ICO derivation gate");
   const customIdentityIndex = identityCandidateBuilder.indexOf(
     "\"$($Style.source)\" -cin @('user', 'editor')");
   const customIcoGuardIndex = identityCandidateBuilder.indexOf("[a-f0-9]{{16}}\\.ico$", customIdentityIndex);
@@ -2905,8 +3253,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
 
   const launcherStyleUpdate = powershellFunction("Update-AuraUiLauncherStyle");
   assert.match(launcherStyleUpdate,
-    /\$requestedStyle = Get-AuraUiLauncherStyle[\s\S]{0,180}?\$defaultStyle = Get-AuraUiLauncherDefaultStyle[\s\S]{0,350}?source -NotePropertyValue 'builtin'[\s\S]{0,180}?theme -NotePropertyValue 'default'[\s\S]{0,120}?\$styles = @\(\$requestedStyle, \$defaultStyle\)/,
-    "The transaction must try the requested identity and then exactly one complete Default identity");
+    /\$requestedStyle = Get-AuraUiLauncherStyle[\s\S]{0,400}?\$defaultStyle = Resolve-AuraUiLauncherModeMaterial -Raw \(Get-AuraUiLauncherDefaultStyle\)[\s\S]{0,320}?-Dark \(Test-AuraUiDarkChrome\)[\s\S]{0,180}?source -NotePropertyValue 'builtin'[\s\S]{0,180}?theme -NotePropertyValue 'default'[\s\S]{0,120}?\$styles = @\(\$requestedStyle, \$defaultStyle\)/,
+    "The transaction must try the requested identity and then exactly one complete Default identity, resolved for the current appearance so a fallback never paints a dark launcher over a light theme");
   assert.match(launcherStyleUpdate,
     /for \(\$attempt = 0; \$attempt -lt 2; \$attempt\+\+\)[\s\S]{0,180}?\$candidate = New-AuraUiIdentityCandidate -Style \$styles\[\$attempt\]/,
     "Identity fallback must remain a bounded requested-then-Default sequence");
@@ -3305,15 +3653,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(!ui.includes("'Customize themes'"), "Picker chrome must come from localized UI copy");
   assert(!ui.includes("'Applying your look...'"), "Loading status must come from localized UI copy");
   assert.match(ui, /themeFallbackDescription/);
-  assert.deepEqual(Object.keys(uiCopy).sort(), ["en", "zh-CN", "zh-TW"]);
+  assert.deepEqual(Object.keys(uiCopy).sort(), ["en", "zh-CN", "zh-HKTW"]);
   const copyKeys = Object.keys(uiCopy.en).sort();
-  for (const locale of ["zh-CN", "zh-TW"]) {
+  for (const locale of ["zh-CN", "zh-HKTW"]) {
     assert.deepEqual(Object.keys(uiCopy[locale]).sort(), copyKeys, `${locale} UI copy is incomplete`);
     for (const key of copyKeys) assert(String(uiCopy[locale][key]).trim(), `${locale}.${key} is empty`);
   }
   assert.equal(uiCopy["zh-CN"].customizeThemes, "\u81ea\u5b9a\u4e49\u4e3b\u9898");
-  assert.equal(uiCopy["zh-TW"].customizeThemes, "\u81ea\u8a02\u4e3b\u984c");
-  assert.notEqual(uiCopy["zh-CN"].themeApplyDescription, uiCopy["zh-TW"].themeApplyDescription);
+  assert.equal(uiCopy["zh-HKTW"].customizeThemes, "\u81ea\u8a02\u4e3b\u984c");
+  assert.notEqual(uiCopy["zh-CN"].themeApplyDescription, uiCopy["zh-HKTW"].themeApplyDescription);
   const expectedStudioCopy = {
     en: {
       studioTitle: "Claude Aura Studio",
@@ -3339,7 +3687,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       themeInstallFailed: "主题安装失败：{0}",
       themeAlreadyInstalled: "名为{0}的主题已安装。",
     },
-    "zh-TW": {
+    "zh-HKTW": {
       studioTitle: "Claude Aura 工作室",
       openStudio: "開啟工作室",
       openDesktopApp: "開啟桌面版",
@@ -3365,6 +3713,34 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Windows exact-tree installer must include Aura Studio");
 
   if (process.platform === "win32") {
+    const compactPayloadStateRegression = [
+      "$ErrorActionPreference='Stop'",
+      `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for compact payload-state regression'}",
+      "foreach($name in @('Get-AuraUiPropertyValue','ConvertFrom-AuraUiPayloadSettings','Set-AuraUiPayloadState')){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing payload-state function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "function Update-AuraUiLauncherStyle {}",
+      "function Update-AuraUiLoadingTheme {}",
+      "function Update-AuraUiLauncherPosition {}",
+      "$script:ActiveThemeName=$null;$script:ActivePayloadDigest=$null;$script:ActiveLabel='honest label'",
+      "$digest=('a' * 64) -join ''",
+      "$poisonDigest=('b' * 64) -join ''",
+      "$css='body::before{content:''\"\"t\"\":\"\"poison-theme\"\" \"\"x\"\":\"\"' + $poisonDigest + '\"\" \"\"label\"\":\"\"poison label\"\"''}'",
+      "$settings=[ordered]@{t='studio-copy';x=$digest}",
+      "$payload='(() => {})(' + (ConvertTo-Json $css -Compress) + ',' + ($settings|ConvertTo-Json -Compress) + ')'",
+      "Set-AuraUiPayloadState -Payload $payload",
+      "if($script:ActiveThemeName -cne 'studio-copy'){throw 'Compact payload theme key did not update ActiveThemeName'}",
+      "if($script:ActivePayloadDigest -cne $digest){throw 'Compact payload digest key did not update ActivePayloadDigest'}",
+      "if($script:ActiveLabel -cne 'honest label'){throw 'CSS text impersonated the stripped runtime label'}",
+    ].join("\n");
+    run("powershell.exe", ["-NoProfile", "-EncodedCommand",
+      Buffer.from(compactPayloadStateRegression, "utf16le").toString("base64")]);
+
     const signInNavigationRegression = [
       "$ErrorActionPreference='Stop'",
       `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
@@ -3797,14 +4173,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "$tokens=$null;$errors=$null",
       "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
       "if($errors.Count){throw 'Could not parse Aura UI for editor bridge regression'}",
-      "foreach($name in @('Get-AuraUiPropertyValue','ConvertTo-AuraUiStudioNumber','ConvertTo-AuraUiStudioInteger','Assert-AuraUiStudioEditorRoots','Test-AuraUiStudioExactProperties','Assert-AuraUiStudioEditorPublicValue','Assert-AuraUiStudioEditorMessage','Get-AuraUiStudioMessage','Assert-AuraUiStudioEditorSession','Request-AuraUiMirror')){",
+      "foreach($name in @('Get-AuraUiPropertyValue','Get-AuraUiUnicodeScalarLength','ConvertTo-AuraUiStudioNumber','ConvertTo-AuraUiStudioInteger','Assert-AuraUiStudioEditorRoots','Test-AuraUiStudioExactProperties','Assert-AuraUiStudioEditorPublicValue','Assert-AuraUiStudioEditorMessage','Get-AuraUiStudioMessage','Assert-AuraUiStudioEditorSession','Request-AuraUiMirror','ConvertTo-AuraUiGreetingShuffleCheckpoint')){",
       "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
       "  if($null -eq $definition){throw \"Missing Studio editor bridge function $name\"}",
       "  Invoke-Expression $definition.Extent.Text",
       "}",
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-aura-preview','set-aura-topmost','refresh-aura-mirror')",
+      "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror')",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
       "$source='https://aura.studio/index.html'",
       "$script:StudioForm=[pscustomobject]@{IsDisposed=$false;Visible=$true}",
@@ -3815,7 +4192,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "if($null -eq $script:MirrorDue){throw 'Active editor could not schedule a mirror capture'}",
       "$script:StudioEditorState=[pscustomobject]@{active=$false}",
       "$valid=@(",
-      "  [ordered]@{type='set-locale';locale='zh-TW'},",
+      "  [ordered]@{type='set-locale';locale='ja'},",
+      "  [ordered]@{type='set-locale';locale='zh-HKTW'},",
       "  [ordered]@{type='complete-studio-introduction'},",
       "  [ordered]@{type='create-theme-copy';theme='default'},",
       "  [ordered]@{type='begin-theme-edit';theme='user-theme';reset=$false},",
@@ -3825,22 +4203,24 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  [ordered]@{type='apply-theme-patch';session=$session;revision=0;changes=@(",
       "    [ordered]@{kind='token';mode='shared';token='radius';value=12},",
       "    [ordered]@{kind='layer';index=0;preset='normal';property='scale';value=1.25},",
-      "    [ordered]@{kind='metadata';field='label';locale='zh-TW';value='Studio Copy'}",
+      "    [ordered]@{kind='metadata';field='label';locale='zh-HKTW';value='Studio Copy'}",
       "  )},",
       "  [ordered]@{type='pick-theme-layer-image';session=$session;revision=0;index=-1;role='hero';appearance='dark';context='conversation'},",
       "  [ordered]@{type='move-theme-layer';session=$session;revision=0;index=7;direction='up'},",
       "  [ordered]@{type='undo-theme-edit';session=$session;revision=0},",
       "  [ordered]@{type='save-theme-edit';session=$session;revision=0},",
-      "  [ordered]@{type='delete-user-theme';theme='user-theme'}",
+      "  [ordered]@{type='delete-user-theme';theme='user-theme'},",
+      "  [ordered]@{type='set-greeting-phrases';session=$session;revision=0;enabled=$true;source='custom';displayName=(([char]::ConvertFromUtf32(0x1F642)*40)-join '');globalPhrases=@((([char]::ConvertFromUtf32(0x1F642)*120)-join ''),'Welcome, {name}');overrideMode='custom';overridePhrases=@('Theme hello')},",
+      "  [ordered]@{type='reset-greeting';session=$session;revision=0}",
       ")",
       "foreach($message in $valid){$parsed=Get-AuraUiStudioMessage -Json ($message|ConvertTo-Json -Compress -Depth 8) -Source $source;if($parsed.type -cne $message.type){throw 'Valid editor message changed type'}}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":4}' -Source $source } 'a non-string action type'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"Set-Theme-Token\"}' -Source $source } 'a case-changed action'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"get-state\"}' -Source 'https://evil.invalid/' } 'a message from another origin'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\"}' -Source $source } 'a locale action with no locale'",
-      "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"ja\"}' -Source $source } 'an unsupported locale'",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"xx\"}' -Source $source } 'an unsupported locale'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":4}' -Source $source } 'a non-string locale'",
-      "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"zh-tw\"}' -Source $source } 'a case-changed locale'",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"zh-hktw\"}' -Source $source } 'a case-changed locale'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"en\",\"extra\":true}' -Source $source } 'an extra locale property'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"complete-studio-introduction\",\"completed\":true}' -Source $source } 'an extra introduction property'",
       "$safeProse=[pscustomobject]@{metadata=[pscustomobject]@{description='Try C:\\Themes\\sample or file: notes when documenting a theme.'}}",
@@ -3885,6 +4265,25 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($longMetadataLabel|ConvertTo-Json -Compress -Depth 8) -Source $source } 'an 81-character theme name'",
       "$longMetadataDescription=[ordered]@{type='apply-theme-patch';session=$session;revision=4;changes=@([ordered]@{kind='metadata';field='description';locale='en';value=('x'*221)})}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($longMetadataDescription|ConvertTo-Json -Compress -Depth 8) -Source $source } 'a 221-character theme description'",
+      "$caseChangedGreetingToken=[ordered]@{type='set-greeting-phrases';session=$session;revision=4;enabled=$true;source='custom';displayName='';globalPhrases=@('Hello, {NAME}');overrideMode='global';overridePhrases=@()}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($caseChangedGreetingToken|ConvertTo-Json -Compress -Depth 8) -Source $source } 'a case-changed greeting name token'",
+      "$emoji=[char]::ConvertFromUtf32(0x1F642)",
+      "$longGreetingName=[ordered]@{type='set-greeting-phrases';session=$session;revision=4;enabled=$true;source='custom';displayName=(($emoji*41)-join '');globalPhrases=@('Hello');overrideMode='global';overridePhrases=@()}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($longGreetingName|ConvertTo-Json -Compress -Depth 8) -Source $source } 'a 41-scalar greeting name'",
+      "$longGreetingPhrase=[ordered]@{type='set-greeting-phrases';session=$session;revision=4;enabled=$true;source='custom';displayName='';globalPhrases=@((($emoji*121)-join ''));overrideMode='global';overridePhrases=@()}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($longGreetingPhrase|ConvertTo-Json -Compress -Depth 8) -Source $source } 'a 121-scalar greeting phrase'",
+      "$canonicalDuplicate=[ordered]@{type='set-greeting-phrases';session=$session;revision=4;enabled=$true;source='custom';displayName='';globalPhrases=@(('e'+[char]0x301),'é');overrideMode='global';overridePhrases=@()}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($canonicalDuplicate|ConvertTo-Json -Compress -Depth 8) -Source $source } 'canonically equivalent duplicate greetings'",
+      "$validShuffle=ConvertFrom-Json -InputObject ('{\"themeId\":\"user-theme\",\"phraseDigest\":\"'+('a'*64)+'\",\"order\":[1,0],\"cursor\":1,\"lastIndex\":1}')",
+      "$shuffleCheckpoint=ConvertTo-AuraUiGreetingShuffleCheckpoint -Value $validShuffle -ExpectedTheme 'user-theme'",
+      "if($shuffleCheckpoint.order -isnot [System.Array] -or $shuffleCheckpoint.order.Count -ne 2 -or $shuffleCheckpoint.order[0] -ne 1 -or $shuffleCheckpoint.lastIndex -ne 1){throw 'Valid greeting shuffle checkpoint changed shape'}",
+      "$duplicateShuffle=ConvertFrom-Json -InputObject ('{\"themeId\":\"user-theme\",\"phraseDigest\":\"'+('a'*64)+'\",\"order\":[0,0],\"cursor\":1,\"lastIndex\":0}')",
+      "Assert-Rejected { ConvertTo-AuraUiGreetingShuffleCheckpoint -Value $duplicateShuffle -ExpectedTheme 'user-theme' } 'a duplicate greeting shuffle index'",
+      "Assert-Rejected { ConvertTo-AuraUiGreetingShuffleCheckpoint -Value $validShuffle -ExpectedTheme 'other-theme' } 'a greeting shuffle checkpoint for another theme'",
+      "$extraShuffle=ConvertFrom-Json -InputObject ('{\"themeId\":\"user-theme\",\"phraseDigest\":\"'+('a'*64)+'\",\"order\":[1,0],\"cursor\":1,\"lastIndex\":1,\"phrase\":\"private\"}')",
+      "Assert-Rejected { ConvertTo-AuraUiGreetingShuffleCheckpoint -Value $extraShuffle -ExpectedTheme 'user-theme' } 'a greeting shuffle checkpoint containing phrase text'",
+      "$extraReset=[ordered]@{type='reset-greeting';session=$session;revision=4;extra=$true}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($extraReset|ConvertTo-Json -Compress) -Source $source } 'an extra reset-greeting property'",
       "$originalLocalAppData=$env:LOCALAPPDATA",
       "try{",
       "  $env:LOCALAPPDATA=Join-Path $testRoot 'local-app-data'",
@@ -3903,9 +4302,26 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  if(Test-Path -LiteralPath $testRoot){[IO.Directory]::Delete($testRoot,$true)}",
       "}",
     ].join("\n");
+    const editorBridgeScript = path.join(
+      PROJECT_ROOT,
+      "dist",
+      `test-studio-editor-bridge-${process.pid}-${Date.now()}.ps1`,
+    );
     try {
-      run("powershell.exe", ["-NoProfile", "-EncodedCommand", Buffer.from(editorBridgeRegression, "utf16le").toString("base64")]);
+      const utf16leBom = Buffer.from([0xff, 0xfe]);
+      await fs.writeFile(
+        editorBridgeScript,
+        Buffer.concat([utf16leBom, Buffer.from(editorBridgeRegression, "utf16le")]),
+      );
+      run("powershell.exe", [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        editorBridgeScript,
+      ]);
     } finally {
+      await fs.rm(editorBridgeScript, { force: true });
       await fs.rm(editorRootsTestRoot, { recursive: true, force: true });
     }
   }
@@ -3925,7 +4341,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   const studioCss = await fs.readFile(path.join(PROJECT_ROOT, "studio", "styles.css"), "utf8");
   const studioEditor = await fs.readFile(path.join(PROJECT_ROOT, "studio", "editor.js"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
-  const uiCopy = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "ui-copy.json"), "utf8"));
+  const uiCopy = await readHostCopy();
 
   assert.match(studioHtml, /class="rail-item" href="#settings" data-i18n="navSettings"/,
     "Studio must expose Settings as a permanent ordinary-shell destination");
@@ -3937,16 +4353,55 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   const welcomeLocales = [...studioHtml.matchAll(
     /<input type="radio" name="welcome-locale" value="([^"]+)"/g,
   )].map((match) => match[1]);
-  assert.deepEqual(settingsLocales, ["en", "zh-CN", "zh-TW"],
-    "Settings must expose only the three exact host-owned locales");
+  assert.deepEqual(settingsLocales, STUDIO_LOCALES,
+    "Settings must expose every supported Studio locale in its canonical order");
   assert.deepEqual(welcomeLocales, settingsLocales,
     "The welcome guide and Settings must offer the same exact locale set");
+  const supportedLocalesStart = studioApp.indexOf("const supportedLocales =");
+  const normalizeLocaleStart = studioApp.indexOf("const normalizeLocale =");
+  const localeBoundaryStart = Math.min(supportedLocalesStart, normalizeLocaleStart);
+  const localeBoundaryEnd = studioApp.indexOf("const rawLocale =", localeBoundaryStart);
+  assert(localeBoundaryStart >= 0 && localeBoundaryEnd > localeBoundaryStart,
+    "Studio must expose one browser-side locale boundary before resolving the requested locale");
+  const normalizeStudioLocale = Function(
+    `"use strict";\n${studioApp.slice(localeBoundaryStart, localeBoundaryEnd)}\nreturn normalizeLocale;`,
+  )();
+  for (const locale of STUDIO_LOCALES) {
+    assert.equal(normalizeStudioLocale(locale), locale,
+      `Studio changed the canonical ${locale} locale`);
+  }
+  const studioLocaleCases = new Map([
+    ["hi-IN", "hi"], ["es-MX", "es"], ["fr-CA", "fr"], ["id-ID", "id"],
+    ["ja-JP", "ja"], ["ko-KR", "ko"], ["pt-PT", "pt-BR"], ["de-CH", "de"],
+    ["it-CH", "it"], ["vi-VN", "vi"], ["pl-PL", "pl"], ["tr-TR", "tr"],
+    ["zh-Hans-CN", "zh-CN"], ["zh-Hant-HK", "zh-HKTW"], ["unknown", "en"],
+  ]);
+  for (const [input, expected] of studioLocaleCases) {
+    assert.equal(normalizeStudioLocale(input), expected,
+      `Studio normalized ${input} to the wrong UI locale`);
+  }
+  const localeHandlerStart = studioApp.indexOf(
+    "for (const input of localeInputs) {",
+    studioApp.indexOf("END HOST BRIDGE"),
+  );
+  const localeHandlerEnd = studioApp.indexOf(
+    "// Bundled themes render through the same DOM builder",
+    localeHandlerStart,
+  );
+  const localeHandler = studioApp.slice(localeHandlerStart, localeHandlerEnd);
+  assert.match(localeHandler, /supportedLocales\.has\(input\.value\)/,
+    "The locale switch must validate against every supported Studio UI locale");
+  assert.doesNotMatch(localeHandler, /hostThemeLocales/,
+    "The locale switch must not reuse the three-locale theme-metadata boundary");
+  assert.match(studioApp,
+    /typeof data\.locale === "string" && supportedLocales\.has\(data\.locale\)/,
+    "Studio must accept canonical host state for every supported UI locale");
   for (const fieldset of ["language-settings", "welcome-language"]) {
     assert.match(studioHtml,
       new RegExp(`<fieldset id="${fieldset}"[^>]+aria-describedby="([^"]+)"[\\s\\S]{0,1000}?<legend[^>]*>[\\s\\S]*?<\\/legend>`),
       `${fieldset} must keep a native legend and an explicit help relationship`);
   }
-  for (const locale of ["en", "zh-CN", "zh-TW"]) {
+  for (const locale of STUDIO_LOCALES) {
     assert.match(studioHtml, new RegExp(`<span lang="${locale}">[^<]+<\\/span>`),
       `${locale} must expose its autonym with the correct language metadata`);
   }
@@ -3961,10 +4416,11 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     /const ordinarySections = \["themes", "background", "create", "settings"\]/,
     "Settings must leave the ordinary shell with the other sections during an editor session");
 
-  const stringsMatch = studioApp.match(/const STRINGS = (\{[\s\S]*?\r?\n  \});\r?\n\r?\n  const params/);
-  assert(stringsMatch, "Studio locale dictionaries could not be isolated");
-  const studioStrings = Function(`"use strict"; return (${stringsMatch[1]});`)();
-  assert.deepEqual(Object.keys(studioStrings).sort(), ["en", "zh-CN", "zh-TW"]);
+  assert.match(studioApp,
+    /const STRINGS = Object\.fromEntries\(\s*Object\.entries\(window\.CLAUDE_AURA_STRINGS \?\? \{\}\)/,
+    "Studio page copy must come from the per-language files in studio/locales");
+  const studioStrings = (await readStudioCopy()).shell;
+  assert.deepEqual(Object.keys(studioStrings).sort(), STUDIO_LOCALES.slice().sort());
   const studioStringKeys = Object.keys(studioStrings.en).sort();
   const htmlTranslationKeys = [...studioHtml.matchAll(
     /\sdata-i18n(?:-aria-label)?="([^"]+)"/g,
@@ -3972,7 +4428,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   for (const key of htmlTranslationKeys) {
     assert(studioStringKeys.includes(key), `Studio HTML references missing locale key ${key}`);
   }
-  for (const locale of ["zh-CN", "zh-TW"]) {
+  for (const locale of STUDIO_LOCALES.filter((locale) => locale !== "en")) {
     assert.deepEqual(Object.keys(studioStrings[locale]).sort(), studioStringKeys,
       `${locale} Studio copy does not cover every Settings and welcome state`);
     for (const key of studioStringKeys) {
@@ -3980,14 +4436,14 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     }
   }
   assert.equal(studioStrings["zh-CN"].settingsTitle, "\u8bbe\u7f6e");
-  assert.equal(studioStrings["zh-TW"].settingsTitle, "\u8a2d\u5b9a");
+  assert.equal(studioStrings["zh-HKTW"].settingsTitle, "\u8a2d\u5b9a");
   for (const key of [
     "settingsLede", "languageHelp", "gettingStartedBody", "welcomeBody",
     "welcomeThemeBody", "welcomeControlBody", "welcomeCreateBody", "welcomeLauncherNote",
     "welcomeLater", "statusWelcomeBusy",
   ]) {
-    assert.notEqual(studioStrings["zh-CN"][key], studioStrings["zh-TW"][key],
-      `${key} must be independently authored for zh-CN and zh-TW`);
+    assert.notEqual(studioStrings["zh-CN"][key], studioStrings["zh-HKTW"][key],
+      `${key} must be independently authored for zh-CN and zh-HKTW`);
   }
 
   const welcomeFlow = studioApp.slice(
@@ -4076,12 +4532,12 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   assert.match(ui,
     /function Invoke-AuraUiCompleteStudioIntroduction[\s\S]{0,500}?Write-AuraUiStudioPreferences[\s\S]{0,180}?Send-AuraUiStudioState/,
     "The host must acknowledge introduction completion with canonical state");
-  for (const locale of ["en", "zh-CN", "zh-TW"]) {
+  for (const locale of ["en", "zh-CN", "zh-HKTW"]) {
     assert(uiCopy[locale].localeNotChangedMessage && uiCopy[locale].studioPreferencesNotSaved,
       `${locale} must localize host-side locale and welcome persistence failures`);
   }
-  assert.notEqual(uiCopy["zh-CN"].localeNotChangedMessage, uiCopy["zh-TW"].localeNotChangedMessage);
-  assert.notEqual(uiCopy["zh-CN"].studioPreferencesNotSaved, uiCopy["zh-TW"].studioPreferencesNotSaved);
+  assert.notEqual(uiCopy["zh-CN"].localeNotChangedMessage, uiCopy["zh-HKTW"].localeNotChangedMessage);
+  assert.notEqual(uiCopy["zh-CN"].studioPreferencesNotSaved, uiCopy["zh-HKTW"].studioPreferencesNotSaved);
 
   if (process.platform === "win32") {
     const preferenceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aura-studio-preferences-"));
@@ -4096,36 +4552,45 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
       "$tokens=$null;$errors=$null",
       "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
       "if($errors.Count){throw 'Could not parse Aura UI for Studio preference regression'}",
-      "foreach($name in @('ConvertTo-AuraUiLocale','Get-AuraUiDefaultLocale','Get-AuraUiStudioPreferences','Write-AuraUiStudioPreferences','Get-AuraUiStudioUrl')){",
+      "foreach($name in @('ConvertTo-AuraUiLocale','Get-AuraUiDefaultLocale','Get-AuraUiStudioPreferences','Write-AuraUiStudioPreferences','Get-AuraUiStudioUrl','Invoke-AuraUiCompleteStudioIntroduction')){",
       "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
       "  if($null -eq $definition){throw \"Missing Studio preference function $name\"}",
       "  Invoke-Expression $definition.Extent.Text",
       "}",
+      "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
       "function Write-AuraUiLog { param([string]$Message) }",
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Aura accepted $Label\"} }",
       "$localeCases=[ordered]@{",
+      "  'hi-IN'='hi';'es-MX'='es';'fr-CA'='fr';'id-ID'='id';'ja-JP'='ja';'ko-KR'='ko';'pt-PT'='pt-BR';",
+      "  'de-CH'='de';'it-CH'='it';'vi-VN'='vi';'pl-PL'='pl';'tr-TR'='tr';",
       "  'zh-CN'='zh-CN';'zh-SG'='zh-CN';'zh-Hans'='zh-CN';'zh-Hans-CN'='zh-CN';'zh_CN_variant'='zh-CN';",
-      "  'zh-TW'='zh-TW';'zh-HK'='zh-TW';'zh-MO'='zh-TW';'zh-Hant'='zh-TW';'zh-Hant-HK'='zh-TW';",
-      "  'en-US'='en';'ja-JP'='en';'zh'='en';''='en'",
+      "  'zh-HKTW'='zh-HKTW';'zh-HK'='zh-HKTW';'zh-MO'='zh-HKTW';'zh-Hant'='zh-HKTW';'zh-Hant-HK'='zh-HKTW';",
+      "  'en-US'='en';'zh'='en';''='en'",
       "}",
       "foreach($entry in $localeCases.GetEnumerator()){if((ConvertTo-AuraUiLocale -Locale $entry.Key) -cne $entry.Value){throw \"Locale normalization failed for $($entry.Key)\"}}",
       "$fallback=Get-AuraUiStudioPreferences",
-      "if($fallback.locale -cnotin @('en','zh-CN','zh-TW') -or $fallback.introductionVersion -ne 0){throw 'Missing preferences did not use the supported OS fallback'}",
-      "$saved=Write-AuraUiStudioPreferences -Locale 'zh-TW' -IntroductionVersion 1",
-      "if($saved.locale -cne 'zh-TW' -or $saved.introductionVersion -ne 1){throw 'Preference writer changed canonical values'}",
+      "if($fallback.locale -cnotin $StudioLocaleIds -or $fallback.introductionVersion -ne 0){throw 'Missing preferences did not use the supported OS fallback'}",
+      "$saved=Write-AuraUiStudioPreferences -Locale 'zh-HKTW' -IntroductionVersion 1",
+      "if($saved.locale -cne 'zh-HKTW' -or $saved.introductionVersion -ne 1){throw 'Preference writer changed canonical values'}",
       "$bytes=[IO.File]::ReadAllBytes($StudioPreferencesPath)",
       "if($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191){throw 'Studio preferences unexpectedly contain a UTF-8 BOM'}",
       "$json=[Text.Encoding]::UTF8.GetString($bytes)|ConvertFrom-Json",
       "$names=@($json.PSObject.Properties|ForEach-Object{$_.Name})",
       "if($names.Count -ne 3 -or $names -cnotcontains 'schemaVersion' -or $names -cnotcontains 'locale' -or $names -cnotcontains 'introductionVersion'){throw 'Preference writer widened its schema'}",
       "$roundTrip=Get-AuraUiStudioPreferences",
-      "if($roundTrip.locale -cne 'zh-TW' -or $roundTrip.introductionVersion -ne 1){throw 'Studio preferences did not round-trip'}",
+      "if($roundTrip.locale -cne 'zh-HKTW' -or $roundTrip.introductionVersion -ne 1){throw 'Studio preferences did not round-trip'}",
+      "function Send-AuraUiStudioState {}",
+      "$script:Locale='ja'",
+      "$script:StudioIntroductionRequested=$true",
+      "Invoke-AuraUiCompleteStudioIntroduction",
+      "if($script:StudioPreferences.locale -cne 'ja' -or $script:StudioPreferences.introductionVersion -ne 1){throw 'Welcome completion changed the active Studio locale'}",
+      "if($script:StudioIntroductionRequested -ne $false){throw 'Welcome completion did not clear its host request'}",
       "[void](Write-AuraUiStudioPreferences -Locale 'en' -IntroductionVersion 0)",
       "if(@(Get-ChildItem -LiteralPath $DataRoot -Filter '.studio-preferences-*').Count -ne 0){throw 'Atomic preference files were not cleaned up'}",
-      "Assert-Rejected { Write-AuraUiStudioPreferences -Locale 'ja' -IntroductionVersion 0 } 'an unsupported saved locale'",
-      "[IO.File]::WriteAllText($StudioPreferencesPath,'{\"schemaVersion\":\"1\",\"locale\":\"zh-TW\",\"introductionVersion\":1}',[Text.UTF8Encoding]::new($false))",
+      "Assert-Rejected { Write-AuraUiStudioPreferences -Locale 'xx' -IntroductionVersion 0 } 'an unsupported saved locale'",
+      "[IO.File]::WriteAllText($StudioPreferencesPath,'{\"schemaVersion\":\"1\",\"locale\":\"zh-HKTW\",\"introductionVersion\":1}',[Text.UTF8Encoding]::new($false))",
       "$invalid=Get-AuraUiStudioPreferences",
-      "if($invalid.introductionVersion -ne 0 -or $invalid.locale -cnotin @('en','zh-CN','zh-TW')){throw 'A wrong-typed preference did not fall back safely'}",
+      "if($invalid.introductionVersion -ne 0 -or $invalid.locale -cnotin $StudioLocaleIds){throw 'A wrong-typed preference did not fall back safely'}",
       "$script:Locale='zh-CN'",
       "$script:StudioWebView=[pscustomobject]@{Source=[Uri]'https://aura.studio/index.html?locale=en#settings'}",
       "if((Get-AuraUiStudioUrl) -cne 'https://aura.studio/index.html?locale=zh-CN'){throw 'Studio URL did not use the exact host locale'}",
@@ -4133,6 +4598,8 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
       "$script:StudioWebView.Source=[Uri]'https://aura.studio/index.html?locale=en#editor'",
       "if((Get-AuraUiStudioUrl -PreserveView) -ne 'https://aura.studio/index.html?locale=zh-CN'){throw 'Studio URL preserved a non-ordinary view'}",
       "$script:Locale='ja'",
+      "if((Get-AuraUiStudioUrl) -cne 'https://aura.studio/index.html?locale=ja'){throw 'Studio URL did not preserve a supported locale'}",
+      "$script:Locale='xx'",
       "Assert-Rejected { Get-AuraUiStudioUrl } 'an unsupported navigation locale'",
     ].join("\n");
     try {
@@ -4144,6 +4611,327 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     } finally {
       await fs.rm(preferenceRoot, { recursive: true, force: true });
     }
+  }
+});
+
+test("WO-21 Studio keeps greeting frames and personal drafts transactional", async () => {
+  const document = { newChatGreetingStyle: defaultStudioGreetingStyle() };
+  assert.equal(studioGreetingCompactMarkAvailable({
+    id: "constructor",
+    sourceRecipe: null,
+    theme: { variant: "constructor" },
+  }), false, "A prototype-named custom theme inherited an unregistered compact mark");
+  const before = structuredClone(document.newChatGreetingStyle);
+  const replacement = {
+    ...studioGreetingState(document.newChatGreetingStyle).frames.dark.wide,
+    fontSize: 57,
+    xRatio: -0.2,
+  };
+  mutateStudioGreetingDocument(document, {
+    operation: "set-frame",
+    appearance: "dark",
+    frame: "wide",
+    value: replacement,
+  });
+  assert.equal(document.newChatGreetingStyle.dark.wide.fontSize, 57);
+  assert.equal(document.newChatGreetingStyle.dark.wide.xRatio, -0.2);
+  assert.deepEqual(document.newChatGreetingStyle.light.standard, before.light.standard,
+    "editing Dark/Wide changed Light/Standard");
+  assert.deepEqual(document.newChatGreetingStyle.light.wide, before.light.wide,
+    "editing Dark/Wide changed Light/Wide");
+  assert.deepEqual(document.newChatGreetingStyle.dark.standard, before.dark.standard,
+    "editing Dark/Wide changed Dark/Standard");
+  assert.deepEqual(Object.keys(studioGreetingState(document.newChatGreetingStyle).frames).sort(),
+    ["dark", "light"]);
+  mutateStudioGreetingDocument(document, {
+    operation: "reset",
+    appearance: "dark",
+    frame: "wide",
+    value: null,
+  });
+  assert.equal(document.newChatGreetingStyle, null);
+
+  const editorSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "editor.js"), "utf8");
+  const coreSource = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "theme-core", "studio.mjs"), "utf8");
+  const htmlSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8");
+  assert.match(htmlSource, /id="editor-greeting-name"[^>]+maxlength="80"/,
+    "The name input must admit up to 40 supplementary-plane Unicode scalars");
+  assert.match(htmlSource, /id="editor-greeting-personal-enabled"[\s\S]{0,140}?greetingPersonalEnable/,
+    "Personal greeting ownership needs a control distinct from portable styling");
+  assert.match(htmlSource, /id="editor-greeting-collision-warning"[^>]+role="note"/,
+    "Custom artwork and greeting styling need a truthful non-blocking collision warning");
+  assert.match(editorSource,
+    /const GREETING_DECORATION_IDS = Object\.freeze\(\["none", "underline", "hairline", "glow"\]\)/);
+  assert.match(editorSource,
+    /const GREETING_WEIGHT_IDS = Object\.freeze\(\[300, 400, 500, 600, 650, 700\]\)/);
+  assert.equal((editorSource.match(/textShadow = greeting\.decoration === "glow"/g) ?? []).length, 2,
+    "Glow must render and clear in both the stage and the in-panel preview");
+  assert.match(editorSource,
+    /compactOption\.disabled = !greetingState\.compactMarkAvailable;[\s\S]{0,120}?compactOption\.hidden = !greetingState\.compactMarkAvailable/,
+    "Unavailable compact marks must not remain an actionable generic option");
+  assert.match(editorSource,
+    /greetingCollisionWarning\.hidden = greetingState\.native[\s\S]{0,180}?state\.layers\.length === 0/,
+    "The custom-artwork collision warning must follow actual style and artwork state");
+  assert.match(editorSource,
+    /greetingEnableInput\?\.addEventListener\("change"[\s\S]{0,420}?kind:\s*"greeting"[\s\S]{0,180}?operation:\s*"reset"/,
+    "Turning off portable styling must emit only the greeting theme reset patch");
+  const greetingEnableHandler = editorSource.match(
+    /greetingEnableInput\?\.addEventListener\("change"[\s\S]*?\n    \}\);/,
+  )?.[0] ?? "";
+  assert.doesNotMatch(greetingEnableHandler, /type:\s*"reset-greeting"/,
+    "Turning off style must not also reset personal wording");
+  assert.match(editorSource,
+    /greetingResetButton\?\.addEventListener\("click"[\s\S]{0,180}?type:\s*"reset-greeting"/,
+    "Only the explicit Reset to Claude control should reset style and wording together");
+  const parserSource = editorSource.match(
+    /function parseGreetingPhrases\(text\) \{[\s\S]*?\n  \}/,
+  )?.[0] ?? "";
+  assert(parserSource, "The strict greeting textarea parser is missing");
+  const parsePhrases = Function(`${parserSource}; return parseGreetingPhrases;`)();
+  assert.deepEqual(parsePhrases(" Hello \n\nWelcome, {name}"), ["Hello", "Welcome, {name}"]);
+  for (const [label, value] of [
+    ["duplicate", "same\nsame"],
+    ["thirteenth line", Array.from({ length: 13 }, (_, index) => `line ${index}`).join("\n")],
+    ["overlong line", "x".repeat(121)],
+    ["unknown token", "Hello, {account}"],
+    ["repeated token", "{name} and {name}"],
+    ["control character", "hello\u0001there"],
+  ]) {
+    assert.equal(parsePhrases(value), null, `The greeting parser silently altered a ${label}`);
+  }
+  assert.match(editorSource,
+    /greetingPreferenceInputDirty = true;\s*greetingPreferenceInputInvalid = true;[\s\S]{0,100}?showGreetingInputError\(\)/,
+    "Invalid visible greeting input must remain tracked instead of falling back to the prior draft");
+  assert.match(editorSource,
+    /const personal = greetingPreferenceInputDirty[\s\S]{0,260}?greetingPreferenceInputInvalid[\s\S]{0,260}?saveBlocked/,
+    "Save must stop on invalid visible greeting input instead of ignoring it");
+  const personalHandler = coreSource.match(
+    /export async function setGreetingPhrases\([\s\S]*?\n\}/,
+  )?.[0] ?? "";
+  assert(personalHandler);
+  assert(!/writeConfig\(/.test(personalHandler),
+    "personal edits must remain staged until Save");
+  assert.match(coreSource,
+    /const savedGreetingPreferences = reconcileStudioGreetingShuffle\([\s\S]{0,180}?greetingPreferences:\s*savedGreetingPreferences/,
+    "Save must commit the staged personal envelope while preserving a newer runtime shuffle");
+  assert.match(editorSource,
+    /if \(event\.relatedTarget === saveButton\) return;/,
+    "blur toward Save must not win the race and disable the first click");
+  assert.match(editorSource,
+    /actionAfterPatch = \{ type: "save-theme-edit", \.\.\.base \};[\s\S]{0,180}?postGreetingPreferences/,
+    "the first Save click must flush personal words and chain the save");
+  assert.match(editorSource,
+    /greetingExactInputs[\s\S]{0,1600}?queueGreetingFrame\(greetingFrameFromControls\(field, value\)\)/,
+    "exact numeric greeting edits must emit a complete frame");
+  assert.match(editorSource,
+    /operation:\s*"set-frame"[\s\S]{0,160}?appearance:\s*selectedMode[\s\S]{0,160}?frame:\s*greetingFrameId\(\)[\s\S]{0,160}?value:\s*frame/,
+    "greeting patches must carry one complete scoped frame");
+
+  const oversizedPreferences = {
+    enabled: true,
+    source: "custom",
+    displayName: "",
+    globalPhrases: Array.from(
+      { length: 12 },
+      (_, index) => String.fromCodePoint(0x4E00 + index).repeat(120),
+    ),
+    themeOverrides: { "studio-copy": { mode: "global", phrases: [] } },
+    shuffle: null,
+  };
+  assert.deepEqual(
+    studioGreetingPreferenceError(oversizedPreferences, "studio-copy"),
+    { code: "invalid-greeting", field: "greetingPreferences" },
+    "Studio accepted an active custom list that cannot fit the compiled greeting ceiling",
+  );
+  oversizedPreferences.themeOverrides["studio-copy"] = { mode: "claude", phrases: [] };
+  assert.equal(studioGreetingPreferenceError(oversizedPreferences, "studio-copy"), null,
+    "An explicit Claude override should remain a valid native-mode choice");
+  assert.match(coreSource,
+    /const greetingError = studioGreetingPreferenceError\(greetingPreferences, document\.id\);[\s\S]{0,300}?valid:\s*false/,
+    "Studio evaluation must preserve an un-compilable custom list as invalid last-valid state");
+  const saveHandler = coreSource.match(/export async function saveThemeEdit\([\s\S]*?\n\}/)?.[0] ?? "";
+  assert(saveHandler.indexOf("if (!evaluated.feedback.valid)") >= 0
+      && saveHandler.indexOf("if (!evaluated.feedback.valid)") < saveHandler.indexOf("await writeConfig("),
+    "Save must reject invalid greeting feedback before any config write");
+  assert.match(saveHandler,
+    /if \(!evaluated\.feedback\.valid\)[\s\S]{0,600}?configChanged:\s*false/,
+    "A rejected greeting Save must report no persisted config change");
+});
+
+test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "aura-greeting-transaction-"));
+  const configPath = path.join(root, "config.json");
+  const userThemesDir = path.join(root, "themes");
+  const editorRoot = path.join(root, "editor");
+  const invoke = (request, options = {}) => executeStudioRequest({
+    request,
+    configPath,
+    userThemesDir,
+    editorRoot,
+    locale: "en",
+    ...options,
+  });
+  const mutate = (result, type, values = {}) => ({
+    type,
+    session: result.state.session,
+    revision: result.state.revision,
+    ...values,
+  });
+  try {
+    await fs.mkdir(userThemesDir, { recursive: true });
+    await writeConfig(configPath, { ...structuredClone(DEFAULT_CONFIG) });
+    let result = await invoke({ type: "create-theme-copy", theme: "default" });
+    const themeId = result.state.id;
+    const destination = path.join(userThemesDir, themeId);
+    const emojiName = "😀".repeat(40);
+    result = await invoke(mutate(result, "set-greeting-phrases", {
+      enabled: true,
+      source: "custom",
+      displayName: emojiName,
+      globalPhrases: ["Welcome, {name}"],
+      overrideMode: "global",
+      overridePhrases: [],
+    }));
+    assert.equal(result.state.greetingPreferences.displayName, emojiName);
+    assert.equal(result.state.greetingPreferences.source, "custom");
+
+    result = await invoke(mutate(result, "apply-theme-patch", {
+      changes: [{
+        kind: "greeting",
+        operation: "reset",
+        appearance: "light",
+        frame: "standard",
+        value: null,
+      }],
+    }));
+    assert.equal(result.state.shared.greeting.native, true,
+      "Turning off greeting style did not reset only the portable presentation");
+    assert.equal(result.state.greetingPreferences.source, "custom",
+      "Turning off greeting style also reset personal wording");
+    assert.deepEqual(result.state.greetingPreferences.globalPhrases, ["Welcome, {name}"]);
+    result = await invoke(mutate(result, "undo-theme-edit"));
+    assert.equal(result.state.shared.greeting.native, false);
+    assert.equal(result.state.greetingPreferences.source, "custom");
+
+    const beforeClaudeResetRevision = result.state.revision;
+    result = await invoke(mutate(result, "reset-greeting"));
+    assert.equal(result.state.revision, beforeClaudeResetRevision + 1);
+    assert.equal(result.state.shared.greeting.native, true);
+    assert.equal(result.state.greetingPreferences.source, "claude");
+    assert.equal(result.state.greetingPreferences.displayName, emojiName,
+      "Reset to Claude discarded a reusable personal name");
+    assert.deepEqual(result.state.greetingPreferences.globalPhrases, ["Welcome, {name}"]);
+    result = await invoke(mutate(result, "undo-theme-edit"));
+    assert.equal(result.state.shared.greeting.native, false,
+      "One Undo did not restore greeting style after Reset to Claude");
+    assert.equal(result.state.greetingPreferences.source, "custom",
+      "One Undo did not restore personal wording after Reset to Claude");
+
+    result = await invoke(mutate(result, "set-greeting-phrases", {
+      enabled: false,
+      source: result.state.greetingPreferences.source,
+      displayName: result.state.greetingPreferences.displayName,
+      globalPhrases: result.state.greetingPreferences.globalPhrases,
+      overrideMode: result.state.greetingPreferences.themeOverrides[themeId].mode,
+      overridePhrases: result.state.greetingPreferences.themeOverrides[themeId].phrases,
+    }));
+    assert.equal(result.state.greetingPreferences.enabled, false,
+      "The personal-enabled control did not participate in Studio history");
+    result = await invoke(mutate(result, "undo-theme-edit"));
+    assert.equal(result.state.greetingPreferences.enabled, true);
+
+    const runtimeShuffle = {
+      themeId,
+      phraseDigest: "a".repeat(64),
+      order: [0],
+      cursor: 0,
+      lastIndex: null,
+    };
+    await writeConfig(configPath, {
+      ...structuredClone(DEFAULT_CONFIG),
+      greetingPreferences: {
+        ...structuredClone(result.state.greetingPreferences),
+        shuffle: runtimeShuffle,
+      },
+    });
+    result = await invoke(mutate(result, "save-theme-edit"));
+    const savedConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert.deepEqual(savedConfig.greetingPreferences.shuffle, runtimeShuffle,
+      "Save overwrote a newer runtime shuffle checkpoint despite unchanged editable fields");
+    assert.equal(savedConfig.theme, themeId);
+    result = await invoke(mutate(result, "discard-theme-edit"));
+    assert.equal(result.state.active, false);
+
+    await writeConfig(configPath, {
+      ...savedConfig,
+      theme: "default",
+    });
+    await assert.rejects(
+      invoke(
+        { type: "delete-user-theme", theme: themeId },
+        {
+          faultInjector(stage) {
+            if (stage === "before-delete-greeting-config") {
+              throw new Error("injected greeting config failure");
+            }
+          },
+        },
+      ),
+      /injected greeting config failure/,
+    );
+    assert.equal((await fs.stat(destination)).isDirectory(), true,
+      "Config failure did not restore the deleted theme directory");
+    let currentConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert(Object.hasOwn(currentConfig.greetingPreferences.themeOverrides, themeId));
+    assert.equal(
+      (await fs.readdir(userThemesDir)).some((name) => name.startsWith(`.delete-${themeId}-`)),
+      false,
+      "Successful delete rollback left a tombstone",
+    );
+
+    let incomplete = null;
+    try {
+      await invoke(
+        { type: "delete-user-theme", theme: themeId },
+        {
+          faultInjector(stage) {
+            if (stage === "before-delete-greeting-config") {
+              throw new Error("injected delete failure");
+            }
+          },
+          recoveryFaultInjector(stage) {
+            if (stage === "rollback-deleted-theme") {
+              throw new Error("injected delete rollback failure");
+            }
+          },
+        },
+      );
+    } catch (error) {
+      incomplete = error;
+    }
+    assert(incomplete instanceof AggregateError,
+      "Incomplete theme-delete rollback did not surface an AggregateError");
+    assert.equal(incomplete.code, "STUDIO_ROLLBACK_INCOMPLETE");
+    assert.match(incomplete.message, /remains recoverable at/);
+    assert.equal(incomplete.recoveryDestination, destination);
+    assert.equal(incomplete.recoveryArtifacts.length, 1);
+    assert.equal((await fs.stat(incomplete.recoveryArtifacts[0])).isDirectory(), true,
+      "Incomplete rollback did not retain its recoverable tombstone");
+    assert.equal(await fs.stat(destination).then(() => true, () => false), false);
+    currentConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert(Object.hasOwn(currentConfig.greetingPreferences.themeOverrides, themeId),
+      "Incomplete rollback changed greeting config before reporting recovery metadata");
+
+    await fs.rename(incomplete.recoveryArtifacts[0], destination);
+    const deleted = await invoke({ type: "delete-user-theme", theme: themeId });
+    assert.equal(deleted.configChanged, true);
+    assert.equal(await fs.stat(destination).then(() => true, () => false), false);
+    currentConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert.equal(Object.hasOwn(currentConfig.greetingPreferences.themeOverrides, themeId), false);
+    assert.equal(currentConfig.greetingPreferences.shuffle, null,
+      "Deleting a theme left a shuffle checkpoint keyed to the deleted theme");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
   }
 });
 

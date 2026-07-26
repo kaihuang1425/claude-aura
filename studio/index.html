@@ -80,6 +80,15 @@
         <button type="button" id="clear-image" class="ghost-button" data-i18n="clearImage">Clear image</button>
       </div>
       <p class="help" data-i18n="backgroundHelp">PNG, JPEG, WebP, GIF, or AVIF up to 16 MB. Quiet, wide images work best.</p>
+
+      <h3 class="account-avatar-title" data-i18n="avatarTitle">Account avatar</h3>
+      <p class="lede" data-i18n="avatarLede">Replace the profile picture in Claude's sidebar with your own image. Personal to this device and shown across every theme.</p>
+      <div class="actions-row">
+        <button type="button" id="pick-avatar" class="primary-button" data-i18n="chooseAvatar">Choose an image…</button>
+        <button type="button" id="adjust-avatar" class="ghost-button" data-i18n="adjustAvatar" hidden>Adjust position</button>
+        <button type="button" id="clear-avatar" class="ghost-button" data-i18n="clearAvatar">Remove avatar</button>
+      </div>
+      <p class="help" data-i18n="avatarHelp">PNG, JPEG, or GIF up to 16 MB. You choose the square crop after picking the image.</p>
     </section>
 
     <section id="create" aria-labelledby="create-title">
@@ -116,12 +125,60 @@
               <span lang="en">English</span>
             </label>
             <label class="language-option">
+              <input type="radio" name="settings-locale" value="hi">
+              <span lang="hi">हिन्दी</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="es">
+              <span lang="es">Español</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="fr">
+              <span lang="fr">Français</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="id">
+              <span lang="id">Bahasa Indonesia</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="ja">
+              <span lang="ja">日本語</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="ko">
+              <span lang="ko">한국어</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="pt-BR">
+              <span lang="pt-BR">Português (Brasil)</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="de">
+              <span lang="de">Deutsch</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="it">
+              <span lang="it">Italiano</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="vi">
+              <span lang="vi">Tiếng Việt</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="pl">
+              <span lang="pl">Polski</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="settings-locale" value="tr">
+              <span lang="tr">Türkçe</span>
+            </label>
+            <label class="language-option">
               <input type="radio" name="settings-locale" value="zh-CN">
               <span lang="zh-CN">简体中文</span>
             </label>
             <label class="language-option">
-              <input type="radio" name="settings-locale" value="zh-TW">
-              <span lang="zh-TW">繁體中文（台灣）</span>
+              <input type="radio" name="settings-locale" value="zh-HKTW">
+              <span lang="zh-HKTW">繁體中文</span>
             </label>
           </div>
           <p id="language-settings-help" class="help" data-i18n="languageHelp">Changes Aura Studio, the Aura button menu, and Aura messages. Claude keeps its own language setting.</p>
@@ -307,9 +364,9 @@
             <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
             <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
           </label>
-          <label class="editor-field" for="editor-label-zh-tw">
-            <span data-editor-i18n="themeNameZhTw">Traditional Chinese (Taiwan) name</span>
-            <input id="editor-label-zh-tw" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-TW" data-editor-field="metadata.labels.zh-TW">
+          <label class="editor-field" for="editor-label-zh-HKTW">
+            <span data-editor-i18n="themeNameZhTw">Traditional Chinese name</span>
+            <input id="editor-label-zh-HKTW" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-HKTW" data-editor-field="metadata.labels.zh-HKTW">
           </label>
         </div>
         <div class="editor-control-grid editor-metadata-grid advanced-only">
@@ -321,12 +378,13 @@
             <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
             <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
           </label>
-          <label class="editor-field" for="editor-description-zh-tw">
-            <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese (Taiwan) description</span>
-            <textarea id="editor-description-zh-tw" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-TW" data-editor-field="metadata.descriptions.zh-TW"></textarea>
+          <label class="editor-field" for="editor-description-zh-HKTW">
+            <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese description</span>
+            <textarea id="editor-description-zh-HKTW" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-HKTW" data-editor-field="metadata.descriptions.zh-HKTW"></textarea>
           </label>
         </div>
       </section>
+      <p id="editor-live-paused" class="editor-live-paused" role="status" aria-live="polite" hidden></p>
       <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
       <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
       <p id="editor-advanced-notice" class="editor-advanced-notice" data-editor-i18n="advancedValuesNotice">This target has additional values in Advanced.</p>
@@ -479,6 +537,124 @@
         </div>
       </section>
 
+      <section class="editor-section editor-greeting-context" data-editor-branch="interface" data-editor-targets="interface.greeting" aria-labelledby="editor-greeting-title">
+        <h2 id="editor-greeting-title" data-editor-i18n="greetingPanel">Greeting</h2>
+        <p class="help" data-editor-i18n="greetingPanelHelp">Style the greeting above the prompt on a new chat. Light, Dark, Standard, and Wide each have independent styling and placement.</p>
+        <label class="editor-toggle-field" for="editor-greeting-enabled">
+          <input type="checkbox" id="editor-greeting-enabled" data-editor-focus="greeting-enabled" data-editor-field="shared.greeting.enabled">
+          <span data-editor-i18n="greetingEnable">Style the greeting</span>
+        </label>
+        <button type="button" id="editor-greeting-reset" class="ghost-button" data-editor-i18n="greetingResetClaude">Reset to Claude</button>
+        <p id="editor-greeting-native" class="editor-inherited-note" data-editor-i18n="greetingNativeHelp" hidden>Using Claude's original greeting style. Turn on styling to customize its appearance.</p>
+        <p id="editor-greeting-collision-warning" class="editor-greeting-collision-warning" role="note" data-editor-i18n="greetingArtworkCollisionWarning" hidden>This custom theme also has artwork. Review the greeting in Aura at each size; Studio will not guess whether the artwork leaves enough room.</p>
+        <figure class="editor-greeting-preview">
+          <figcaption data-editor-i18n="greetingPreview">Preview</figcaption>
+          <p id="editor-greeting-sample" data-editor-i18n="greetingPreviewSample">Good evening</p>
+        </figure>
+
+        <h3 data-editor-i18n="greetingWords">Greeting words</h3>
+        <p class="help" data-editor-i18n="greetingWordsHelp">Saved only on this device, never inside the theme. Use one shared list or choose theme-specific words; Aura picks one line for each new chat.</p>
+        <label class="editor-toggle-field" for="editor-greeting-personal-enabled">
+          <input type="checkbox" id="editor-greeting-personal-enabled" data-editor-focus="greeting-personal-enabled">
+          <span data-editor-i18n="greetingPersonalEnable">Use personalized greeting words</span>
+        </label>
+        <div class="editor-greeting-source" role="group" aria-labelledby="editor-greeting-source-label">
+          <span id="editor-greeting-source-label" class="sr-only" data-editor-i18n="greetingWords">Greeting words</span>
+          <label><input type="radio" name="greeting-source" value="claude" data-editor-focus="greeting-source-claude"> <span data-editor-i18n="greetingSourceClaude">Use Claude's greeting</span></label>
+          <label><input type="radio" name="greeting-source" value="custom" data-editor-focus="greeting-source-custom"> <span data-editor-i18n="greetingSourceCustom">Use my own words</span></label>
+        </div>
+        <div class="editor-control-grid editor-greeting-words">
+          <label class="editor-field" for="editor-greeting-name">
+            <span data-editor-i18n="greetingName">Your name</span>
+            <input id="editor-greeting-name" type="text" maxlength="80" autocomplete="off" data-editor-focus="greeting-name">
+            <small class="help" data-editor-i18n="greetingNameHelp">Used wherever a line contains {name}. Lines with {name} are skipped while this is empty.</small>
+          </label>
+          <label class="editor-field" for="editor-greeting-phrases">
+            <span data-editor-i18n="greetingPhrases">Your lines</span>
+            <textarea id="editor-greeting-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-phrases"></textarea>
+            <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-override">
+            <span data-editor-i18n="greetingOverride">Words for this theme</span>
+            <select id="editor-greeting-override" data-editor-focus="greeting-override">
+              <option value="global" data-editor-i18n="greetingOverrideGlobal">Use the global list</option>
+              <option value="claude" data-editor-i18n="greetingSourceClaude">Use Claude's greeting</option>
+              <option value="custom" data-editor-i18n="greetingOverrideCustom">Use a list for this theme</option>
+            </select>
+          </label>
+          <label id="editor-greeting-override-phrases-field" class="editor-field advanced-only" for="editor-greeting-override-phrases" hidden>
+            <span data-editor-i18n="greetingOverrideCustom">Use a list for this theme</span>
+            <textarea id="editor-greeting-override-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-override-phrases"></textarea>
+            <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
+          </label>
+        </div>
+        <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" hidden></p>
+        <div class="editor-control-grid editor-greeting-controls">
+          <label class="editor-field" for="editor-greeting-font">
+            <span data-editor-i18n="greetingFont">Font</span>
+            <select id="editor-greeting-font" data-editor-greeting="font" data-editor-focus="greeting-font" data-editor-field="shared.greeting.font"></select>
+          </label>
+          <label class="editor-field" for="editor-greeting-color">
+            <span data-editor-i18n="greetingColor">Colour role</span>
+            <select id="editor-greeting-color" data-editor-greeting="color" data-editor-focus="greeting-color" data-editor-field="shared.greeting.color"></select>
+          </label>
+          <label class="editor-field" for="editor-greeting-size">
+            <span><span data-editor-i18n="greetingSize">Size</span> <output id="editor-greeting-size-output" for="editor-greeting-size"></output></span>
+            <input id="editor-greeting-size" type="range" min="24" max="72" step="1" data-editor-greeting="fontSize" data-editor-focus="greeting-fontSize" data-editor-field="shared.greeting.fontSize">
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-weight">
+            <span data-editor-i18n="greetingWeight">Weight</span>
+            <select id="editor-greeting-weight" data-editor-greeting="weight" data-editor-focus="greeting-weight" data-editor-field="shared.greeting.weight"></select>
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-align">
+            <span data-editor-i18n="greetingAlign">Alignment</span>
+            <select id="editor-greeting-align" data-editor-greeting="align" data-editor-focus="greeting-align" data-editor-field="shared.greeting.align"></select>
+          </label>
+          <label class="editor-toggle-field advanced-only" for="editor-greeting-italic">
+            <input type="checkbox" id="editor-greeting-italic" data-editor-greeting="italic" data-editor-focus="greeting-italic" data-editor-field="shared.greeting.italic">
+            <span data-editor-i18n="greetingItalic">Italic</span>
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-tracking">
+            <span><span data-editor-i18n="greetingTracking">Letter spacing</span> <output id="editor-greeting-tracking-output" for="editor-greeting-tracking"></output></span>
+            <input id="editor-greeting-tracking" type="range" min="-0.06" max="0.12" step="0.005" data-editor-greeting="letterSpacing" data-editor-focus="greeting-letterSpacing" data-editor-field="shared.greeting.letterSpacing">
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-line-height">
+            <span><span data-editor-i18n="greetingLineHeight">Line height</span> <output id="editor-greeting-line-height-output" for="editor-greeting-line-height"></output></span>
+            <input id="editor-greeting-line-height" type="range" min="0.9" max="1.5" step="0.01" data-editor-greeting="lineHeight" data-editor-focus="greeting-lineHeight" data-editor-field="shared.greeting.lineHeight">
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-max-width">
+            <span><span data-editor-i18n="greetingMaxWidth">Max width</span> <output id="editor-greeting-max-width-output" for="editor-greeting-max-width"></output></span>
+            <input id="editor-greeting-max-width" type="range" min="0.35" max="0.9" step="0.01" data-editor-greeting="maxWidthRatio" data-editor-focus="greeting-maxWidthRatio" data-editor-field="shared.greeting.maxWidthRatio">
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-x">
+            <span><span data-editor-i18n="greetingOffsetX">Horizontal offset</span> <output id="editor-greeting-x-output" for="editor-greeting-x"></output></span>
+            <input id="editor-greeting-x" type="range" min="-0.45" max="0.45" step="0.01" data-editor-greeting="xRatio" data-editor-focus="greeting-xRatio" data-editor-field="shared.greeting.xRatio">
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-y">
+            <span><span data-editor-i18n="greetingOffsetY">Vertical offset</span> <output id="editor-greeting-y-output" for="editor-greeting-y"></output></span>
+            <input id="editor-greeting-y" type="range" min="-0.4" max="0.45" step="0.01" data-editor-greeting="yRatio" data-editor-focus="greeting-yRatio" data-editor-field="shared.greeting.yRatio">
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-decoration">
+            <span data-editor-i18n="greetingDecoration">Decoration</span>
+            <select id="editor-greeting-decoration" data-editor-greeting="decoration" data-editor-focus="greeting-decoration" data-editor-field="shared.greeting.decoration"></select>
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-mark">
+            <span data-editor-i18n="greetingMark">Mark</span>
+            <select id="editor-greeting-mark" data-editor-greeting="markSource" data-editor-focus="greeting-markSource" data-editor-field="shared.greeting.markSource"></select>
+          </label>
+          <label class="editor-field advanced-only" for="editor-greeting-mark-scale">
+            <span><span data-editor-i18n="greetingMarkScale">Mark size</span> <output id="editor-greeting-mark-scale-output" for="editor-greeting-mark-scale"></output></span>
+            <input id="editor-greeting-mark-scale" type="range" min="0.5" max="1.5" step="0.05" data-editor-greeting="markScale" data-editor-focus="greeting-markScale" data-editor-field="shared.greeting.markScale">
+          </label>
+        </div>
+      </section>
+
+      <section class="editor-section editor-greeting-unavailable" data-editor-branch="interface" data-editor-targets="interface.greeting" aria-labelledby="editor-greeting-unavailable-title" hidden>
+        <h2 id="editor-greeting-unavailable-title" data-editor-i18n="greetingPanel">Greeting</h2>
+        <p class="help" data-editor-i18n="contextNewChat">New chat only</p>
+        <button type="button" id="editor-greeting-switch-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
+      </section>
+
       <section class="editor-section editor-prompt-unavailable" data-editor-branch="interface" data-editor-targets="interface.new-chat-area" aria-labelledby="editor-conversation-layout-title" hidden>
         <h2 id="editor-conversation-layout-title" data-editor-i18n="conversationLayout">Conversation layout</h2>
         <p class="help" data-editor-i18n="conversationLayoutHelp">Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.</p>
@@ -567,12 +743,60 @@
               <span lang="en">English</span>
             </label>
             <label class="language-option">
+              <input type="radio" name="welcome-locale" value="hi">
+              <span lang="hi">हिन्दी</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="es">
+              <span lang="es">Español</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="fr">
+              <span lang="fr">Français</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="id">
+              <span lang="id">Bahasa Indonesia</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="ja">
+              <span lang="ja">日本語</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="ko">
+              <span lang="ko">한국어</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="pt-BR">
+              <span lang="pt-BR">Português (Brasil)</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="de">
+              <span lang="de">Deutsch</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="it">
+              <span lang="it">Italiano</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="vi">
+              <span lang="vi">Tiếng Việt</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="pl">
+              <span lang="pl">Polski</span>
+            </label>
+            <label class="language-option">
+              <input type="radio" name="welcome-locale" value="tr">
+              <span lang="tr">Türkçe</span>
+            </label>
+            <label class="language-option">
               <input type="radio" name="welcome-locale" value="zh-CN">
               <span lang="zh-CN">简体中文</span>
             </label>
             <label class="language-option">
-              <input type="radio" name="welcome-locale" value="zh-TW">
-              <span lang="zh-TW">繁體中文（台灣）</span>
+              <input type="radio" name="welcome-locale" value="zh-HKTW">
+              <span lang="zh-HKTW">繁體中文</span>
             </label>
           </div>
           <p id="welcome-language-help" class="help" data-i18n="welcomeLanguageHelp">You can change this later in Settings.</p>
@@ -653,6 +877,33 @@
       <input id="crop-zoom" type="range" min="100" max="200" step="1" value="100">
     </div>
 
+    <fieldset id="crop-background" class="crop-background" hidden>
+      <legend data-i18n="avatarBackground">Background behind transparent areas</legend>
+      <div class="crop-background-swatches" role="radiogroup" data-i18n-aria-label="avatarBackground" aria-label="Background behind transparent areas">
+        <label class="crop-swatch is-transparent">
+          <input type="radio" name="crop-background-choice" value="transparent" checked>
+          <span class="crop-swatch-chip" aria-hidden="true"></span>
+          <span class="crop-swatch-name" data-i18n="backgroundNone">None</span>
+        </label>
+        <label class="crop-swatch">
+          <input type="radio" name="crop-background-choice" value="#FFFFFF">
+          <span class="crop-swatch-chip" style="background:#FFFFFF" aria-hidden="true"></span>
+          <span class="crop-swatch-name" data-i18n="backgroundWhite">White</span>
+        </label>
+        <label class="crop-swatch">
+          <input type="radio" name="crop-background-choice" value="#1A1A1F">
+          <span class="crop-swatch-chip" style="background:#1A1A1F" aria-hidden="true"></span>
+          <span class="crop-swatch-name" data-i18n="backgroundBlack">Black</span>
+        </label>
+        <label class="crop-swatch">
+          <input type="radio" name="crop-background-choice" value="custom">
+          <span class="crop-swatch-chip crop-swatch-custom" aria-hidden="true"></span>
+          <span class="crop-swatch-name" data-i18n="backgroundCustom">Custom</span>
+        </label>
+        <input id="crop-background-color" type="color" value="#4721A1" data-i18n-aria-label="backgroundCustom" aria-label="Custom background color">
+      </div>
+    </fieldset>
+
     <div class="dialog-actions">
       <button type="button" id="crop-reset" class="ghost-button" data-i18n="resetPosition">Reset</button>
       <span class="dialog-actions-spacer" aria-hidden="true"></span>
@@ -674,6 +925,21 @@
   </form>
 </dialog>
 
+<script src="locales/en.js"></script>
+<script src="locales/hi.js"></script>
+<script src="locales/es.js"></script>
+<script src="locales/fr.js"></script>
+<script src="locales/id.js"></script>
+<script src="locales/ja.js"></script>
+<script src="locales/ko.js"></script>
+<script src="locales/pt-BR.js"></script>
+<script src="locales/de.js"></script>
+<script src="locales/it.js"></script>
+<script src="locales/vi.js"></script>
+<script src="locales/pl.js"></script>
+<script src="locales/tr.js"></script>
+<script src="locales/zh-CN.js"></script>
+<script src="locales/zh-HKTW.js"></script>
 <script src="generated-themes.js"></script>
 <script src="editor.js"></script>
 <script src="app.js"></script>

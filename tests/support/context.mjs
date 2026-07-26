@@ -16,6 +16,7 @@ import {
   buildPayload,
   buildPayloadFromCompiled,
   compileTheme,
+  renderGreetingCss,
   DEFAULT_CONFIG,
   executeStudioRequest,
   hydrateStudioDraft,
@@ -26,6 +27,12 @@ import {
   readThemeRegistry,
   REQUIRED_SEMANTIC_TOKENS,
   resolveArtwork,
+  greetingPhraseDigest,
+  resolveGreetingPhrases,
+  resolveGreetingRuntime,
+  validateGreetingPreferences,
+  validateGreetingShuffleState,
+  validateNewChatGreetingStyle,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
   STUDIO_MAX_LAYERS,
@@ -89,10 +96,46 @@ export function run(command, args, options = {}) {
 }
 
 export function readPayloadSettings(payload) {
-  const marker = '{"version":';
-  const offset = payload.lastIndexOf(marker);
+  const aliases = {
+    v: "version", t: "theme", r: "variant", a: "appearance",
+    i: "imageDataUrl", j: "imageAnimated", o: "imageOpacity",
+    p: "imagePosition", z: "imageZoom", d: "artDataUrl",
+    e: "artPosition", f: "artSize", l: "artMobile", y: "artLayers",
+    h: "reduceMotion", x: "digest", A: "avatarDataUrl",
+  };
+  let end = payload.length - 1;
+  while (end >= 0 && /\s/.test(payload[end])) end -= 1;
+  if (payload[end] === ")") end -= 1;
+  assert(payload[end] === "}", "Renderer payload is missing its compact settings argument");
+  let depth = 0;
+  let quoted = false;
+  let offset = -1;
+  for (let index = end; index >= 0; index -= 1) {
+    const character = payload[index];
+    if (character === '"') {
+      let slashes = 0;
+      for (let before = index - 1; before >= 0 && payload[before] === "\\"; before -= 1) {
+        slashes += 1;
+      }
+      if (slashes % 2 === 0) quoted = !quoted;
+      continue;
+    }
+    if (quoted) continue;
+    if (character === "}") depth += 1;
+    else if (character === "{") {
+      depth -= 1;
+      if (depth === 0) {
+        offset = index;
+        break;
+      }
+    }
+  }
   assert(offset >= 0, "Renderer payload is missing its compact settings argument");
-  return JSON.parse(payload.slice(offset, -1));
+  const raw = JSON.parse(payload.slice(offset, end + 1));
+  return Object.fromEntries(Object.entries(raw).map(([key, value]) => [
+    aliases[key] ?? key,
+    value,
+  ]));
 }
 
 export function zipEntryNames(bytes) {
@@ -113,6 +156,38 @@ export function zipEntryNames(bytes) {
   return names;
 }
 
+export const UI_LOCALES = ["en", "zh-CN", "zh-HKTW"];
+export const STUDIO_LOCALES = [
+  "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
+];
+
+// Window copy is one JSON file per language under windows/locales. Tests read
+// the whole set so a missing or extra language file fails as loudly as a
+// missing key used to.
+export async function readHostCopy() {
+  const entries = await Promise.all(UI_LOCALES.map(async (locale) => [
+    locale,
+    JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "windows", "locales", `${locale}.json`), "utf8")),
+  ]));
+  return Object.fromEntries(entries);
+}
+
+// Studio copy is one script per language under studio/locales. Each file
+// registers itself on window.CLAUDE_AURA_STRINGS, so the tests replay it
+// against a bare object instead of parsing the source text.
+export async function readStudioCopy() {
+  const registry = {};
+  for (const locale of STUDIO_LOCALES) {
+    const source = await fs.readFile(path.join(PROJECT_ROOT, "studio", "locales", `${locale}.js`), "utf8");
+    Function("window", `"use strict";\n${source}`)(registry);
+  }
+  const strings = registry.CLAUDE_AURA_STRINGS ?? {};
+  const section = (name) => Object.fromEntries(
+    Object.entries(strings).map(([locale, copy]) => [locale, copy?.[name] ?? {}]),
+  );
+  return { locales: Object.keys(strings), shell: section("shell"), editor: section("editor") };
+}
+
 export async function deliverableFiles(directory = PROJECT_ROOT, relativeDirectory = "") {
   const files = [];
   const excludedRoots = new Set(["dist", "node_modules", "release"]);
@@ -122,7 +197,7 @@ export async function deliverableFiles(directory = PROJECT_ROOT, relativeDirecto
     "NOTICE.md",
     "README.md",
     "README.zh-CN.md",
-    "README.zh-TW.md",
+    "README.zh-HKTW.md",
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
   ]);
@@ -182,6 +257,7 @@ export {
   buildPayload,
   buildPayloadFromCompiled,
   compileTheme,
+  renderGreetingCss,
   crypto,
   executeStudioRequest,
   fs,
@@ -193,6 +269,12 @@ export {
   readThemeKit,
   readThemeRegistry,
   resolveArtwork,
+  greetingPhraseDigest,
+  resolveGreetingPhrases,
+  resolveGreetingRuntime,
+  validateGreetingPreferences,
+  validateGreetingShuffleState,
+  validateNewChatGreetingStyle,
   spawnSync,
   validateTheme,
   writeConfig,

@@ -1,4 +1,14 @@
 ((cssText, settings) => {
+  if (settings.C === 1) {
+    const cssDictionary = [
+      "html.claude-aura", "[data-claude-aura-", "hsl(var(--aura-", "var(--aura-",
+      "!important", "#claude-aura-backdrop", "background-", "border-",
+    ];
+    cssText = cssText.replace(
+      /[\uE000-\uE007]/g,
+      (token) => cssDictionary[token.charCodeAt(0) - 0xE000],
+    );
+  }
   const STATE_KEY = "__CLAUDE_AURA_STATE__";
   const STYLE_ID = "claude-aura-style";
   const BACKDROP_ID = "claude-aura-backdrop";
@@ -57,6 +67,25 @@
   let artBindings = [];
   let bb = null;
   let bt = 0;
+  let av = null;
+  let avt = 0;
+  let syncAvatar, clearAvatar;
+  let syncGreeting, clearGreeting, advanceGreetingVisit, greetingMemory, greetingMatches = -1;
+  let getGreetingProbe = () => ({
+    version: 1,
+    digest: settings.digest,
+    context: currentContext,
+    status: "inactive",
+    candidateCount: -1,
+    source: "inactive",
+    nativeConnected: false,
+    replacementConnected: false,
+    replacementVisible: false,
+    nativeHidden: false,
+    visitEpoch: 0,
+    shuffle: null,
+    rect: null,
+  });
 
   const visibleRect = (element) => {
     if (!element?.isConnected) return null;
@@ -350,6 +379,80 @@
     im.src = source;
   };
 
+  /*__AURA_AVATAR_START__*/
+  /* Personal avatar overlay: an absolutely-positioned image over the Claude
+     account picture in the sidebar footer; compiled out when no avatar is set. */
+  if (typeof settings.avatarDataUrl === "string" && settings.avatarDataUrl) {
+    const AVH = "data-claude-aura-avatar-host", AVF = "data-claude-aura-avatar-flow", AV = "data-claude-aura-avatar";
+    const findAvatar = (sidebar) => {
+      const side = visibleRect(sidebar);
+      if (!side) return null;
+      let acct = null, lowest = 0;
+      for (const candidate of sidebar.querySelectorAll?.(
+        '[data-testid="account-menu"],[data-testid="profile-menu"],[aria-haspopup="menu"]',
+      ) ?? []) {
+        const rect = visibleRect(candidate);
+        if (rect && rect.top >= side.bottom - Math.max(180, side.height * 0.24) && rect.top >= lowest) {
+          lowest = rect.top; acct = candidate;
+        }
+      }
+      const bounds = acct && visibleRect(acct);
+      if (!bounds) return null;
+      let best = null;
+      for (const element of [acct, ...(acct.querySelectorAll?.("img,span,div") ?? [])]) {
+        const rect = visibleRect(element);
+        if (!rect) continue;
+        const size = Math.min(rect.width, rect.height);
+        if (size < 16 || size > 56 || Math.abs(rect.width - rect.height) > Math.max(4, size * 0.34)
+          || rect.left > bounds.left + Math.max(56, bounds.width * 0.5)
+          || rect.top < bounds.top - 2 || rect.bottom > bounds.bottom + 2) continue;
+        const score = (element.tagName === "IMG" ? 0 : 1e6) + Math.round(rect.left);
+        if (!best || score < best.score) best = { element, rect, score };
+      }
+      if (!best) return null;
+      const radius = window.getComputedStyle?.(best.element)?.borderRadius;
+      return { acct, bounds, rect: best.rect, radius: radius && radius !== "0px" ? radius : "50%" };
+    };
+    clearAvatar = () => {
+      avt += 1;
+      for (const node of document.querySelectorAll?.(`[${AV}]`) ?? []) node.remove();
+      for (const node of document.querySelectorAll?.(`[${AVH}],[${AVF}]`) ?? []) {
+        node.removeAttribute(AVH); node.removeAttribute(AVF);
+      }
+      av = null;
+    };
+    syncAvatar = (sidebar) => {
+      const spot = findAvatar(sidebar);
+      if (!spot) { if (av) clearAvatar(); return; }
+      if (av?.acct === spot.acct && av.image?.isConnected) return;
+      clearAvatar();
+      const image = document.createElement("img");
+      const token = ++avt;
+      image.alt = "";
+      image.draggable = false;
+      image.setAttribute("aria-hidden", "true");
+      image.setAttribute(AV, "1");
+      const put = (name, value) => image.style.setProperty(name, value);
+      put("left", `${Math.round(spot.rect.left - spot.bounds.left)}px`);
+      put("top", `${Math.round(spot.rect.top - spot.bounds.top)}px`);
+      put("width", `${Math.round(spot.rect.width)}px`);
+      put("height", `${Math.round(spot.rect.height)}px`);
+      put("border-radius", spot.radius);
+      av = { acct: spot.acct, image, token };
+      image.onerror = () => { if (av?.token === token) clearAvatar(); };
+      image.onload = () => {
+        if (av?.token !== token || !image.isConnected) return;
+        if ((window.getComputedStyle?.(spot.acct)?.position || "static") === "static") {
+          spot.acct.setAttribute(AVF, "true");
+        }
+        spot.acct.setAttribute(AVH, "ready");
+      };
+      spot.acct.appendChild(image);
+      image.src = settings.avatarDataUrl;
+    };
+  }
+  /*__AURA_AVATAR_END__*/
+
   const discoverMain = () => {
     const candidates = [...(document.querySelectorAll?.('main,[role="main"]') ?? [])]
       .filter((element) => {
@@ -552,6 +655,278 @@
     }
   };
 
+  /*__AURA_GREETING_START__*/
+  if (settings.g && typeof settings.g === "object") {
+    const g = settings.g, G = "data-claude-aura-greeting", H = `${G}-native`;
+    const T = `${G}-text`, K = `${G}-mark`, ps = Array.isArray(g.p) ? g.p : [];
+    const pd = typeof g.d === "string" ? g.d : "", sh = g.h, old = window[STATE_KEY]?.greetingMemory;
+    const io = Array.isArray(sh?.[0]) && sh.length === 3 ? sh[0] : [];
+    const ic = sh?.[1], il = sh?.[2];
+    const iv = io.length === ps.length && new Set(io).size === ps.length
+      && io.every((x) => Number.isInteger(x) && x >= 0 && x < ps.length)
+      && Number.isInteger(ic) && ic >= 0 && ic <= io.length
+      && (il === null || (Number.isInteger(il) && il >= 0 && il < ps.length))
+      && (ic === 0 || il === io[ic - 1]);
+    greetingMemory = old?.f === pd && old?.t === settings.theme ? old : {
+      t: settings.theme, f: pd, s: -1, o: iv ? [...io] : [], c: iv ? ic : 0,
+      l: iv && il !== null ? il : -1, e: 1, v: false,
+    };
+    let bd, rn, tn, dn, ro, ft = 0, st = "missing", cc = 0, mf = false, rt = [];
+    const src = ps.length ? "custom" : "native", rr = (r) => r && ({
+      left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height),
+    });
+    getGreetingProbe = () => {
+      const x = visibleRect(rn), n = bd?.n?.isConnected && (visibleRect(bd.n) || bd.r);
+      return {
+        version: 1, digest: settings.digest, context: currentContext, status: st,
+        candidateCount: cc, "source": src, nativeConnected: Boolean(bd?.n?.isConnected),
+        replacementConnected: Boolean(rn?.isConnected), replacementVisible: Boolean(x),
+        nativeHidden: bd?.u?.getAttribute?.(H) === "true",
+        visitEpoch: greetingMemory.e,
+        shuffle: ps.length && pd && greetingMemory.o.length ? {
+          themeId: settings.theme, phraseDigest: pd, order: [...greetingMemory.o],
+          cursor: greetingMemory.c, lastIndex: greetingMemory.l < 0 ? null : greetingMemory.l,
+        } : null,
+        "rect": rr(x || n),
+      };
+    };
+    const at = (n, a) => [n, a, n.hasAttribute?.(a), n.getAttribute?.(a)];
+    const af = (f) => { const x = ++ft; window.requestAnimationFrame(() => x === ft && f()); };
+    const q = `${EDITOR_SELECTOR},${CONTROL_SELECTOR},${MESSAGE_SELECTOR}`;
+    const excluded = (n, own = bd?.n) => !n?.isConnected || n === rn || n.hasAttribute?.(T)
+      || (n.hasAttribute?.(G) && n !== own) || n.matches?.(q) || n.querySelector?.(q)
+      || n.parentElement?.closest?.(q)
+      || n.closest?.('[role="dialog"],[role="navigation"],nav,form');
+    const bound = (c, ma) => Boolean(c?.n?.isConnected && c.t?.isConnected
+      && ma.contains?.(c.n) && c.n.contains?.(c.t) && !excluded(c.t, c.n));
+    const find = (ma, sh, gr) => {
+      const mr = visibleRect(ma), sr = visibleRect(sh), roots = [];
+      let pass = false;
+      for (let n = sh, d = 0; n?.parentElement && d < 8; n = n.parentElement, d += 1) {
+        const p = n.parentElement, a = [...p.children], i = a.indexOf(n);
+        if (i) roots.push(...a.slice(Math.max(0, i - 8), i));
+        if (pass) break;
+        pass = p === gr;
+      }
+      const out = bound(bd, ma) ? [bd] : [], sel = 'h1,h2,h3,h4,h5,h6,[role="heading"],span,p';
+      for (const n of [...new Set(roots)].slice(-16)
+        .flatMap((x) => [...(x.matches?.(sel) ? [x] : []), ...(x.querySelectorAll?.(sel) ?? [])]).slice(0, 64)) {
+        if (excluded(n)) continue;
+        const nr = visibleRect(n), tag = String(n.tagName || n.nodeName || "");
+        const sem = /^H[1-6]$/i.test(tag) || n.getAttribute?.("role") === "heading";
+        const fs = Number.parseFloat(window.getComputedStyle?.(n)?.fontSize ?? "");
+        if (!nr || nr.top < mr.top - 2 || nr.bottom > sr.top + 2 || nr.height > 160
+            || (!sem && (n.children.length || fs < 24 || nr.width < 48 || nr.height < 20 || nr.height > 96))) continue;
+        let w = n;
+        if (!sem) for (let p = n.parentElement, d = 0; p && p !== gr && p !== ma && d++ < 2; p = p.parentElement) {
+          const r = visibleRect(p);
+          if (!r || r.height > 128 || r.width > nr.width + 112
+              || Math.abs(r.left + r.right - nr.left - nr.right) > 64 || p.querySelector?.(q)) break;
+          w = p;
+        }
+        const r = visibleRect(w), ov = r && Math.max(0, Math.min(r.right, sr.right) - Math.max(r.left, sr.left));
+        if (!r || ov < Math.min(r.width, sr.width) * 0.55) continue;
+        const k = [...w.children].find((c) => {
+          const z = !c.contains?.(n) && visibleRect(c), s = z && Math.min(z.width, z.height);
+          return s >= 10 && s <= 64 && Math.abs(z.width - z.height) < 16;
+        });
+        const z = (sem ? 60 : Math.min(36, (fs - 18) * 3))
+          + Math.max(0, 42 - ((sr.top - r.bottom) + Math.abs(r.left + r.right - sr.left - sr.right) / 2) / 8)
+          + (k ? 3 : 0);
+        const c = { n: w, t: n, k, r, z }, i = out.findIndex((x) => x.n === w);
+        if (i < 0) out.push(c);
+        else if (z > out[i].z) out[i] = c;
+      }
+      const a = out.sort((x, y) => y.z - x.z);
+      if (!a.length) return ["missing", 0];
+      if (a[0].z < 56 || (a[1] && a[0].z - a[1].z < Math.max(10, a[0].z * 0.1))) {
+        return ["ambiguous", a.length];
+      }
+      return ["found", a.length, a[0]];
+    };
+    const bind = (c) => {
+      const u = c.t?.isConnected && c.t !== c.n ? c.t : c.n;
+      return {
+        ...c, p: c.n.parentElement, u,
+        a: [at(c.n, G), at(u, H), at(u, "aria-hidden"), c.k && at(c.k, K)].filter(Boolean),
+        y: [...new Set([c.n, u])].map((n) => [n, n.style["css" + "Text"]]),
+      };
+    };
+    const restore = () => {
+      for (const [n, p, e, v] of bd?.a ?? []) if (n?.isConnected) {
+        e ? n.setAttribute(p, v ?? "") : n.removeAttribute(p);
+      }
+      for (const [n, s] of bd?.y ?? []) if (n?.isConnected) n.style["css" + "Text"] = s;
+    };
+    const unwatch = () => { ro?.disconnect(); rt = []; };
+    const watch = (...nodes) => {
+      const next = [...new Set(nodes.filter((n) => n?.isConnected))];
+      if (next.length === rt.length && next.every((n, i) => n === rt[i])) return;
+      unwatch();
+      if (!next.length || typeof window.ResizeObserver !== "function") return;
+      ro ??= new window.ResizeObserver(() => { if (bd) scheduleEnsure(); });
+      for (const n of next) ro.observe(n);
+      rt = next;
+    };
+    const remove = () => { ft += 1; rn?.remove(); dn?.remove(); rn = tn = dn = null; };
+    const end = () => {
+      if (greetingMemory.v) greetingMemory.v = false, greetingMemory.s = -1, greetingMemory.e += 1;
+    };
+    advanceGreetingVisit = () => {
+      greetingMemory.v = false; greetingMemory.s = -1; greetingMemory.e += 1;
+    };
+    clearGreeting = (e = false) => { unwatch(); restore(); remove(); bd = null; if (e) end(); };
+    const geometry = (n, ma) => {
+      const c = window.getComputedStyle?.(n), r = visibleRect(ma);
+      if (!c || !r) return;
+      const v = (p) => Number.parseFloat(c.getPropertyValue?.(`--aura-greeting-${p}`));
+      const x = v("x"), y = v("y"), w = v("max-ratio");
+      if (Number.isFinite(x) || Number.isFinite(y)) n.style.setProperty(
+        "translate",
+        `${Math.round((Number.isFinite(x) ? Math.max(-0.4, Math.min(0.4, x)) * r.width : 0))}px `
+          + `${Math.round((Number.isFinite(y) ? Math.max(-0.4, Math.min(0.4, y)) * r.height : 0))}px`,
+      );
+      if (Number.isFinite(w)) n.style.setProperty("max-width", `${Math.round(Math.max(160, Math.min(r.width, w * r.width)))}px`);
+    };
+    const within = (n, ma, sh) => {
+      const r = visibleRect(n), m = visibleRect(ma), s = visibleRect(sh);
+      return Boolean(r && m && s
+        && r.left >= m.left - 2 && r.right <= m.right + 2
+        && r.top >= m.top - 2 && r.bottom <= Math.min(m.bottom, s.top) + 2);
+    };
+    const im = (parent) => {
+      const x = document.createElement("img");
+      x.setAttribute(K, "compact"); x.setAttribute("aria-hidden", "true");
+      x.alt = ""; x.draggable = false;
+      x.onerror = () => {
+        if (x.isConnected && dn?.contains?.(x)) {
+          mf = true; fail("unmeasurable");
+        }
+      };
+      x.src = g.m; parent.appendChild(x); return x;
+    };
+    const decorate = () => {
+      if (!g.m) return;
+      if (!dn?.isConnected) {
+        dn = document.createElement("span");
+        dn.setAttribute(G, "decoration"); dn.setAttribute("aria-hidden", "true");
+        dn.style.setProperty("position", "fixed"); dn.style.setProperty("pointer-events", "none");
+        im(dn);
+        bd.p.insertBefore(dn, bd.n);
+      }
+      const r = bd.u === bd.n ? visibleRect(rn) || bd.r : visibleRect(bd.k) || bd.r;
+      const s = Math.round(Math.max(16, Math.min(48, Math.min(r.width, r.height))));
+      [["left", r.left], ["top", r.top], ["width", s], ["height", s]]
+        .forEach(([p, v]) => dn.style.setProperty(p, `${Math.round(v)}px`));
+    };
+    let custom = () => false;
+    /*__AURA_GREETING_PHRASES_START__*/
+    const pick = () => {
+      if (greetingMemory.s >= 0 && greetingMemory.s < ps.length) return greetingMemory.s;
+      if (greetingMemory.c >= greetingMemory.o.length || greetingMemory.o.length !== ps.length) {
+        greetingMemory.o = ps.map((_, i) => i);
+        for (let i = greetingMemory.o.length - 1; i; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [greetingMemory.o[i], greetingMemory.o[j]] = [greetingMemory.o[j], greetingMemory.o[i]];
+        }
+        if (greetingMemory.o.length > 1 && greetingMemory.o[0] === greetingMemory.l) {
+          [greetingMemory.o[0], greetingMemory.o[1]] = [greetingMemory.o[1], greetingMemory.o[0]];
+        }
+        greetingMemory.c = 0;
+      }
+      greetingMemory.s = greetingMemory.o[greetingMemory.c++];
+      greetingMemory.l = greetingMemory.s;
+      return greetingMemory.s;
+    };
+    custom = (ma, sh) => {
+      const i = pick();
+      if (i < 0 || !bd?.n?.isConnected) return false;
+      if (/^(pending|verifying|custom)$/.test(st) && rn?.isConnected) {
+        if (tn && tn.textContent !== ps[i]) tn.textContent = ps[i];
+        if (st === "custom") {
+          geometry(bd.u === bd.n ? rn : bd.n, ma);
+          if (!within(rn, ma, sh)) { fail("unmeasurable"); return false; }
+          decorate();
+        }
+        return true;
+      }
+      remove();
+      rn = document.createElement("div");
+      rn.setAttribute(G, "new-chat"); rn.setAttribute("role", "heading");
+      const level = Number.parseInt(bd.t?.getAttribute?.("aria-level") ?? "", 10);
+      const tagLevel = /^H([1-6])$/i.exec(String(bd.t?.tagName || ""))?.[1];
+      rn.setAttribute("aria-level", String(level >= 1 && level <= 6 ? level : tagLevel || 1));
+      rn.setAttribute("aria-hidden", "true");
+      rn.style.setProperty("position", "absolute"); rn.style.setProperty("visibility", "hidden");
+      rn.style.setProperty("pointer-events", "none");
+      rn.style.setProperty("min-width", "0"); rn.style.setProperty("max-width", "100%");
+      rn.style.setProperty("box-sizing", "border-box");
+      rn.style.setProperty("white-space", "normal"); rn.style.setProperty("overflow-wrap", "anywhere");
+      tn = document.createElement("span"); tn.setAttribute(T, ""); tn.textContent = ps[i]; rn.appendChild(tn);
+      const host = bd.u === bd.n ? bd.p : bd.n, siblings = [...host.children];
+      host.insertBefore(rn, bd.u === bd.n ? bd.n : siblings[siblings.indexOf(bd.u) + 1] || null);
+      if (g.s) {
+        if (bd.u === bd.n) geometry(rn, ma);
+      } else {
+        const c = window.getComputedStyle?.(bd.n);
+        for (const p of [
+          "font-family", "font-size", "font-weight", "font-style",
+          "letter-spacing", "line-height", "color", "text-align",
+        ]) {
+          const v = c?.getPropertyValue?.(p); if (v) rn.style.setProperty(p, v);
+        }
+      }
+      st = "pending";
+      af(() => {
+        const r = rn?.getBoundingClientRect?.(), m = visibleRect(ma);
+        if (!r || !m || r.width <= 0 || r.height <= 0 || r.width > m.width) {
+          fail("unmeasurable"); return;
+        }
+        bd.n.setAttribute(G, "native-mark");
+        if (bd.k?.isConnected) bd.k.setAttribute(K, "native");
+        if (bd.u !== bd.n) geometry(bd.n, ma);
+        decorate();
+        bd.u.setAttribute(H, "true"); bd.u.setAttribute("aria-hidden", "true");
+        bd.u.style.setProperty("display", "none");
+        rn.removeAttribute("aria-hidden"); rn.style.removeProperty("position"); rn.style.removeProperty("visibility");
+        st = "verifying";
+        af(() => {
+          if (!within(rn, ma, sh)) fail("unmeasurable");
+          else st = "custom";
+        });
+      });
+      return true;
+    };
+    /*__AURA_GREETING_PHRASES_END__*/
+    const fail = (x, e = false, n = 0) => {
+      clearGreeting(e); st = x; cc = n; greetingMatches = n;
+    };
+    syncGreeting = (ctx, ma, sh, gr) => {
+      if (forcedColors?.matches) return fail("forced-colors");
+      if (mf) return fail("unmeasurable");
+      if (ctx !== "new-chat") return fail(ctx === "conversation" ? ctx : "other", ctx === "conversation");
+      if (!ma || !sh || !gr) return fail("missing");
+      greetingMemory.v = true;
+      const x = find(ma, sh, gr);
+      if (x[0] !== "found") return fail(x[0], false, x[1]);
+      if (!bd || bd.n !== x[2].n) { clearGreeting(); bd = bind(x[2]); }
+      cc = greetingMatches = x[1];
+      if (ps.length) {
+        if (!custom(ma, sh)) st = "unmeasurable";
+        else watch(ma, sh, bd?.n, bd?.u, rn);
+        return;
+      }
+      remove();
+      if (!g.s) { unwatch(); return (st = "inactive"); }
+      bd.n.setAttribute(G, "native");
+      if (bd.k?.isConnected) bd.k.setAttribute(K, "native");
+      geometry(bd.n, ma);
+      if (!within(bd.n, ma, sh)) return fail("unmeasurable");
+      decorate(); st = "native"; watch(ma, sh, bd.n, bd.u);
+    };
+  }
+  /*__AURA_GREETING_END__*/
+
   const syncSemanticLayout = () => {
     clearMarks();
     if (forcedColors?.matches) {
@@ -559,6 +934,9 @@
       root.dataset.claudeAuraContext = currentContext;
       root.style.removeProperty("--aura-main-start");
       clearBrand();
+      clearAvatar?.();
+      if (syncGreeting) syncGreeting("other", null, null, null);
+      else clearGreeting?.(false);
       applyArtworkContext(currentContext);
       return;
     }
@@ -568,6 +946,7 @@
       discoverSidebarRoles(sidebar);
     }
     syncBrand(sidebar);
+    syncAvatar?.(sidebar);
     const found = discoverComposer();
     currentContext = found.context;
     root.dataset.claudeAuraContext = currentContext;
@@ -581,6 +960,7 @@
     } else root.style.removeProperty("--aura-main-start");
     if (currentContext === "new-chat") applyPromptLayout(found.prompt, found.main);
     else clearPromptLayout();
+    syncGreeting?.(currentContext, found.main, found.shell, found.prompt);
     applyArtworkContext(currentContext);
   };
 
@@ -589,6 +969,8 @@
   previous?.stopModeListener?.();
   previous?.stopContextListeners?.();
   previous?.clearBrandWordmark?.();
+  previous?.clearAvatarOverlay?.();
+  previous?.cg?.(false);
   previous?.clearMarkedElements?.();
   if (previous?.timer) clearInterval(previous.timer);
   if (previous?.scheduled) clearTimeout(previous.scheduled);
@@ -731,6 +1113,8 @@
     stopMode();
     stopContext();
     clearBrand();
+    clearAvatar?.();
+    clearGreeting?.(true);
     clearMarks();
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BACKDROP_ID)?.remove();
@@ -772,15 +1156,23 @@
     if (state) state.scheduled = scheduled;
   };
   const onContextSignal = () => scheduleEnsure();
-  window.addEventListener("popstate", onContextSignal);
+  const onPopState = () => {
+    if (!window.navigation) advanceGreetingVisit?.();
+    scheduleEnsure();
+  };
+  const onNavigationSignal = () => {
+    advanceGreetingVisit?.();
+    scheduleEnsure();
+  };
+  window.addEventListener("popstate", onPopState);
   window.addEventListener("resize", onContextSignal, { passive: true });
   document.addEventListener?.("fullscreenchange", onContextSignal);
-  window.navigation?.addEventListener?.("currententrychange", onContextSignal);
+  window.navigation?.addEventListener?.("currententrychange", onNavigationSignal);
   const stopContext = () => {
-    window.removeEventListener("popstate", onContextSignal);
+    window.removeEventListener("popstate", onPopState);
     window.removeEventListener("resize", onContextSignal);
     document.removeEventListener?.("fullscreenchange", onContextSignal);
-    window.navigation?.removeEventListener?.("currententrychange", onContextSignal);
+    window.navigation?.removeEventListener?.("currententrychange", onNavigationSignal);
   };
   let observedHead = null;
   let observedBody = null;
@@ -861,11 +1253,15 @@
     stopModeListener: stopMode,
     stopContextListeners: stopContext,
     clearBrandWordmark: clearBrand,
+    clearAvatarOverlay: clearAvatar,
+    cg: (endVisit = true) => clearGreeting?.(endVisit),
+    greetingMemory,
+    getGreetingProbe,
     clearMarkedElements: clearMarks,
     version: settings.version,
     theme: settings.theme,
     digest: settings.digest,
   };
   ensure();
-  return { installed: true, version: settings.version, theme: settings.theme, digest: settings.digest };
+  return { installed: true, version: settings.version, theme: settings.theme, digest: settings.digest, gm: greetingMatches };
 })(__AURA_CSS_JSON__, __AURA_SETTINGS_JSON__)

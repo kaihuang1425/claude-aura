@@ -19,6 +19,22 @@ offline-preview files and comparison screenshots are not deliverables.
 - `studio/editor.js`
 - `studio/generated-themes.js`
 - `studio/index.html`
+- `studio/locales/de.js`
+- `studio/locales/en-keys.json`
+- `studio/locales/en.js`
+- `studio/locales/es.js`
+- `studio/locales/fr.js`
+- `studio/locales/hi.js`
+- `studio/locales/id.js`
+- `studio/locales/it.js`
+- `studio/locales/ja.js`
+- `studio/locales/ko.js`
+- `studio/locales/pl.js`
+- `studio/locales/pt-BR.js`
+- `studio/locales/tr.js`
+- `studio/locales/vi.js`
+- `studio/locales/zh-CN.js`
+- `studio/locales/zh-HKTW.js`
 - `studio/styles.css`
 
 ## Repository and policy
@@ -34,11 +50,26 @@ offline-preview files and comparison screenshots are not deliverables.
 - `NOTICE.md`
 - `package.json`
 - `README.md`
-- `README.zh-CN.md`
-- `README.zh-TW.md`
 - `SECURITY.md`
 - `THIRD_PARTY_NOTICES.md`
 - `Uninstall Claude Aura.cmd`
+
+## Localized readmes
+
+- `readmes/README.de.md`
+- `readmes/README.es.md`
+- `readmes/README.fr.md`
+- `readmes/README.hi.md`
+- `readmes/README.id.md`
+- `readmes/README.it.md`
+- `readmes/README.ja.md`
+- `readmes/README.ko.md`
+- `readmes/README.pl.md`
+- `readmes/README.pt-BR.md`
+- `readmes/README.tr.md`
+- `readmes/README.vi.md`
+- `readmes/README.zh-CN.md`
+- `readmes/README.zh-HKTW.md`
 
 ## Renderer and artwork
 
@@ -264,19 +295,26 @@ the retired reconstructed preview are not deliverables.
 - `scripts/build-release.mjs`
 - `scripts/convert-theme-assets.mjs`
 - `scripts/injector.mjs`
+- `scripts/locale-tasks.mjs`
 - `scripts/state-cli.mjs`
 - `scripts/theme-cli.mjs`
 - `scripts/theme-core.mjs`
 - `scripts/theme-core/artwork.mjs`
 - `scripts/theme-core/compile.mjs`
 - `scripts/theme-core/constants.mjs`
+- `scripts/theme-core/greeting.mjs`
 - `scripts/theme-core/registry.mjs`
 - `scripts/theme-core/studio.mjs`
 - `scripts/theme-core/validation.mjs`
 - `scripts/verify-cycle.mjs`
 - `scripts/webview-cli.mjs`
+- `tests/aura-rescue.test.mjs`
 - `tests/artwork.test.mjs`
+- `tests/avatar.test.mjs`
 - `tests/config.test.mjs`
+- `tests/greeting-runtime.test.mjs`
+- `tests/greeting.test.mjs`
+- `tests/locales.test.mjs`
 - `tests/payload.test.mjs`
 - `tests/platform.test.mjs`
 - `tests/run-tests.mjs`
@@ -292,6 +330,9 @@ the retired reconstructed preview are not deliverables.
 - `windows/aura-ui.ps1`
 - `windows/common.ps1`
 - `windows/install.ps1`
+- `windows/locales/en.json`
+- `windows/locales/zh-CN.json`
+- `windows/locales/zh-HKTW.json`
 - `windows/restore.ps1`
 - `windows/start.ps1`
 - `windows/switch-theme.ps1`

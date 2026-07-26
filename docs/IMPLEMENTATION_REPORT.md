@@ -343,14 +343,14 @@ are logged, and unsuccessful requests do not prevent Studio, the WebView, or
 theme selection from working.
 
 Theme metadata and Windows picker chrome, status, error, and accessibility copy
-support `en`, `zh-CN`, and `zh-TW`. Windows passes the current UI culture to the
+support `en`, `zh-CN`, and `zh-HKTW`. Windows passes the current UI culture to the
 theme CLI and decodes the helper's UTF-8 output with an explicit UTF-8
 `StandardOutputEncoding`, and reads `config.json` with `-Encoding UTF8`, so
 localized metadata is not corrupted when the console falls back to an OEM code
 page such as Big5 (cp950) on a Traditional Chinese system. Locale normalization
 maps `zh-CN`, `zh-SG`, and
-`zh-Hans` tags to `zh-CN`; it maps `zh-TW`, `zh-HK`, `zh-MO`, and `zh-Hant`
-tags to `zh-TW`. Other tags fall back to English. Theme CSS and artwork contain
+`zh-Hans` tags to `zh-CN`; it maps `zh-HKTW`, `zh-HK`, `zh-MO`, and `zh-Hant`
+tags to `zh-HKTW`. Other tags fall back to English. Theme CSS and artwork contain
 no localized functional copy.
 
 ## Persistence and compatibility
@@ -516,7 +516,7 @@ reinstalled after the source tree and live checkpoint settle.
 | WO-18 in-page brand identity | The repository-only reference tree freezes one normalized horizontal `Claude` source per built-in and records source provenance/prompts: exact supplied full lockups for Japanese Film Editorial and Japanese Idol, the approved supplied Korean Idol raster, and newly authored Default, Korean Prestige, Cartoon Studio, Anime Twilight, and Study Library directions. The deterministic builder emits appearance-specific Light/Dark PNGs under all eight theme-art directories. One artwork-budgeted renderer channel preserves the native wrapper, reveals one inert image only after decode on a unique expanded host, and restores the native visual for collapsed/undersized, ambiguous, failed, forced-colors, Original-look, cleanup, and remount paths. Runtime derivatives and the builder ship; normalized sources, prompts, and ignored source kits do not. This is mechanical implementation evidence only: live expanded-sidebar Light/Dark quality across all eight themes and selector/fallback behavior remain open at HUMAN CHECKPOINT D. |
 | Windows title-bar source check | Passed; best-effort DWM dark-caption and caption/text/border attributes are present with a non-fatal fallback path |
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
-| Aura Studio framing simulator exercise | Mechanically exercised on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-TW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were checked. This was not an acceptance pass: the offline walkthrough images were retired and deleted on 2026-07-20, and actual-Aura review remains the only visual evidence. |
+| Aura Studio framing simulator exercise | Mechanically exercised on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-HKTW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were checked. This was not an acceptance pass: the offline walkthrough images were retired and deleted on 2026-07-20, and actual-Aura review remains the only visual evidence. |
 | WO-10 Cartoon Studio asset cycle | Source/runtime checksum freeze, two-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark review pass. The user approved the visual evidence at HUMAN CHECKPOINT C; the narrower 1280 x 720 stress case remains in WO-16. |
 | WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark 1920 x 1080 review pass. The user approved the visual evidence at HUMAN CHECKPOINT C. |
 | WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
@@ -557,7 +557,7 @@ status-only asset audit.
 An interactive 2026-07-18 run exercised all eight selections against the
 signed-in production `claude.ai` WebView2 window and persisted theme, enabled,
 and background state. The revised Aura Studio gallery was inspected in a real
-WebView2 host in zh-TW and zh-CN, including immediate selection updates and
+WebView2 host in zh-HKTW and zh-CN, including immediate selection updates and
 keyboard focus traversal. Its framing behavior is also covered by executable
 bridge, persistence, and input-validation checks; retired simulator images are
 not evidence.

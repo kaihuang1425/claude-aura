@@ -2,1028 +2,12 @@
 (() => {
   "use strict";
 
-  const STRINGS = {
-    en: {
-      navEditor: "Theme editor",
-      editorKicker: "No-code theme editor",
-      historyActions: "Edit history",
-      undo: "Undo",
-      redo: "Redo",
-      resetChanges: "Reset",
-      backToThemes: "Back to themes",
-      themeIdentity: "Theme name",
-      themeIdentityHelp: "Name the theme for each language you want to support.",
-      themeNameEn: "English name",
-      themeNameZhCn: "Simplified Chinese name",
-      themeNameZhTw: "Traditional Chinese (Taiwan) name",
-      themeDescriptionEn: "English description",
-      themeDescriptionZhCn: "Simplified Chinese description",
-      themeDescriptionZhTw: "Traditional Chinese (Taiwan) description",
-      editAppearance: "Theme mode",
-      lightMode: "Light",
-      darkMode: "Dark",
-      copyLightToDark: "Copy Light colors to Dark",
-      copyDarkToLight: "Copy Dark colors to Light",
-      modeHelp: "Light and Dark can use different colors and images.",
-      colorsAndSurfaces: "Colors",
-      colorsHelp: "Choose essential colors in Quick customize. Advanced also includes supporting colors and exact values.",
-      typographyAndMaterials: "Type and effects",
-      studioStyleHelp: "These type, corner, blur, and shadow choices style Aura and Studio together.",
-      appIdentity: "App identity",
-      appIdentityHelp: "Replace the mark used by Aura, Studio, the launcher, taskbar, and tray, or style its surrounding control. Choose a static, transparent 96 × 96 PNG.",
-      appIdentityPreview: "App identity preview",
-      selectAppIdentityPreview: "Select app identity",
-      replaceAppMark: "Replace mark",
-      launcherSurface: "Mark background",
-      launcherSurfaceHover: "Hover background",
-      launcherForeground: "Label and grip",
-      launcherAccent: "Identity accent",
-      launcherBorder: "Identity border",
-      launcherRadius: "Identity roundness",
-      launcherBorderWidth: "Border width",
-      interfaceFont: "Interface font",
-      displayFont: "Heading font",
-      cornerRadius: "Corner radius",
-      themeOriginal: "Theme original",
-      inheritedRadiusHelp: "Theme original. Moving this control creates one shared corner radius.",
-      surfaceBlur: "Panel blur",
-      softShadow: "Shadow",
-      themeBackground: "Theme background",
-      backgroundScope: "Background area",
-      contentCanvas: "Main area only",
-      fullWindow: "Entire window",
-      contentScopeHelp: "Artwork begins after the live sidebar.",
-      fullScopeHelp: "Artwork continues behind the live sidebar, which uses the selected translucent overlay.",
-      artworkLayers: "Images",
-      layersHelp: "Add up to eight pointer-inert images. Each layer can target an appearance, page context, and window size.",
-      addLayer: "Add layer",
-      addArtwork: "Add image…",
-      artworkRoleChoice: "Image type",
-      artworkVisibilityHelp: "Show in theme changes Aura. Hide in the preview is temporary.",
-      layerPlacementShared: "This image shares one position across {0}. Open Advanced to limit its appearance or page, or add a separate image.",
-      layerPlacementSpecific: "This position changes only {0}.",
-      appearanceBoth: "Light and Dark",
-      contextBoth: "New chat and Conversation",
-      promptPlacement: "New chat area",
-      promptPlacementHelp: "Drag it in the preview or use these controls. Light and Dark share this position; Conversation composers never move.",
-      nativePromptHelp: "Using Claude's current layout. Your first adjustment adopts the measured live size and position.",
-      conversationLayout: "Conversation layout",
-      conversationLayoutHelp: "Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.",
-      promptWidth: "Width",
-      horizontalOffset: "Horizontal offset",
-      verticalOffset: "Vertical offset",
-      assetGuide: "Asset and safe-zone guide",
-      guideOnlyNotice: "Guide only — this is not a Claude preview. Review the saved theme in the actual Aura window.",
-      sidebarZone: "Sidebar zone",
-      textSafeZone: "Text-safe zone",
-      edgeCropZone: "Edge crop",
-      composerReserve: "Composer reserve",
-      assetGuideCaption: "Keep detailed subjects outside the text-safe and composer zones. The exact live layout can change.",
-      promptBuilder: "Local artwork prompt builder",
-      promptBuilderHelp: "Build a slot-specific prompt locally. Nothing is sent to a model or network service.",
-      assetSlot: "Asset slot",
-      artworkSubject: "Subject or motif",
-      artworkDirection: "Visual direction",
-      buildPrompt: "Build prompt",
-      copyPrompt: "Copy prompt",
-      generatedPrompt: "Generated prompt",
-      validationAndBudgets: "Validation and budgets",
-      cancelEditing: "Cancel",
-      saveTheme: "Save theme",
-      keepEditing: "Keep editing",
-      duplicateToCustomize: "Duplicate to customize",
-      editTheme: "Edit",
-      deleteTheme: "Delete",
-      builtInTheme: "Built-in",
-      customTheme: "Custom",
-      editorTitleFor: "Edit {0}",
-      editorSummary: "Valid draft changes apply to Aura and Studio immediately.",
-      savedState: "Saved",
-      unsavedState: "Unsaved changes",
-      validState: "Preview up to date",
-      invalidState: "Preview uses the last valid settings",
-      editorReady: "Theme editor ready.",
-      editorBusy: "Applying editor change…",
-      editorStateRejected: "The editor received invalid state. Close Studio and try again.",
-      editorActionFailed: "The change was not applied. Review the highlighted setting and try again.",
-      launcherMarkImported: "App mark replaced.",
-      launcherMarkFailed: "The app mark could not be replaced. Choose a static, transparent 96 × 96 PNG smaller than 400 KB.",
-      launcherMarkApplyFailed: "The app mark is in your draft, but Windows could not update it everywhere. Try again or restart Aura.",
-      saveBlocked: "Fix the validation issues before saving.",
-      copiedModes: "Appearance colors copied.",
-      copiedPrompt: "Prompt copied.",
-      copyPromptFailed: "The prompt could not be copied. Select the text and copy it manually.",
-      promptBuilt: "Prompt built locally.",
-      layerLimit: "A theme can contain up to eight images.",
-      noLayers: "No images yet. Add one when the theme needs it.",
-      layerNumber: "Image {0}",
-      layerName: "{0} {1}",
-      layerSummary: "{0} · {1} · {2}",
-      replaceImage: "Replace",
-      moveUp: "Send backward",
-      moveDown: "Bring forward",
-      removeLayer: "Remove from theme",
-      layerRole: "Image type",
-      roleBackground: "Background",
-      roleHero: "Main subject",
-      roleCorner: "Corner graphic",
-      roleDecoration: "Decoration",
-      appearanceUse: "Theme mode",
-      appearanceAll: "Both modes",
-      appearanceLight: "Light only",
-      appearanceDark: "Dark only",
-      contextUse: "Page",
-      previewPage: "Preview page",
-      contextAll: "All pages",
-      contextNewChat: "New chat only",
-      contextConversation: "Conversation only",
-      viewportUse: "Window size",
-      viewportAll: "All sizes",
-      viewportNormal: "Standard only",
-      viewportWide: "Wide only",
-      layerVisible: "Show in theme",
-      layerInspectorTitle: "Selected image",
-      exactValue: "Exact value",
-      layerOpacity: "Opacity",
-      layerMask: "Edge fade",
-      maskNone: "None",
-      maskSoftRight: "Fade right edge",
-      mobileBehavior: "Small windows",
-      mobileKeep: "Keep size",
-      mobileReduce: "Reduce",
-      mobileHide: "Hide",
-      normalPreset: "Position for: Standard",
-      widePreset: "Position for: Wide",
-      anchor: "Pin to",
-      anchorTopLeft: "Top left",
-      anchorTop: "Top",
-      anchorTopRight: "Top right",
-      anchorLeft: "Left",
-      anchorCenter: "Center",
-      anchorRight: "Right",
-      anchorBottomLeft: "Bottom left",
-      anchorBottom: "Bottom",
-      anchorBottomRight: "Bottom right",
-      focalX: "Image focus: horizontal",
-      focalY: "Image focus: vertical",
-      positionX: "Horizontal offset",
-      positionY: "Vertical offset",
-      scale: "Size",
-      imageBytes: "{0} of 400 KB",
-      noImagePreview: "Image",
-      groupCanvas: "Page background",
-      groupSidebar: "Sidebar",
-      groupSurface: "Panels",
-      groupText: "Text",
-      groupAccent: "Accent",
-      groupBorder: "Borders",
-      canvasColor: "Page background",
-      sidebarColor: "Sidebar",
-      surfaceColor: "Panels",
-      textColor: "Text",
-      accentColor: "Accent",
-      borderColor: "Borders",
-      surfaceAlpha: "Panel opacity",
-      sidebarAlpha: "Sidebar opacity",
-      fontSystemSans: "System sans",
-      fontHumanistSans: "Humanist sans",
-      fontRoundedSans: "Rounded sans",
-      fontEditorialSerif: "Editorial serif",
-      shadowNone: "None",
-      shadowSoft: "Soft",
-      shadowElevated: "Strong",
-      confirmResetTitle: "Reset all draft changes?",
-      confirmResetBody: "This discards every change from the current edit session and restores the saved theme. The reset cannot be undone.",
-      confirmResetAction: "Reset changes",
-      confirmDiscardTitle: "Discard unsaved changes?",
-      confirmDiscardBody: "Unsaved theme changes will be removed. The saved theme and its artwork stay unchanged.",
-      confirmDiscardAction: "Discard changes",
-      confirmDeleteTitle: "Delete {0}?",
-      confirmDeleteBody: "This permanently deletes the custom theme and cannot be undone. If it is active, Aura applies Default first. Built-in themes are not affected.",
-      confirmDeleteAction: "Delete theme",
-      feedbackValid: "All checks pass",
-      feedbackInvalid: "Some checks need attention",
-      quickFeedbackValid: "Ready to save · contrast and size checks pass.",
-      quickFeedbackInvalid: "Needs attention · {0}",
-      studioLastValid: "Studio is showing the last valid colors until this issue is fixed.",
-      quickFeedbackFix: "Open the highlighted setting and adjust it before saving.",
-      validationColorFix: "A color combination does not have enough contrast. Adjust the highlighted color.",
-      validationBudgetFix: "Theme artwork is over its size limit. Replace or remove the highlighted image.",
-      validationArtworkFix: "An artwork setting needs attention. Open the highlighted layer and adjust it.",
-      validationMetadataFix: "A theme name or description needs attention. Complete the highlighted field.",
-      validationIdentityFix: "Adjust the App identity colors so the label remains readable.",
-      validationGenericFix: "One setting needs attention. Open the highlighted control and adjust it.",
-      contrastCheck: "{0} contrast",
-      contrastCanvasText: "Canvas and text",
-      contrastSurfaceText: "Surface and text",
-      contrastMutedText: "Secondary text",
-      contrastAccentOutline: "Accent and outline",
-      contrastAccentText: "Accent and text",
-      contrastSidebarText: "Sidebar and text",
-      contrastFocus: "Focus indicator",
-      budgetChrome: "Theme payload",
-      budgetArtwork: "Embedded artwork",
-      budgetSourceArtwork: "Source artwork",
-      budgetLayer: "Artwork layer",
-      budgetValue: "{0} / {1}",
-      checkPass: "Pass",
-      checkFail: "Needs attention",
-      validationIssue: "Review {0} and adjust the highlighted setting.",
-      firstIssue: "Go to first issue",
-      slotBackground: "Background",
-      slotHero: "Hero",
-      slotCornerTopRight: "Top-right corner",
-      slotCornerBottom: "Bottom corner",
-      slotCard1: "Card 1",
-      slotCard2: "Card 2",
-      slotCard3: "Card 3",
-      slotBrandMark: "Brand mark",
-      slotLauncherMark: "App + launcher mark",
-      stageTitle: "Live preview",
-      stageEvidence: "Placement aid · not a Claude preview or acceptance evidence",
-      stageNotice: "When available, the canvas uses a private capture of the actual Aura window with editable Aura artwork over it. Otherwise it shows the placement guide. It is not a Claude preview or acceptance evidence.",
-      stageSize: "Preview size",
-      stageNormal: "Standard",
-      stageWide: "Wide",
-      stageRealLabel: "Aura window",
-      stageRealLaunch: "Launch size",
-      stageRealWide: "Wide (≥1440)",
-      stageRealFull: "Maximized",
-      stageRealHelp: "Every valid draft already applies to the actual Aura window on live claude.ai. Preview-size changes leave Studio in front; use Review in Aura only when you want to interact with the separate live window.",
-      stageRealShown: "Aura preview size updated. Studio remains in front.",
-      stageTopmost: "Keep on top",
-      topmostOn: "The Aura window now stays on top.",
-      topmostOff: "The Aura window no longer stays on top.",
-      customWidth: "Width",
-      customHeight: "Height",
-      sizeUpdatesLive: "px · updates live",
-      mirrorTitle: "Live capture",
-      mirrorPrivacy: "May show conversation content. The capture stays in this device's memory and is never saved.",
-      mirrorEmpty: "Waiting for the actual Aura window.",
-      mirrorRefresh: "Refresh",
-      mirrorCaption: "Live Aura · {2} · {0}×{1}",
-      mirrorCaptionCached: "Captured {2} · {0}×{1}",
-      mirrorUnavailable: "No {0} capture yet.",
-      mirrorAlt: "Scaled capture of the actual Aura window",
-      openAuraWindow: "Review in Aura ↗",
-      previewSizeHelp: "Dimensions update automatically. Standard is used below 1440 px; Wide is used from 1440 px.",
-      stageBackdropToggle: "Drag on the live capture",
-      stageBackdropReady: "Live capture enabled — the stage now overlays the real window, and artwork appears while you drag it.",
-      stageLayersPanel: "Images",
-      stageContextMismatch: "Open {0} in Aura once to capture this preview. Studio keeps it in memory only for this editing session.",
-      stageOpenContext: "Switch in Aura…",
-      stageContextSelected: "{0} preview selected.",
-      stageEyeToggle: "Show image {0} ({1}) in preview",
-      stageEyeHide: "Hide on editing stage only",
-      stageEyeShow: "Show on editing stage",
-      stageEyeHideShort: "Hide",
-      stageEyeShowShort: "Show",
-      stageSelectLayer: "Edit layer {0}",
-      stageMoveHandle: "Move",
-      editorLevel: "Editing mode",
-      levelSimple: "Quick customize",
-      levelAdvanced: "Advanced",
-      inspectorTitle: "Edit theme",
-      inspectorSections: "Theme editor branches",
-      branchInterface: "Interface",
-      branchBackground: "Background",
-      branchWidgets: "Widgets",
-      branchInterfaceDetail: "Surfaces & layout",
-      branchBackgroundDetail: "Canvas & images",
-      branchWidgetsDetail: "Aura controls",
-      branchInterfaceHelp: "Interface tool. Select Overall interface or New chat area on the canvas.",
-      branchBackgroundHelp: "Background tool. Select the theme canvas or an image on the canvas.",
-      branchWidgetsHelp: "Widgets tool. Select App identity in its local preview.",
-      targetPicker: "Target",
-      editingContext: "Editing",
-      appliesToContext: "Applies to",
-      sourceContext: "Source",
-      editTargetContext: "Edit target",
-      documentDetails: "Document details",
-      targetInterfaceTheme: "Overall interface",
-      targetNewChatArea: "New chat area",
-      targetBackgroundCanvas: "Theme canvas",
-      targetBackgroundLayer: "Images",
-      targetAppIdentity: "App identity",
-      themeOriginalSource: "Theme original",
-      customizedSource: "Customized",
-      allModesScope: "Light and Dark",
-      allPagesScope: "All pages",
-      frameStandard: "Standard",
-      frameWide: "Wide",
-      customFrameUses: "Custom preview uses {0}",
-      switchPreview: "Switch preview",
-      advancedValuesNotice: "This target has additional values in Advanced.",
-      reviewStates: "Review states",
-      matrixTitle: "Every state at a glance",
-      matrixHint: "Select a state to edit it.",
-      hiddenInStageView: "Not in this preview · {0}",
-      copyFramingToWide: "Copy placement to Wide",
-      copyFramingToNormal: "Copy placement to Standard",
-      framingCopied: "Framing copied to {0}.",
-      stageNewChat: "New chat",
-      stageConversation: "Conversation",
-      stageShowZones: "Show safe zones",
-      stageKeyboardHelp: "Select an image or the new chat area in the preview. Drag to move; drag a handle to resize. Arrow keys make precise adjustments.",
-      stagePromptTag: "New chat area",
-      stageLayerAria: "Image {0} ({1}). Arrow keys move it; plus and minus resize.",
-      stagePromptAria: "New chat area. Arrow keys move it; bracket keys adjust width.",
-      stageEmpty: "No images are used in this preview.",
-      stageSelectedAnnounce: "{0} selected.",
-      stageScaleHandle: "Resize image",
-      stageWidthHandle: "Resize new chat area",
-      promptTemplate: "Create a {0} theme artwork asset. Subject: {1}. Visual direction: {2}. {3} Decorative artwork only; no interface text, controls, borrowed logos, remote resources, or photographic people. Keep the composition usable when clipped at different window sizes.",
-      launcherPromptTemplate: "Create a production-ready {0}. Subject: {1}. Visual direction: {2}. {3} Output one square transparent PNG at exactly 96×96 px. Keep the silhouette legible at 24–48 px and centered inside a 72×72 px safe area. Use no words, interface controls, borrowed logos, remote resources, photographic people, opaque background, border, or baked drop shadow.",
-      promptFallbackSubject: "an original abstract motif",
-      promptFallbackStyle: "quiet, polished, and legible behind interface content",
-      promptRuleBackground: "Use a wide opaque scene with low detail through the central text-safe area.",
-      promptRuleHero: "Keep the main subject inside the right 60% with clean transparent or soft-matte edges.",
-      promptRuleCorner: "Use a transparent composition that remains intentional when clipped at the viewport edge.",
-      promptRuleCard: "Use a square transparent composition with the subject concentrated in the bottom-right 40%.",
-      promptRuleBrand: "Use a small, flat, original mark with no words or borrowed brand shapes.",
-      promptRuleLauncher: "Design one original compact mark that represents the theme across the floating launcher, title bar, taskbar, tray, Studio, and the Aura and Aura Studio shortcuts on Desktop and in the Start menu.",
-    },
-    "zh-CN": {
-      navEditor: "主题编辑器",
-      editorKicker: "无代码主题编辑",
-      historyActions: "编辑历史",
-      undo: "撤销",
-      redo: "重做",
-      resetChanges: "重置",
-      backToThemes: "返回主题",
-      themeIdentity: "主题名称",
-      themeIdentityHelp: "请填写需要支持的各界面语言下显示的主题名称。",
-      themeNameEn: "英文名称",
-      themeNameZhCn: "简体中文名称",
-      themeNameZhTw: "繁体中文（台湾）名称",
-      themeDescriptionEn: "英文说明",
-      themeDescriptionZhCn: "简体中文说明",
-      themeDescriptionZhTw: "繁体中文（台湾）说明",
-      editAppearance: "主题模式",
-      lightMode: "浅色",
-      darkMode: "深色",
-      copyLightToDark: "将浅色配色复制到深色",
-      copyDarkToLight: "将深色配色复制到浅色",
-      modeHelp: "浅色和深色可使用不同的配色和图片。",
-      colorsAndSurfaces: "颜色",
-      colorsHelp: "在“快速自定义”中选择主要颜色；“高级”还可调整辅助颜色和精确值。",
-      typographyAndMaterials: "字体与效果",
-      studioStyleHelp: "这些字体、圆角、模糊和阴影设置会同时应用到 Aura 和 Studio。",
-      appIdentity: "应用标识",
-      appIdentityHelp: "更换 Aura、Studio、启动器、任务栏和系统托盘使用的标识图，或调整周边控件的样式。请选择小于 400 KB、96 × 96 px 的静态透明 PNG。",
-      appIdentityPreview: "应用标识预览",
-      selectAppIdentityPreview: "选择应用标识",
-      replaceAppMark: "更换标识图",
-      launcherSurface: "标识背景",
-      launcherSurfaceHover: "悬停背景",
-      launcherForeground: "标签和拖动柄",
-      launcherAccent: "标识强调色",
-      launcherBorder: "标识边框",
-      launcherRadius: "标识圆角",
-      launcherBorderWidth: "边框宽度",
-      interfaceFont: "界面字体",
-      displayFont: "标题字体",
-      cornerRadius: "圆角",
-      themeOriginal: "主题原有设置",
-      inheritedRadiusHelp: "主题原有设置。调整后，所有界面元素将共用同一圆角半径。",
-      surfaceBlur: "面板模糊",
-      softShadow: "阴影",
-      themeBackground: "主题背景",
-      backgroundScope: "背景范围",
-      contentCanvas: "仅主区域",
-      fullWindow: "整个窗口",
-      contentScopeHelp: "背景从实际侧边栏之后开始显示。",
-      fullScopeHelp: "背景延伸至实际侧边栏后方，侧边栏使用所选的半透明覆盖层。",
-      artworkLayers: "图片",
-      layersHelp: "最多添加八个不响应指针操作的图片图层，并分别设置外观、页面场景及窗口尺寸。",
-      addLayer: "添加图层",
-      addArtwork: "添加图片…",
-      artworkRoleChoice: "图片类型",
-      artworkVisibilityHelp: "“在主题中显示”会应用到 Aura；预览中的“隐藏”只影响本次编辑。",
-      layerPlacementShared: "此图片在{0}中共用一个位置。请打开“高级”，限制适用外观或页面；也可添加单独的图片。",
-      layerPlacementSpecific: "此位置仅会更改{0}。",
-      appearanceBoth: "浅色和深色",
-      contextBoth: "新对话和对话",
-      promptPlacement: "新对话区域",
-      promptPlacementHelp: "可在预览中拖动，也可使用下方控件。浅色和深色共用此位置；对话中的输入框不会移动。",
-      nativePromptHelp: "正在沿用 Claude 当前布局。首次调整时，会先采用实时测得的大小和位置。",
-      conversationLayout: "对话布局",
-      conversationLayoutHelp: "对话使用 Claude 的实时输入框位置。请在上方选择“新对话”，再调整可移动的新对话区域。",
-      promptWidth: "宽度",
-      horizontalOffset: "水平偏移",
-      verticalOffset: "垂直偏移",
-      assetGuide: "素材与安全区域指南",
-      guideOnlyNotice: "仅作素材位置参考，这不是 Claude 预览。请在实际 Aura 窗口中检查保存后的主题。",
-      sidebarZone: "侧边栏区域",
-      textSafeZone: "文字安全区域",
-      edgeCropZone: "边缘裁切区域",
-      composerReserve: "输入框预留区域",
-      assetGuideCaption: "请勿在文字安全区域和输入框预留区域放置复杂主体。实际页面布局可能变化。",
-      promptBuilder: "本地图片提示词生成器",
-      promptBuilderHelp: "在本地生成适用于指定素材槽位的提示词，不会向模型或网络服务发送内容。",
-      assetSlot: "素材槽位",
-      artworkSubject: "主体或图案",
-      artworkDirection: "视觉方向",
-      buildPrompt: "生成提示词",
-      copyPrompt: "复制提示词",
-      generatedPrompt: "生成的提示词",
-      validationAndBudgets: "校验与容量限制",
-      cancelEditing: "取消",
-      saveTheme: "保存主题",
-      keepEditing: "继续编辑",
-      duplicateToCustomize: "复制并自定义",
-      editTheme: "编辑",
-      deleteTheme: "删除",
-      builtInTheme: "内置",
-      customTheme: "自定义",
-      editorTitleFor: "编辑{0}",
-      editorSummary: "有效的草稿更改会立即应用到 Aura 和 Studio。",
-      savedState: "已保存",
-      unsavedState: "有未保存的更改",
-      validState: "预览已更新",
-      invalidState: "预览仍显示上一次有效设置",
-      editorReady: "主题编辑器已就绪。",
-      editorBusy: "正在应用编辑内容…",
-      editorStateRejected: "编辑器收到的状态无效。请关闭工作室后重试。",
-      editorActionFailed: "更改未应用。请检查标记的设置后重试。",
-      launcherMarkImported: "应用标识图已更换。",
-      launcherMarkFailed: "无法更换应用标识图。请选择小于 400 KB、96 × 96 px 的静态透明 PNG。",
-      launcherMarkApplyFailed: "应用标识图已加入草稿，但 Windows 未能在所有位置完成更新。请重试或重新启动 Aura。",
-      saveBlocked: "请先修正校验问题再保存。",
-      copiedModes: "外观配色已复制。",
-      copiedPrompt: "提示词已复制。",
-      copyPromptFailed: "无法复制提示词。请选中文本后手动复制。",
-      promptBuilt: "提示词已在本地生成。",
-      layerLimit: "一个主题最多可包含八张图片。",
-      noLayers: "还没有图片。需要时可添加一张。",
-      layerNumber: "图片 {0}",
-      layerName: "{0} {1}",
-      layerSummary: "{0} · {1} · {2}",
-      replaceImage: "替换",
-      moveUp: "下移一层",
-      moveDown: "上移一层",
-      removeLayer: "从主题中移除",
-      layerRole: "图片类型",
-      roleBackground: "背景",
-      roleHero: "主体",
-      roleCorner: "角落装饰",
-      roleDecoration: "装饰",
-      appearanceUse: "主题模式",
-      appearanceAll: "浅色和深色",
-      appearanceLight: "仅浅色",
-      appearanceDark: "仅深色",
-      contextUse: "页面",
-      previewPage: "预览页面",
-      contextAll: "所有页面",
-      contextNewChat: "仅新对话",
-      contextConversation: "仅对话页面",
-      viewportUse: "窗口尺寸",
-      viewportAll: "所有尺寸",
-      viewportNormal: "仅标准窗口",
-      viewportWide: "仅宽屏",
-      layerVisible: "在主题中显示",
-      layerInspectorTitle: "所选图片",
-      exactValue: "精确值",
-      layerOpacity: "不透明度",
-      layerMask: "边缘渐隐",
-      maskNone: "无",
-      maskSoftRight: "淡出右边缘",
-      mobileBehavior: "小窗口",
-      mobileKeep: "保持大小",
-      mobileReduce: "缩小",
-      mobileHide: "隐藏",
-      normalPreset: "位置：标准",
-      widePreset: "位置：宽屏",
-      anchor: "定位基准",
-      anchorTopLeft: "左上",
-      anchorTop: "上方",
-      anchorTopRight: "右上",
-      anchorLeft: "左侧",
-      anchorCenter: "居中",
-      anchorRight: "右侧",
-      anchorBottomLeft: "左下",
-      anchorBottom: "下方",
-      anchorBottomRight: "右下",
-      focalX: "图像焦点：水平",
-      focalY: "图像焦点：垂直",
-      positionX: "水平偏移",
-      positionY: "垂直偏移",
-      scale: "大小",
-      imageBytes: "{0} / 400 KB",
-      noImagePreview: "图片",
-      groupCanvas: "页面背景",
-      groupSidebar: "侧边栏",
-      groupSurface: "面板",
-      groupText: "文字",
-      groupAccent: "强调色",
-      groupBorder: "边框",
-      canvasColor: "页面背景",
-      sidebarColor: "侧边栏",
-      surfaceColor: "面板",
-      textColor: "文字",
-      accentColor: "强调色",
-      borderColor: "边框",
-      surfaceAlpha: "面板不透明度",
-      sidebarAlpha: "侧边栏不透明度",
-      fontSystemSans: "系统无衬线字体",
-      fontHumanistSans: "人文无衬线字体",
-      fontRoundedSans: "圆体无衬线字体",
-      fontEditorialSerif: "编辑风衬线字体",
-      shadowNone: "无",
-      shadowSoft: "柔和",
-      shadowElevated: "明显",
-      confirmResetTitle: "确认重置全部草稿更改？",
-      confirmResetBody: "此操作将放弃本次编辑中的全部更改，并恢复已保存的主题。重置后无法撤销。",
-      confirmResetAction: "重置更改",
-      confirmDiscardTitle: "确认放弃未保存的更改？",
-      confirmDiscardBody: "未保存的主题更改将被移除，已保存的主题及其图片不受影响。",
-      confirmDiscardAction: "放弃更改",
-      confirmDeleteTitle: "确认删除{0}？",
-      confirmDeleteBody: "此操作将永久删除该自定义主题，且无法恢复。如果当前正在使用该主题，Aura 会先应用默认主题。内置主题不受影响。",
-      confirmDeleteAction: "删除主题",
-      feedbackValid: "全部校验已通过",
-      feedbackInvalid: "部分项目需要处理",
-      quickFeedbackValid: "可以保存 · 对比度和容量校验均已通过。",
-      quickFeedbackInvalid: "需要调整 · {0}",
-      studioLastValid: "在问题修正前，Studio 将继续显示上一个有效配色。",
-      quickFeedbackFix: "请打开已标记的设置并完成调整，然后再保存。",
-      validationColorFix: "部分颜色组合的对比度不足，请调整已标记的颜色。",
-      validationBudgetFix: "主题美术素材超出容量限制，请替换或移除已标记的图片。",
-      validationArtworkFix: "美术素材设置需要调整，请打开已标记的图层并修改。",
-      validationMetadataFix: "主题名称或说明需要调整，请填写已标记的字段。",
-      validationIdentityFix: "调整应用标识颜色，确保标签清晰可读。",
-      validationGenericFix: "有一项设置需要调整，请打开已标记的控件并修改。",
-      contrastCheck: "{0}对比度",
-      contrastCanvasText: "画布与文字",
-      contrastSurfaceText: "表面与文字",
-      contrastMutedText: "次要文字",
-      contrastAccentOutline: "强调色与轮廓",
-      contrastAccentText: "强调色与文字",
-      contrastSidebarText: "侧边栏与文字",
-      contrastFocus: "焦点指示",
-      budgetChrome: "主题载荷",
-      budgetArtwork: "嵌入图片",
-      budgetSourceArtwork: "源图片",
-      budgetLayer: "图片图层",
-      budgetValue: "{0} / {1}",
-      checkPass: "通过",
-      checkFail: "需要处理",
-      validationIssue: "请检查{0}并调整已标记的设置。",
-      firstIssue: "转到第一个问题",
-      slotBackground: "背景",
-      slotHero: "主视觉",
-      slotCornerTopRight: "右上角",
-      slotCornerBottom: "底部角落",
-      slotCard1: "卡片 1",
-      slotCard2: "卡片 2",
-      slotCard3: "卡片 3",
-      slotBrandMark: "品牌标记",
-      slotLauncherMark: "应用与启动器标记",
-      stageTitle: "实时预览",
-      stageEvidence: "构图辅助 · 不是 Claude 预览或验收证据",
-      stageNotice: "有可用画面时，画布会显示实际 Aura 窗口的本机截取画面，并叠加可编辑的 Aura 图片。没有匹配画面时会显示构图示意图；此画布不是 Claude 预览或验收证据。",
-      stageSize: "预览尺寸",
-      stageNormal: "标准",
-      stageWide: "宽屏",
-      stageRealLabel: "Aura 窗口",
-      stageRealLaunch: "启动尺寸",
-      stageRealWide: "宽屏（≥1440）",
-      stageRealFull: "最大化",
-      stageRealHelp: "每次通过校验的草稿更改都会立即应用到实际的 Aura 窗口（真实 claude.ai 页面）。调整预览尺寸时，Studio 会保持在前台；仅在需要操作独立窗口时使用“在 Aura 中检查”。",
-      stageRealShown: "Aura 预览尺寸已更新，Studio 会保持在前台。",
-      stageTopmost: "保持置顶",
-      topmostOn: "Aura 窗口已保持置顶。",
-      topmostOff: "Aura 窗口已取消置顶。",
-      customWidth: "宽度",
-      customHeight: "高度",
-      sizeUpdatesLive: "px · 即时更新",
-      mirrorTitle: "实时截取画面",
-      mirrorPrivacy: "画布可能包含对话内容。截取画面只保留在本机内存中，绝不会保存。",
-      mirrorEmpty: "正在等待实际 Aura 窗口。",
-      mirrorRefresh: "刷新",
-      mirrorCaption: "Aura 实时画面 · {2} · {0}×{1}",
-      mirrorCaptionCached: "已捕获的{2}画面 · {0}×{1}",
-      mirrorUnavailable: "尚未捕获{0}画面。",
-      mirrorAlt: "实际 Aura 窗口的缩放画面",
-      openAuraWindow: "在 Aura 中检查 ↗",
-      previewSizeHelp: "尺寸会自动更新。宽度低于 1440 px 时使用“标准”，达到 1440 px 时使用“宽屏”。",
-      stageBackdropToggle: "在实时画面上拖动",
-      stageBackdropReady: "已启用实时画面背景：画布现在叠加在实际窗口画面上，拖动图片时会显示半透明预览。",
-      stageLayersPanel: "图片",
-      stageContextMismatch: "请在 Aura 中打开一次{0}，以捕获该预览。Studio 仅在本次编辑期间将画面保留在内存中。",
-      stageOpenContext: "在 Aura 中切换…",
-      stageContextSelected: "已选择{0}预览。",
-      stageEyeToggle: "在预览中显示图片 {0}（{1}）",
-      stageEyeHide: "仅在编辑画布中隐藏",
-      stageEyeShow: "在编辑画布中显示",
-      stageEyeHideShort: "隐藏",
-      stageEyeShowShort: "显示",
-      stageSelectLayer: "编辑图层 {0}",
-      stageMoveHandle: "移动",
-      editorLevel: "编辑模式",
-      levelSimple: "快速自定义",
-      levelAdvanced: "高级",
-      inspectorTitle: "编辑主题",
-      inspectorSections: "主题编辑分区",
-      branchInterface: "界面",
-      branchBackground: "背景",
-      branchWidgets: "小组件",
-      branchInterfaceDetail: "外观与布局",
-      branchBackgroundDetail: "画布与图片",
-      branchWidgetsDetail: "Aura 控件",
-      branchInterfaceHelp: "界面工具。可在画布中选择“整体界面”或“新对话区域”。",
-      branchBackgroundHelp: "背景工具。可在画布中选择“主题画布”或图片。",
-      branchWidgetsHelp: "小组件工具。请在专用预览中选择“应用标识”。",
-      targetPicker: "编辑对象",
-      editingContext: "正在编辑",
-      appliesToContext: "作用范围",
-      sourceContext: "来源",
-      editTargetContext: "编辑尺寸",
-      documentDetails: "文档信息",
-      targetInterfaceTheme: "整体界面",
-      targetNewChatArea: "新对话区域",
-      targetBackgroundCanvas: "主题画布",
-      targetBackgroundLayer: "图片",
-      targetAppIdentity: "应用标识",
-      themeOriginalSource: "主题原始设置",
-      customizedSource: "已自定义",
-      allModesScope: "浅色和深色",
-      allPagesScope: "所有页面",
-      frameStandard: "标准",
-      frameWide: "宽屏",
-      customFrameUses: "自定义预览使用“{0}”设置",
-      switchPreview: "切换预览",
-      advancedValuesNotice: "此对象在“高级”模式中还有更多设置。",
-      reviewStates: "检查不同状态",
-      matrixTitle: "全部状态一览",
-      matrixHint: "点击某个状态即可编辑。",
-      hiddenInStageView: "不在当前预览中显示 · {0}",
-      copyFramingToWide: "将位置设置复制到“宽屏”",
-      copyFramingToNormal: "将位置设置复制到“标准”",
-      framingCopied: "构图已复制到{0}。",
-      stageNewChat: "新对话",
-      stageConversation: "对话",
-      stageShowZones: "显示安全区域",
-      stageKeyboardHelp: "在预览中选中图片或新对话区域。拖动可移动，拖动控制点可调整大小；方向键可精确微调。",
-      stagePromptTag: "新对话区域",
-      stageLayerAria: "图片 {0}（{1}）。使用方向键移动，加号和减号调整大小。",
-      stagePromptAria: "新对话区域。使用方向键移动，中括号键调整宽度。",
-      stageEmpty: "此预览未使用任何图片。",
-      stageSelectedAnnounce: "已选中{0}。",
-      stageScaleHandle: "缩放图片",
-      stageWidthHandle: "调整新对话区域大小",
-      promptTemplate: "创建一个{0}主题图片素材。主体：{1}。视觉方向：{2}。{3} 图片仅用于装饰；不得包含界面文字、控件、他人品牌标识、远程资源或真实人物照片。请确保构图在不同窗口尺寸下裁切后仍可使用。",
-      launcherPromptTemplate: "创建一个可直接使用的{0}。主体：{1}。视觉方向：{2}。{3} 输出一张 96×96 px 的正方形透明 PNG。图形需在 24–48 px 下清晰可辨，并位于中央 72×72 px 的安全区域内。不得包含文字、界面控件、他人品牌标识、远程资源、真实人物照片、不透明背景、外框或图片自带阴影。",
-      promptFallbackSubject: "原创抽象图案",
-      promptFallbackStyle: "安静、精致，并确保界面内容清晰可读",
-      promptRuleBackground: "使用宽幅不透明场景，中央文字安全区域保持低细节。",
-      promptRuleHero: "将主要主体放在右侧 60% 范围内，并使用干净的透明边缘或柔和衬底。",
-      promptRuleCorner: "使用透明构图，确保在视口边缘裁切后仍然完整自然。",
-      promptRuleCard: "使用方形透明构图，主体集中在右下方 40% 范围内。",
-      promptRuleBrand: "使用不含文字及他人品牌造型的小型原创平面标记。",
-      promptRuleLauncher: "设计一个能代表主题的原创紧凑标记，用于悬浮启动器、标题栏、任务栏、系统托盘、Studio，以及桌面和开始菜单中的 Aura 与 Aura Studio 快捷方式。",
-    },
-    "zh-TW": {
-      navEditor: "主題編輯器",
-      editorKicker: "不用寫程式也能編輯主題",
-      historyActions: "編輯記錄",
-      undo: "復原",
-      redo: "重做",
-      resetChanges: "重設",
-      backToThemes: "回到主題",
-      themeIdentity: "主題名稱",
-      themeIdentityHelp: "填寫需要支援的各介面語言名稱。",
-      themeNameEn: "英文名稱",
-      themeNameZhCn: "簡體中文名稱",
-      themeNameZhTw: "繁體中文（台灣）名稱",
-      themeDescriptionEn: "英文說明",
-      themeDescriptionZhCn: "簡體中文說明",
-      themeDescriptionZhTw: "繁體中文（台灣）說明",
-      editAppearance: "主題模式",
-      lightMode: "淺色",
-      darkMode: "深色",
-      copyLightToDark: "將淺色配色複製到深色",
-      copyDarkToLight: "將深色配色複製到淺色",
-      modeHelp: "淺色與深色可使用不同的配色和圖片。",
-      colorsAndSurfaces: "顏色",
-      colorsHelp: "在「快速自訂」選擇主要顏色；「進階」還能調整輔助顏色與精確數值。",
-      typographyAndMaterials: "字體與效果",
-      studioStyleHelp: "這些字體、圓角、模糊與陰影設定會同時套用到 Aura 和 Studio。",
-      appIdentity: "App 識別",
-      appIdentityHelp: "更換 Aura、Studio、啟動器、工作列與系統匣使用的識別圖，或調整周邊控制項的樣式。請選擇小於 400 KB、96 × 96 px 的靜態透明 PNG。",
-      appIdentityPreview: "App 識別預覽",
-      selectAppIdentityPreview: "選取 App 識別",
-      replaceAppMark: "更換識別圖",
-      launcherSurface: "識別背景",
-      launcherSurfaceHover: "游標移入背景",
-      launcherForeground: "標籤與拖曳把手",
-      launcherAccent: "識別強調色",
-      launcherBorder: "識別邊框",
-      launcherRadius: "識別圓角",
-      launcherBorderWidth: "邊框寬度",
-      interfaceFont: "介面字體",
-      displayFont: "標題字體",
-      cornerRadius: "圓角",
-      themeOriginal: "沿用主題設定",
-      inheritedRadiusHelp: "沿用主題設定。調整後，所有介面元素會共用同一個圓角大小。",
-      surfaceBlur: "面板模糊",
-      softShadow: "陰影",
-      themeBackground: "主題背景",
-      backgroundScope: "背景範圍",
-      contentCanvas: "只顯示在主要區域",
-      fullWindow: "整個視窗",
-      contentScopeHelp: "背景會從實際側邊欄後方開始顯示。",
-      fullScopeHelp: "背景會延伸到實際側邊欄後方，側邊欄則套用所選的半透明覆蓋層。",
-      artworkLayers: "圖片",
-      layersHelp: "最多可新增八個不會接收指標操作的圖片圖層，並分別設定外觀、頁面情境和視窗大小。",
-      addLayer: "新增圖層",
-      addArtwork: "加入圖片…",
-      artworkRoleChoice: "圖片類型",
-      artworkVisibilityHelp: "「顯示在主題中」會套用到 Aura；預覽裡的「隱藏」只影響這次編輯。",
-      layerPlacementShared: "這張圖片會在{0}共用同一個位置。請開啟「進階」，限制套用的外觀或頁面；也可以另外加入一張圖片。",
-      layerPlacementSpecific: "這個位置只會變更{0}。",
-      appearanceBoth: "淺色與深色",
-      contextBoth: "新對話與對話",
-      promptPlacement: "新對話區域",
-      promptPlacementHelp: "可在預覽中拖曳，也可使用下方控制項。淺色與深色共用這個位置；對話中的輸入框不會移動。",
-      nativePromptHelp: "目前沿用 Claude 的版面。首次調整時，會先套用即時偵測到的大小與位置。",
-      conversationLayout: "對話版面",
-      conversationLayoutHelp: "對話會沿用 Claude 目前的輸入框位置。請先在上方選擇「新對話」，再調整可移動的新對話區域。",
-      promptWidth: "寬度",
-      horizontalOffset: "水平位移",
-      verticalOffset: "垂直位移",
-      assetGuide: "素材與安全區域指南",
-      guideOnlyNotice: "這只是素材位置指南，不是 Claude 預覽。請到實際的 Aura 視窗檢查儲存後的主題。",
-      sidebarZone: "側邊欄區域",
-      textSafeZone: "文字安全區域",
-      edgeCropZone: "邊緣裁切區域",
-      composerReserve: "輸入框預留區域",
-      assetGuideCaption: "請避免在文字安全區域和輸入框預留區域放置複雜主體。實際頁面配置可能改變。",
-      promptBuilder: "本機圖片提示詞產生器",
-      promptBuilderHelp: "在本機產生適合指定素材槽位的提示詞，不會將內容傳送給模型或網路服務。",
-      assetSlot: "素材槽位",
-      artworkSubject: "主體或圖案",
-      artworkDirection: "視覺方向",
-      buildPrompt: "產生提示詞",
-      copyPrompt: "複製提示詞",
-      generatedPrompt: "產生的提示詞",
-      validationAndBudgets: "檢查與容量限制",
-      cancelEditing: "取消",
-      saveTheme: "儲存主題",
-      keepEditing: "繼續編輯",
-      duplicateToCustomize: "複製後自訂",
-      editTheme: "編輯",
-      deleteTheme: "刪除",
-      builtInTheme: "內建",
-      customTheme: "自訂",
-      editorTitleFor: "編輯{0}",
-      editorSummary: "有效的草稿變更會立即套用到 Aura 和 Studio。",
-      savedState: "已儲存",
-      unsavedState: "有尚未儲存的變更",
-      validState: "預覽已更新",
-      invalidState: "預覽仍顯示上一組有效設定",
-      editorReady: "主題編輯器已準備好。",
-      editorBusy: "正在套用編輯內容…",
-      editorStateRejected: "編輯器收到的狀態無效。請關閉工作室後再試一次。",
-      editorActionFailed: "變更未套用。請檢查標示的設定後再試一次。",
-      launcherMarkImported: "App 識別圖已更換。",
-      launcherMarkFailed: "無法更換 App 識別圖。請選擇小於 400 KB、96 × 96 px 的靜態透明 PNG。",
-      launcherMarkApplyFailed: "App 識別圖已加入草稿，但 Windows 未能在所有位置完成更新。請再試一次或重新啟動 Aura。",
-      saveBlocked: "請先修正檢查問題，再儲存主題。",
-      copiedModes: "外觀配色已複製。",
-      copiedPrompt: "提示詞已複製。",
-      copyPromptFailed: "無法複製提示詞。請選取文字後手動複製。",
-      promptBuilt: "提示詞已在本機產生。",
-      layerLimit: "一個主題最多可包含八張圖片。",
-      noLayers: "目前沒有圖片。需要時可加入一張。",
-      layerNumber: "圖片 {0}",
-      layerName: "{0} {1}",
-      layerSummary: "{0} · {1} · {2}",
-      replaceImage: "更換",
-      moveUp: "下移一層",
-      moveDown: "上移一層",
-      removeLayer: "從主題移除",
-      layerRole: "圖片類型",
-      roleBackground: "背景",
-      roleHero: "主體",
-      roleCorner: "角落裝飾",
-      roleDecoration: "裝飾",
-      appearanceUse: "主題模式",
-      appearanceAll: "淺色和深色",
-      appearanceLight: "只用於淺色",
-      appearanceDark: "只用於深色",
-      contextUse: "頁面",
-      previewPage: "預覽頁面",
-      contextAll: "所有頁面",
-      contextNewChat: "只用於新對話",
-      contextConversation: "只用於對話頁面",
-      viewportUse: "視窗大小",
-      viewportAll: "所有大小",
-      viewportNormal: "只在標準視窗",
-      viewportWide: "只在寬螢幕",
-      layerVisible: "顯示在主題中",
-      layerInspectorTitle: "所選圖片",
-      exactValue: "精確數值",
-      layerOpacity: "不透明度",
-      layerMask: "邊緣淡出",
-      maskNone: "無",
-      maskSoftRight: "淡出右側",
-      mobileBehavior: "小視窗",
-      mobileKeep: "保持大小",
-      mobileReduce: "縮小",
-      mobileHide: "隱藏",
-      normalPreset: "位置：標準",
-      widePreset: "位置：寬螢幕",
-      anchor: "定位基準",
-      anchorTopLeft: "左上",
-      anchorTop: "上方",
-      anchorTopRight: "右上",
-      anchorLeft: "左側",
-      anchorCenter: "置中",
-      anchorRight: "右側",
-      anchorBottomLeft: "左下",
-      anchorBottom: "下方",
-      anchorBottomRight: "右下",
-      focalX: "圖片焦點：水平",
-      focalY: "圖片焦點：垂直",
-      positionX: "水平位移",
-      positionY: "垂直位移",
-      scale: "大小",
-      imageBytes: "{0} / 400 KB",
-      noImagePreview: "圖片",
-      groupCanvas: "頁面背景",
-      groupSidebar: "側邊欄",
-      groupSurface: "面板",
-      groupText: "文字",
-      groupAccent: "強調色",
-      groupBorder: "邊框",
-      canvasColor: "頁面背景",
-      sidebarColor: "側邊欄",
-      surfaceColor: "面板",
-      textColor: "文字",
-      accentColor: "強調色",
-      borderColor: "邊框",
-      surfaceAlpha: "面板不透明度",
-      sidebarAlpha: "側邊欄不透明度",
-      fontSystemSans: "系統無襯線字體",
-      fontHumanistSans: "人文無襯線字體",
-      fontRoundedSans: "圓體無襯線字體",
-      fontEditorialSerif: "編輯風襯線字體",
-      shadowNone: "無",
-      shadowSoft: "柔和",
-      shadowElevated: "明顯",
-      confirmResetTitle: "要重設所有草稿變更嗎？",
-      confirmResetBody: "這會放棄本次編輯中的所有變更，並還原已儲存的主題。重設後無法復原。",
-      confirmResetAction: "重設變更",
-      confirmDiscardTitle: "要放棄尚未儲存的變更嗎？",
-      confirmDiscardBody: "尚未儲存的主題變更會被移除；已儲存的主題和圖片都會保留。",
-      confirmDiscardAction: "放棄變更",
-      confirmDeleteTitle: "要刪除{0}嗎？",
-      confirmDeleteBody: "這會永久刪除自訂主題，刪除後無法復原。如果目前正在使用這個主題，Aura 會先套用預設主題；內建主題不受影響。",
-      confirmDeleteAction: "刪除主題",
-      feedbackValid: "所有檢查都已通過",
-      feedbackInvalid: "有些項目需要調整",
-      quickFeedbackValid: "可以儲存 · 對比度和容量檢查都已通過。",
-      quickFeedbackInvalid: "需要調整 · {0}",
-      studioLastValid: "問題修正前，Studio 會繼續使用上一組有效配色。",
-      quickFeedbackFix: "請打開標示的設定並調整，再儲存主題。",
-      validationColorFix: "有一組顏色的對比度不足，請調整標示的顏色。",
-      validationBudgetFix: "主題美術素材超過容量限制，請更換或移除標示的圖片。",
-      validationArtworkFix: "美術素材設定需要調整，請打開標示的圖層修改。",
-      validationMetadataFix: "主題名稱或說明需要調整，請填寫標示的欄位。",
-      validationIdentityFix: "調整 App 識別顏色，讓標籤保持清楚易讀。",
-      validationGenericFix: "有一項設定需要調整，請打開標示的控制項修改。",
-      contrastCheck: "{0}對比度",
-      contrastCanvasText: "畫布與文字",
-      contrastSurfaceText: "表面與文字",
-      contrastMutedText: "次要文字",
-      contrastAccentOutline: "強調色與外框",
-      contrastAccentText: "強調色與文字",
-      contrastSidebarText: "側邊欄與文字",
-      contrastFocus: "焦點指示",
-      budgetChrome: "主題載荷",
-      budgetArtwork: "嵌入圖片",
-      budgetSourceArtwork: "來源圖片",
-      budgetLayer: "圖片圖層",
-      budgetValue: "{0} / {1}",
-      checkPass: "通過",
-      checkFail: "需要調整",
-      validationIssue: "請檢查{0}並調整標示的設定。",
-      firstIssue: "前往第一個問題",
-      slotBackground: "背景",
-      slotHero: "主視覺",
-      slotCornerTopRight: "右上角",
-      slotCornerBottom: "底部角落",
-      slotCard1: "卡片 1",
-      slotCard2: "卡片 2",
-      slotCard3: "卡片 3",
-      slotBrandMark: "品牌標記",
-      slotLauncherMark: "App 與啟動器圖示",
-      stageTitle: "即時預覽",
-      stageEvidence: "構圖輔助 · 不是 Claude 預覽或驗收依據",
-      stageNotice: "有可用畫面時，畫布會顯示實際 Aura 視窗的本機擷取畫面，並疊上可編輯的 Aura 圖片。沒有符合狀態的畫面時會顯示構圖示意圖；這不是 Claude 預覽或驗收依據。",
-      stageSize: "預覽大小",
-      stageNormal: "標準",
-      stageWide: "寬螢幕",
-      stageRealLabel: "Aura 視窗",
-      stageRealLaunch: "啟動大小",
-      stageRealWide: "寬螢幕（≥1440）",
-      stageRealFull: "最大化",
-      stageRealHelp: "每次通過檢查的草稿變更都會立刻套用到實際的 Aura 視窗（真實的 claude.ai 頁面）。調整預覽大小時，Studio 會留在最前面；只有要操作獨立視窗時，才使用「在 Aura 中檢查」。",
-      stageRealShown: "Aura 預覽大小已更新，Studio 會留在最前面。",
-      stageTopmost: "維持最上層",
-      topmostOn: "Aura 視窗已維持在最上層。",
-      topmostOff: "Aura 視窗已取消最上層。",
-      customWidth: "寬度",
-      customHeight: "高度",
-      sizeUpdatesLive: "px · 即時更新",
-      mirrorTitle: "即時擷取畫面",
-      mirrorPrivacy: "畫布可能包含對話內容。擷取畫面只保留在本機記憶體中，絕不會儲存。",
-      mirrorEmpty: "正在等待實際 Aura 視窗。",
-      mirrorRefresh: "重新整理",
-      mirrorCaption: "Aura 即時畫面 · {2} · {0}×{1}",
-      mirrorCaptionCached: "已擷取的{2}畫面 · {0}×{1}",
-      mirrorUnavailable: "還沒有{0}畫面。",
-      mirrorAlt: "實際 Aura 視窗的縮放畫面",
-      openAuraWindow: "在 Aura 中檢查 ↗",
-      previewSizeHelp: "大小會自動更新。寬度低於 1440 px 時使用「標準」，達到 1440 px 時使用「寬螢幕」。",
-      stageBackdropToggle: "在即時畫面上拖曳",
-      stageBackdropReady: "已啟用即時畫面背景：畫布現在會疊在實際視窗畫面上，拖曳圖片時會顯示半透明預覽。",
-      stageLayersPanel: "圖片",
-      stageContextMismatch: "請先在 Aura 開啟一次{0}，Studio 就能擷取這個預覽。畫面只會在這次編輯期間保留在記憶體中。",
-      stageOpenContext: "在 Aura 切換…",
-      stageContextSelected: "已選取{0}預覽。",
-      stageEyeToggle: "在預覽中顯示圖片 {0}（{1}）",
-      stageEyeHide: "只在編輯畫布中隱藏",
-      stageEyeShow: "在編輯畫布中顯示",
-      stageEyeHideShort: "隱藏",
-      stageEyeShowShort: "顯示",
-      stageSelectLayer: "編輯圖層 {0}",
-      stageMoveHandle: "移動",
-      editorLevel: "編輯模式",
-      levelSimple: "快速自訂",
-      levelAdvanced: "進階",
-      inspectorTitle: "編輯主題",
-      inspectorSections: "主題編輯分區",
-      branchInterface: "介面",
-      branchBackground: "背景",
-      branchWidgets: "小工具",
-      branchInterfaceDetail: "外觀與版面",
-      branchBackgroundDetail: "畫布與圖片",
-      branchWidgetsDetail: "Aura 控制項",
-      branchInterfaceHelp: "介面工具。可在畫布上選取「整體介面」或「新對話區域」。",
-      branchBackgroundHelp: "背景工具。可在畫布上選取「主題畫布」或圖片。",
-      branchWidgetsHelp: "小工具。請在專用預覽中選取「App 識別」。",
-      targetPicker: "編輯項目",
-      editingContext: "正在編輯",
-      appliesToContext: "套用範圍",
-      sourceContext: "來源",
-      editTargetContext: "編輯尺寸",
-      documentDetails: "文件資訊",
-      targetInterfaceTheme: "整體介面",
-      targetNewChatArea: "新對話區域",
-      targetBackgroundCanvas: "主題畫布",
-      targetBackgroundLayer: "圖片",
-      targetAppIdentity: "App 識別",
-      themeOriginalSource: "主題原始設定",
-      customizedSource: "已自訂",
-      allModesScope: "淺色與深色",
-      allPagesScope: "所有頁面",
-      frameStandard: "標準",
-      frameWide: "寬螢幕",
-      customFrameUses: "自訂預覽使用「{0}」設定",
-      switchPreview: "切換預覽",
-      advancedValuesNotice: "此項目在「進階」模式中還有其他設定。",
-      reviewStates: "檢查不同狀態",
-      matrixTitle: "所有狀態一覽",
-      matrixHint: "點選某個狀態即可編輯。",
-      hiddenInStageView: "不會顯示在目前預覽中 · {0}",
-      copyFramingToWide: "將位置設定複製到「寬螢幕」",
-      copyFramingToNormal: "將位置設定複製到「標準」",
-      framingCopied: "構圖已複製到{0}。",
-      stageNewChat: "新對話",
-      stageConversation: "對話",
-      stageShowZones: "顯示安全區域",
-      stageKeyboardHelp: "在預覽中選取圖片或新對話區域。拖曳可移動，拖曳控制點可調整大小；方向鍵可精確微調。",
-      stagePromptTag: "新對話區域",
-      stageLayerAria: "圖片 {0}（{1}）。方向鍵可移動，加號和減號可調整大小。",
-      stagePromptAria: "新對話區域。用方向鍵移動，中括號鍵調整寬度。",
-      stageEmpty: "此預覽未使用任何圖片。",
-      stageSelectedAnnounce: "已選取{0}。",
-      stageScaleHandle: "縮放圖片",
-      stageWidthHandle: "調整新對話區域大小",
-      promptTemplate: "建立一張{0}主題圖片素材。主體：{1}。視覺方向：{2}。{3} 圖片只作裝飾；不要放入介面文字、控制項、他人品牌標誌、遠端資源或真實人物照片。請讓構圖在不同視窗大小下裁切後仍可使用。",
-      launcherPromptTemplate: "建立一個可直接使用的{0}。主體：{1}。視覺方向：{2}。{3} 輸出一張 96×96 px 的正方形透明 PNG。圖案在 24–48 px 大小下仍要清楚可辨，並置於中央 72×72 px 的安全區域。不要放入文字、介面控制項、他人品牌標誌、遠端資源、真實人物照片、不透明背景、外框或圖片內建陰影。",
-      promptFallbackSubject: "原創抽象圖案",
-      promptFallbackStyle: "安靜、精緻，並讓介面內容保持清楚易讀",
-      promptRuleBackground: "使用寬幅不透明場景，中央文字安全區域保持低細節。",
-      promptRuleHero: "將主要主體放在右側 60% 範圍內，並使用乾淨的透明邊緣或柔和襯底。",
-      promptRuleCorner: "使用透明構圖，讓圖片在視窗邊緣裁切後仍然自然完整。",
-      promptRuleCard: "使用方形透明構圖，主體集中在右下方 40% 範圍內。",
-      promptRuleBrand: "使用不含文字或他人品牌造型的小型原創平面標記。",
-      promptRuleLauncher: "設計一個能代表主題的原創精簡圖示，用於浮動啟動器、標題列、工作列、系統匣、Studio，以及桌面和「開始」功能表中的 Aura 與 Aura Studio 捷徑。",
-    },
-  };
+  // Editor copy lives one file per language in studio/locales/*.js, loaded
+  // before this script. Those files also carry the Studio page copy that
+  // studio/app.js reads; only the "editor" half belongs here.
+  const STRINGS = Object.fromEntries(
+    Object.entries(window.CLAUDE_AURA_STRINGS ?? {}).map(([tag, copy]) => [tag, copy?.editor ?? {}]),
+  );
 
   const ID_PATTERN = /^[a-z][a-z0-9-]{1,39}$/;
   const LAYER_ID_PATTERN = /^layer-[a-f0-9]{32}$/;
@@ -1035,6 +19,7 @@
     "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer", "apply-theme-patch",
     "pick-theme-layer-image", "pick-theme-launcher-mark", "remove-theme-layer", "move-theme-layer", "undo-theme-edit",
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
+    "set-greeting-phrases", "reset-greeting",
   ]);
   const MODE_TOKEN_KEYS = Object.freeze([
     "canvas", "sidebar", "surface", "text", "accent", "border", "surfaceAlpha", "sidebarAlpha",
@@ -1050,6 +35,36 @@
   const FONT_UI_IDS = Object.freeze(["system-sans", "humanist-sans", "rounded-sans"]);
   const FONT_DISPLAY_IDS = Object.freeze([...FONT_UI_IDS, "editorial-serif"]);
   const SHADOW_IDS = Object.freeze(["none", "soft", "elevated"]);
+  // WO-21 greeting style projection. Every Light/Dark x Standard/Wide frame is
+  // explicit so a control always edits the same frame the stage is showing.
+  const GREETING_FONT_IDS = Object.freeze(["system-sans", "humanist-sans", "rounded-sans", "editorial-serif"]);
+  const GREETING_COLOR_IDS = Object.freeze(["primary", "accent"]);
+  const GREETING_ALIGN_IDS = Object.freeze(["start", "center", "end"]);
+  const GREETING_DECORATION_IDS = Object.freeze(["none", "underline", "hairline", "glow"]);
+  const GREETING_MARK_IDS = Object.freeze(["none", "native", "compact"]);
+  const GREETING_WEIGHT_IDS = Object.freeze([300, 400, 500, 600, 650, 700]);
+  const GREETING_ENUM_FIELDS = Object.freeze({
+    font: GREETING_FONT_IDS,
+    color: GREETING_COLOR_IDS,
+    align: GREETING_ALIGN_IDS,
+    decoration: GREETING_DECORATION_IDS,
+    markSource: GREETING_MARK_IDS,
+  });
+  const GREETING_NUMERIC_FIELDS = Object.freeze({
+    fontSize: [24, 72],
+    letterSpacing: [-0.06, 0.12],
+    lineHeight: [0.9, 1.5],
+    maxWidthRatio: [0.35, 0.9],
+    xRatio: [-0.45, 0.45],
+    yRatio: [-0.4, 0.45],
+    markScale: [0.5, 1.5],
+  });
+  const GREETING_FRAME_KEYS = Object.freeze([
+    "font", "color", "fontSize", "weight", "italic", "align", "letterSpacing",
+    "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "decoration", "markSource", "markScale",
+  ]);
+  const GREETING_STATE_KEYS = Object.freeze(["native", "compactMarkAvailable", "frames"]);
+  const GREETING_MAX_COMPILED_BYTES = 2048;
   const THEME_ORIGINAL = "theme-original";
   const ROLE_IDS = Object.freeze(["background", "hero", "corner", "decoration"]);
   const APPEARANCE_IDS = Object.freeze(["all", "light", "dark"]);
@@ -1100,6 +115,35 @@
     ["card-1", "slotCard1"], ["card-2", "slotCard2"], ["card-3", "slotCard3"],
     ["brand-mark", "slotBrandMark"], ["launcher-mark", "slotLauncherMark"],
   ]);
+  const GREETING_FONT_OPTIONS = Object.freeze([
+    ["system-sans", "fontSystemSans"], ["humanist-sans", "fontHumanistSans"],
+    ["rounded-sans", "fontRoundedSans"], ["editorial-serif", "fontEditorialSerif"],
+  ]);
+  const GREETING_COLOR_OPTIONS = Object.freeze([
+    ["primary", "greetingColorPrimary"], ["accent", "greetingColorAccent"],
+  ]);
+  const GREETING_WEIGHT_OPTIONS = Object.freeze([
+    ["300", "greetingWeightLight"], ["400", "greetingWeightRegular"], ["500", "greetingWeightMedium"],
+    ["600", "greetingWeightSemibold"], ["650", "greetingWeightStrong"], ["700", "greetingWeightBold"],
+  ]);
+  const GREETING_ALIGN_OPTIONS = Object.freeze([
+    ["start", "greetingAlignStart"], ["center", "greetingAlignCenter"], ["end", "greetingAlignEnd"],
+  ]);
+  const GREETING_DECORATION_OPTIONS = Object.freeze([
+    ["none", "greetingDecorationNone"], ["underline", "greetingDecorationUnderline"],
+    ["hairline", "greetingDecorationHairline"], ["glow", "greetingDecorationGlow"],
+  ]);
+  const GREETING_MARK_OPTIONS = Object.freeze([
+    ["none", "greetingMarkNone"], ["native", "greetingMarkNative"], ["compact", "greetingMarkCompact"],
+  ]);
+  // Mirrors STUDIO_FONT_DISPLAY_STACKS so the in-panel sample uses the same families
+  // the compiled greeting CSS resolves through --aura-font-display.
+  const GREETING_FONT_STACKS = Object.freeze({
+    "system-sans": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "humanist-sans": "\"Segoe UI\", \"Hiragino Sans\", \"Yu Gothic UI\", system-ui, sans-serif",
+    "rounded-sans": "\"Trebuchet MS\", \"Segoe UI\", system-ui, sans-serif",
+    "editorial-serif": "ui-serif, Georgia, \"Times New Roman\", serif",
+  });
 
   // Stage geometry mirrors assets/renderer-inject.js: the live renderer marks
   // its effective normal/wide viewport, anchors are container percentage
@@ -1196,11 +240,12 @@
     "none", "full-canvas", "new-chat-area", "artwork-layer", "local-preview",
   ]);
   const CAPABILITY_SELECTION_BEHAVIOR = Object.freeze([
-    "picker", "stage-prompt", "stage-layer",
+    "picker", "stage-prompt", "stage-greeting", "stage-layer",
   ]);
   const CAPABILITY_TARGETS = Object.freeze({
     "interface.theme": Object.freeze({ branch: "interface", labelKey: "targetInterfaceTheme" }),
     "interface.new-chat-area": Object.freeze({ branch: "interface", labelKey: "targetNewChatArea" }),
+    "interface.greeting": Object.freeze({ branch: "interface", labelKey: "targetGreeting" }),
     "background.canvas": Object.freeze({ branch: "background", labelKey: "targetBackgroundCanvas" }),
     "background.layer": Object.freeze({ branch: "background", labelKey: "targetBackgroundLayer" }),
     "widgets.app-identity": Object.freeze({ branch: "widgets", labelKey: "targetAppIdentity" }),
@@ -1255,6 +300,14 @@
       axes: [],
       captureGeometry: "new-chat-area",
       selectionBehavior: "stage-prompt",
+    },
+    {
+      id: "interface.greeting",
+      branch: "interface",
+      views: ["new-chat"],
+      axes: ["appearance", "frame"],
+      captureGeometry: "new-chat-area",
+      selectionBehavior: "stage-greeting",
     },
     {
       id: "background.canvas",
@@ -1312,13 +365,130 @@
     return result;
   }
 
+  function normalizeGreeting(value) {
+    if (!exactShape(value, GREETING_STATE_KEYS)
+        || typeof value.native !== "boolean"
+        || typeof value.compactMarkAvailable !== "boolean"
+        || !exactShape(value.frames, ["light", "dark"])) return null;
+    const frames = {};
+    for (const appearance of ["light", "dark"]) {
+      if (!exactShape(value.frames[appearance], ["standard", "wide"])) return null;
+      frames[appearance] = {};
+      for (const frame of ["standard", "wide"]) {
+        const candidate = value.frames[appearance][frame];
+        if (!exactShape(candidate, GREETING_FRAME_KEYS)
+            || typeof candidate.italic !== "boolean"
+            || !GREETING_WEIGHT_IDS.includes(candidate.weight)) return null;
+        for (const [field, ids] of Object.entries(GREETING_ENUM_FIELDS)) {
+          if (!enumValue(candidate[field], ids)) return null;
+        }
+        for (const [field, [minimum, maximum]] of Object.entries(GREETING_NUMERIC_FIELDS)) {
+          if (!inRange(candidate[field], minimum, maximum)) return null;
+        }
+        if (!value.compactMarkAvailable && candidate.markSource === "compact") return null;
+        frames[appearance][frame] = { ...candidate };
+      }
+    }
+    return {
+      native: value.native,
+      compactMarkAvailable: value.compactMarkAvailable,
+      frames,
+    };
+  }
+
+  // WO-21 personal greeting envelope. Host-owned config, not theme data: it carries no
+  // session or revision and is validated independently of the theme document.
+  function normalizeGreetingPreferences(value) {
+    if (!exactShape(value, [
+      "enabled", "source", "displayName", "globalPhrases", "themeOverrides", "shuffle",
+    ])
+        || typeof value.enabled !== "boolean"
+        || !enumValue(value.source, ["claude", "custom"])
+        || !Array.isArray(value.globalPhrases) || value.globalPhrases.length > 12
+        || !plainRecord(value.themeOverrides) || Object.keys(value.themeOverrides).length > 64) return null;
+    if (typeof value.displayName !== "string") return null;
+    const displayName = value.displayName.normalize("NFC").trim();
+    if ([...displayName].length > 40
+        || /[\u0000-\u001F\u007F-\u009F]/u.test(displayName)) return null;
+    const normalizePhrases = (value) => {
+      if (!Array.isArray(value) || value.length > 12) return null;
+      const phrases = [];
+      for (const phrase of value) {
+        if (typeof phrase !== "string") return null;
+        const text = phrase.normalize("NFC").trim();
+        if (!text || [...text].length > 120
+            || /[\u0000-\u001F\u007F-\u009F]/u.test(text)
+            || (text.match(/\{name\}/gu) ?? []).length > 1
+            || /[{}]/u.test(text.replace(/\{name\}/gu, ""))) return null;
+        if (phrases.includes(text)) return null;
+        phrases.push(text);
+      }
+      return phrases;
+    };
+    const globalPhrases = normalizePhrases(value.globalPhrases);
+    if (!globalPhrases) return null;
+    const themeOverrides = {};
+    for (const [themeId, override] of Object.entries(value.themeOverrides)) {
+      if (!ID_PATTERN.test(themeId)
+          || !exactShape(override, ["mode", "phrases"])
+          || !enumValue(override.mode, ["global", "claude", "custom"])) return null;
+      const phrases = normalizePhrases(override.phrases);
+      if (!phrases || (override.mode === "custom" && !phrases.length)) return null;
+      themeOverrides[themeId] = { mode: override.mode, phrases };
+    }
+    let shuffle = null;
+    if (value.shuffle !== null) {
+      if (!exactShape(value.shuffle, ["themeId", "phraseDigest", "order", "cursor", "lastIndex"])
+          || !ID_PATTERN.test(value.shuffle.themeId)
+          || !/^[a-f0-9]{64}$/.test(value.shuffle.phraseDigest)
+          || !Array.isArray(value.shuffle.order) || value.shuffle.order.length > 12
+          || new Set(value.shuffle.order).size !== value.shuffle.order.length
+          || value.shuffle.order.some((index) => !integer(index, 0, 11))
+          || !integer(value.shuffle.cursor, 0, value.shuffle.order.length)
+          || (value.shuffle.lastIndex !== null && !integer(value.shuffle.lastIndex, 0, 11))) return null;
+      shuffle = {
+        themeId: value.shuffle.themeId,
+        phraseDigest: value.shuffle.phraseDigest,
+        order: [...value.shuffle.order],
+        cursor: value.shuffle.cursor,
+        lastIndex: value.shuffle.lastIndex,
+      };
+    }
+    return {
+      enabled: value.enabled,
+      source: value.source,
+      displayName,
+      globalPhrases,
+      themeOverrides,
+      shuffle,
+    };
+  }
+
+  // Blank lines are the only input that may be ignored. Rejecting the complete
+  // textarea avoids silently saving a shortened or otherwise different list.
+  function parseGreetingPhrases(text) {
+    const phrases = [];
+    for (const line of String(text ?? "").split(/\r?\n/u)) {
+      const phrase = line.normalize("NFC").trim();
+      if (!phrase) continue;
+      if (phrases.length === 12 || phrases.includes(phrase)
+          || /[\u0000-\u001F\u007F-\u009F]/u.test(phrase)
+          || [...phrase].length > 120
+          || (phrase.match(/\{name\}/gu) ?? []).length > 1
+          || /[{}]/u.test(phrase.replace(/\{name\}/gu, ""))) return null;
+      phrases.push(phrase);
+    }
+    return phrases;
+  }
+
   function normalizeShared(value) {
-    const keys = ["fontUi", "fontDisplay", "radius", "blur", "shadow", "backgroundScope", "prompt", "inherited"];
+    const keys = ["fontUi", "fontDisplay", "radius", "blur", "shadow", "backgroundScope", "prompt", "greeting", "inherited"];
     const inheritedKeys = ["fontUi", "fontDisplay", "radius", "shadow"];
     if (!exactShape(value, keys) || !exactShape(value.prompt, ["native", "width", "x", "y"])
         || !exactShape(value.inherited, inheritedKeys)
         || inheritedKeys.some((key) => typeof value.inherited[key] !== "boolean")) return null;
-    if (!enumValue(value.fontUi, FONT_UI_IDS) || !enumValue(value.fontDisplay, FONT_DISPLAY_IDS)
+    const greeting = normalizeGreeting(value.greeting);
+    if (!greeting || !enumValue(value.fontUi, FONT_UI_IDS) || !enumValue(value.fontDisplay, FONT_DISPLAY_IDS)
         || !inRange(value.radius, 0, 32) || !inRange(value.blur, 0, 40)
         || !enumValue(value.shadow, SHADOW_IDS) || !enumValue(value.backgroundScope, ["content", "full-window"])
         || !inRange(value.prompt.width, 0.4, 0.96) || !inRange(value.prompt.x, -0.35, 0.35)
@@ -1337,6 +507,7 @@
         x: value.prompt.x,
         y: value.prompt.y,
       },
+      greeting,
       inherited: {
         fontUi: value.inherited.fontUi,
         fontDisplay: value.inherited.fontDisplay,
@@ -1429,7 +600,7 @@
   }
 
   function normalizeMetadata(value) {
-    const locales = ["en", "zh-CN", "zh-TW"];
+    const locales = ["en", "zh-CN", "zh-HKTW"];
     if (!exactShape(value, ["labels", "descriptions"])
         || !exactShape(value.labels, locales) || !exactShape(value.descriptions, locales)) return null;
     const labels = Object.create(null);
@@ -1509,7 +680,7 @@
     const required = [
       "active", "id", "sourceId", "source", "isNew", "session", "revision", "dirty", "canUndo", "canRedo",
       "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
-      "launcherStylePreviewUrl", "shared", "layers", "feedback",
+      "launcherStylePreviewUrl", "shared", "greetingPreferences", "layers", "feedback",
     ];
     if (!exactShape(value, required, optional) || !ID_PATTERN.test(value.id)
         || !ID_PATTERN.test(value.sourceId) || !enumValue(value.source, ["user", "builtin"])
@@ -1527,8 +698,9 @@
     const launcherPreviewUrl = normalizeLauncherPreviewUrl(value.launcherPreviewUrl);
     const launcherStylePreviewUrl = normalizeLauncherPreviewUrl(value.launcherStylePreviewUrl);
     const shared = normalizeShared(value.shared);
+    const greetingPreferences = normalizeGreetingPreferences(value.greetingPreferences);
     if (!metadata || !light || !dark || !studioStyle || !launcher || !launcherStyle
-        || !launcherPreviewUrl || !launcherStylePreviewUrl || !shared
+        || !launcherPreviewUrl || !launcherStylePreviewUrl || !shared || !greetingPreferences
         || !Array.isArray(value.layers) || value.layers.length > 8) return undefined;
     const layers = value.layers.map(normalizeLayer);
     const feedback = normalizeFeedback(value.feedback);
@@ -1548,6 +720,7 @@
       launcherPreviewUrl,
       launcherStylePreviewUrl,
       shared,
+      greetingPreferences,
       layers,
       feedback,
     };
@@ -1571,7 +744,7 @@
 
   function createController({ locale, send, setStatus, translate, focusThemeCard, onStudioStyleChange }) {
     const normalizedLocale = Object.hasOwn(STRINGS, locale) ? locale : "en";
-    const tr = (key) => STRINGS[normalizedLocale][key] ?? translate?.(key) ?? STRINGS.en[key] ?? key;
+    const tr = (key) => STRINGS[normalizedLocale]?.[key] ?? translate?.(key) ?? STRINGS.en?.[key] ?? key;
     const editor = document.getElementById("editor");
     const navEditor = document.getElementById("nav-editor");
     const ordinarySections = ["themes", "background", "create", "settings"].map((id) => document.getElementById(id));
@@ -1586,6 +759,7 @@
     const validPill = document.getElementById("editor-valid");
     const live = document.getElementById("editor-live");
     const errorSummary = document.getElementById("editor-error-summary");
+    const livePausedNote = document.getElementById("editor-live-paused");
     const tokenGroups = document.getElementById("editor-token-groups");
     const layerList = document.getElementById("editor-layer-list");
     const feedbackRoot = document.getElementById("editor-feedback");
@@ -1610,6 +784,50 @@
     const replaceLauncherMarkButton = document.getElementById("editor-launcher-replace");
     const promptInputs = [...document.querySelectorAll("[data-editor-prompt]")];
     const promptExactInputs = [...document.querySelectorAll("[data-editor-prompt-exact]")];
+    const greetingInputs = [...document.querySelectorAll("[data-editor-greeting]")];
+    const greetingExactLabelKeys = Object.freeze({
+      fontSize: "greetingSize",
+      letterSpacing: "greetingTracking",
+      lineHeight: "greetingLineHeight",
+      maxWidthRatio: "greetingMaxWidth",
+      xRatio: "greetingOffsetX",
+      yRatio: "greetingOffsetY",
+      markScale: "greetingMarkScale",
+    });
+    const greetingExactInputs = greetingInputs
+      .filter((input) => input.type === "range")
+      .map((range) => {
+        const exact = document.createElement("input");
+        exact.type = "number";
+        exact.className = "greeting-exact-value advanced-only";
+        exact.min = range.min;
+        exact.max = range.max;
+        exact.step = range.step;
+        exact.inputMode = "decimal";
+        exact.dataset.editorGreetingExact = range.dataset.editorGreeting;
+        exact.dataset.editorFocus = `${range.dataset.editorFocus}-exact`;
+        exact.setAttribute("aria-label",
+          `${tr(greetingExactLabelKeys[range.dataset.editorGreeting])} / ${tr("exactValue")}`);
+        range.insertAdjacentElement("afterend", exact);
+        return exact;
+      });
+    const greetingEnableInput = document.getElementById("editor-greeting-enabled");
+    const greetingResetButton = document.getElementById("editor-greeting-reset");
+    const greetingNativeNote = document.getElementById("editor-greeting-native");
+    const greetingCollisionWarning = document.getElementById("editor-greeting-collision-warning");
+    const greetingSample = document.getElementById("editor-greeting-sample");
+    const greetingPersonalEnableInput = document.getElementById("editor-greeting-personal-enabled");
+    const greetingSourceInputs = [...document.querySelectorAll('input[name="greeting-source"]')];
+    const greetingNameInput = document.getElementById("editor-greeting-name");
+    const greetingPhrasesInput = document.getElementById("editor-greeting-phrases");
+    const greetingOverrideInput = document.getElementById("editor-greeting-override");
+    const greetingOverridePhrasesInput = document.getElementById("editor-greeting-override-phrases");
+    const greetingOverridePhrasesField = document.getElementById("editor-greeting-override-phrases-field");
+    const greetingPhrasesStatus = document.getElementById("editor-greeting-phrases-status");
+    const greetingMarkInput = document.getElementById("editor-greeting-mark");
+    const greetingContextSection = editor.querySelector(".editor-greeting-context");
+    const greetingContextUnavailable = editor.querySelector(".editor-greeting-unavailable");
+    const greetingSwitchPreviewButton = document.getElementById("editor-greeting-switch-preview");
     const saveButton = document.getElementById("editor-save");
     const cancelButton = document.getElementById("editor-cancel");
     const undoButton = document.getElementById("editor-undo");
@@ -1638,6 +856,10 @@
       }
     }
     let state = null;
+    let greetingPreferenceDraft = null;
+    let greetingPreferenceDraftDirty = false;
+    let greetingPreferenceInputDirty = false;
+    let greetingPreferenceInputInvalid = false;
     let selectedMode = "light";
     let selectedLayerId = null;
     let renderedLayerSignature = null;
@@ -1655,6 +877,7 @@
     let stagePreviewSize = [...STAGE_SIZES.normal];
     let previewSizeIntent = null;
     let pendingAction = null;
+    let pendingWatchdog = null;
     let returnTheme = "default";
     let confirmCallback = null;
     let confirmReturnFocus = null;
@@ -1671,7 +894,7 @@
     let inFlightSession = null;
     let actionAfterPatch = null;
     const hasUnsavedEdits = () => hasUnsavedEditorWork({
-      dirty: state?.dirty,
+      dirty: state?.dirty || greetingPreferenceDraftDirty || greetingPreferenceInputDirty,
       deferred: deferredChanges.size,
       coalesced: coalescedChanges.size,
       debounce: changeFlushTimer,
@@ -1740,8 +963,30 @@
     // (apply-theme-patch) never change layer structure, so they sync in the
     // background without locking the editor.
     const isBlockingAction = () => Boolean(pendingAction) && pendingAction !== "apply-theme-patch";
+    // A host reply can be lost: a stale session, a dropped bridge message, or a state
+    // whose lastAction never matches what we sent. Without a watchdog `pendingAction`
+    // stays set forever and flushThemeChanges then queues every later edit without ever
+    // sending it — the editor looks alive while silently discarding work.
+    const PENDING_WATCHDOG_MS = 12000;
+    const WATCHDOG_EXEMPT_ACTIONS = new Set(["pick-theme-layer-image", "pick-theme-launcher-mark"]);
+    const clearPendingWatchdog = () => {
+      if (!pendingWatchdog) return;
+      clearTimeout(pendingWatchdog);
+      pendingWatchdog = null;
+    };
     const setPending = (action = null) => {
       pendingAction = action;
+      clearPendingWatchdog();
+      if (action && !WATCHDOG_EXEMPT_ACTIONS.has(action)) {
+        pendingWatchdog = setTimeout(() => {
+          pendingWatchdog = null;
+          if (!pendingAction) return;
+          requeueInFlightChanges();
+          setPending(null);
+          announce(tr("editorActionTimedOut"), "error");
+          flushThemeChanges();
+        }, PENDING_WATCHDOG_MS);
+      }
       const blocking = Boolean(action) && action !== "apply-theme-patch";
       editor.setAttribute("aria-busy", String(blocking));
       // Only structural actions disable every control; per-control busy gating
@@ -1776,11 +1021,15 @@
     };
 
     const mutationBase = () => state ? { session: state.session, revision: state.revision } : null;
+    const greetingFrameId = () => stageViewport === "wide" ? "wide" : "standard";
+    const activeGreetingFrame = () => state?.shared?.greeting?.frames?.[selectedMode]?.[greetingFrameId()] ?? null;
     const themeChangeKey = (change) => change.kind === "token"
       ? `token:${change.mode}:${change.token}`
       : change.kind === "layer"
         ? `layer:${change.layerId}:${change.preset}:${change.property}`
-        : `metadata:${change.field}:${change.locale}`;
+        : change.kind === "greeting"
+          ? `greeting:${change.operation}:${change.appearance}:${change.frame}`
+          : `metadata:${change.field}:${change.locale}`;
     const clearInFlightChanges = () => {
       inFlightChanges = [];
       inFlightRevision = null;
@@ -1837,6 +1086,29 @@
     const queueTokenChange = (mode, token, value) => {
       queueThemeChange({ kind: "token", mode, token, value });
     };
+    const greetingFrameFromControls = (changedField = null, changedValue = null) => {
+      const frame = { ...activeGreetingFrame() };
+      if (!frame.font) return null;
+      for (const input of greetingInputs) {
+        const field = input.dataset.editorGreeting;
+        frame[field] = field === changedField ? changedValue
+          : input.type === "checkbox" ? input.checked
+            : input.type === "range" ? input.valueAsNumber
+              : field === "weight" ? Number(input.value)
+                : input.value;
+      }
+      return frame;
+    };
+    const queueGreetingFrame = (frame, { immediate = false } = {}) => {
+      if (!frame) return;
+      queueThemeChange({
+        kind: "greeting",
+        operation: "set-frame",
+        appearance: selectedMode,
+        frame: greetingFrameId(),
+        value: frame,
+      }, { immediate });
+    };
     const queueLayerChange = (index, preset, property, value) => {
       const layerId = state?.layers?.[index]?.id;
       if (layerId) queueThemeChange({ kind: "layer", layerId, preset, property, value });
@@ -1885,6 +1157,7 @@
     })[branch] ?? "branchInterfaceHelp";
     const stageSelectionTarget = (selection) => selection?.kind === "prompt"
       ? "interface.new-chat-area"
+      : selection?.kind === "greeting" ? "interface.greeting"
       : selection?.kind === "layer" ? "background.layer" : null;
     const stageSelectionAllowed = (selection) => {
       if (!selection) return true;
@@ -1907,6 +1180,8 @@
       stageRoot.dataset.selectionBranch = inspectorBranch;
       const prompt = stageRoot.querySelector(".stage-prompt");
       setStageNodeInteractive(prompt, inspectorBranch === "interface" && stageContext === "new-chat");
+      const greeting = stageRoot.querySelector(".stage-greeting");
+      setStageNodeInteractive(greeting, inspectorBranch === "interface" && stageContext === "new-chat");
       for (const item of stageRoot.querySelectorAll(".stage-layer .stage-item")) {
         setStageNodeInteractive(item, inspectorBranch === "background");
       }
@@ -1947,6 +1222,9 @@
       if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
         return "interface.new-chat-area";
       }
+      if (field === "shared.greeting" || field.startsWith("shared.greeting.")) {
+        return "interface.greeting";
+      }
       if (field === "shared.backgroundScope") return "background.canvas";
       if (field === "layers" || field.startsWith("layers[")) return "background.layer";
       if (field === "launcher" || field.startsWith("launcher.")) return "widgets.app-identity";
@@ -1955,6 +1233,7 @@
     const defaultInspectorField = (target) => {
       if (target === "interface.theme") return `tokens.${selectedMode}.canvas`;
       if (target === "interface.new-chat-area") return "shared.prompt";
+      if (target === "interface.greeting") return "shared.greeting";
       if (target === "background.canvas") return "shared.backgroundScope";
       if (target === "background.layer") {
         const index = state?.layers?.findIndex((layer) => layer.id === selectedLayerId) ?? -1;
@@ -1965,6 +1244,8 @@
     const normalizeInspectorField = (field) => {
       const token = /^tokens\.(?:light|dark)\.(.+)$/.exec(field ?? "");
       if (token) return `tokens.${selectedMode}.${token[1]}`;
+      const greeting = /^shared\.greeting\.frames\.(?:light|dark)\.(?:standard|wide)\.(.+)$/.exec(field ?? "");
+      if (greeting) return `shared.greeting.frames.${selectedMode}.${greetingFrameId()}.${greeting[1]}`;
       const layer = /^layers\[\d+](.*)$/.exec(field ?? "");
       if (layer) {
         const index = state?.layers?.findIndex((item) => item.id === selectedLayerId) ?? -1;
@@ -1978,6 +1259,9 @@
       if (!state) return true;
       if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
         return state.shared.prompt.native && !hasStageOverridePrefix("shared.prompt");
+      }
+      if (field === "shared.greeting" || field.startsWith("shared.greeting.")) {
+        return state.shared.greeting.native;
       }
       const inherited = /^shared\.(fontUi|fontDisplay|radius|shadow)$/.exec(field);
       if (inherited) {
@@ -2022,12 +1306,16 @@
         ? layerScopeLabel(selectedLayer)
         : inspectorTarget === "interface.new-chat-area"
           ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr("frameStandard")} + ${tr("frameWide")}`
-          : tokenMode
+          : inspectorTarget === "interface.greeting"
+            ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} / ${tr("contextNewChat")} / ${tr(greetingFrameId() === "wide" ? "frameWide" : "frameStandard")}`
+            : tokenMode
             ? `${tr(tokenMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
             : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
       contextSource.textContent = fieldUsesThemeOriginal(inspectorField)
         ? tr("themeOriginalSource") : tr("customizedSource");
-      const fieldFrame = /^layers\[\d+]\.frames\.(normal|wide)\./.exec(inspectorField)?.[1] ?? null;
+      const fieldFrame = /^layers\[\d+]\.frames\.(normal|wide)\./.exec(inspectorField)?.[1]
+        ?? /^shared\.greeting\.frames\.(?:light|dark)\.(standard|wide)\./.exec(inspectorField)?.[1]
+        ?? null;
       contextFrameRow.hidden = !fieldFrame;
       const editFrameLabel = tr(fieldFrame === "wide" ? "frameWide" : "frameStandard");
       const previewFrameLabel = tr(stageViewport === "wide" ? "frameWide" : "frameStandard");
@@ -2105,6 +1393,8 @@
     const reflectStageSelectionForTarget = (target) => {
       if (target === "interface.new-chat-area") {
         stageSelection = { kind: "prompt" };
+      } else if (target === "interface.greeting") {
+        stageSelection = { kind: "greeting" };
       } else if (target === "background.layer" && selectedLayerId) {
         stageSelection = { kind: "layer", id: selectedLayerId };
       } else {
@@ -2453,13 +1743,34 @@
       }
       return null;
     };
+    const greetingStagePrefix = () => `shared.greeting.frames.${selectedMode}.${greetingFrameId()}.`;
+    const greetingStagePaths = () => ["xRatio", "yRatio", "maxWidthRatio", "fontSize"]
+      .map((field) => `${greetingStagePrefix()}${field}`);
     const stageItemPaths = (selection) => {
       if (!selection) return [];
       if (selection.kind === "prompt") return [...STAGE_PROMPT_PATHS];
+      if (selection.kind === "greeting") return greetingStagePaths();
       const index = layerIndexForId(selection.id);
       return index < 0 ? [] : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${stageViewport}.${property}`);
     };
     const commitStagePaths = (paths) => {
+      if (paths.some((path) => path.startsWith(greetingStagePrefix()))) {
+        const frame = { ...activeGreetingFrame() };
+        let changed = false;
+        for (const path of greetingStagePaths()) {
+          if (!stageOverrides.has(path)) continue;
+          const field = path.slice(greetingStagePrefix().length);
+          const value = stageOverrides.get(path);
+          if (Math.abs(Number(frame[field]) - Number(value)) < 0.00005) {
+            stageOverrides.delete(path);
+            continue;
+          }
+          frame[field] = value;
+          changed = true;
+        }
+        if (changed) queueGreetingFrame(frame, { immediate: true });
+        return;
+      }
       const messages = [];
       const adoptsNativePrompt = Boolean(state?.shared?.prompt?.native
         && STAGE_PROMPT_PATHS.some((path) => paths.includes(path) && stageOverrides.has(path)
@@ -2633,6 +1944,23 @@
     stagePromptChip.dataset.editorI18n = "stagePromptTag";
     stagePromptChip.textContent = tr("stagePromptTag");
     stagePromptEl.append(stagePromptSample, stagePromptChip);
+    // WO-21: Greeting is its own Interface-stage target above the prompt. Its
+    // overlay owns editing gestures; the normal Aura greeting remains
+    // pointer-inert.
+    const stageGreetingEl = document.createElement("div");
+    stageGreetingEl.className = "stage-greeting";
+    stageGreetingEl.dataset.stageItem = "greeting";
+    stageGreetingEl.dataset.editorFocus = "stage-greeting";
+    stageGreetingEl.setAttribute("role", "button");
+    stageGreetingEl.setAttribute("aria-label", tr("targetGreeting"));
+    stageGreetingEl.setAttribute("aria-pressed", "false");
+    stageGreetingEl.tabIndex = 0;
+    const stageGreetingMark = document.createElement("span");
+    stageGreetingMark.className = "stage-greeting-mark";
+    stageGreetingMark.textContent = "✳";
+    const stageGreetingText = document.createElement("span");
+    stageGreetingText.className = "stage-greeting-text";
+    stageGreetingEl.append(stageGreetingMark, stageGreetingText);
     const stageStripA = document.createElement("div");
     stageStripA.className = "stage-strip";
     const stageStripB = document.createElement("div");
@@ -2673,6 +2001,11 @@
         promptContextSection.inert = !newChat;
       }
       if (promptContextUnavailable) promptContextUnavailable.hidden = newChat;
+      if (greetingContextSection) {
+        greetingContextSection.hidden = !newChat;
+        greetingContextSection.inert = !newChat;
+      }
+      if (greetingContextUnavailable) greetingContextUnavailable.hidden = newChat;
       refreshInspectorContext();
       syncStageSelectionMode();
     };
@@ -2791,7 +2124,7 @@
         }
       }
       stageContentHost.replaceChildren(...(stageContext === "new-chat"
-        ? [stagePromptEl]
+        ? [stageGreetingEl, stagePromptEl]
         : [stageStripA, stageStripB, stageComposerEl]));
       stageEmptyNote.textContent = tr("stageEmpty");
       stageEmptyNote.hidden = inspectorBranch !== "background" || seen.size > 0;
@@ -2807,6 +2140,7 @@
     const syncStageHud = () => {
       if (!stageSelectionAllowed(stageSelection)) stageSelection = null;
       stagePromptEl.setAttribute("aria-pressed", String(stageSelection?.kind === "prompt"));
+      stageGreetingEl.setAttribute("aria-pressed", String(stageSelection?.kind === "greeting"));
       for (const [id, entry] of stageLayerNodes) {
         entry.item.setAttribute("aria-pressed",
           String(stageSelection?.kind === "layer" && stageSelection.id === id));
@@ -2814,6 +2148,7 @@
       let target = null;
       if (stageSelection?.kind === "layer") target = stageLayerNodes.get(stageSelection.id)?.item ?? null;
       else if (stageSelection?.kind === "prompt" && stageContext === "new-chat") target = stagePromptEl;
+      else if (stageSelection?.kind === "greeting" && stageContext === "new-chat") target = stageGreetingEl;
       const chrome = [...stageEdges, ...stageCorners];
       if (!target || !state) {
         stageRing.hidden = true;
@@ -2833,6 +2168,7 @@
       stageRing.style.width = `${rect.width}px`;
       stageRing.style.height = `${rect.height}px`;
       const prompt = stageSelection.kind === "prompt";
+      const greeting = stageSelection.kind === "greeting";
       const setRect = (node, x, y, width, height) => {
         node.hidden = false;
         node.style.left = `${x}px`;
@@ -2848,16 +2184,19 @@
       setRect(stageEdges[3], clampX(left - 4, 8), clampY(top + 12, sideLength), 8, sideLength);
       const selectionIndex = stageSelection.kind === "layer" ? layerIndexForId(stageSelection.id) : -1;
       const framePrefix = selectionIndex >= 0 ? `layers[${selectionIndex}].frames.${stageViewport}.` : "";
-      const positionX = Number(stageSelection.kind === "prompt"
+      const positionX = Number(prompt
         ? stageValue("shared.prompt.x") * 100
-        : stageValue(`${framePrefix}positionX`)) || 0;
-      const positionY = Number(stageSelection.kind === "prompt"
+        : greeting ? stageValue(`${greetingStagePrefix()}xRatio`) * 100
+          : stageValue(`${framePrefix}positionX`)) || 0;
+      const positionY = Number(prompt
         ? stageValue("shared.prompt.y") * 100
-        : stageValue(`${framePrefix}positionY`)) || 0;
+        : greeting ? stageValue(`${greetingStagePrefix()}yRatio`) * 100
+          : stageValue(`${framePrefix}positionY`)) || 0;
       for (const node of stageEdges) {
         const horizontal = node.dataset.side === "e" || node.dataset.side === "w";
         const value = horizontal ? positionX : positionY;
-        const limit = stageSelection.kind === "prompt" ? (horizontal ? 35 : 30) : 100;
+        const limit = prompt ? (horizontal ? 35 : 30)
+          : greeting ? (horizontal ? 45 : 40) : 100;
         node.setAttribute("aria-label", tr("stageMoveHandle"));
         node.setAttribute("aria-orientation", horizontal ? "horizontal" : "vertical");
         node.setAttribute("aria-valuemin", String(-limit));
@@ -2873,19 +2212,20 @@
       };
       for (const node of stageCorners) {
         const point = cornerPoints[node.dataset.corner];
-        const value = stageSelection.kind === "prompt"
+        const value = prompt
           ? (Number(stageValue("shared.prompt.width")) || 0.4) * 100
-          : (Number(stageValue(`${framePrefix}scale`)) || 1) * 100;
+          : greeting ? Number(stageValue(`${greetingStagePrefix()}fontSize`)) || 24
+            : (Number(stageValue(`${framePrefix}scale`)) || 1) * 100;
         node.hidden = false;
         node.style.left = `${clampX(point[0], cornerTarget)}px`;
         node.style.top = `${clampY(point[1], cornerTarget)}px`;
         node.setAttribute("aria-label", tr(prompt ? "stageWidthHandle" : "stageScaleHandle"));
-        node.setAttribute("aria-valuemin", prompt ? "40" : "25");
-        node.setAttribute("aria-valuemax", prompt ? "96" : "300");
+        node.setAttribute("aria-valuemin", prompt ? "40" : greeting ? "24" : "25");
+        node.setAttribute("aria-valuemax", prompt ? "96" : greeting ? "72" : "300");
         node.setAttribute("aria-valuenow", String(Math.round(value * 100) / 100));
         node.setAttribute("aria-valuetext", `${Math.round(value * 100) / 100}%`);
       }
-      if (prompt) {
+      if (prompt || greeting) {
         stageOpacityWrap.hidden = true;
       } else {
         const index = layerIndexForId(stageSelection.id);
@@ -3026,6 +2366,61 @@
         stagePromptSample.style.fontFamily = STAGE_FONT_STACKS[stageValue("shared.fontDisplay")]
           ?? STAGE_FONT_STACKS["system-sans"];
         stagePromptChip.style.color = tokenValue("accent") ?? "currentColor";
+        const greeting = activeGreetingFrame();
+        const liveGreeting = captureActive && stageMirror?.geometry?.greeting?.status === "found"
+          ? stageMirror.geometry.greeting.rect : null;
+        if (greeting && (!captureActive || liveGreeting)) {
+          const boxWidth = mainMetrics.width * Number(stageValue(`${greetingStagePrefix()}maxWidthRatio`));
+          const centre = mainMetrics.left + (mainMetrics.width / 2)
+            + (mainMetrics.width * Number(stageValue(`${greetingStagePrefix()}xRatio`)));
+          const gap = Math.max(24, greeting.fontSize * 0.9);
+          stageGreetingEl.hidden = false;
+          stageGreetingEl.dataset.liveTarget = liveGreeting ? "true" : "";
+          if (liveGreeting) {
+            const deltaX = (Number(stageValue(`${greetingStagePrefix()}xRatio`)) - greeting.xRatio)
+              * mainMetrics.width;
+            const deltaY = (Number(stageValue(`${greetingStagePrefix()}yRatio`)) - greeting.yRatio)
+              * mainMetrics.height;
+            const deltaWidth = (Number(stageValue(`${greetingStagePrefix()}maxWidthRatio`))
+              - greeting.maxWidthRatio) * mainMetrics.width;
+            const fontRatio = Number(stageValue(`${greetingStagePrefix()}fontSize`)) / greeting.fontSize;
+            stageGreetingEl.style.left = `${liveGreeting.left + deltaX - (deltaWidth / 2)}px`;
+            stageGreetingEl.style.top = `${liveGreeting.top + deltaY}px`;
+            stageGreetingEl.style.width = `${Math.max(48, liveGreeting.width + deltaWidth)}px`;
+            stageGreetingEl.style.height = `${Math.max(24, liveGreeting.height * fontRatio)}px`;
+          } else {
+            stageGreetingEl.style.left = `${centre - (boxWidth / 2)}px`;
+            stageGreetingEl.style.width = `${boxWidth}px`;
+            stageGreetingEl.style.height = "";
+            stageGreetingEl.style.top = `${rect.top - gap - (Number(stageValue(`${greetingStagePrefix()}fontSize`)) * greeting.lineHeight)
+              + (mainMetrics.height * Number(stageValue(`${greetingStagePrefix()}yRatio`)))}px`;
+          }
+          stageGreetingEl.style.justifyContent = greeting.align === "start" ? "flex-start"
+            : greeting.align === "end" ? "flex-end" : "center";
+          stageGreetingEl.style.color = greeting.color === "accent"
+            ? (tokenValue("accent") ?? "currentColor")
+            : (tokenValue("text") ?? "#000000");
+          stageGreetingText.textContent = greetingSampleText();
+          const textStyle = stageGreetingText.style;
+          textStyle.fontFamily = GREETING_FONT_STACKS[greeting.font] ?? GREETING_FONT_STACKS["system-sans"];
+          textStyle.fontSize = `${Number(stageValue(`${greetingStagePrefix()}fontSize`))}px`;
+          textStyle.fontWeight = String(greeting.weight);
+          textStyle.fontStyle = greeting.italic ? "italic" : "normal";
+          textStyle.letterSpacing = `${greeting.letterSpacing}em`;
+          textStyle.lineHeight = String(greeting.lineHeight);
+          textStyle.textAlign = greeting.align;
+          textStyle.textDecoration = greeting.decoration === "underline" ? "underline" : "none";
+          textStyle.borderBottom = greeting.decoration === "hairline" ? "1px solid currentColor" : "none";
+          textStyle.textShadow = greeting.decoration === "glow"
+            ? "0 0 18px color-mix(in srgb, var(--accent) 35%, transparent)"
+            : "none";
+          stageGreetingMark.hidden = greeting.markSource === "none";
+          stageGreetingMark.style.fontSize = `${greeting.fontSize * greeting.markScale
+            * (greeting.markSource === "compact" ? 0.6 : 0.85)}px`;
+        } else {
+          stageGreetingEl.hidden = true;
+          stageGreetingEl.dataset.liveTarget = "";
+        }
       } else {
         const strips = [[stageStripA, 0.16, 0.13, 0.16, 0.56], [stageStripB, 0.34, 0.17, 0.24, 0.56]];
         for (const [node, topRatio, heightRatio, leftRatio, widthRatio] of strips) {
@@ -3100,6 +2495,10 @@
         inspectorField = "shared.prompt";
         setInspectorTarget("interface.new-chat-area", { reveal });
         announce(format(tr("stageSelectedAnnounce"), tr("stagePromptTag")));
+      } else if (selection?.kind === "greeting") {
+        inspectorField = `${greetingStagePrefix()}xRatio`;
+        setInspectorTarget("interface.greeting", { reveal });
+        announce(format(tr("stageSelectedAnnounce"), tr("targetGreeting")));
       }
       syncStageHud();
       return true;
@@ -3108,6 +2507,8 @@
     const stageSelectionFromNode = (node) => {
       const selection = node.dataset.stageItem === "prompt"
         ? { kind: "prompt" }
+        : node.dataset.stageItem === "greeting"
+          ? { kind: "greeting" }
         : { kind: "layer", id: node.dataset.stageItem };
       return stageSelectionAllowed(selection) ? selection : null;
     };
@@ -3143,14 +2544,18 @@
         const input = stageInputFor(path);
         if (!input || input.type !== "range") continue;
         const prompt = path.startsWith("shared.prompt.");
+        const greeting = /^shared\.greeting\.frames\.(?:light|dark)\.(?:standard|wide)\.(.+)$/.exec(path)?.[1] ?? null;
         input.value = String(prompt ? Math.round(value * 100) : value);
-        const exact = input.parentElement?.querySelector(".layer-exact-value, .prompt-exact-value");
+        const exact = input.parentElement?.querySelector(
+          ".layer-exact-value, .prompt-exact-value, .greeting-exact-value",
+        );
         if (exact) exact.value = String(prompt ? Math.round(value * 100) : value);
         const output = prompt
           ? document.getElementById(`${input.id}-output`)
           : input.parentElement?.querySelector("output");
         if (output) {
-          output.value = prompt || path.endsWith("scale")
+          output.value = greeting ? greetingOutputText(greeting, value)
+            : prompt || path.endsWith("scale")
             ? `${Math.round(value * 100)}%`
             : `${Math.round(value)}%`;
         }
@@ -3183,23 +2588,27 @@
       for (const path of stageItemPaths(selection)) start[path] = Number(stageValue(path)) || 0;
       const targetRect = (selection.kind === "layer"
         ? stageLayerNodes.get(selection.id)?.item
-        : stagePromptEl)?.getBoundingClientRect();
+        : selection.kind === "greeting" ? stageGreetingEl : stagePromptEl)?.getBoundingClientRect();
       const handleKind = handle?.dataset.stageHandle;
       if (selection.kind === "layer") {
         const index = layerIndexForId(selection.id);
         if (index >= 0) {
           inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
         }
-      } else {
+      } else if (selection.kind === "prompt") {
         inspectorField = "shared.prompt";
+      } else {
+        inspectorField = `${greetingStagePrefix()}xRatio`;
       }
       refreshInspectorContext();
       const corner = handle?.dataset.corner ?? "se";
       stageDrag = {
         pointerId: event.pointerId,
         kind: handleKind === "scale"
-          ? (selection.kind === "prompt" ? "prompt-width" : "scale")
-          : selection.kind === "prompt" ? "prompt-move" : "layer-move",
+          ? (selection.kind === "prompt" ? "prompt-width"
+            : selection.kind === "greeting" ? "greeting-size" : "scale")
+          : selection.kind === "prompt" ? "prompt-move"
+            : selection.kind === "greeting" ? "greeting-move" : "layer-move",
         signX: corner.includes("w") ? -1 : 1,
         signY: corner.includes("n") ? -1 : 1,
         selection,
@@ -3259,6 +2668,22 @@
         seedNativePromptOverrides();
         setStageOverride("shared.prompt.width",
           clampNumber(drag.start["shared.prompt.width"] + (drag.signX * dx * 2 / drag.mainWidth), 0.4, 0.96));
+      } else if (drag.kind === "greeting-move") {
+        const prefix = greetingStagePrefix();
+        let nextX = clampNumber(drag.start[`${prefix}xRatio`] + (dx / drag.mainWidth), -0.45, 0.45);
+        let nextY = clampNumber(drag.start[`${prefix}yRatio`] + (dy / drag.mainHeight), -0.4, 0.45);
+        if (!event.altKey) {
+          if (Math.abs(nextX) < 0.02) nextX = 0;
+          if (Math.abs(nextY) < 0.02) nextY = 0;
+        }
+        stageRoot.dataset.snap = `${nextX === 0 ? "x" : ""}${nextY === 0 ? "y" : ""}`;
+        setStageOverride(`${prefix}xRatio`, nextX);
+        setStageOverride(`${prefix}yRatio`, nextY);
+      } else if (drag.kind === "greeting-size") {
+        const prefix = greetingStagePrefix();
+        const delta = ((drag.signX * dx) + (drag.signY * dy)) / 16;
+        setStageOverride(`${prefix}fontSize`,
+          clampNumber(drag.start[`${prefix}fontSize`] + delta, 24, 72));
       }
     };
 
@@ -3355,6 +2780,25 @@
         else if (event.key === "ArrowDown") adjust(`${prefix}positionY`, step, -100, 100);
         else if (event.key === "+" || event.key === "=") adjust(`${prefix}scale`, event.shiftKey ? 0.2 : 0.05, 0.25, 3);
         else if (event.key === "-" || event.key === "_") adjust(`${prefix}scale`, event.shiftKey ? -0.2 : -0.05, 0.25, 3);
+      } else if (selection.kind === "greeting") {
+        const prefix = greetingStagePrefix();
+        const ratioStep = step / 100;
+        if (handleKind === "scale" && scaleDirection) {
+          adjust(`${prefix}fontSize`, scaleDirection * step, 24, 72);
+        } else if (handleKind === "move") {
+          const horizontal = handle.dataset.side === "e" || handle.dataset.side === "w";
+          if (horizontal && event.key === "ArrowLeft") adjust(`${prefix}xRatio`, -ratioStep, -0.45, 0.45);
+          else if (horizontal && event.key === "ArrowRight") adjust(`${prefix}xRatio`, ratioStep, -0.45, 0.45);
+          else if (!horizontal && event.key === "ArrowUp") adjust(`${prefix}yRatio`, -ratioStep, -0.4, 0.45);
+          else if (!horizontal && event.key === "ArrowDown") adjust(`${prefix}yRatio`, ratioStep, -0.4, 0.45);
+        } else if (event.key === "ArrowLeft") adjust(`${prefix}xRatio`, -ratioStep, -0.45, 0.45);
+        else if (event.key === "ArrowRight") adjust(`${prefix}xRatio`, ratioStep, -0.45, 0.45);
+        else if (event.key === "ArrowUp") adjust(`${prefix}yRatio`, -ratioStep, -0.4, 0.45);
+        else if (event.key === "ArrowDown") adjust(`${prefix}yRatio`, ratioStep, -0.4, 0.45);
+        else if (event.key === "+" || event.key === "=") adjust(`${prefix}fontSize`, step, 24, 72);
+        else if (event.key === "-" || event.key === "_") adjust(`${prefix}fontSize`, -step, 24, 72);
+        else if (event.key === "[") adjust(`${prefix}maxWidthRatio`, -0.02, 0.35, 0.9);
+        else if (event.key === "]") adjust(`${prefix}maxWidthRatio`, 0.02, 0.35, 0.9);
       } else {
         seedNativePromptOverrides();
         const ratioStep = step / 100;
@@ -3381,8 +2825,10 @@
         if (index >= 0) {
           inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
         }
-      } else {
+      } else if (selection.kind === "prompt") {
         inspectorField = "shared.prompt";
+      } else {
+        inspectorField = `${greetingStagePrefix()}xRatio`;
       }
       applyStageLayout();
       reflectStageInputs(stageItemPaths(selection));
@@ -3471,6 +2917,7 @@
       sendPreviewSize(input.value === "wide" ? "wide" : "launch", stagePreviewSize);
       refreshInspectorContext();
       selectStageMirror();
+      reflectGreeting();
       renderStage();
     }));
     stageContextInputs.forEach((input) => input.addEventListener("change", () => {
@@ -3481,14 +2928,16 @@
       renderStage();
       announce(format(tr("stageContextSelected"), stageContextLabel()));
     }));
-    switchSupportedPreviewButton?.addEventListener("click", () => {
+    const switchToNewChatPreview = () => {
       stageContextTouched = true;
       stageContext = "new-chat";
       for (const input of stageContextInputs) input.checked = input.value === stageContext;
       selectStageMirror();
       renderStage();
       announce(format(tr("stageContextSelected"), stageContextLabel()));
-    });
+    };
+    switchSupportedPreviewButton?.addEventListener("click", switchToNewChatPreview);
+    greetingSwitchPreviewButton?.addEventListener("click", switchToNewChatPreview);
     stageZonesInput?.addEventListener("change", () => {
       stageRoot.dataset.zones = String(stageZonesInput.checked);
     });
@@ -3549,16 +2998,27 @@
       if (!integer(value.width, 200, 6000) || !integer(value.height, 200, 6000)) return null;
       let geometry = null;
       if (value.geometry !== undefined && value.geometry !== null) {
-        if (!exactShape(value.geometry, ["context", "mode", "viewport", "main", "prompt"])
+        if (!exactShape(value.geometry, ["context", "mode", "viewport", "main", "prompt", "greeting"])
             || !enumValue(value.geometry.context, ["new-chat", "conversation", "other"])
             || !enumValue(value.geometry.mode, ["light", "dark"])
             || !enumValue(value.geometry.viewport, ["normal", "wide"])) return null;
         const main = normalizeMirrorRect(value.geometry.main);
         const prompt = normalizeMirrorRect(value.geometry.prompt);
-        if (main === undefined || prompt === undefined) return null;
+        const rawGreeting = value.geometry.greeting;
+        if (!exactShape(rawGreeting, ["status", "source", "rect"])
+            || !enumValue(rawGreeting.status, ["found", "missing", "ambiguous", "inactive"])
+            || !enumValue(rawGreeting.source, ["native", "custom", "none"])) return null;
+        const greetingRect = normalizeMirrorRect(rawGreeting.rect);
+        if (main === undefined || prompt === undefined || greetingRect === undefined
+            || (rawGreeting.status === "found") !== Boolean(greetingRect)) return null;
         geometry = {
           context: value.geometry.context, mode: value.geometry.mode,
           viewport: value.geometry.viewport, main, prompt,
+          greeting: {
+            status: rawGreeting.status,
+            source: rawGreeting.source,
+            rect: greetingRect,
+          },
         };
       }
       return {
@@ -3641,6 +3101,7 @@
         }
         stageViewport = mirror.geometry.viewport;
         reflectStageViewport();
+        reflectGreeting();
         const realContext = mirror.geometry?.context;
         if ((realContext === "new-chat" || realContext === "conversation")
             && !stageContextTouched && (first || realContext !== previousContext)) {
@@ -3652,6 +3113,7 @@
           selectedMode = realMode;
           for (const input of modeInputs) input.checked = input.value === selectedMode;
           reflectTokens();
+          reflectGreeting();
         }
         selectStageMirror();
         if (first && stageMirror) announce(tr("stageBackdropReady"));
@@ -4041,6 +3503,123 @@
       }
     };
 
+    const greetingOutputText = (field, value) => {
+      if (field === "fontSize") return `${Math.round(value)} px`;
+      if (field === "lineHeight") return value.toFixed(2);
+      if (field === "letterSpacing") return `${value.toFixed(3)} em`;
+      if (field === "markScale") return `${Math.round(value * 100)}%`;
+      return `${Math.round(value * 100)}%`;
+    };
+
+    const greetingDraft = () => greetingPreferenceDraft ?? state?.greetingPreferences ?? null;
+    const greetingThemeOverride = (personal = greetingDraft()) => (
+      personal?.themeOverrides?.[state?.id] ?? { mode: "global", phrases: [] }
+    );
+    const greetingSampleText = () => {
+      const personal = greetingDraft();
+      if (!personal?.enabled || personal.source !== "custom") return tr("greetingPreviewSample");
+      const override = greetingThemeOverride(personal);
+      if (override.mode === "claude") return tr("greetingPreviewSample");
+      const phrases = override.mode === "custom" ? override.phrases : personal.globalPhrases;
+      const usable = phrases.filter(
+        (phrase) => personal.displayName || !/\{name\}/u.test(phrase),
+      );
+      if (!usable.length) return tr("greetingPreviewSample");
+      return usable[0].replace(/\{name\}/gu, personal.displayName);
+    };
+
+    const reflectGreetingPreview = (greeting, native = state?.shared?.greeting?.native) => {
+      if (!greetingSample) return;
+      greetingSample.textContent = greetingSampleText();
+      const style = greetingSample.style;
+      style.fontFamily = GREETING_FONT_STACKS[greeting.font] ?? GREETING_FONT_STACKS["system-sans"];
+      style.fontSize = `${greeting.fontSize}px`;
+      style.fontWeight = String(greeting.weight);
+      style.fontStyle = greeting.italic ? "italic" : "normal";
+      style.letterSpacing = `${greeting.letterSpacing}em`;
+      style.lineHeight = String(greeting.lineHeight);
+      style.textAlign = greeting.align;
+      style.maxWidth = `${Math.round(greeting.maxWidthRatio * 100)}%`;
+      style.color = greeting.color === "accent" ? "var(--accent)" : "var(--ink)";
+      style.textDecoration = greeting.decoration === "underline" ? "underline" : "none";
+      style.borderBottom = greeting.decoration === "hairline" ? "1px solid currentColor" : "none";
+      style.textShadow = greeting.decoration === "glow"
+        ? "0 0 18px color-mix(in srgb, var(--accent) 35%, transparent)"
+        : "none";
+      style.marginInline = greeting.align === "center" ? "auto"
+        : greeting.align === "end" ? "auto 0" : "0 auto";
+      style.opacity = native ? "0.45" : "1";
+    };
+
+    const reflectGreeting = () => {
+      if (!state) return;
+      const greetingState = state.shared.greeting;
+      const greeting = activeGreetingFrame();
+      if (!greeting) return;
+      if (greetingEnableInput) greetingEnableInput.checked = !greetingState.native;
+      if (greetingNativeNote) greetingNativeNote.hidden = !greetingState.native;
+      if (greetingCollisionWarning) {
+        greetingCollisionWarning.hidden = greetingState.native
+          || (!state.isNew && state.source !== "user")
+          || state.layers.length === 0;
+      }
+      const compactOption = greetingMarkInput?.querySelector('option[value="compact"]');
+      if (compactOption) {
+        compactOption.disabled = !greetingState.compactMarkAvailable;
+        compactOption.hidden = !greetingState.compactMarkAvailable;
+      }
+      reflectGreetingPreview(greeting, greetingState.native);
+      const personal = greetingDraft();
+      if (!personal) return;
+      if (greetingPersonalEnableInput) greetingPersonalEnableInput.checked = personal.enabled;
+      const personalSource = personal.source;
+      for (const input of greetingSourceInputs) input.checked = input.value === personalSource;
+      for (const input of greetingSourceInputs) input.disabled = !personal.enabled;
+      const custom = personal.enabled && personalSource === "custom";
+      const override = greetingThemeOverride(personal);
+      if (greetingNameInput && !greetingPreferenceInputDirty
+          && document.activeElement !== greetingNameInput) {
+        greetingNameInput.value = personal.displayName;
+      }
+      if (greetingPhrasesInput && !greetingPreferenceInputDirty
+          && document.activeElement !== greetingPhrasesInput) {
+        greetingPhrasesInput.value = personal.globalPhrases.join("\n");
+      }
+      if (greetingOverrideInput) greetingOverrideInput.value = override.mode;
+      if (greetingOverridePhrasesInput && !greetingPreferenceInputDirty
+          && document.activeElement !== greetingOverridePhrasesInput) {
+        greetingOverridePhrasesInput.value = override.phrases.join("\n");
+      }
+      if (greetingNameInput) greetingNameInput.disabled = !custom;
+      if (greetingPhrasesInput) greetingPhrasesInput.disabled = !custom;
+      if (greetingOverrideInput) greetingOverrideInput.disabled = !custom;
+      if (greetingOverridePhrasesField) greetingOverridePhrasesField.hidden = override.mode !== "custom";
+      if (greetingOverridePhrasesInput) {
+        greetingOverridePhrasesInput.disabled = !custom || override.mode !== "custom";
+      }
+      for (const input of greetingInputs) {
+        const field = input.dataset.editorGreeting;
+        input.dataset.editorField = `${greetingStagePrefix()}${field}`;
+        input.disabled = greetingState.native;
+        if (input.type === "checkbox") {
+          input.checked = Boolean(greeting[field]);
+        } else if (input.type === "range") {
+          input.value = String(greeting[field]);
+          const exact = greetingExactInputs.find((candidate) =>
+            candidate.dataset.editorGreetingExact === field);
+          if (exact && document.activeElement !== exact) {
+            exact.value = input.value;
+            exact.dataset.editorField = input.dataset.editorField;
+          }
+          const output = document.getElementById(`${input.id}-output`);
+          if (output) output.value = greetingOutputText(field, greeting[field]);
+        } else {
+          input.value = String(greeting[field]);
+        }
+      }
+      for (const exact of greetingExactInputs) exact.disabled = greetingState.native;
+    };
+
     const reflectLauncher = () => {
       if (!state) return;
       for (const input of launcherInputs) {
@@ -4422,14 +4001,17 @@
     };
 
     const revealAdvancedForError = (field) => {
-      const direct = editor.querySelector(`[data-editor-field="${CSS.escape(field)}"]`);
+      const direct = field === "greetingPreferences"
+        ? greetingPhrasesInput
+        : editor.querySelector(`[data-editor-field="${CSS.escape(field)}"]`);
       if (field.startsWith("budget.") || direct?.closest(".advanced-only")) {
         editor.dataset.level = "advanced";
         for (const input of document.querySelectorAll('input[name="editor-level"]')) {
           input.checked = input.value === "advanced";
         }
       }
-      const target = field.startsWith("launcher.") ? "widgets.app-identity"
+      const target = field === "greetingPreferences" ? "interface.greeting"
+        : field.startsWith("launcher.") ? "widgets.app-identity"
         : field.startsWith("layers[") || field.startsWith("budget.layer") ? "background.layer"
           : field === "shared.backgroundScope" ? "background.canvas"
             : field.startsWith("shared.prompt.") ? "interface.new-chat-area"
@@ -4493,6 +4075,9 @@
 
     const validationMessageFor = (error) => {
       if (!error) return tr("validationGenericFix");
+      if (error.code === "invalid-greeting" || error.field === "greetingPreferences") {
+        return tr("greetingPhrasesEmpty");
+      }
       if (error.field.startsWith("launcher.")) return tr("validationIdentityFix");
       if (error.code.includes("contrast") || /^(light|dark)\./.test(error.field)) return tr("validationColorFix");
       if (error.code.includes("budget") || error.field.startsWith("budget.")) return tr("validationBudgetFix");
@@ -4507,6 +4092,27 @@
       quickFeedback.replaceChildren();
       errorSummary.replaceChildren();
       errorSummary.hidden = true;
+      // An invalid draft keeps Aura on the last valid payload, so every later edit —
+      // colour, greeting, artwork — stops reaching the running app until it is fixed.
+      // Say that plainly; a failed check in a list does not explain a frozen preview.
+      if (livePausedNote) {
+        const blocking = [];
+        for (const mode of ["light", "dark"]) {
+          for (const check of state.feedback.contrast[mode] ?? []) {
+            if (!check.pass) {
+              blocking.push(`${tr(mode === "light" ? "lightMode" : "darkMode")} ${tr(CONTRAST_LABEL_KEYS[check.id])}`);
+            }
+          }
+        }
+        const budget = state.feedback.budget;
+        if (budget.chromeBytes >= budget.chromeLimit) blocking.push(tr("budgetChrome"));
+        if (budget.embeddedArtworkBytes >= budget.embeddedArtworkLimit) blocking.push(tr("budgetArtwork"));
+        if (budget.sourceArtworkBytes >= budget.sourceArtworkLimit) blocking.push(tr("budgetSourceArtwork"));
+        livePausedNote.hidden = state.feedback.valid;
+        livePausedNote.textContent = state.feedback.valid
+          ? ""
+          : format(tr("livePausedNotice"), blocking.slice(0, 3).join(" · ") || tr("feedbackInvalid"));
+      }
       const list = document.createElement("ul");
       list.className = "editor-feedback-list";
       const addItem = (label, value, pass) => {
@@ -4566,11 +4172,13 @@
       const busy = Boolean(pendingAction || coalescedChanges.size || changeFlushTimer
         || stageKeyTimer || stageKeyPaths.size);
       const blocked = deferredChanges.size > 0;
-      undoButton.disabled = busy || blocked || !state.canUndo;
-      redoButton.disabled = busy || blocked || !state.canRedo;
-      resetButton.disabled = busy || blocked || !state.dirty;
+      const localGreetingWork = greetingPreferenceDraftDirty || greetingPreferenceInputDirty;
+      undoButton.disabled = busy || blocked || (!state.canUndo && !localGreetingWork);
+      redoButton.disabled = busy || blocked || localGreetingWork || !state.canRedo;
+      resetButton.disabled = busy || blocked || (!state.dirty && !localGreetingWork);
       saveButton.disabled = busy
-        || (state.feedback.valid && (blocked || (!state.dirty && !state.isNew)));
+        || (state.feedback.valid && (blocked
+          || (!state.dirty && !localGreetingWork && !state.isNew)));
       // Leaving must always be possible while edits are still settling; only a
       // blocking structural action (which briefly replaces state) holds it.
       cancelButton.disabled = isBlockingAction();
@@ -4578,6 +4186,7 @@
       addLayerButton.disabled = busy || blocked || state.layers.length >= 8;
       stageOpacityInput.disabled = isBlockingAction() || blocked;
       if (replaceLauncherMarkButton) replaceLauncherMarkButton.disabled = busy || blocked;
+      if (greetingResetButton) greetingResetButton.disabled = busy || blocked;
       addLayerButton.dataset.layerStructure = "";
       for (const button of editor.querySelectorAll("[data-layer-structure]")) {
         button.disabled = busy || blocked || (button === addLayerButton && state.layers.length >= 8)
@@ -4595,6 +4204,7 @@
       for (const input of modeInputs) input.checked = input.value === selectedMode;
       reflectTokens();
       reflectShared();
+      reflectGreeting();
       reflectLauncher();
       reflectMetadata();
       renderLayers(focusKey);
@@ -4621,6 +4231,15 @@
           ? tr(actionError === "identity-apply-failed" ? "launcherMarkApplyFailed" : "launcherMarkFailed")
           : tr("editorActionFailed");
         announce(succeeded ? successMessage : failureMessage, succeeded ? "ok" : "error");
+        if (succeeded && actionAfterPatch) {
+          const followup = actionAfterPatch;
+          actionAfterPatch = null;
+          const base = mutationBase();
+          const rebased = base && (Object.hasOwn(followup, "session") || Object.hasOwn(followup, "revision"))
+            ? { ...followup, ...base }
+            : followup;
+          post(rebased);
+        }
         return "settled";
       }
       if (!inFlightSession || inFlightRevision === null
@@ -4692,6 +4311,10 @@
           return true;
         }
         state = null;
+        greetingPreferenceDraft = null;
+        greetingPreferenceDraftDirty = false;
+        greetingPreferenceInputDirty = false;
+        greetingPreferenceInputInvalid = false;
         onStudioStyleChange?.(null, null, null, null);
         if (wasEditing || action) hideEditor(action);
         return true;
@@ -4713,6 +4336,20 @@
         previewExpectedRequest = null;
       }
       returnTheme = normalized.isNew ? normalized.sourceId : normalized.id;
+      const greetingAcknowledged = ["set-greeting-phrases", "reset-greeting"].includes(pendingAction)
+        && normalized.lastAction === pendingAction;
+      if (entering
+          || (!greetingPreferenceDraftDirty && !greetingPreferenceInputDirty)
+          || greetingAcknowledged) {
+        greetingPreferenceDraft = structuredClone(normalized.greetingPreferences);
+        greetingPreferenceDraftDirty = false;
+        greetingPreferenceInputDirty = false;
+        greetingPreferenceInputInvalid = false;
+        greetingNameInput?.removeAttribute("aria-invalid");
+        greetingPhrasesInput?.removeAttribute("aria-invalid");
+        greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
+        if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+      }
       state = normalized;
       selectStageMirror();
       onStudioStyleChange?.(
@@ -4739,6 +4376,7 @@
       selectedMode = input.value;
       selectStageMirror();
       reflectTokens();
+      reflectGreeting();
       refreshInspectorContext();
       renderStage();
     }));
@@ -4893,9 +4531,253 @@
         commitStagePaths(STAGE_PROMPT_PATHS);
       });
     });
+    greetingEnableInput?.addEventListener("change", () => {
+      if (greetingEnableInput.checked) queueGreetingFrame(greetingFrameFromControls(), { immediate: true });
+      else {
+        queueThemeChange({
+          kind: "greeting",
+          operation: "reset",
+          appearance: selectedMode,
+          frame: greetingFrameId(),
+          value: null,
+        }, { immediate: true });
+      }
+    });
+    greetingResetButton?.addEventListener("click", () => {
+      const base = mutationBase();
+      if (base) post({ type: "reset-greeting", ...base });
+    });
+    const showGreetingInputError = () => {
+      if (!greetingPhrasesStatus) return;
+      greetingPhrasesStatus.textContent = tr("greetingPhrasesEmpty");
+      greetingPhrasesStatus.hidden = false;
+    };
+    const updateGreetingPreferenceDraft = () => {
+      if (!state) return null;
+      const current = structuredClone(greetingDraft() ?? state.greetingPreferences);
+      const enabled = greetingPersonalEnableInput?.checked ?? current.enabled;
+      const source = greetingSourceInputs.find((input) => input.checked)?.value ?? current.source;
+      const overrideMode = greetingOverrideInput?.value ?? greetingThemeOverride(current).mode;
+      if (typeof enabled !== "boolean"
+          || !["claude", "custom"].includes(source)
+          || !["global", "claude", "custom"].includes(overrideMode)) {
+        greetingPreferenceInputDirty = true;
+        greetingPreferenceInputInvalid = true;
+        showGreetingInputError();
+        return null;
+      }
+      // Disabled personalization and Claude wording do not consume the custom
+      // fields. Preserve the last valid stored lists so switching away is an
+      // explicit recovery path for invalid in-progress text.
+      if (!enabled || source === "claude") {
+        current.enabled = enabled;
+        current.source = source;
+        current.shuffle = null;
+        greetingPreferenceDraft = current;
+        greetingPreferenceDraftDirty = JSON.stringify(current) !== JSON.stringify(state.greetingPreferences);
+        greetingPreferenceInputDirty = greetingPreferenceDraftDirty;
+        greetingPreferenceInputInvalid = false;
+        greetingNameInput?.removeAttribute("aria-invalid");
+        greetingPhrasesInput?.removeAttribute("aria-invalid");
+        greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
+        if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+        return current;
+      }
+      const displayName = (greetingNameInput?.value ?? "").normalize("NFC").trim();
+      const globalPhrases = parseGreetingPhrases(greetingPhrasesInput?.value);
+      const overridePhrases = overrideMode === "custom"
+        ? parseGreetingPhrases(greetingOverridePhrasesInput?.value)
+        : [];
+      const invalidName = [...displayName].length > 40
+        || /[\u0000-\u001F\u007F-\u009F]/u.test(displayName);
+      const invalidGlobal = globalPhrases === null;
+      const invalidOverride = overridePhrases === null;
+      greetingNameInput?.toggleAttribute("aria-invalid", invalidName);
+      greetingPhrasesInput?.toggleAttribute("aria-invalid", invalidGlobal);
+      greetingOverridePhrasesInput?.toggleAttribute("aria-invalid", invalidOverride);
+      if (invalidName || invalidGlobal || invalidOverride) {
+        greetingPreferenceInputDirty = true;
+        greetingPreferenceInputInvalid = true;
+        showGreetingInputError();
+        return null;
+      }
+      current.enabled = enabled;
+      current.source = source;
+      current.displayName = displayName;
+      current.globalPhrases = globalPhrases;
+      current.themeOverrides[state.id] = {
+        mode: overrideMode,
+        phrases: overrideMode === "custom" ? overridePhrases : [],
+      };
+      current.shuffle = null;
+      greetingPreferenceDraft = current;
+      greetingPreferenceDraftDirty = JSON.stringify(current) !== JSON.stringify(state.greetingPreferences);
+      greetingPreferenceInputDirty = greetingPreferenceDraftDirty;
+      greetingPreferenceInputInvalid = false;
+      if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+      return current;
+    };
+    const greetingPreferenceDraftValid = (personal) => {
+      if (!personal) return false;
+      if (!personal.enabled || personal.source === "claude") return true;
+      const override = greetingThemeOverride(personal);
+      if (override.mode === "claude") return true;
+      const phrases = override.mode === "custom" ? override.phrases : personal.globalPhrases;
+      const usable = phrases.flatMap((phrase) => {
+        if (!personal.displayName && /\{name\}/u.test(phrase)) return [];
+        return [phrase.replace(/\{name\}/gu, personal.displayName)];
+      });
+      return usable.length > 0
+        && new TextEncoder().encode(JSON.stringify(usable)).length <= GREETING_MAX_COMPILED_BYTES;
+    };
+    const postGreetingPreferences = (personal, base = mutationBase()) => {
+      if (!base || !personal) return false;
+      const override = greetingThemeOverride(personal);
+      return post({
+        type: "set-greeting-phrases",
+        ...base,
+        enabled: personal.enabled,
+        source: personal.source,
+        displayName: personal.displayName,
+        globalPhrases: personal.globalPhrases,
+        overrideMode: override.mode,
+        overridePhrases: override.phrases,
+      });
+    };
+    const submitGreetingPhrases = () => {
+      const base = mutationBase();
+      if (!base || !state) return;
+      const personal = updateGreetingPreferenceDraft();
+      if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
+        showGreetingInputError();
+        reflectButtonStates();
+        return;
+      }
+      if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+      if (!greetingPreferenceDraftDirty) {
+        reflectButtonStates();
+        return;
+      }
+      postGreetingPreferences(personal, base);
+    };
+    greetingPersonalEnableInput?.addEventListener("change", () => {
+      updateGreetingPreferenceDraft();
+      reflectGreeting();
+      reflectButtonStates();
+    });
+    for (const input of greetingSourceInputs) {
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        updateGreetingPreferenceDraft();
+        reflectGreeting();
+        reflectButtonStates();
+      });
+    }
+    const previewGreetingWords = () => {
+      const personal = updateGreetingPreferenceDraft();
+      if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
+        showGreetingInputError();
+      }
+      reflectGreetingPreview(activeGreetingFrame(), state?.shared?.greeting?.native);
+      reflectButtonStates();
+    };
+    greetingNameInput?.addEventListener("input", previewGreetingWords);
+    greetingPhrasesInput?.addEventListener("input", previewGreetingWords);
+    greetingOverridePhrasesInput?.addEventListener("input", previewGreetingWords);
+    const submitGreetingOnFocusExit = (event) => {
+      // A blur caused by the Save button must not post first and disable that
+      // button before its click. Save flushes this same draft and chains the
+      // theme transaction after the host acknowledges it.
+      if (event.relatedTarget === saveButton) return;
+      submitGreetingPhrases();
+    };
+    greetingNameInput?.addEventListener("focusout", submitGreetingOnFocusExit);
+    greetingPhrasesInput?.addEventListener("focusout", submitGreetingOnFocusExit);
+    greetingOverrideInput?.addEventListener("change", () => {
+      updateGreetingPreferenceDraft();
+      reflectGreeting();
+      reflectButtonStates();
+    });
+    greetingPersonalEnableInput?.addEventListener("focusout", submitGreetingOnFocusExit);
+    for (const input of greetingSourceInputs) {
+      input.addEventListener("focusout", submitGreetingOnFocusExit);
+    }
+    greetingOverrideInput?.addEventListener("focusout", submitGreetingOnFocusExit);
+    greetingOverridePhrasesInput?.addEventListener("focusout", submitGreetingOnFocusExit);
+    // Reads the panel's own controls so the sample tracks a drag continuously, rather
+    // than only after the host acknowledges the patch.
+    const previewFromControls = () => {
+      if (!state) return;
+      reflectGreetingPreview(
+        greetingFrameFromControls(),
+        !greetingEnableInput?.checked,
+      );
+    };
+    greetingInputs.forEach((input) => {
+      const field = input.dataset.editorGreeting;
+      const output = input.type === "range" ? document.getElementById(`${input.id}-output`) : null;
+      input.addEventListener("input", () => {
+        if (output) output.value = greetingOutputText(field, input.valueAsNumber);
+        const exact = greetingExactInputs.find((candidate) =>
+          candidate.dataset.editorGreetingExact === field);
+        if (exact) exact.value = input.value;
+        previewFromControls();
+      });
+      input.addEventListener("change", () => {
+        const value = input.type === "checkbox" ? input.checked
+          : input.type === "range" ? input.valueAsNumber
+            : field === "weight" ? Number(input.value)
+              : input.value;
+        if (field === "markSource" && value === "compact"
+            && !state?.shared?.greeting?.compactMarkAvailable) {
+          reflectGreeting();
+          announce(tr("editorActionFailed"), "error");
+          return;
+        }
+        queueGreetingFrame(greetingFrameFromControls(field, value));
+      });
+    });
+    greetingExactInputs.forEach((exact) => {
+      const field = exact.dataset.editorGreetingExact;
+      const range = greetingInputs.find((candidate) =>
+        candidate.dataset.editorGreeting === field && candidate.type === "range");
+      if (!range) return;
+      const update = () => {
+        if (!Number.isFinite(exact.valueAsNumber)) return null;
+        const value = Math.min(Number(exact.max), Math.max(Number(exact.min), exact.valueAsNumber));
+        exact.value = String(value);
+        range.value = String(value);
+        const output = document.getElementById(`${range.id}-output`);
+        if (output) output.value = greetingOutputText(field, value);
+        previewFromControls();
+        return value;
+      };
+      exact.addEventListener("input", update);
+      exact.addEventListener("change", () => {
+        const value = update();
+        if (value === null) {
+          exact.value = range.value;
+          return;
+        }
+        queueGreetingFrame(greetingFrameFromControls(field, value));
+      });
+    });
 
     const performUndo = () => {
       if (undoButton.disabled) return;
+      if ((greetingPreferenceDraftDirty || greetingPreferenceInputDirty) && state) {
+        greetingPreferenceDraft = structuredClone(state.greetingPreferences);
+        greetingPreferenceDraftDirty = false;
+        greetingPreferenceInputDirty = false;
+        greetingPreferenceInputInvalid = false;
+        greetingNameInput?.removeAttribute("aria-invalid");
+        greetingPhrasesInput?.removeAttribute("aria-invalid");
+        greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
+        if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+        reflectGreeting();
+        reflectButtonStates();
+        return;
+      }
       const base = mutationBase();
       if (base) post({ type: "undo-theme-edit", ...base });
     };
@@ -4906,14 +4788,28 @@
     };
     const performSave = () => {
       if (saveButton.disabled) return;
-      if (!state?.feedback.valid) {
+      const personal = greetingPreferenceInputDirty
+        ? updateGreetingPreferenceDraft()
+        : greetingDraft();
+      if (!state?.feedback.valid
+          || greetingPreferenceInputInvalid
+          || !greetingPreferenceDraftValid(personal)) {
+        if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
+          showGreetingInputError();
+        }
         errorSummary.hidden = false;
         focusBelowInspector(errorSummary);
         announce(tr("saveBlocked"), "error");
         return;
       }
       const base = mutationBase();
-      if (base) post({ type: "save-theme-edit", ...base });
+      if (!base) return;
+      if (greetingPreferenceDraftDirty) {
+        actionAfterPatch = { type: "save-theme-edit", ...base };
+        postGreetingPreferences(personal, base);
+        return;
+      }
+      post({ type: "save-theme-edit", ...base });
     };
     undoButton.addEventListener("click", performUndo);
     redoButton.addEventListener("click", performRedo);
@@ -5036,6 +4932,12 @@
     fillSelect(document.getElementById("editor-font-ui"), FONT_UI_OPTIONS);
     fillSelect(document.getElementById("editor-font-display"), FONT_DISPLAY_OPTIONS);
     fillSelect(document.getElementById("editor-shadow"), SHADOW_OPTIONS);
+    fillSelect(document.getElementById("editor-greeting-font"), GREETING_FONT_OPTIONS);
+    fillSelect(document.getElementById("editor-greeting-color"), GREETING_COLOR_OPTIONS);
+    fillSelect(document.getElementById("editor-greeting-weight"), GREETING_WEIGHT_OPTIONS);
+    fillSelect(document.getElementById("editor-greeting-align"), GREETING_ALIGN_OPTIONS);
+    fillSelect(document.getElementById("editor-greeting-decoration"), GREETING_DECORATION_OPTIONS);
+    fillSelect(document.getElementById("editor-greeting-mark"), GREETING_MARK_OPTIONS);
     fillSelect(promptSlot, SLOT_OPTIONS);
     buildTokenControls();
     buildPrompt();

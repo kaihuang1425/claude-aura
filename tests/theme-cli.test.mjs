@@ -50,7 +50,7 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
     assert.equal(snippet.id, themeId);
     assert.equal(snippet.labels.en, "Cedar Mist");
     assert.equal(snippet.labels["zh-CN"], `自定义主题（${themeId}）`);
-    assert.equal(snippet.labels["zh-TW"], `自訂主題（${themeId}）`);
+    assert.equal(snippet.labels["zh-HKTW"], `自訂主題（${themeId}）`);
     assert.equal(snippet.artwork, null);
     assert.equal(snippet.swatches.length >= 3, true);
 
@@ -261,11 +261,11 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
     const studioDocument = {
       schemaVersion: STUDIO_THEME_SCHEMA_VERSION,
       id: studioThemeId,
-      labels: { en: "Studio Eight", "zh-CN": "工作室八层主题", "zh-TW": "工作室八層主題" },
+      labels: { en: "Studio Eight", "zh-CN": "工作室八层主题", "zh-HKTW": "工作室八層主題" },
       descriptions: {
         en: "A Studio-authored schema-v2 compatibility fixture.",
         "zh-CN": "用于验证工作室第二版架构兼容性的主题。",
-        "zh-TW": "用來驗證工作室第二版架構相容性的主題。",
+        "zh-HKTW": "用來驗證工作室第二版架構相容性的主題。",
       },
       swatches: ["#102030", "#405060", "#708090"],
       preview: { chrome: "#102030", background: "#203040", surface: "#304050", accent: "#708090", text: "#F0F4F8" },

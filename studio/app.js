@@ -5,303 +5,47 @@
 
   const STUDIO_PAGE_MESSAGE_TYPES = Object.freeze([
     "get-state", "set-theme", "set-appearance", "set-locale", "complete-studio-introduction",
-    "set-image", "clear-image",
+    "set-image", "clear-image", "set-avatar", "clear-avatar", "set-avatar-framing",
     "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-desktop",
     "import-theme", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
     "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "remove-theme-layer", "move-theme-layer",
     "undo-theme-edit", "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
+    "set-greeting-phrases", "reset-greeting",
     "set-aura-preview", "set-aura-topmost", "refresh-aura-mirror",
   ]);
   const studioPageMessageTypes = new Set(STUDIO_PAGE_MESSAGE_TYPES);
 
-  const STRINGS = {
-    en: {
-      railSubtitle: "Studio",
-      navThemes: "Themes",
-      navBackground: "Personal wallpaper",
-      navCreate: "Create a theme",
-      navSettings: "Settings",
-      auraWindow: "Back to Claude Aura",
-      desktopApp: "Desktop app",
-      themesKicker: "Appearance",
-      themesTitle: "Choose a look",
-      themesLede: "Selection applies to Claude Aura and Studio immediately and is saved on this device.",
-      themesLegend: "Available themes",
-      themesHelp: "Use arrow keys to move between themes. Press Space or Enter to apply.",
-      appearanceMode: "Appearance mode",
-      appearanceSystem: "System",
-      appearanceLight: "Light",
-      appearanceDark: "Dark",
-      appearanceHelp: "System follows Windows. Light and Dark apply to Claude Aura and Studio.",
-      quickActions: "Quick actions",
-      adjustPreview: "Adjust card preview",
-      adjustPreviewFor: "Adjust the card preview for {0}",
-      originalLook: "Original look",
-      applyTheme: "Apply theme",
-      backgroundKicker: "Your window",
-      backgroundTitle: "Personal wallpaper",
-      backgroundLede: "Add one private image behind every theme. Wallpaper is personal to this device and is separate from artwork saved inside a theme.",
-      chooseImage: "Choose wallpaper…",
-      adjustBackground: "Adjust wallpaper",
-      clearImage: "Clear wallpaper",
-      backgroundHelp: "PNG, JPEG, WebP, GIF, or AVIF up to 16 MB. A quiet, wide image works best as wallpaper.",
-      cropKicker: "Framing",
-      cardCropTitle: "Adjust card preview",
-      backgroundCropTitle: "Adjust personal wallpaper",
-      cardCropHelp: "Drag the preserved master image to choose what appears on the theme card. Aura saves only the frame, so you can reframe it later.",
-      backgroundCropHelp: "Drag the image to choose what stays in your personal wallpaper. Save to apply the new framing on this device.",
-      dragToReposition: "Drag to reposition",
-      horizontalPosition: "Horizontal position",
-      verticalPosition: "Vertical position",
-      zoom: "Zoom",
-      resetPosition: "Reset",
-      cancel: "Cancel",
-      saveChanges: "Save",
-      createKicker: "Visual theme builder",
-      createTitle: "Create a theme",
-      createLede: "Start with Default in the visual editor, then choose colors, style, and artwork. No code or theme folder is required.",
-      startTheme: "Customize Default",
-      importTheme: "Install theme from folder…",
-      createGuide: "How visual creation works",
-      createStepName: "Give the theme a name in each language you use.",
-      createStepStyle: "Choose the essential colors and overall style.",
-      createStepArtwork: "Optionally add theme artwork, review the checks, and save.",
-      createAdvancedHelp: "Already have a theme kit? Install its folder with the secondary action above.",
-      createHelp: "Your custom themes stay in Aura's user data folder and never modify Claude or the desktop app.",
-      settingsKicker: "Aura preferences",
-      settingsTitle: "Settings",
-      settingsLede: "Choose how Aura speaks to you. These settings are saved on this device.",
-      languageTitle: "Interface language",
-      languageHelp: "Changes Aura Studio, the Aura button menu, and Aura messages. Claude keeps its own language setting.",
-      gettingStartedTitle: "Getting started",
-      gettingStartedBody: "Open the welcome guide whenever you want a quick refresher.",
-      openWelcome: "Open welcome guide",
-      welcomeKicker: "Welcome",
-      welcomeTitle: "Meet Claude Aura",
-      welcomeBody: "Give Claude a look that feels like yours. Aura stays local and never changes Claude itself.",
-      welcomeClose: "Close welcome guide",
-      welcomeLanguageTitle: "Choose your language",
-      welcomeLanguageHelp: "You can change this later in Settings.",
-      welcomeThemeTitle: "Try a theme",
-      welcomeThemeBody: "Pick any theme card to apply it to Claude Aura and Studio immediately.",
-      welcomeControlTitle: "Keep control",
-      welcomeControlBody: "Compare Light and Dark, or restore Claude's Original look at any time.",
-      welcomeCreateTitle: "Make it yours",
-      welcomeCreateBody: "Add a personal wallpaper or duplicate a theme when you're ready to customize.",
-      welcomeLauncherNote: "Click the Aura button to open Studio, drag it to move it, or right-click for quick actions.",
-      welcomeLater: "Skip",
-      welcomeTryTheme: "Try a theme",
-      statusWelcomeBusy: "Saving your welcome choice…",
-      statusWelcomeRetry: "Aura hasn't confirmed that yet. Try again.",
-      selected: "Selected",
-      statusReady: "Ready.",
-      statusApplying: "Applying theme…",
-      statusAppearanceBusy: "Changing appearance…",
-      statusLanguageBusy: "Changing language…",
-      statusActive: "{0} is active.",
-      statusOriginal: "Original look is active.",
-      statusDemo: "Preview mode: no Claude window connected.",
-      previewSaved: "Card preview updated.",
-      backgroundSaved: "Wallpaper framing saved.",
-      previewUnavailable: "The image preview could not load. Close this window and try again.",
-      saveFailed: "The changes could not be saved. Try again.",
-      advancedPositionHelp: "This background uses an advanced CSS position. Saving here will replace it with the visual crop shown below.",
-    },
-    "zh-CN": {
-      railSubtitle: "工作室",
-      navThemes: "主题",
-      navBackground: "个人壁纸",
-      navCreate: "创建主题",
-      navSettings: "设置",
-      auraWindow: "返回 Claude Aura",
-      desktopApp: "桌面版",
-      themesKicker: "外观",
-      themesTitle: "选择外观",
-      themesLede: "选择主题后会立即应用到 Claude Aura 和 Studio，并保存在本机。",
-      themesLegend: "可用主题",
-      themesHelp: "使用方向键在主题间移动，按空格键或回车键应用。",
-      appearanceMode: "外观模式",
-      appearanceSystem: "跟随系统",
-      appearanceLight: "浅色",
-      appearanceDark: "深色",
-      appearanceHelp: "“跟随系统”会使用 Windows 的外观设置；选择“浅色”或“深色”后，Claude Aura 和 Studio 会同步切换。",
-      quickActions: "快捷操作",
-      adjustPreview: "调整卡片预览",
-      adjustPreviewFor: "调整“{0}”的卡片预览",
-      originalLook: "原始外观",
-      applyTheme: "应用主题",
-      backgroundKicker: "窗口背景",
-      backgroundTitle: "个人壁纸",
-      backgroundLede: "在所有主题后方显示一张本地图片。壁纸仅保存在本机，与主题内保存的美术素材相互独立。",
-      chooseImage: "选择壁纸…",
-      adjustBackground: "调整壁纸",
-      clearImage: "清除壁纸",
-      backgroundHelp: "支持不超过 16 MB 的 PNG、JPEG、WebP、GIF 或 AVIF 图片。建议使用简洁的宽幅图片作为壁纸。",
-      cropKicker: "画面范围",
-      cardCropTitle: "调整卡片预览",
-      backgroundCropTitle: "调整个人壁纸",
-      cardCropHelp: "拖动保留的原图，选择主题卡片中显示的区域。Aura 仅保存画面范围，之后仍可重新调整。",
-      backgroundCropHelp: "拖动图片，选择个人壁纸中保留的区域。保存后会在本机应用新的画面范围。",
-      dragToReposition: "拖动以调整位置",
-      horizontalPosition: "水平位置",
-      verticalPosition: "垂直位置",
-      zoom: "缩放",
-      resetPosition: "重置",
-      cancel: "取消",
-      saveChanges: "保存",
-      createKicker: "可视化主题编辑器",
-      createTitle: "创建主题",
-      createLede: "以默认主题为起点，在可视化编辑器中选择颜色、样式和美术素材，无需编写代码或准备主题文件夹。",
-      startTheme: "自定义默认主题",
-      importTheme: "从文件夹安装主题…",
-      createGuide: "可视化创建流程",
-      createStepName: "填写各界面语言下显示的主题名称。",
-      createStepStyle: "选择主要颜色和整体样式。",
-      createStepArtwork: "按需添加主题美术素材，检查各项校验后保存。",
-      createAdvancedHelp: "如已有主题工具包，可通过上方次要操作安装所在文件夹。",
-      createHelp: "自定义主题保存在 Aura 用户数据文件夹中，不会修改 Claude 或桌面版应用。",
-      settingsKicker: "Aura 首选项",
-      settingsTitle: "设置",
-      settingsLede: "选择 Aura 的界面语言。设置将保存在本机。",
-      languageTitle: "界面语言",
-      languageHelp: "此设置会更改 Aura Studio、Aura 按钮菜单和 Aura 提示信息。Claude 的语言设置不受影响。",
-      gettingStartedTitle: "入门指南",
-      gettingStartedBody: "可随时重新打开欢迎指南，查看选择主题和自定义外观的基本步骤。",
-      openWelcome: "打开欢迎指南",
-      welcomeKicker: "欢迎使用",
-      welcomeTitle: "认识 Claude Aura",
-      welcomeBody: "为 Claude 选择适合您的外观。Aura 仅在本机运行，不会修改 Claude。",
-      welcomeClose: "关闭欢迎指南",
-      welcomeLanguageTitle: "选择界面语言",
-      welcomeLanguageHelp: "之后可在“设置”中更改。",
-      welcomeThemeTitle: "试用主题",
-      welcomeThemeBody: "选择任意主题卡片，即可立即应用到 Claude Aura 和 Studio。",
-      welcomeControlTitle: "随时恢复",
-      welcomeControlBody: "可比较浅色和深色效果，也可随时恢复 Claude 的原始外观。",
-      welcomeCreateTitle: "创建专属外观",
-      welcomeCreateBody: "可添加个人壁纸；需要进一步调整时，可复制主题并进行自定义。",
-      welcomeLauncherNote: "点击 Aura 按钮可打开 Studio，拖动可移动按钮位置，右键可查看更多选项。",
-      welcomeLater: "跳过",
-      welcomeTryTheme: "试用主题",
-      statusWelcomeBusy: "正在保存欢迎指南设置…",
-      statusWelcomeRetry: "Aura 尚未确认保存结果，请重试。",
-      selected: "已选",
-      statusReady: "就绪。",
-      statusApplying: "正在应用主题…",
-      statusAppearanceBusy: "正在切换外观…",
-      statusLanguageBusy: "正在更改界面语言…",
-      statusActive: "当前使用{0}。",
-      statusOriginal: "当前使用原始外观。",
-      statusDemo: "预览模式：未连接 Claude 窗口。",
-      previewSaved: "卡片预览已更新。",
-      backgroundSaved: "壁纸画面范围已保存。",
-      previewUnavailable: "无法加载图片预览，请关闭窗口后重试。",
-      saveFailed: "无法保存更改，请重试。",
-      advancedPositionHelp: "此背景使用高级 CSS 位置。保存后会改用下方显示的可视画面范围。",
-    },
-    "zh-TW": {
-      railSubtitle: "工作室",
-      navThemes: "主題",
-      navBackground: "個人桌布",
-      navCreate: "建立主題",
-      navSettings: "設定",
-      auraWindow: "回到 Claude Aura",
-      desktopApp: "桌面版",
-      themesKicker: "外觀",
-      themesTitle: "選擇外觀",
-      themesLede: "選取主題後會立即套用到 Claude Aura 和 Studio，並儲存在這台裝置上。",
-      themesLegend: "可用的主題",
-      themesHelp: "用方向鍵在主題間移動，按空白鍵或 Enter 套用。",
-      appearanceMode: "外觀模式",
-      appearanceSystem: "跟隨系統",
-      appearanceLight: "淺色",
-      appearanceDark: "深色",
-      appearanceHelp: "「跟隨系統」會使用 Windows 的外觀設定；選擇「淺色」或「深色」後，Claude Aura 和 Studio 會一起切換。",
-      quickActions: "快速操作",
-      adjustPreview: "調整卡片預覽",
-      adjustPreviewFor: "調整「{0}」的卡片預覽",
-      originalLook: "原始外觀",
-      applyTheme: "套用主題",
-      backgroundKicker: "視窗背景",
-      backgroundTitle: "個人桌布",
-      backgroundLede: "在所有主題後方放一張本機圖片。桌布只會留在這台裝置上，和主題裡儲存的美術素材彼此獨立。",
-      chooseImage: "選擇桌布…",
-      adjustBackground: "調整桌布",
-      clearImage: "清除桌布",
-      backgroundHelp: "支援 16 MB 以內的 PNG、JPEG、WebP、GIF 或 AVIF 圖片。簡潔的寬幅圖片最適合當桌布。",
-      cropKicker: "畫面範圍",
-      cardCropTitle: "調整卡片預覽",
-      backgroundCropTitle: "調整個人桌布",
-      cardCropHelp: "拖曳保留的原始圖片，選擇主題卡片要顯示的範圍。Aura 只會儲存畫面範圍，之後仍可重新調整。",
-      backgroundCropHelp: "拖曳圖片，選擇個人桌布要保留的範圍。儲存後會在這台裝置套用新的畫面範圍。",
-      dragToReposition: "拖曳以調整位置",
-      horizontalPosition: "水平位置",
-      verticalPosition: "垂直位置",
-      zoom: "縮放",
-      resetPosition: "重設",
-      cancel: "取消",
-      saveChanges: "儲存",
-      createKicker: "視覺化主題編輯器",
-      createTitle: "建立主題",
-      createLede: "從預設主題開始，在視覺化編輯器裡挑選顏色、樣式和美術素材，不用寫程式，也不用準備主題資料夾。",
-      startTheme: "自訂預設主題",
-      importTheme: "從資料夾安裝主題…",
-      createGuide: "視覺化建立流程",
-      createStepName: "填寫各介面語言要顯示的主題名稱。",
-      createStepStyle: "挑選主要顏色和整體樣式。",
-      createStepArtwork: "需要時加入主題美術素材，確認檢查結果後儲存。",
-      createAdvancedHelp: "已經有主題工具包嗎？可用上方的次要操作安裝資料夾。",
-      createHelp: "自訂主題會存放在 Aura 使用者資料夾，不會更動 Claude 或桌面版 App。",
-      settingsKicker: "Aura 偏好設定",
-      settingsTitle: "設定",
-      settingsLede: "選擇 Aura 的介面語言。設定會儲存在這台裝置上。",
-      languageTitle: "介面語言",
-      languageHelp: "這項設定會變更 Aura Studio、Aura 按鈕選單和 Aura 提示。Claude 的語言設定不受影響。",
-      gettingStartedTitle: "開始使用",
-      gettingStartedBody: "隨時重新開啟歡迎導覽，快速查看選主題和自訂外觀的步驟。",
-      openWelcome: "開啟歡迎導覽",
-      welcomeKicker: "歡迎使用",
-      welcomeTitle: "認識 Claude Aura",
-      welcomeBody: "替 Claude 換上喜歡的外觀。Aura 只在本機運作，不會更動 Claude。",
-      welcomeClose: "關閉歡迎導覽",
-      welcomeLanguageTitle: "選擇介面語言",
-      welcomeLanguageHelp: "之後可在「設定」裡變更。",
-      welcomeThemeTitle: "試試主題",
-      welcomeThemeBody: "選一張主題卡片，就會立即套用到 Claude Aura 和 Studio。",
-      welcomeControlTitle: "隨時還原",
-      welcomeControlBody: "可以比較淺色和深色效果，也能隨時還原 Claude 的原始外觀。",
-      welcomeCreateTitle: "打造自己的外觀",
-      welcomeCreateBody: "可以先加一張個人桌布；想再多調整時，就複製主題來自訂。",
-      welcomeLauncherNote: "點一下 Aura 按鈕可開啟 Studio，拖曳可以移動，按右鍵還有更多選項。",
-      welcomeLater: "略過",
-      welcomeTryTheme: "試試主題",
-      statusWelcomeBusy: "正在儲存歡迎導覽設定…",
-      statusWelcomeRetry: "Aura 尚未確認儲存結果，請再試一次。",
-      selected: "已選取",
-      statusReady: "就緒。",
-      statusApplying: "正在套用主題…",
-      statusAppearanceBusy: "正在切換外觀…",
-      statusLanguageBusy: "正在變更介面語言…",
-      statusActive: "目前使用{0}。",
-      statusOriginal: "目前使用原始外觀。",
-      statusDemo: "預覽模式：尚未連接 Claude 視窗。",
-      previewSaved: "卡片預覽已更新。",
-      backgroundSaved: "桌布畫面範圍已儲存。",
-      previewUnavailable: "無法載入圖片預覽，請關閉視窗後再試一次。",
-      saveFailed: "無法儲存變更，請再試一次。",
-      advancedPositionHelp: "此背景使用進階 CSS 位置。儲存後會改用下方顯示的視覺畫面範圍。",
-    },
-  };
+  // Interface copy lives one file per language in studio/locales/*.js, loaded
+  // before this script. Each file registers its own entry on
+  // window.CLAUDE_AURA_STRINGS; this page reads the "shell" half and
+  // studio/editor.js reads the "editor" half.
+  const STRINGS = Object.fromEntries(
+    Object.entries(window.CLAUDE_AURA_STRINGS ?? {}).map(([tag, copy]) => [tag, copy?.shell ?? {}]),
+  );
 
   const params = new URLSearchParams(window.location.search);
+  const normalizeLocale = (value) => {
+    if (typeof value !== "string") return "en";
+    const tag = value.trim().replaceAll("_", "-");
+    if (!tag) return "en";
+    if (/^pt(?:-|$)/i.test(tag)) return "pt-BR";
+    if (/^zh-(?:hktw|tw|hk|mo|hant)(?:-|$)/i.test(tag) || /^zh-hant(?:-|$)/i.test(tag)) return "zh-HKTW";
+    if (/^zh-(?:cn|sg|hans)(?:-|$)/i.test(tag) || /^zh-hans(?:-|$)/i.test(tag)) return "zh-CN";
+    if (/^en(?:-|$)/i.test(tag)) return "en";
+    const base = tag.split("-", 1)[0].toLowerCase();
+    return supportedLocales.has(base) ? base : "en";
+  };
+  const supportedLocales = new Set([
+    "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
+  ]);
   const rawLocale = params.get("locale") || navigator.language || "en";
   const requestedView = params.get("view");
   const requestedViewHash = ["themes", "background", "create", "settings"].includes(requestedView)
     ? `#${requestedView}`
     : "";
-  const locale = /^zh[-_](?:tw|hk|mo|hant)/i.test(rawLocale) ? "zh-TW"
-    : /^zh/i.test(rawLocale) ? "zh-CN" : "en";
-  const t = (key) => STRINGS[locale][key] ?? STRINGS.en[key] ?? key;
+  const resolvedLocale = normalizeLocale(rawLocale);
+  const locale = supportedLocales.has(resolvedLocale) ? resolvedLocale : "en";
+  const t = (key) => STRINGS[locale]?.[key] ?? STRINGS.en?.[key] ?? key;
   document.documentElement.lang = locale;
   for (const node of document.querySelectorAll("[data-i18n]")) {
     node.textContent = t(node.dataset.i18n);
@@ -336,6 +80,8 @@
   const adjustThemePreview = document.getElementById("adjust-theme-preview");
   const adjustBackground = document.getElementById("adjust-background");
   const clearImage = document.getElementById("clear-image");
+  const clearAvatar = document.getElementById("clear-avatar");
+  const adjustAvatar = document.getElementById("adjust-avatar");
   const railThemeMark = document.getElementById("rail-theme-mark");
   const studioThemeIcon = document.getElementById("studio-theme-icon");
   const cropDialog = document.getElementById("crop-dialog");
@@ -347,6 +93,9 @@
   const cropImage = document.getElementById("crop-image");
   const cropSave = document.getElementById("crop-save");
   const cropReset = document.getElementById("crop-reset");
+  const cropBackground = document.getElementById("crop-background");
+  const cropBackgroundColor = document.getElementById("crop-background-color");
+  const cropBackgroundChoices = [...document.querySelectorAll('input[name="crop-background-choice"]')];
   const cropCancelButtons = [...cropDialog.querySelectorAll('[value="cancel"]')];
   const cropInputs = {
     x: document.getElementById("crop-x"),
@@ -369,6 +118,11 @@
     enabled: true,
     connected: false,
     hasImage: false,
+    hasAvatar: false,
+    avatarPreviewUrl: null,
+    avatarCrop: { ...DEFAULT_CROP },
+    avatarBackground: "transparent",
+    avatarHasAlpha: false,
     imagePreviewUrl: null,
     backgroundAspectRatio: 16 / 9,
     backgroundCropSupported: true,
@@ -626,6 +380,36 @@
       return url.href;
     } catch { return null; }
   };
+  const avatarPreviewUrl = (value) => {
+    if (typeof value !== "string") return null;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" || url.hostname !== "aura.avatar") return null;
+      if (!/^\/source\.(?:png|jpe?g|gif)$/.test(url.pathname)) return null;
+      if (!/^\?v=(?:[a-f0-9]{64}|x)$/.test(url.search)) return null;
+      return url.href;
+    } catch { return null; }
+  };
+  // The avatar backdrop is either untouched alpha or one exact #RRGGBB fill.
+  const normalizeAvatarBackground = (value) => (
+    typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value) ? value.toUpperCase() : "transparent"
+  );
+  const PRESET_AVATAR_BACKGROUNDS = ["transparent", "#FFFFFF", "#1A1A1F"];
+  // Mirror the chosen backdrop onto the crop stage so the framing preview shows
+  // exactly what the host will bake behind the transparent areas.
+  const syncAvatarBackdrop = () => {
+    if (!cropBackground || cropContext?.kind !== "avatar") return;
+    const chosen = cropContext.background;
+    cropStage.dataset.backdrop = chosen === "transparent" ? "none" : "color";
+    cropStage.style.setProperty("--crop-backdrop", chosen === "transparent" ? "transparent" : chosen);
+    const preset = PRESET_AVATAR_BACKGROUNDS.includes(chosen);
+    for (const input of cropBackgroundChoices) {
+      input.checked = preset ? input.value === chosen : input.value === "custom";
+    }
+    if (!preset && cropBackgroundColor) cropBackgroundColor.value = chosen.toLowerCase();
+    cropBackground.style.setProperty(
+      "--crop-custom-color", preset ? (cropBackgroundColor?.value ?? "#4721a1") : chosen);
+  };
   const defaultCropForTheme = (themeId) => normalizeCrop(
     themes[themeId]?.studioPreviewFrame, DEFAULT_CROP, CARD_PREVIEW_MAX_ZOOM);
   const cropForTheme = (themeId) => normalizeCrop(
@@ -737,6 +521,11 @@
     adjustBackground.hidden = !state.hasImage;
     adjustBackground.disabled = state.hasImage && !state.imagePreviewUrl;
     clearImage.disabled = !state.hasImage;
+    if (clearAvatar) clearAvatar.disabled = !state.hasAvatar;
+    if (adjustAvatar) {
+      adjustAvatar.hidden = !state.hasAvatar;
+      adjustAvatar.disabled = state.hasAvatar && !state.avatarPreviewUrl;
+    }
     for (const themeId of cardFrames.keys()) layoutCardCrop(themeId);
   };
 
@@ -747,9 +536,11 @@
   const hostThemeColorPattern = /^#[0-9a-f]{6}$/i;
   const hostThemeKeys = new Set([
     "name", "label", "description", "labels", "descriptions", "swatches", "preview", "launcher", "studioPreview",
-    "studioPreviewFrame", "studioStyle", "source",
+    "studioPreviewFrame", "studioStyle", "source", "sourceRecipe",
   ]);
-  const hostThemeLocales = new Set(["en", "zh-CN", "zh-TW"]);
+  // Theme metadata remains localized only in the three frozen product locales.
+  // Studio UI languages outside that set use the canonical host label/description.
+  const hostThemeLocales = new Set(["en", "zh-CN", "zh-HKTW"]);
   const hostThemePreviewKeys = new Set(["chrome", "background", "surface", "accent", "text"]);
   const hostThemeLauncherKeys = new Set([
     "asset", "surface", "surfaceHover", "foreground", "accent", "border", "radius", "borderWidth",
@@ -812,7 +603,7 @@
     }
 
     let studioPreviewFrame;
-    if (value.studioPreviewFrame !== undefined) {
+    if (value.studioPreviewFrame !== undefined && value.studioPreviewFrame !== null) {
       if (!plainRecord(value.studioPreviewFrame)
           || Object.keys(value.studioPreviewFrame).sort().join(",") !== "x,y,zoom"
           || !finite(value.studioPreviewFrame.x) || value.studioPreviewFrame.x < 0 || value.studioPreviewFrame.x > 100
@@ -853,6 +644,13 @@
       source = value.source;
     }
 
+    let sourceRecipe;
+    if (value.sourceRecipe !== undefined) {
+      if (value.sourceRecipe !== null
+          && (typeof value.sourceRecipe !== "string" || !hostThemeIdPattern.test(value.sourceRecipe))) return null;
+      sourceRecipe = value.sourceRecipe;
+    }
+
     return {
       name,
       label,
@@ -866,6 +664,7 @@
       ...(studioPreview === undefined ? {} : { studioPreview }),
       ...(studioPreviewFrame === undefined ? {} : { studioPreviewFrame }),
       ...(source === undefined ? {} : { source }),
+      ...(sourceRecipe === undefined ? {} : { sourceRecipe }),
     };
   };
 
@@ -1210,7 +1009,7 @@
         state.connected = true;
         let appearanceAcknowledged = false;
         let introductionAcknowledged = false;
-        if (typeof data.locale === "string" && hostThemeLocales.has(data.locale)) {
+        if (typeof data.locale === "string" && supportedLocales.has(data.locale)) {
           state.locale = data.locale;
           localePending = null;
         }
@@ -1241,6 +1040,11 @@
             && Object.hasOwn(themes, data.theme)) state.theme = data.theme;
         if (typeof data.enabled === "boolean") state.enabled = data.enabled;
         if (typeof data.hasImage === "boolean") state.hasImage = data.hasImage;
+        if (typeof data.hasAvatar === "boolean") state.hasAvatar = data.hasAvatar;
+        state.avatarPreviewUrl = avatarPreviewUrl(data.avatarPreviewUrl);
+        state.avatarCrop = normalizeCrop(data.avatarCrop);
+        state.avatarBackground = normalizeAvatarBackground(data.avatarBackground);
+        if (typeof data.avatarHasAlpha === "boolean") state.avatarHasAlpha = data.avatarHasAlpha;
         state.effectiveIdentity = normalizeEffectiveIdentity(data.effectiveIdentity);
         state.imagePreviewUrl = backgroundPreviewUrl(data.imagePreviewUrl);
         state.backgroundAspectRatio = normalizeAspectRatio(data.backgroundAspectRatio);
@@ -1267,9 +1071,14 @@
           const pending = pendingCropSave;
           const persisted = pending.kind === "card"
             ? state.studioPreviewCrops[pending.theme]
-            : state.backgroundCrop;
+            : pending.kind === "avatar"
+              ? state.avatarCrop
+              : state.backgroundCrop;
           pendingCropSave = null;
-          if (data.actionSucceeded && data.tone !== "error" && cropsEqual(persisted, pending.crop)) {
+          const backdropSettled = pending.kind !== "avatar"
+            || state.avatarBackground === pending.background;
+          if (data.actionSucceeded && data.tone !== "error"
+              && cropsEqual(persisted, pending.crop) && backdropSettled) {
             reflect();
             cropDialog.close("saved");
             return;
@@ -1278,6 +1087,12 @@
           setCropError(t("saveFailed"));
         }
         reflect();
+        // Picking an avatar opens the framing editor at once, so the crop is
+        // positioned before it settles — mirroring the theme-card preview flow.
+        if (data.action === "set-avatar" && data.actionSucceeded && data.tone !== "error"
+            && state.hasAvatar && state.avatarPreviewUrl && !cropDialog.open) {
+          openAvatarCrop(document.getElementById("pick-avatar"));
+        }
         if (introductionAcknowledged && welcomeDialog.open) {
           const destination = introductionCompletionDestination;
           introductionCompletionDestination = null;
@@ -1323,7 +1138,7 @@
 
   for (const input of localeInputs) {
     input.addEventListener("change", () => {
-      if (!input.checked || localePending || !hostThemeLocales.has(input.value)
+      if (!input.checked || localePending || !supportedLocales.has(input.value)
           || input.value === state.locale) return;
       if (welcomeDialog.open && !introductionIsAutomatic) {
         try { sessionStorage.setItem("claude-aura:resume-welcome", "true"); } catch {}
@@ -1351,6 +1166,8 @@
   });
   document.getElementById("pick-image").addEventListener("click", () => send({ type: "set-image" }));
   clearImage.addEventListener("click", () => send({ type: "clear-image" }));
+  document.getElementById("pick-avatar")?.addEventListener("click", () => send({ type: "set-avatar" }));
+  clearAvatar?.addEventListener("click", () => send({ type: "clear-avatar" }));
   document.getElementById("open-aura").addEventListener("click", () => send({ type: "open-aura" }));
   document.getElementById("open-desktop").addEventListener("click", () => send({ type: "open-desktop" }));
   document.getElementById("start-theme").addEventListener("click", () => {
@@ -1379,6 +1196,7 @@
 
   const openCropEditor = ({
     kind, theme = null, imageUrl, crop, defaultCrop = DEFAULT_CROP, positionSupported = true,
+    background = "transparent",
   }, opener) => {
     if (!imageUrl) { setStatus(t("previewUnavailable"), "error"); return; }
     cropReturnFocus = opener;
@@ -1390,13 +1208,20 @@
       maximumZoom,
       resetCrop,
       draft: normalizeCrop(crop, resetCrop, maximumZoom),
+      background: normalizeAvatarBackground(background),
     };
+    // Offer the backdrop swatches only where they change something: an avatar
+    // whose source actually has see-through pixels.
+    if (cropBackground) cropBackground.hidden = !(kind === "avatar" && state.avatarHasAlpha);
+    syncAvatarBackdrop();
     cropInputs.zoom.max = String(maximumZoom * 100);
     cropStage.dataset.kind = kind;
-    cropStage.style.setProperty("--crop-aspect-ratio", String(
-      kind === "card" ? 3 / 2 : state.backgroundAspectRatio));
-    cropTitle.textContent = t(kind === "card" ? "cardCropTitle" : "backgroundCropTitle");
-    cropHelp.textContent = t(kind === "card" ? "cardCropHelp" : "backgroundCropHelp");
+    const aspectRatio = kind === "card" ? 3 / 2 : kind === "avatar" ? 1 : state.backgroundAspectRatio;
+    cropStage.style.setProperty("--crop-aspect-ratio", String(aspectRatio));
+    const titleKey = kind === "card" ? "cardCropTitle" : kind === "avatar" ? "avatarCropTitle" : "backgroundCropTitle";
+    const helpKey = kind === "card" ? "cardCropHelp" : kind === "avatar" ? "avatarCropHelp" : "backgroundCropHelp";
+    cropTitle.textContent = t(titleKey);
+    cropHelp.textContent = t(helpKey);
     setCropError();
     setCropNotice(kind === "background" && !positionSupported ? t("advancedPositionHelp") : "");
     setCropBusy(false);
@@ -1432,12 +1257,38 @@
       positionSupported: state.backgroundCropSupported,
     }, adjustBackground);
   });
+  const openAvatarCrop = (opener) => {
+    openCropEditor({
+      kind: "avatar",
+      imageUrl: state.avatarPreviewUrl,
+      crop: state.avatarCrop,
+      background: state.avatarBackground,
+    }, opener);
+  };
+  adjustAvatar?.addEventListener("click", () => openAvatarCrop(adjustAvatar));
 
   for (const axis of ["x", "y"]) {
     cropInputs[axis].addEventListener("input", () => updateCropDraft({ [axis]: Number(cropInputs[axis].value) }));
   }
   cropInputs.zoom.addEventListener("input", () => updateCropDraft({ zoom: Number(cropInputs.zoom.value) / 100 }));
   cropReset.addEventListener("click", () => updateCropDraft(cropContext?.resetCrop ?? DEFAULT_CROP));
+
+  const chooseAvatarBackground = (value) => {
+    if (!cropContext) return;
+    cropContext.background = normalizeAvatarBackground(value);
+    syncAvatarBackdrop();
+  };
+  for (const input of cropBackgroundChoices) {
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      chooseAvatarBackground(input.value === "custom" ? cropBackgroundColor?.value : input.value);
+    });
+  }
+  cropBackgroundColor?.addEventListener("input", () => {
+    const custom = cropBackgroundChoices.find((input) => input.value === "custom");
+    if (custom) custom.checked = true;
+    chooseAvatarBackground(cropBackgroundColor.value);
+  });
 
   cropStage.addEventListener("pointerdown", (event) => {
     if (!cropContext || pendingCropSave || (event.button !== 0 && event.pointerType !== "touch")) return;
@@ -1476,12 +1327,20 @@
     const saved = normalizeCrop(cropContext.draft, cropContext.resetCrop, cropContext.maximumZoom);
     const message = cropContext.kind === "card"
       ? { type: "set-card-preview-crop", theme: cropContext.theme, ...saved }
-      : { type: "set-image-framing", ...saved };
+      : cropContext.kind === "avatar"
+        ? { type: "set-avatar-framing", ...saved, background: cropContext.background }
+        : { type: "set-image-framing", ...saved };
     if (!send(message)) {
       setCropError(t("statusDemo"));
       return;
     }
-    pendingCropSave = { action: message.type, kind: cropContext.kind, theme: cropContext.theme, crop: saved };
+    pendingCropSave = {
+      action: message.type,
+      kind: cropContext.kind,
+      theme: cropContext.theme,
+      crop: saved,
+      background: cropContext.background,
+    };
     setCropError();
     setCropBusy(true);
   });
@@ -1494,6 +1353,9 @@
     cropImage.removeAttribute("src");
     setCropError();
     setCropNotice();
+    if (cropBackground) cropBackground.hidden = true;
+    delete cropStage.dataset.backdrop;
+    cropStage.style.removeProperty("--crop-backdrop");
     pendingCropSave = null;
     cropContext = null;
     cropReturnFocus?.focus();

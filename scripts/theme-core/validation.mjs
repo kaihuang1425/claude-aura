@@ -9,6 +9,12 @@ import {
   BUILTIN_LAUNCHER_ASSET_PATTERN,
   DEFAULT_LAUNCHER_STYLE,
   FROZEN_BUILTIN_THEME_IDS,
+  GREETING_ALIGNMENTS,
+  GREETING_COLOR_ROLES,
+  GREETING_DECORATIONS,
+  GREETING_FONT_CATEGORIES,
+  GREETING_FONT_WEIGHTS,
+  GREETING_MARK_SOURCES,
   HEX_COLOR,
   LEGACY_REQUIRED_TOKENS,
   MAX_CHROME_PAYLOAD_BYTES,
@@ -19,6 +25,7 @@ import {
   STUDIO_ARTWORK_PATH_PATTERN,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
+  STUDIO_KIT_SCHEMA_VERSIONS,
   STUDIO_LAYER_ANCHORS,
   STUDIO_LAYER_APPEARANCES,
   STUDIO_LAYER_CONTEXTS,
@@ -45,7 +52,8 @@ export function payloadBudget(payload, settings) {
   // shared by Light and Dark), but both serialized copies are still artwork
   // bytes and must not be misclassified as renderer chrome.
   const artworkUrls = [];
-  if (typeof settings.artDataUrl === "string" && settings.artDataUrl) artworkUrls.push(settings.artDataUrl);
+  const artDataUrl = settings.artDataUrl ?? settings.d;
+  if (typeof artDataUrl === "string" && artDataUrl) artworkUrls.push(artDataUrl);
   if (settings.brandWordmark) {
     for (const key of ["lightDataUrl", "darkDataUrl"]) {
       if (typeof settings.brandWordmark[key] === "string" && settings.brandWordmark[key]) {
@@ -53,12 +61,33 @@ export function payloadBudget(payload, settings) {
       }
     }
   }
-  for (const layer of settings.artLayers ?? []) {
+  if (Array.isArray(settings.b)) {
+    for (const dataUrl of settings.b.slice(0, 2)) {
+      if (typeof dataUrl === "string" && dataUrl) artworkUrls.push(dataUrl);
+    }
+  }
+  for (const layer of settings.artLayers ?? settings.y ?? []) {
     if (typeof layer?.dataUrl === "string" && layer.dataUrl) artworkUrls.push(layer.dataUrl);
   }
+  if (Array.isArray(settings.u)) {
+    for (const dataUrl of settings.u) {
+      if (typeof dataUrl === "string" && dataUrl) artworkUrls.push(dataUrl);
+    }
+  }
+  const greetingMarkDataUrl = settings.greeting?.markDataUrl ?? settings.g?.m;
+  if (typeof greetingMarkDataUrl === "string" && greetingMarkDataUrl) {
+    artworkUrls.push(greetingMarkDataUrl);
+  }
   const payloadDataUrls = [...artworkUrls];
-  if (typeof settings.imageDataUrl === "string" && settings.imageDataUrl) {
-    payloadDataUrls.push(settings.imageDataUrl);
+  const imageDataUrl = settings.imageDataUrl ?? settings.i;
+  if (typeof imageDataUrl === "string" && imageDataUrl) {
+    payloadDataUrls.push(imageDataUrl);
+  }
+  // Personal avatar is a per-user embed like the wallpaper: excluded from the
+  // chrome budget, and not counted against the theme-artwork limit.
+  const avatarDataUrl = settings.avatarDataUrl ?? settings.A;
+  if (typeof avatarDataUrl === "string" && avatarDataUrl) {
+    payloadDataUrls.push(avatarDataUrl);
   }
   const embeddedArtworkBytes = artworkUrls
     .reduce((total, dataUrl) => total + Buffer.byteLength(dataUrl, "utf8"), 0);
@@ -915,7 +944,7 @@ export function validateTheme(theme, source = "theme", { enforceLauncherContrast
 export function normalizeLocale(value = "en") {
   const locale = String(value || "en").replaceAll("_", "-").toLowerCase();
   if (locale === "zh-cn" || locale === "zh-sg" || locale === "zh-hans" || locale.startsWith("zh-hans-")) return "zh-CN";
-  if (locale === "zh-tw" || locale === "zh-hk" || locale === "zh-mo" || locale === "zh-hant" || locale.startsWith("zh-hant-")) return "zh-TW";
+  if (locale === "zh-hktw" || locale === "zh-hk" || locale === "zh-mo" || locale === "zh-hant" || locale.startsWith("zh-hant-")) return "zh-HKTW";
   return "en";
 }
 
@@ -939,6 +968,60 @@ export function validateNewChatLayout(value, label) {
     widthRatio: strictNumber(value.widthRatio, `${label}.widthRatio`, 0.4, 0.96),
     offsetXRatio: strictNumber(value.offsetXRatio, `${label}.offsetXRatio`, -0.35, 0.35),
     offsetYRatio: strictNumber(value.offsetYRatio, `${label}.offsetYRatio`, -0.3, 0.3),
+  };
+}
+
+function validateGreetingFrame(value, label) {
+  assertExactKeys(value, [
+    "font", "color", "fontSize", "weight", "italic", "letterSpacing",
+    "lineHeight", "align", "maxWidthRatio", "xRatio", "yRatio", "decoration", "mark",
+  ], label);
+  if (typeof value.italic !== "boolean") throw new Error(`${label}.italic must be a boolean`);
+  if (!GREETING_FONT_WEIGHTS.has(value.weight)) throw new Error(`${label}.weight has an unsupported value`);
+  assertExactKeys(value.mark, ["source", "scale"], `${label}.mark`);
+  const letterSpacing = value.letterSpacing;
+  if (typeof letterSpacing !== "number" || !Number.isFinite(letterSpacing)
+      || letterSpacing < -0.06 || letterSpacing > 0.12) {
+    throw new Error(`${label}.letterSpacing must be a number between -0.06 and 0.12`);
+  }
+  return {
+    font: strictEnum(value.font, GREETING_FONT_CATEGORIES, `${label}.font`),
+    color: strictEnum(value.color, GREETING_COLOR_ROLES, `${label}.color`),
+    fontSize: strictNumber(value.fontSize, `${label}.fontSize`, 24, 72),
+    weight: value.weight,
+    italic: value.italic,
+    // Approved recipes and Studio's control use 0.005em steps. The general
+    // strictNumber two-decimal policy would silently rewrite those values.
+    letterSpacing: Math.round(letterSpacing * 1000) / 1000,
+    lineHeight: strictNumber(value.lineHeight, `${label}.lineHeight`, 0.9, 1.5),
+    align: strictEnum(value.align, GREETING_ALIGNMENTS, `${label}.align`),
+    maxWidthRatio: strictNumber(value.maxWidthRatio, `${label}.maxWidthRatio`, 0.35, 0.9),
+    xRatio: strictNumber(value.xRatio, `${label}.xRatio`, -0.45, 0.45),
+    yRatio: strictNumber(value.yRatio, `${label}.yRatio`, -0.4, 0.45),
+    decoration: strictEnum(value.decoration, GREETING_DECORATIONS, `${label}.decoration`),
+    mark: {
+      source: strictEnum(value.mark.source, GREETING_MARK_SOURCES, `${label}.mark.source`),
+      scale: strictNumber(value.mark.scale, `${label}.mark.scale`, 0.5, 1.5),
+    },
+  };
+}
+
+// WO-21 portable greeting style: Light/Dark x Standard/Wide presentation only.
+// `null` means Claude-native presentation. Exact-shape; rejects unknown fields,
+// out-of-range numbers, and any personal phrase/name data (kept host-owned).
+export function validateNewChatGreetingStyle(value, label) {
+  if (value === null || value === undefined) return null;
+  assertExactKeys(value, ["light", "dark"], label);
+  const validateAppearance = (appearance, appearanceLabel) => {
+    assertExactKeys(appearance, ["standard", "wide"], appearanceLabel);
+    return {
+      standard: validateGreetingFrame(appearance.standard, `${appearanceLabel}.standard`),
+      wide: validateGreetingFrame(appearance.wide, `${appearanceLabel}.wide`),
+    };
+  };
+  return {
+    light: validateAppearance(value.light, `${label}.light`),
+    dark: validateAppearance(value.dark, `${label}.dark`),
   };
 }
 
@@ -1053,12 +1136,14 @@ export function validateStudioThemeKitDocument(raw, source, { enforceLauncherCon
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
     "$comment", "schemaVersion", "id", "labels", "descriptions", "swatches", "preview",
-    "studioPreview", "newChatLayout", "backgroundScope", "artworkLayers", "sourceRecipe",
-    "controlOverrides", "theme",
+    "studioPreview", "newChatLayout", "newChatGreetingStyle", "backgroundScope", "artworkLayers",
+    "sourceRecipe", "controlOverrides", "theme",
   ]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`${source} has an unsupported property`);
-  if (raw.schemaVersion !== STUDIO_THEME_SCHEMA_VERSION) {
-    throw new Error(`${source} must use schemaVersion ${STUDIO_THEME_SCHEMA_VERSION}`);
+  // Accept v2 (pre-greeting) and v3 kits; both normalize up to the current
+  // version in memory. Older kits simply lack newChatGreetingStyle (treated null).
+  if (!STUDIO_KIT_SCHEMA_VERSIONS.has(raw.schemaVersion)) {
+    throw new Error(`${source} must use schemaVersion ${[...STUDIO_KIT_SCHEMA_VERSIONS].join(" or ")}`);
   }
   if (typeof raw.id !== "string" || !THEME_ID_PATTERN.test(raw.id)) {
     throw new Error(`${source}.id must be lowercase kebab-case`);
@@ -1122,6 +1207,7 @@ export function validateStudioThemeKitDocument(raw, source, { enforceLauncherCon
     studioPreview: null,
     studioPreviewFrame: null,
     newChatLayout: validateNewChatLayout(raw.newChatLayout, `${source}.newChatLayout`),
+    newChatGreetingStyle: validateNewChatGreetingStyle(raw.newChatGreetingStyle ?? null, `${source}.newChatGreetingStyle`),
     backgroundScope: strictEnum(raw.backgroundScope, new Set(["content", "full-window"]), `${source}.backgroundScope`),
     artwork: null,
     artworkLayers,
@@ -1133,6 +1219,9 @@ export function validateStudioThemeKitDocument(raw, source, { enforceLauncherCon
 
 export function validateRegistryEntry(entry, label, { source = "builtin" } = {}) {
   if (!isPlainObject(entry)) throw new Error(`${label} must be an object`);
+  if (Object.hasOwn(entry, "greetingPreferences")) {
+    throw new Error(`${label}.greetingPreferences is host-owned and cannot appear in a theme document`);
+  }
   if (typeof entry.id !== "string" || !THEME_ID_PATTERN.test(entry.id)) {
     throw new Error(`${label}.id must be lowercase kebab-case`);
   }
@@ -1188,6 +1277,7 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
     };
   };
   const newChatLayout = validateNewChatLayout(entry.newChatLayout, `${label}.newChatLayout`);
+  const newChatGreetingStyle = validateNewChatGreetingStyle(entry.newChatGreetingStyle ?? null, `${label}.newChatGreetingStyle`);
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
   const validateArtworkLayer = (layer, layerLabel, { allowKeep = true } = {}) => {
     if (!isPlainObject(layer)) throw new Error(`${layerLabel} must be an object`);
@@ -1292,6 +1382,7 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
     studioPreview,
     studioPreviewFrame,
     newChatLayout,
+    newChatGreetingStyle,
     artwork,
     artworkLayers,
   };

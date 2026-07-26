@@ -62,12 +62,12 @@ example; replace the locale placeholders with reviewed copy before committing:
   "labels": {
     "en": "My Theme",
     "zh-CN": "<localized name>",
-    "zh-TW": "<localized name>"
+    "zh-HKTW": "<localized name>"
   },
   "descriptions": {
     "en": "A short, concrete description of the interface character.",
     "zh-CN": "<localized description>",
-    "zh-TW": "<localized description>"
+    "zh-HKTW": "<localized description>"
   },
   "swatches": ["#F5F1E8", "#26312B", "#527A65", "#B66C4A"],
   "preview": {
@@ -84,7 +84,7 @@ example; replace the locale placeholders with reviewed copy before committing:
 Rules enforced by the registry validator:
 
 - every ID is unique and references `themes/<id>.json`;
-- `labels` and `descriptions` include `en`, `zh-CN`, and `zh-TW`;
+- `labels` and `descriptions` include `en`, `zh-CN`, and `zh-HKTW`;
 - three to six six-digit hexadecimal swatches are provided;
 - `preview` defines `chrome`, `background`, `surface`, `accent`, and `text`; and
 - artwork, when present, stays under `assets/theme-art` (one subdirectory level
@@ -103,8 +103,8 @@ local conversion pattern. The chrome portion of every payload must stay under
 
 `listThemes({ locale })` resolves display copy from this registry. Windows uses
 the current UI culture when requesting picker metadata. Locale normalization
-maps `zh-CN`, `zh-SG`, and `zh-Hans` tags to `zh-CN`; it maps `zh-TW`,
-`zh-HK`, `zh-MO`, and `zh-Hant` tags to `zh-TW`. Other tags use English.
+maps `zh-CN`, `zh-SG`, and `zh-Hans` tags to `zh-CN`; it maps `zh-HKTW`,
+`zh-HK`, `zh-MO`, and `zh-Hant` tags to `zh-HKTW`. Other tags use English.
 
 Theme code must remain language-independent. Do not put localized interface
 copy in theme CSS or artwork.

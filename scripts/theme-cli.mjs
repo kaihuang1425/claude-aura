@@ -14,7 +14,10 @@ import {
   readConfig,
   readThemeKit,
   readThemeRegistry,
+  resolveGreetingRuntime,
   studioStyleFromTheme,
+  validateGreetingPreferences,
+  validateGreetingShuffleState,
   writeConfig,
 } from "./theme-core.mjs";
 
@@ -42,7 +45,7 @@ function parse(argv) {
       continue;
     }
     const key = arg.slice(2);
-    if (["json", "clear-image", "payload"].includes(key)) options[key] = true;
+    if (["json", "clear-image", "clear-avatar", "payload"].includes(key)) options[key] = true;
     else {
       if (!argv.length) throw new Error(`Missing value for ${arg}`);
       options[key] = argv.shift();
@@ -114,7 +117,7 @@ to \`launcher-mark.png\` in both generated theme JSON files; otherwise Aura
 inherits its safe Default launcher.
 
 Before pasting the registry snippet, replace its labels and descriptions with
-independently written en, zh-CN, and zh-TW theme copy.
+independently written en, zh-CN, and zh-HKTW theme copy.
 `;
 }
 
@@ -125,12 +128,12 @@ function registrySnippet(id, defaultEntry) {
     labels: {
       en: title,
       "zh-CN": `自定义主题（${id}）`,
-      "zh-TW": `自訂主題（${id}）`,
+      "zh-HKTW": `自訂主題（${id}）`,
     },
     descriptions: {
       en: "A custom theme scaffolded from Claude Aura's default tokens.",
       "zh-CN": "基于 Claude Aura 默认变量创建的自定义主题。",
-      "zh-TW": "以 Claude Aura 預設樣式變數建立的自訂主題。",
+      "zh-HKTW": "以 Claude Aura 預設樣式變數建立的自訂主題。",
     },
     swatches: [...defaultEntry.swatches],
     preview: { ...defaultEntry.preview },
@@ -225,18 +228,20 @@ function help() {
   console.log(`Claude Aura theme tool
 
 Commands:
-  list [--json] [--locale en|zh-CN|zh-TW] [--user-themes <path>]
+  list [--json] [--locale en|zh-CN|zh-HKTW] [--user-themes <path>]
   scaffold <id>
   qa <id>
-  init --config <path> [--locale en|zh-CN|zh-TW] [--user-themes <path>] [--payload]
-  show --config <path> [--json] [--locale en|zh-CN|zh-TW] [--user-themes <path>]
+  init --config <path> [--locale en|zh-CN|zh-HKTW] [--user-themes <path>] [--payload]
+  show --config <path> [--json] [--locale en|zh-CN|zh-HKTW] [--user-themes <path>]
   validate <kit-folder>
-  validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-TW]
+  validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-HKTW]
       [--user-themes <path>]
   studio --config <path> --user-themes <path> --editor-root <path>
       --locale <tag> --request-base64 <base64url-json> [--asset <absolute-host-owned-image-path>]
   studio-state --config <path> --user-themes <path> --editor-root <path> --locale <tag>
+  greeting-checkpoint --config <path> --state-base64 <base64url-json>
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
+      [--avatar <path>|--clear-avatar]
       [--appearance system|light|dark]
       [--image-opacity <0..0.55>] [--image-position <css-position>] [--image-zoom <1..2>]
       [--studio-preview-theme <id> --studio-preview-x <0..100>
@@ -303,6 +308,50 @@ if (command === "help" || command === "--help") {
     locale: options.locale,
   });
   process.stdout.write(JSON.stringify(result));
+} else if (command === "greeting-checkpoint") {
+  const allowed = new Set(["config", "state-base64"]);
+  const unsupported = Object.keys(options).find((key) => !allowed.has(key));
+  if (unsupported) throw new Error(`Unsupported greeting-checkpoint option: --${unsupported}`);
+  for (const key of allowed) {
+    if (typeof options[key] !== "string" || !options[key]) throw new Error(`--${key} is required`);
+  }
+  const encoded = options["state-base64"];
+  if (encoded.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
+    throw new Error("--state-base64 must be bounded unpadded base64url JSON");
+  }
+  const bytes = Buffer.from(encoded, "base64url");
+  if (bytes.toString("base64url") !== encoded || bytes.length > 1536) {
+    throw new Error("--state-base64 is not canonical base64url JSON");
+  }
+  let state;
+  try {
+    state = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`--state-base64 contains invalid JSON: ${error.message}`);
+  }
+  const shuffle = validateGreetingShuffleState(state, "greeting checkpoint");
+  if (!shuffle) throw new Error("Greeting checkpoint cannot be null");
+  const configPath = path.resolve(options.config);
+  const config = await readConfig(configPath);
+  const preferences = validateGreetingPreferences(config.greetingPreferences);
+  const runtime = resolveGreetingRuntime(preferences, shuffle.themeId);
+  if (!runtime || runtime.phraseDigest !== shuffle.phraseDigest
+      || runtime.phrases.length !== shuffle.order.length) {
+    throw new Error("Greeting checkpoint does not match the current effective phrase list");
+  }
+  const expectedOrder = Array.from({ length: runtime.phrases.length }, (_, index) => index);
+  const sortedOrder = [...shuffle.order].sort((left, right) => left - right);
+  if (sortedOrder.some((index, position) => index !== expectedOrder[position])
+      || shuffle.cursor < 1
+      || shuffle.lastIndex !== shuffle.order[shuffle.cursor - 1]) {
+    throw new Error("Greeting checkpoint is not a completed bounded selection");
+  }
+  const normalized = validateGreetingPreferences({ ...preferences, shuffle });
+  const changed = JSON.stringify(preferences.shuffle) !== JSON.stringify(shuffle);
+  if (changed) {
+    await writeConfig(configPath, { ...config, greetingPreferences: normalized });
+  }
+  process.stdout.write(JSON.stringify({ changed, shuffle }));
 } else if (command === "scaffold") {
   if (positionals.length !== 1 || Object.keys(options).length) {
     throw new Error("Usage: theme-cli scaffold <id>");
@@ -331,6 +380,9 @@ if (command === "help" || command === "--help") {
     swatches,
     preview,
     launcher,
+    studioPreview,
+    studioPreviewFrame,
+    sourceRecipe,
     artwork,
     source,
     light,
@@ -349,6 +401,11 @@ if (command === "help" || command === "--help") {
     preview,
     launcher,
     studioStyle: studioStyleFromTheme({ light, dark, typography, shape, effects, blur }),
+    // Studio renders user theme cards from this metadata, and the host resolves
+    // a duplicate's permanent identity profile through its source recipe.
+    studioPreview: studioPreview ?? null,
+    studioPreviewFrame: studioPreviewFrame ? { ...studioPreviewFrame } : null,
+    sourceRecipe: sourceRecipe ?? null,
     source,
     artwork: artwork ? {
       path: artwork.path,
@@ -441,6 +498,8 @@ if (command === "help" || command === "--help") {
   }
   if (options.image) config.image = path.resolve(options.image);
   if (options["clear-image"]) config.image = null;
+  if (options.avatar) config.avatar = path.resolve(options.avatar);
+  if (options["clear-avatar"]) config.avatar = null;
   if (options["image-opacity"] !== undefined) config.imageOpacity = Number(options["image-opacity"]);
   if (options["image-position"] !== undefined) config.imagePosition = options["image-position"];
   if (options["image-zoom"] !== undefined) config.imageZoom = Number(options["image-zoom"]);

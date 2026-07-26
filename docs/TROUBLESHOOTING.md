@@ -20,6 +20,35 @@ Technical startup errors are written to
 `%LOCALAPPDATA%\ClaudeAura\data\aura-ui.log`. The log is not intended to
 capture chats.
 
+## Claude shows a blank page or browser check
+
+Some Claude access checks are served by Cloudflare as a real top-level
+`claude.ai` response. Aura recognizes Cloudflare's `cf-mitigated: challenge`
+response marker only when it belongs to the current Claude navigation. It then
+reveals the genuine page, pauses theme injection and Studio mirroring, and
+stops automatic retry behavior. Aura does not replace, hide, solve, or
+automate the check. WebView2 does not guarantee when the response observer runs.
+Aura therefore reveals a completed Claude page immediately but briefly holds
+only theme injection and Studio mirroring so a late challenge marker can still
+be correlated at any valid response status. A current top-level Claude HTTP 403
+also receives immediate fail-native protection while that marker is pending.
+
+The native **Claude Aura recovery** card offers three user-controlled choices:
+
+- **Continue in browser** opens the fixed `https://claude.ai/` address in the
+  default browser.
+- **Start clean session** closes Aura and reopens it with a temporary WebView2
+  private session. It starts signed out and is discarded when that Aura window
+  closes. The normal Aura profile and its saved sign-in remain untouched.
+- **Retry in Aura** makes one explicit retry. A repeated challenge reopens the
+  circuit breaker instead of starting a reload loop.
+
+If the check also appears in the clean session, use the normal browser and
+check the network path. A VPN, proxy, filtering DNS service, corporate gateway,
+or the current public IP can cause the same server-side decision across every
+fresh local profile. No local wrapper can guarantee a Cloudflare bypass; the
+site owner controls that decision.
+
 ## Claude loads but the theme does not
 
 Close and reopen Aura. The theme is applied only to HTTPS pages owned by

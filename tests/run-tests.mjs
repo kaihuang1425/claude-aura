@@ -8,6 +8,11 @@ import "./artwork.test.mjs";
 import "./theme-cli.test.mjs";
 import "./user-kits.test.mjs";
 import "./config.test.mjs";
+import "./avatar.test.mjs";
+import "./greeting.test.mjs";
+import "./greeting-runtime.test.mjs";
+import "./aura-rescue.test.mjs";
+import "./locales.test.mjs";
 import "./studio-editor.test.mjs";
 import "./platform.test.mjs";
 

@@ -14,10 +14,10 @@ document, the tooling is not finished.
    every supported Studio width. The ordinary gallery rail collapses to its
    identity mark while editing. The inspector has exactly three branches in
    both Quick customize and Advanced: **Interface** for the overall palette,
-   materials, type, and current new-chat prompt target; **Background** for
-   canvas scope and artwork layers; and **Widgets** for Aura app identity and
-   the floating launcher. Future work registers Instant prompts and Greeting
-   in those same branches instead of adding destinations or empty
+   materials, type, current new-chat prompt target, and **Greeting**;
+   **Background** for canvas scope and artwork layers; and **Widgets** for Aura
+   app identity and the floating launcher. Future work registers Instant
+   prompts in those same branches instead of adding destinations or empty
    placeholders. Theme name and descriptions remain document details in the
    sticky header. Light/Dark, page, and Standard/Wide stay beside the preview
    in every branch. The preview and inspector scroll independently inside the
@@ -62,9 +62,11 @@ document, the tooling is not finished.
    sliders, and exact numeric fields edit the same safe values. Selection and
    temporary **Hide while editing** follow the same layer after reorder and do
    not change saved visibility by accident. In Conversation, a selected
-   New-chat-area target stays selected but unavailable and inert, explains that
-   it is New chat only, and offers **Switch preview** instead of silently
-   choosing another object.
+   New-chat-area or Greeting target stays selected but unavailable and inert,
+   explains that it is New chat only, and offers **Switch preview** instead of
+   silently choosing another object. Greeting provides independent Light/Dark
+   and Standard/Wide controls for placement, width, typography, alignment,
+   decoration, and an approved native or compact mark.
 7. Choose **Main area only** to begin artwork at the measured live main canvas,
    or **Entire window** to continue it behind the translucent live sidebar. The
    personal wallpaper page is separate and does not become part of the theme.
@@ -153,11 +155,44 @@ foreground, border, radius, and border width. A valid replacement updates
 Aura, Studio, the floating launcher, taskbar, system tray, and owned shortcuts
 together. This app identity is separate from the Claude sidebar identity.
 
-### Planned branch growth after 1.0
+### New-chat greeting
 
-The branch map stays fixed as the editor grows. WO-19 registers **Instant
-prompts** under Widgets; WO-20 adds temporary selection and manipulation inside
-the actual Aura page; WO-21 registers **Greeting** under Interface. WO-25 then
+**Interface > Greeting** edits a surface that exists only on New chat. Quick
+customize can keep Claude's wording or use personal phrases, enable or remove
+the portable style, enter an optional display name for the exact `{name}`
+token, choose the font category, size, colour role, and position, or use
+**Reset to Claude** to restore both native wording and native presentation in
+one Undo-able action. Changing the preview to Conversation keeps Greeting
+selected, disables its controls, and offers **Switch preview**.
+
+Advanced exposes the independent Light/Dark and Standard/Wide frames. Each
+frame has exact numeric controls for X/Y position, maximum width, size,
+tracking, line height, and mark scale, plus allowlisted alignment, weight,
+italic, decoration, and mark choices. Pointer movement, keyboard movement or
+resize, sliders, and exact inputs all submit one complete bounded frame and
+create one Undo item.
+
+The portable theme document stores presentation only. Personal wording remains
+in device-local `greetingPreferences`: Claude or custom source, display name,
+one global list, optional per-theme Claude/global/custom overrides, and bounded
+shuffle state. Those values are excluded from theme duplication and package
+data. Save commits the theme and personal draft together; Cancel restores both,
+and deleting a user theme atomically removes only that theme's personal
+override.
+
+Each list accepts at most twelve NFC-normalized phrases of 120 Unicode scalar
+values each. A display name accepts 40 scalar values. `{name}` is the only
+token and may appear once per phrase; control characters, duplicates, invalid
+tokens, and an effective compiled list above 2 KB are rejected. Aura inserts
+custom wording only as plain text. Empty, invalid, missing, or ambiguous data,
+conversation navigation, forced colours, Original look, and cleanup all fail
+open to Claude's native greeting.
+
+### Branch growth after 1.0
+
+The branch map stays fixed as the editor grows. **Greeting** is registered
+under Interface. WO-19 registers **Instant prompts** under Widgets; WO-20 adds
+temporary selection and manipulation inside the actual Aura page. WO-25 then
 adds Interface targets for Sidebar, Sidebar identity, and Prompt block plus
 bounded Background hue, saturation, brightness, contrast, and blur controls.
 It may replace only the visual Claude sidebar mark and style the unchanged
@@ -189,14 +224,26 @@ Matching Claude Code terminal and optional VS Code theme exports are separate
 bounded colour projections, not copies of Aura artwork or layout and never
 evidence that native Claude Desktop Code was styled.
 
-WO-26 adds opt-in fluid composition between the existing Standard 1180×640 and
-Wide 1560×940 endpoints. Existing and incompatible themes keep the discrete
-1440 px step. Fluid mode interpolates only allowlisted numeric geometry such as
-position, focal point, scale, width, and offsets; it never blends asset
-identity, anchor, text, appearance, page, visibility, mask, or interaction
-state. Standard and Wide remain the only saved endpoints. A custom dimension
-is always a preview, and direct editing at an intermediate width must disclose
-whether it will adjust both endpoints, Standard only, or Wide only.
+WO-26 upgrades responsive themes to a bounded track of one to six named layout
+sets. Each set records an exact reference width and height; Standard 1180×640
+and Wide 1560×940 are migration seeds rather than permanent schema keys. Users
+may add a set at the current custom preview size, duplicate, rename, resize, or
+remove one, while the inspector keeps Previewing, Editing layout, Between, and
+Source separate.
+
+Existing themes keep the discrete 1440 px Standard/Wide behavior until an
+explicit responsive edit upgrades them. Fluid mode orders saved sets by width
+and interpolates only allowlisted numeric geometry such as position, focal
+point, scale, width, and offsets. Height remains the truthful Aura/Studio
+reference size and affects normalized geometry, but it is not a second
+ambiguous selection axis. Asset identity, anchor, text, appearance, page,
+visibility, mask, and interaction state never blend.
+
+A custom dimension is always preview-only. At an intermediate size, direct
+handles remain inert until the user chooses **Add layout set here** or selects
+an existing saved set to edit. Merely resizing the preview never creates a
+state, modifies both neighbours, advances the revision, or creates an Undo
+entry.
 
 ### Studio shell follows the validated theme
 
@@ -238,11 +285,15 @@ URLs, custom CSS, and filesystem paths never style the Studio shell. Theme-card
 media, the editor's labelled asset guide/stage, and the validated launcher mark
 remain their own bounded product surfaces.
 
-### Studio-authored schema v2
+### Studio-authored schemas v2 and v3
 
-Studio saves `theme.json` with `schemaVersion: 2`. The document carries the
-localized metadata and a validated, Studio-normalized `theme` token object
-forward from schema v1, and adds:
+Studio saves an edited `theme.json` with `schemaVersion: 3`. Schema v3 carries
+the schema-v2 document forward and adds optional `newChatGreetingStyle`; `null`
+means Claude-native presentation. Opening a schema-v1 or schema-v2 user theme
+normalizes only the in-memory editing history and does not rewrite the
+installed kit until Save. The document carries localized metadata and a
+validated, Studio-normalized `theme` token object forward from schema v1, and
+adds:
 
 - `backgroundScope`: `content` or `full-window`;
 - `newChatLayout`: `widthRatio` (0.4–0.96), `offsetXRatio` (-0.35–0.35), and
@@ -250,6 +301,8 @@ forward from schema v1, and adds:
 - `sourceRecipe`: `null` or one of the eight frozen built-in IDs;
 - `controlOverrides`: a unique list containing only `fontUi`, `fontDisplay`,
   `radius`, or `shadow`;
+- `newChatGreetingStyle`: `null` or exact Light/Dark × Standard/Wide greeting
+  presentation and frame values;
 - `artworkLayers`: zero to eight entries using app-owned
   `artwork/layer-<32 lowercase hex>.webp` files; and
 - per-layer `role`, `appearance`, `context`, `viewport`, `visible`, `opacity`,

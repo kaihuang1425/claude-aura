@@ -4,8 +4,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   AURA_VERSION,
+  BUILTIN_BRAND_MARK_ASSETS,
   DEFAULT_CONFIG,
   PROJECT_ROOT,
+  STUDIO_FONT_DISPLAY_STACKS,
 } from "./constants.mjs";
 import {
   cloneJson,
@@ -20,6 +22,7 @@ import {
   readConfig,
   readRegisteredTheme,
   readThemeKit,
+  resolveAvatar,
   resolveImage,
   resolveTheme,
 } from "./registry.mjs";
@@ -28,16 +31,70 @@ import {
   resolveArtworkLayers,
   resolveBrandWordmark,
 } from "./artwork.mjs";
+import { resolveGreetingRuntime } from "./greeting.mjs";
 
-export function renderMode(selector, mode) {
-  const declarations = Object.entries(mode.tokens).map(([name, value]) => `  ${name}: ${value} !important;`);
-  declarations.push(`  --aura-wallpaper-gradient: ${mode.wallpaper.gradient};`);
-  declarations.push(`  --aura-surface-alpha: ${mode.wallpaper.surfaceAlpha};`);
-  declarations.push(`  --aura-sidebar-alpha: ${mode.wallpaper.sidebarAlpha};`);
-  declarations.push(`  --aura-default-image-opacity: ${mode.wallpaper.imageOpacity};`);
-  declarations.push(`  --aura-art-opacity: ${mode.wallpaper.artOpacity};`);
-  declarations.push(`  --aura-texture-opacity: ${mode.wallpaper.textureOpacity};`);
+// Marks the strippable WO-21 greeting subsystem inside the renderer template, and the
+// nested custom-phrases sub-block that native-greeting-only themes do not need.
+const AVATAR_BLOCK_PATTERN = /\/\*__AURA_AVATAR_START__\*\/[\s\S]*?\/\*__AURA_AVATAR_END__\*\//;
+// CSS for the personal avatar overlay. Appended to the compiled sheet only when
+// an avatar is configured (kept out of base.css so avatar-free payloads pay
+// nothing). The renderer sets each overlay's box geometry inline; these rules
+// give it a containing block and reveal it only after the image decodes.
+const AVATAR_OVERLAY_CSS = [
+  'html.claude-aura [data-claude-aura-avatar-flow="true"]{position:relative!important}',
+  "html.claude-aura [data-claude-aura-avatar]{position:absolute;object-fit:cover;pointer-events:none!important;z-index:2;display:block;visibility:hidden}",
+  'html.claude-aura [data-claude-aura-avatar-host="ready"] [data-claude-aura-avatar]{visibility:visible}',
+].join("\n");
+const GREETING_BLOCK_PATTERN = /\/\*__AURA_GREETING_START__\*\/[\s\S]*?\/\*__AURA_GREETING_END__\*\//;
+const GREETING_PHRASES_PATTERN = /\/\*__AURA_GREETING_PHRASES_START__\*\/[\s\S]*?\/\*__AURA_GREETING_PHRASES_END__\*\//;
+
+const WALLPAPER_VARIABLES = Object.freeze({
+  gradient: "--aura-wallpaper-gradient",
+  surfaceAlpha: "--aura-surface-alpha",
+  sidebarAlpha: "--aura-sidebar-alpha",
+  imageOpacity: "--aura-default-image-opacity",
+  artOpacity: "--aura-art-opacity",
+  textureOpacity: "--aura-texture-opacity",
+});
+
+export function renderMode(selector, mode, {
+  omitTokens = new Set(),
+  omitWallpaper = new Set(),
+} = {}) {
+  const declarations = Object.entries(mode.tokens)
+    .filter(([name]) => !omitTokens.has(name))
+    .map(([name, value]) =>
+      `  ${name}: ${value}${name.startsWith("--aura-") ? "" : " !important"};`);
+  for (const [property, variable] of Object.entries(WALLPAPER_VARIABLES)) {
+    if (!omitWallpaper.has(property)) {
+      declarations.push(`  ${variable}: ${mode.wallpaper[property]};`);
+    }
+  }
   return `${selector} {\n${declarations.join("\n")}\n}`;
+}
+
+function renderThemeModes(theme) {
+  const commonTokens = new Set(Object.keys(theme.light.tokens)
+    .filter((name) => theme.light.tokens[name] === theme.dark.tokens[name]));
+  const commonWallpaper = new Set(Object.keys(WALLPAPER_VARIABLES)
+    .filter((name) => theme.light.wallpaper[name] === theme.dark.wallpaper[name]));
+  const commonDeclarations = [
+    ...[...commonTokens].map((name) =>
+      `  ${name}: ${theme.light.tokens[name]} !important;`),
+    ...[...commonWallpaper].map((name) =>
+      `  ${WALLPAPER_VARIABLES[name]}: ${theme.light.wallpaper[name]};`),
+  ];
+  return [
+    commonDeclarations.length ? `:root {\n${commonDeclarations.join("\n")}\n}` : "",
+    renderMode(':root:not([data-claude-aura-effective-mode="dark"])', theme.light, {
+      omitTokens: commonTokens,
+      omitWallpaper: commonWallpaper,
+    }),
+    renderMode(':root[data-claude-aura-effective-mode="dark"]', theme.dark, {
+      omitTokens: commonTokens,
+      omitWallpaper: commonWallpaper,
+    }),
+  ].filter(Boolean).join("\n\n");
 }
 
 export function renderThemePrimitives(theme) {
@@ -74,6 +131,159 @@ export function renderStudioRecipeOverrides(theme) {
     declarations.push("  --aura-variant-card-shadow: var(--aura-shadow-soft);");
   }
   return declarations.length ? `:root {\n${declarations.join("\n")}\n}` : "";
+}
+
+// WO-21: emit a theme's greeting presentation as CSS keyed on the Aura greeting node.
+// The renderer only marks the node; styling rides the theme's own font/colour tokens
+// so it costs far fewer payload bytes than shipping the style object + JS applier.
+function greetingFrameDeclarations(frame) {
+  const font = STUDIO_FONT_DISPLAY_STACKS[frame.font];
+  const color = frame.color === "accent" ? "hsl(var(--aura-accent-primary))" : "hsl(var(--aura-text-primary))";
+  const declarations = new Map([
+    ["font-family", font],
+    ["color", color],
+    ["font-size", `${frame.fontSize}px`],
+    ["font-weight", String(frame.weight)],
+    ["font-style", frame.italic ? "italic" : "normal"],
+    ["letter-spacing", `${frame.letterSpacing}em`],
+    ["line-height", String(frame.lineHeight)],
+    ["text-align", frame.align],
+    ["--aura-greeting-max-ratio", String(frame.maxWidthRatio)],
+    ["--aura-greeting-x", String(frame.xRatio)],
+    ["--aura-greeting-y", String(frame.yRatio)],
+    ["--aura-greeting-native-opacity", frame.mark.source === "native" ? "1" : "0"],
+    ["--aura-greeting-compact-opacity", frame.mark.source === "compact" ? "1" : "0"],
+    ["--aura-greeting-mark-scale", String(frame.mark.scale)],
+    ["text-decoration", frame.decoration === "underline" ? "underline" : "none"],
+    ["border-bottom", frame.decoration === "hairline" ? "1px solid currentColor" : "0"],
+    ["text-shadow", frame.decoration === "glow"
+      ? "0 0 18px hsl(var(--aura-accent-primary)/.35)"
+      : "none"],
+  ]);
+  return declarations;
+}
+
+function greetingDeclarationDiff(frame, inherited = null) {
+  const declarations = greetingFrameDeclarations(frame);
+  return [...declarations]
+    .filter(([property, value]) => !inherited || inherited.get(property) !== value)
+    .map(([property, value]) => `${property}:${value}`)
+    .join(";");
+}
+
+export function renderGreetingCss(style) {
+  if (!style) return "";
+  const node = "[data-claude-aura-greeting]";
+  const dark = ':root[data-claude-aura-effective-mode="dark"] ';
+  const wide = ':root[data-claude-aura-viewport="wide"] ';
+  const both = ':root[data-claude-aura-effective-mode="dark"][data-claude-aura-viewport="wide"] ';
+  const base = greetingFrameDeclarations(style.light.standard);
+  const darkStandard = greetingFrameDeclarations(style.dark.standard);
+  const lightWide = greetingFrameDeclarations(style.light.wide);
+  const effectiveDarkWide = new Map(base);
+  for (const [property, value] of darkStandard) {
+    if (value !== base.get(property)) effectiveDarkWide.set(property, value);
+  }
+  for (const [property, value] of lightWide) {
+    if (value !== base.get(property)) effectiveDarkWide.set(property, value);
+  }
+  const rules = [
+    `${node}{pointer-events:none;min-width:0;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;${[...base].map(([property, value]) => `${property}:${value}`).join(";")}}`,
+  ];
+  const darkDiff = greetingDeclarationDiff(style.dark.standard, base);
+  const wideDiff = greetingDeclarationDiff(style.light.wide, base);
+  const bothDiff = greetingDeclarationDiff(style.dark.wide, effectiveDarkWide);
+  if (darkDiff) rules.push(`${dark}${node}{${darkDiff}}`);
+  if (wideDiff) rules.push(`${wide}${node}{${wideDiff}}`);
+  if (bothDiff) rules.push(`${both}${node}{${bothDiff}}`);
+  rules.push(
+    `${node}[data-claude-aura-greeting="decoration"],${node}[data-claude-aura-greeting="native-mark"]{border:0;text-decoration:none;text-shadow:none}`,
+    `${node} [data-claude-aura-greeting-mark="native"]{opacity:var(--aura-greeting-native-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
+    `${node} [data-claude-aura-greeting-mark="compact"]{opacity:var(--aura-greeting-compact-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
+    `@media(forced-colors:active){${node}{text-shadow:none;border-bottom:0}}`,
+  );
+  return rules.join("\n");
+}
+
+const RUNTIME_SETTING_ALIASES = Object.freeze([
+  ["version", "v"],
+  ["theme", "t"],
+  ["variant", "r"],
+  ["appearance", "a"],
+  ["imageDataUrl", "i"],
+  ["imageAnimated", "j"],
+  ["imageOpacity", "o"],
+  ["imagePosition", "p"],
+  ["imageZoom", "z"],
+  ["artDataUrl", "d"],
+  ["artPosition", "e"],
+  ["artSize", "f"],
+  ["artMobile", "l"],
+  ["artLayers", "y"],
+  ["reduceMotion", "h"],
+  ["digest", "x"],
+  ["avatarDataUrl", "A"],
+]);
+
+export const RENDERER_CSS_DICTIONARY = Object.freeze([
+  "html.claude-aura",
+  "[data-claude-aura-",
+  "hsl(var(--aura-",
+  "var(--aura-",
+  "!important",
+  "#claude-aura-backdrop",
+  "background-",
+  "border-",
+]);
+const RENDERER_CSS_SENTINEL_START = 0xE000;
+
+export function compressRendererCss(source) {
+  if (typeof source !== "string") throw new TypeError("Renderer CSS must be a string");
+  const sentinels = RENDERER_CSS_DICTIONARY.map((_, index) =>
+    String.fromCharCode(RENDERER_CSS_SENTINEL_START + index));
+  if (sentinels.some((sentinel) => source.includes(sentinel))) {
+    return { css: source, compressed: false };
+  }
+  const css = RENDERER_CSS_DICTIONARY.reduce(
+    (result, entry, index) => result.replaceAll(entry, sentinels[index]),
+    source,
+  );
+  return Buffer.byteLength(css, "utf8") < Buffer.byteLength(source, "utf8")
+    ? { css, compressed: true }
+    : { css: source, compressed: false };
+}
+
+export function expandRendererCss(source) {
+  if (typeof source !== "string") throw new TypeError("Renderer CSS must be a string");
+  return source.replace(
+    /[\uE000-\uE007]/gu,
+    (sentinel) =>
+      RENDERER_CSS_DICTIONARY[sentinel.charCodeAt(0) - RENDERER_CSS_SENTINEL_START],
+  );
+}
+
+function greetingUsesCompactMark(style) {
+  return Boolean(style && ["light", "dark"].some((appearance) =>
+    ["standard", "wide"].some((viewport) =>
+      style[appearance][viewport].mark.source === "compact")));
+}
+
+export function hasRegisteredGreetingCompactMark(theme) {
+  const recipeId = theme?.sourceRecipe || theme?.variant || theme?.name;
+  return typeof recipeId === "string" && Object.hasOwn(BUILTIN_BRAND_MARK_ASSETS, recipeId);
+}
+
+export async function resolveGreetingCompactMark(theme) {
+  if (!greetingUsesCompactMark(theme.newChatGreetingStyle)) return null;
+  const recipeId = theme.sourceRecipe || theme.variant || theme.name;
+  if (!hasRegisteredGreetingCompactMark(theme)) {
+    throw new Error(
+      `${theme.name} greeting requests a compact mark without an approved registered asset`,
+    );
+  }
+  const relativePath = BUILTIN_BRAND_MARK_ASSETS[recipeId];
+  const bytes = await fs.readFile(path.join(PROJECT_ROOT, relativePath));
+  return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
 }
 
 const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
@@ -172,17 +382,310 @@ const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
   ["root", "V0"],
   ["mark", "V1"],
   ["view", "V2"],
+  ["greetingHeadingCandidate", "V3"],
+  ["mimicGreetingHeading", "V4"],
+  ["greetingHeadingLevel", "V5"],
+  ["applyGreetingStyle", "V6"],
+  ["pickGreetingPhrase", "V7"],
+  ["greetingPhrases", "V8"],
+  ["greetingPhrase", "V9"],
+  ["greetingNative", "U0"],
+  ["greetingLastPick", "U1"],
+  ["clearGreeting", "U2"],
+  ["syncGreeting", "U3"],
+  ["greetingNode", "U4"],
+  ["greetingBag", "U5"],
+  ["GREETING_MARKER", "U6"],
+  ["GREETING_HIDDEN", "U7"],
+  ["GREETING_COPY_PROPS", "U8"],
+  ["GREETING_FONTS", "U9"],
+  ["rejectSelector", "T0"],
+  ["promptGroup", "T1"],
+  ["endVisit", "T2"],
+  ["fallback", "T3"],
+  ["editors", "T4"],
+  ["depth", "T5"],
+  ["rootElement", "T6"],
+  ["override", "T7"],
+  ["property", "T8"],
+  ["anchors", "T9"],
+  ["cssText", "S0"],
+  ["phrase", "S1"],
+  ["greetingStyled", "S2"],
+  ["applyGreetingPhrases", "S3"],
+  ["endGreetingVisit", "S4"],
+  ["clearAvatarOverlay", "S5"],
+  ["findAvatar", "S6"],
+  ["syncAvatar", "S8"],
+  ["clearAvatar", "S9"],
+  ["acct", "R0"],
+  ["radius", "R2"],
+  ["lowest", "R3"],
+  ["spot", "R4"],
+  ["score", "R5"],
+  ["best", "R6"],
+  ["binding", "Q1"],
+  ["refreshGreetingProbe", "Q2"],
+  ["greetingDecoration", "Q3"],
+  ["greetingStatus", "Q4"],
+  ["greetingCandidateCount", "Q5"],
+  ["initialNavigationKey", "Q6"],
+  ["removeReplacement", "Q7"],
+  ["applyGreetingGeometry", "Q8"],
+  ["snapshotAttribute", "Q9"],
+  ["advanceGreetingVisit", "P0"],
+  ["greetingTextNode", "P1"],
+  ["restoreAttribute", "P2"],
+  ["elementChildren", "P3"],
+  ["greetingFrameToken", "P4"],
+  ["GREETING_MARK", "P5"],
+  ["greetingFrame", "P6"],
+  ["navigationKey", "P7"],
+  ["nodeRect", "P8"],
+  ["nativeRect", "P9"],
+  ["currentNavigationKey", "O0"],
+  ["restoreBinding", "O1"],
+  ["markRect", "O2"],
+  ["onNavigationSignal", "O3"],
+  ["phraseFingerprint", "O4"],
+  ["stopGreetingFrame", "O5"],
+  ["greetingProbeState", "O6"],
+  ["resolveGreetingBinding", "O7"],
+  ["scheduleGreetingFrame", "O8"],
+  ["syncNativeCompactMark", "O9"],
+  ["greetingCandidateFor", "N0"],
+  ["prepareReplacement", "N1"],
+  ["isSemanticHeading", "N2"],
+  ["pickGreetingIndex", "N3"],
+  ["snapshotDisplay", "N4"],
+  ["restoreDisplay", "N5"],
+  ["greetingMarkFor", "N6"],
+  ["greetingRoots", "N7"],
+  ["createBinding", "N8"],
 ]);
 
 export function compactRendererIdentifiers(source) {
   if (typeof source !== "string") throw new TypeError("Renderer template must be a string");
-  return RENDERER_IDENTIFIER_ALIASES.reduce(
-    (result, [identifier, alias]) => result.replace(
-      new RegExp(`\\b${identifier}\\b`, "g"),
-      alias,
-    ),
-    source,
-  );
+  const aliases = new Map(RENDERER_IDENTIFIER_ALIASES);
+  const settingAliases = new Map(RUNTIME_SETTING_ALIASES);
+  const identifierStart = /[A-Za-z_$]/;
+  const identifierPart = /[A-Za-z0-9_$]/;
+  const regexPrefix = /[({[,:;=!?&|+\-*%^~<>]/;
+
+  const copyQuoted = (start, quote) => {
+    let index = start + 1;
+    let escaped = false;
+    while (index < source.length) {
+      const character = source[index];
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) return index + 1;
+      index += 1;
+    }
+    return source.length;
+  };
+
+  const copyRegex = (start) => {
+    let index = start + 1;
+    let escaped = false;
+    let characterClass = false;
+    while (index < source.length) {
+      const character = source[index];
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === "[") characterClass = true;
+      else if (character === "]") characterClass = false;
+      else if (character === "/" && !characterClass) {
+        index += 1;
+        while (/[A-Za-z]/.test(source[index] || "")) index += 1;
+        return index;
+      }
+      index += 1;
+    }
+    return source.length;
+  };
+
+  const scanCode = (start, stopAtTemplateBrace = false) => {
+    let result = "";
+    let index = start;
+    let braceDepth = 0;
+    let previousToken = "";
+    while (index < source.length) {
+      const character = source[index];
+      if (stopAtTemplateBrace && character === "}") {
+        if (braceDepth === 0) return { result, index };
+        braceDepth -= 1;
+        result += character;
+        previousToken = character;
+        index += 1;
+        continue;
+      }
+      if (character === "{") {
+        if (stopAtTemplateBrace) braceDepth += 1;
+        result += character;
+        previousToken = character;
+        index += 1;
+        continue;
+      }
+      if (character === '"' || character === "'") {
+        const end = copyQuoted(index, character);
+        result += source.slice(index, end);
+        previousToken = "literal";
+        index = end;
+        continue;
+      }
+      if (character === "`") {
+        const template = scanTemplate(index);
+        result += template.result;
+        previousToken = "literal";
+        index = template.index;
+        continue;
+      }
+      if (character === "/" && source[index + 1] === "*") {
+        const end = source.indexOf("*/", index + 2);
+        const next = end < 0 ? source.length : end + 2;
+        result += source.slice(index, next);
+        index = next;
+        continue;
+      }
+      if (character === "/" && source[index + 1] === "/") {
+        const end = source.indexOf("\n", index + 2);
+        const next = end < 0 ? source.length : end;
+        result += source.slice(index, next);
+        index = next;
+        continue;
+      }
+      if (character === "/" && (regexPrefix.test(previousToken.at(-1) || "")
+          || /^(return|case|throw|yield|await)$/.test(previousToken))) {
+        const end = copyRegex(index);
+        result += source.slice(index, end);
+        previousToken = "literal";
+        index = end;
+        continue;
+      }
+      if (identifierStart.test(character)) {
+        let end = index + 1;
+        while (identifierPart.test(source[end] || "")) end += 1;
+        const identifier = source.slice(index, end);
+        let replacement = aliases.get(identifier) || identifier;
+        if (identifier === "settings") {
+          const propertyMatch = source.slice(end).match(/^(\s*\.\s*)([A-Za-z_$][A-Za-z0-9_$]*)/);
+          if (propertyMatch) {
+            const property = settingAliases.get(propertyMatch[2]) || propertyMatch[2];
+            replacement += `${propertyMatch[1]}${property}`;
+            end += propertyMatch[0].length;
+          }
+        }
+        result += replacement;
+        previousToken = identifier;
+        index = end;
+        continue;
+      }
+      result += character;
+      if (!/\s/.test(character)) previousToken = character;
+      index += 1;
+    }
+    return { result, index };
+  };
+
+  const scanTemplate = (start) => {
+    let result = "`";
+    let index = start + 1;
+    while (index < source.length) {
+      const character = source[index];
+      if (character === "\\") {
+        result += source.slice(index, index + 2);
+        index += 2;
+        continue;
+      }
+      if (character === "`") return { result: `${result}\``, index: index + 1 };
+      if (character === "$" && source[index + 1] === "{") {
+        const expression = scanCode(index + 2, true);
+        result += `\${${expression.result}}`;
+        index = expression.index + 1;
+        continue;
+      }
+      result += character;
+      index += 1;
+    }
+    return { result, index };
+  };
+
+  return scanCode(0).result;
+}
+
+function compactRuntimeSettings(settings) {
+  for (const [property, alias] of RUNTIME_SETTING_ALIASES) {
+    if (!Object.hasOwn(settings, property)) continue;
+    settings[alias] = settings[property];
+    delete settings[property];
+  }
+}
+
+function pruneRuntimeSettingDefaults(settings) {
+  for (const [property, defaultValue] of [
+    ["appearance", "system"],
+    ["imageDataUrl", null],
+    ["imageAnimated", false],
+    ["imagePosition", "center"],
+    ["imageZoom", 1],
+    ["artDataUrl", null],
+    ["artPosition", "right center"],
+    ["artSize", "min(58vw, 860px) auto"],
+    ["artMobile", "reduce"],
+    ["artLayers", null],
+    ["brandWordmark", null],
+    ["newChatLayout", null],
+    ["reduceMotion", false],
+  ]) {
+    if (settings[property] === defaultValue) delete settings[property];
+  }
+  if (settings.variant === settings.theme) delete settings.variant;
+  if (settings.q === "f") delete settings.q;
+}
+
+// The renderer is authored for review, then shipped as one injected expression.
+// Remove formatting whitespace without touching quoted/template content. A space
+// is retained only where deleting it could merge identifiers or change ++/--.
+function compactRendererSyntax(source) {
+  let result = "";
+  let index = 0;
+  let quote = null;
+  let escaped = false;
+  const word = (character) => /[A-Za-z0-9_$]/.test(character || "");
+  while (index < source.length) {
+    const character = source[index];
+    if (quote) {
+      result += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      index += 1;
+      continue;
+    }
+    if (character === '"' || character === "'" || character === "`") {
+      quote = character;
+      result += character;
+      index += 1;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      let nextIndex = index + 1;
+      while (nextIndex < source.length && /\s/.test(source[nextIndex])) nextIndex += 1;
+      const previous = result.at(-1) || "";
+      const next = source[nextIndex] || "";
+      if ((word(previous) && word(next))
+          || (previous === "+" && next === "+")
+          || (previous === "-" && next === "-")
+          || (word(previous) && next === "/")
+          || (previous === "/" && (next === "/" || next === "*"))) result += " ";
+      index = nextIndex;
+      continue;
+    }
+    result += character;
+    index += 1;
+  }
+  return result;
 }
 
 export function filterThemeVariantCss(source, themeId, variantId = themeId, includeBrandWordmark = true) {
@@ -245,11 +748,22 @@ export async function compileTheme({
     );
   }
   const { theme, filePath: themePath, requestedTheme, fallbackFrom, customThemeUnavailable } = themeResolution;
-  const [image, artwork, artworkLayers, brandWordmark, baseCss, allVariantCss] = await Promise.all([
+  const [
+    image,
+    avatar,
+    artwork,
+    artworkLayers,
+    brandWordmark,
+    greetingCompactMark,
+    baseCss,
+    allVariantCss,
+  ] = await Promise.all([
     resolveImage(config, resolvedConfigPath),
+    resolveAvatar(config, resolvedConfigPath),
     resolveArtwork(theme),
     resolveArtworkLayers(theme),
     resolveBrandWordmark(theme),
+    resolveGreetingCompactMark(theme),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8"),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "theme-variants.css"), "utf8"),
   ]);
@@ -262,11 +776,14 @@ export async function compileTheme({
   const imageZoom = finiteNumber(config.imageZoom, "imageZoom", 1, 2);
   const studioPreviewCrops = validateStudioPreviewCrops(config.studioPreviewCrops ?? {});
   const variableCss = [
-    renderMode(':root:not([data-claude-aura-effective-mode="dark"])', theme.light),
-    renderMode(':root[data-claude-aura-effective-mode="dark"]', theme.dark),
+    renderThemeModes(theme),
     renderThemePrimitives(theme),
   ].join("\n\n");
-  const css = `${variableCss}\n\n${baseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
+  const greetingCss = renderGreetingCss(theme.newChatGreetingStyle);
+  // Personal avatar overlay rules ride along only when an avatar is set, so the
+  // common payload carries none of their bytes (the reserve ceiling is tight).
+  const avatarCss = avatar ? AVATAR_OVERLAY_CSS : "";
+  const css = `${variableCss}\n\n${baseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${greetingCss ? `\n${greetingCss}\n` : ""}${avatarCss ? `\n${avatarCss}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
     .replace(/^[ \t]+/gm, "");
   const settingsBase = {
     version: AURA_VERSION,
@@ -322,6 +839,26 @@ export async function compileTheme({
     newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,
     reduceMotion: config.reduceMotion,
   };
+  // Personal avatar: per-user, never theme-owned. Attach the data URL only when a
+  // valid avatar resolves so configs without one keep an identical digest/payload;
+  // surface `avatarUnavailable` (a stripped diagnostic) when the chosen file went
+  // missing so the Studio can warn without shipping anything to the renderer.
+  if (avatar) settingsBase.avatarDataUrl = avatar.dataUrl;
+  else if (config.avatar) settingsBase.avatarUnavailable = true;
+  // WO-21 greeting: theme-owned presentation (validated) plus host-owned effective
+  // phrases (fail open to native on invalid custom data). Only attach when there is
+  // something greeting-related so existing null-greeting configs keep a stable digest.
+  const newChatGreetingStyle = theme.newChatGreetingStyle ? cloneJson(theme.newChatGreetingStyle) : null;
+  const greetingRuntime = resolveGreetingRuntime(config.greetingPreferences ?? null, theme.name);
+  if (newChatGreetingStyle || greetingRuntime) {
+    settingsBase.greeting = {
+      style: newChatGreetingStyle,
+      phrases: greetingRuntime?.phrases ?? null,
+      phraseDigest: greetingRuntime?.phraseDigest ?? null,
+      shuffle: greetingRuntime?.shuffle ?? null,
+      ...(greetingCompactMark ? { markDataUrl: greetingCompactMark } : {}),
+    };
+  }
   const digest = crypto.createHash("sha256")
     .update(css)
     .update("\0")
@@ -346,6 +883,7 @@ export async function compileTheme({
     artwork,
     artworkLayers,
     brandWordmark,
+    greetingCompactMark,
     css,
     settings: { ...settingsBase, digest },
     digest,
@@ -356,11 +894,9 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
   if (!compiled || typeof compiled.css !== "string" || !isPlainObject(compiled.settings)) {
     throw new Error("A compiled theme is required to build a renderer payload");
   }
-  const template = compactRendererIdentifiers(
+  let template = compactRendererSyntax(compactRendererIdentifiers(
     await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8"),
-  )
-    .replace(/^[ \t]+/gm, "")
-    .replace(/\r?\n/g, "");
+  ));
   const runtimeSettings = { ...compiled.settings };
   for (const diagnosticKey of [
     "label",
@@ -369,9 +905,41 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
     "customThemeUnavailable",
     "imageUnavailable",
     "artUnavailable",
+    "avatarUnavailable",
   ]) delete runtimeSettings[diagnosticKey];
   runtimeSettings.q = runtimeSettings.backgroundScope === "full-window" ? "f" : "c";
   delete runtimeSettings.backgroundScope;
+  // WO-21: ship the compiled greeting as compact `g` — `p` = effective phrase list
+  // (host-owned custom wording), `s` = 1 flags theme-owned styling (delivered as CSS).
+  // Only present when there is something to render, so a native theme is unchanged.
+  if (runtimeSettings.greeting) {
+    const compact = {};
+    if (Array.isArray(runtimeSettings.greeting.phrases) && runtimeSettings.greeting.phrases.length) {
+      compact.p = runtimeSettings.greeting.phrases;
+      compact.d = runtimeSettings.greeting.phraseDigest;
+      if (runtimeSettings.greeting.shuffle) {
+        compact.h = [
+          runtimeSettings.greeting.shuffle.order,
+          runtimeSettings.greeting.shuffle.cursor,
+          runtimeSettings.greeting.shuffle.lastIndex,
+        ];
+      }
+    }
+    if (runtimeSettings.greeting.style) compact.s = 1;
+    if (typeof runtimeSettings.greeting.markDataUrl === "string"
+        && runtimeSettings.greeting.markDataUrl) {
+      compact.m = runtimeSettings.greeting.markDataUrl;
+    }
+    delete runtimeSettings.greeting;
+    if (compact.p || compact.s) runtimeSettings.g = compact;
+  }
+  // Strip the personal-avatar overlay when no avatar is set, so payloads for the
+  // common case carry none of its code.
+  if (!runtimeSettings.avatarDataUrl) template = template.replace(AVATAR_BLOCK_PATTERN, "");
+  // Strip the greeting subsystem when inactive, and its custom-phrases sub-block when a
+  // theme only styles the native greeting — so the default recipe payload stays lean.
+  if (!runtimeSettings.g) template = template.replace(GREETING_BLOCK_PATTERN, "");
+  else if (!runtimeSettings.g.p) template = template.replace(GREETING_PHRASES_PATTERN, "");
   if (runtimeSettings.brandWordmark) {
     const wordmark = runtimeSettings.brandWordmark;
     runtimeSettings.b = [
@@ -450,6 +1018,8 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
     runtimeSettings.n = [layout.widthRatio, layout.offsetXRatio, layout.offsetYRatio];
     delete runtimeSettings.newChatLayout;
   }
+  pruneRuntimeSettingDefaults(runtimeSettings);
+  compactRuntimeSettings(runtimeSettings);
   let compactCss = "";
   let quote = null;
   let escaped = false;
@@ -513,15 +1083,25 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
     compactCss += character;
   }
   compactCss = compactCss.trim();
-  const payload = template
+  const compressedCss = compressRendererCss(compactCss);
+  compactCss = compressedCss.css;
+  if (compressedCss.compressed) runtimeSettings.C = 1;
+  // Conditional markers and explanatory comments have done their build-time
+  // job. Do not carry them into every injected payload.
+  template = template.replace(/\/\*[\s\S]*?\*\//g, "");
+  const buildPayloadString = () => template
     .replace("__AURA_CSS_JSON__", JSON.stringify(compactCss))
     .replace("__AURA_SETTINGS_JSON__", JSON.stringify(runtimeSettings));
+  const payload = buildPayloadString();
+  // Validated phrases, presentation, and personal embeds are indivisible user
+  // intent. Reclaim chrome elsewhere or fail rather than silently changing the
+  // requested result while reporting a successful apply.
   if (payload.includes("__AURA_CSS_JSON__") || payload.includes("__AURA_SETTINGS_JSON__")) {
     throw new Error("Renderer payload placeholders were not fully replaced");
   }
   const measuredBudget = enforceBudget
-    ? enforcePayloadBudget(payload, compiled.settings, `${compiled.theme?.name ?? "Theme"} payload`)
-    : payloadBudget(payload, compiled.settings);
+    ? enforcePayloadBudget(payload, runtimeSettings, `${compiled.theme?.name ?? "Theme"} payload`)
+    : payloadBudget(payload, runtimeSettings);
   return { ...compiled, payload, payloadBudget: measuredBudget };
 }
 

@@ -142,7 +142,7 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
     /\[data-claude-aura-brand-image\][^{]*\{[^}]*(?:background-color:\s*currentColor|mask-image:\s*var\(--aura-brand-mask\))/s,
     "Theme wordmarks must preserve their authored colors instead of becoming monochrome masks");
 
-  for (const locale of ["en", "zh-CN", "zh-TW"]) {
+  for (const locale of ["en", "zh-CN", "zh-HKTW"]) {
     for (const appearance of ["light", "dark", "system"]) {
       for (const theme of await listThemes({ locale })) {
         const bundle = await buildPayload({
@@ -157,6 +157,9 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
           + (bundle.settings.brandWordmark
             ? Buffer.byteLength(bundle.settings.brandWordmark.lightDataUrl, "utf8")
               + Buffer.byteLength(bundle.settings.brandWordmark.darkDataUrl, "utf8")
+            : 0)
+          + (bundle.settings.greeting?.markDataUrl
+            ? Buffer.byteLength(bundle.settings.greeting.markDataUrl, "utf8")
             : 0);
         const payloadBytes = Buffer.byteLength(bundle.payload, "utf8");
         assert(payloadBytes - artBytes <= 62_000,
@@ -164,7 +167,8 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
         assert(artBytes < 1_400_000,
           `${locale}/${appearance}/${theme.name} embedded artwork exceeds the 1.4 MB decorative budget`);
         const embeddedArtworkCount = bundle.payload.match(/data:image\/(?:svg\+xml|webp|png|avif);base64/g)?.length ?? 0;
-        const expectedArtwork = (theme.artworkLayers ? theme.artworkLayers.length : (theme.artwork ? 1 : 0)) + 2;
+        const expectedArtwork = (theme.artworkLayers ? theme.artworkLayers.length : (theme.artwork ? 1 : 0))
+          + 2 + (bundle.settings.greeting?.markDataUrl ? 1 : 0);
         assert.equal(embeddedArtworkCount, expectedArtwork, `${locale}/${theme.name} did not embed exactly its active artwork`);
         assert(bundle.settings.brandWordmark,
           `${locale}/${theme.name} did not compile its built-in wordmark channel`);

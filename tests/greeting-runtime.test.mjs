@@ -1,0 +1,862 @@
+import { test, runIfMain } from "./support/harness.mjs";
+import {
+  assert,
+  buildPayloadFromCompiled,
+  greetingPhraseDigest,
+} from "./support/context.mjs";
+
+const G = "data-claude-aura-greeting";
+const H = "data-claude-aura-greeting-native";
+const T = "data-claude-aura-greeting-text";
+const K = "data-claude-aura-greeting-mark";
+const RUNTIME_CSS = `[${G}]{--aura-greeting-x:.1;--aura-greeting-y:.05;--aura-greeting-max-ratio:.7}`;
+
+class Style {
+  values = new Map();
+  priorities = new Map();
+
+  get cssText() {
+    return [...this.values].map(([name, value]) => `${name}:${value}${
+      this.priorities.get(name) ? " !important" : ""
+    }`).join(";");
+  }
+
+  set cssText(value) {
+    this.values.clear();
+    this.priorities.clear();
+    for (const declaration of String(value).split(";")) {
+      const [name, ...raw] = declaration.split(":");
+      if (!name || !raw.length) continue;
+      const joined = raw.join(":").trim();
+      const important = /\s*!important$/i.test(joined);
+      this.setProperty(name.trim(), joined.replace(/\s*!important$/i, ""), important ? "important" : "");
+    }
+  }
+
+  setProperty(name, value, priority = "") {
+    this.values.set(name, String(value));
+    this.priorities.set(name, String(priority));
+  }
+
+  getPropertyValue(name) {
+    return this.values.get(name) ?? "";
+  }
+
+  getPropertyPriority(name) {
+    return this.priorities.get(name) ?? "";
+  }
+
+  removeProperty(name) {
+    this.values.delete(name);
+    this.priorities.delete(name);
+  }
+}
+
+class Classes {
+  values = new Set();
+  add(...names) { names.forEach((name) => this.values.add(name)); }
+  remove(...names) { names.forEach((name) => this.values.delete(name)); }
+  contains(name) { return this.values.has(name); }
+  toggle(name, force = !this.values.has(name)) {
+    if (force) this.values.add(name);
+    else this.values.delete(name);
+    return force;
+  }
+}
+
+class Element {
+  constructor(tag, rect = { left: 0, top: 0, right: 20, bottom: 20, width: 20, height: 20 }) {
+    this.tagName = tag.toUpperCase();
+    this.nodeName = this.tagName;
+    this.rect = rect;
+    this.style = new Style();
+    this.classList = new Classes();
+    this.dataset = {};
+    this.children = [];
+    this.parentElement = null;
+    this.parentNode = null;
+    this.textContent = "";
+    this.id = "";
+    this.fontSize = 16;
+  }
+
+  get isConnected() {
+    return this.tagName === "HTML" || Boolean(this.parentElement?.isConnected);
+  }
+
+  appendChild(child) {
+    child.remove();
+    this.children.push(child);
+    child.parentElement = child.parentNode = this;
+    return child;
+  }
+
+  prepend(child) {
+    child.remove();
+    this.children.unshift(child);
+    child.parentElement = child.parentNode = this;
+    return child;
+  }
+
+  insertBefore(child, before) {
+    child.remove();
+    const index = before ? this.children.indexOf(before) : -1;
+    if (index < 0) this.children.push(child);
+    else this.children.splice(index, 0, child);
+    child.parentElement = child.parentNode = this;
+    return child;
+  }
+
+  remove() {
+    if (!this.parentElement) return;
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+    this.parentElement = this.parentNode = null;
+  }
+
+  contains(node) {
+    return node === this || this.children.some((child) => child.contains(node));
+  }
+
+  setAttribute(name, value) {
+    this[name] = String(value);
+  }
+
+  getAttribute(name) {
+    return Object.hasOwn(this, name) ? this[name] : null;
+  }
+
+  hasAttribute(name) {
+    return Object.hasOwn(this, name);
+  }
+
+  removeAttribute(name) {
+    delete this[name];
+  }
+
+  getBoundingClientRect() {
+    for (let node = this.parentElement; node; node = node.parentElement) {
+      if (node.style.getPropertyValue("display") === "none") {
+        return { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+      }
+    }
+    let rect = this.rect;
+    if (this.getAttribute(G) === "new-chat") {
+      rect = { left: 560, top: 300, right: 880, bottom: 350, width: 320, height: 50 };
+    } else if (this.getAttribute(G) === "decoration") {
+      const left = Number.parseFloat(this.style.getPropertyValue("left")) || 0;
+      const top = Number.parseFloat(this.style.getPropertyValue("top")) || 0;
+      const width = Number.parseFloat(this.style.getPropertyValue("width")) || 24;
+      const height = Number.parseFloat(this.style.getPropertyValue("height")) || 24;
+      rect = { left, top, right: left + width, bottom: top + height, width, height };
+    }
+    let dx = 0;
+    let dy = 0;
+    for (let node = this; node; node = node.parentElement) {
+      const [x = "0", y = "0"] = node.style.getPropertyValue("translate").split(/\s+/);
+      dx += Number.parseFloat(x) || 0;
+      dy += Number.parseFloat(y) || 0;
+    }
+    return {
+      ...rect,
+      left: rect.left + dx,
+      right: rect.right + dx,
+      top: rect.top + dy,
+      bottom: rect.bottom + dy,
+    };
+  }
+
+  matches(selector) {
+    return selector.split(",").some((part) => {
+      const value = part.trim();
+      if (value === "*") return true;
+      if (value === "main") return this.tagName === "MAIN";
+      if (value === "nav") return this.tagName === "NAV";
+      if (value === "form") return this.tagName === "FORM";
+      if (value === "button") return this.tagName === "BUTTON";
+      if (value === "select") return this.tagName === "SELECT";
+      if (value === "textarea:not([readonly])") {
+        return this.tagName === "TEXTAREA" && !this.hasAttribute("readonly");
+      }
+      if (value === ".ProseMirror[contenteditable=\"true\"]") {
+        return this.classList.contains("ProseMirror") && this.contenteditable === "true";
+      }
+      if (value === "[role=\"textbox\"][contenteditable=\"true\"]") {
+        return this.role === "textbox" && this.contenteditable === "true";
+      }
+      const tagAttribute = value.match(/^([a-z0-9-]+)?\[([^=\]]+)(?:="([^"]*)")?\]$/i);
+      if (tagAttribute) {
+        const [, tag, name, expected] = tagAttribute;
+        return (!tag || this.tagName === tag.toUpperCase())
+          && this.hasAttribute(name)
+          && (expected === undefined || this.getAttribute(name) === expected);
+      }
+      return this.tagName === value.toUpperCase();
+    });
+  }
+
+  closest(selector) {
+    for (let node = this; node; node = node.parentElement) {
+      if (node.matches(selector)) return node;
+    }
+    return null;
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
+  querySelectorAll(selector) {
+    return this.children.flatMap((child) => [
+      ...(child.matches(selector) ? [child] : []),
+      ...child.querySelectorAll(selector),
+    ]);
+  }
+}
+
+function makeGreetingBranch(top = 280) {
+  const outer = new Element("div", {
+    left: 430, top, right: 1010, bottom: top + 70, width: 580, height: 70,
+  });
+  const row = new Element("div", {
+    left: 550, top: top + 10, right: 890, bottom: top + 60, width: 340, height: 50,
+  });
+  row.fontSize = 32;
+  const mark = new Element("div", {
+    left: 550, top: top + 20, right: 578, bottom: top + 48, width: 28, height: 28,
+  });
+  const text = new Element("span", {
+    left: 590, top: top + 10, right: 890, bottom: top + 60, width: 300, height: 50,
+  });
+  text.fontSize = 32;
+  text.textContent = "native words are never inspected by Aura";
+  row.appendChild(mark);
+  row.appendChild(text);
+  outer.appendChild(row);
+  return { outer, row, mark, text };
+}
+
+async function makePayload({ digest, phrases, mark = false, styled = true, shuffle = null }) {
+  const phraseDigest = Array.isArray(phrases) && phrases.length
+    ? greetingPhraseDigest(phrases)
+    : null;
+  const compiled = {
+    css: RUNTIME_CSS,
+    settings: {
+      version: "test",
+      theme: "default",
+      appearance: "light",
+      digest,
+      imageDataUrl: null,
+      imageOpacity: null,
+      imageZoom: 1,
+      artDataUrl: null,
+      artLayers: [],
+      backgroundScope: "full-window",
+      newChatLayout: null,
+      reduceMotion: false,
+      greeting: { style: styled ? {} : null, phrases, phraseDigest, shuffle },
+    },
+  };
+  const bundle = await buildPayloadFromCompiled(compiled, { enforceBudget: false });
+  if (!mark) return bundle.payload;
+  return bundle.payload.replace(
+    /("g":\{[^{}]*)(\})/,
+    `$1,"m":"data:image/svg+xml;base64,PHN2Zy8+"$2`,
+  );
+}
+
+async function runtime(options = {}) {
+  const {
+    count = 1,
+    phrases = ["First phrase", "Second phrase"],
+    mark = false,
+    styled = true,
+    digest = "greeting-runtime-a",
+    nativeStyle = null,
+    headingTag = null,
+    semanticLevel = null,
+    controlDecoys = false,
+    greetingX = 0.1,
+    greetingY = 0.05,
+    greetingMax = 0.7,
+    shuffle = null,
+  } = options;
+  const html = new Element("html");
+  const head = new Element("head");
+  const body = new Element("body");
+  html.appendChild(head);
+  html.appendChild(body);
+  const main = new Element("main", {
+    left: 250, top: 0, right: 1440, bottom: 900, width: 1190, height: 900,
+  });
+  body.appendChild(main);
+  const greetings = Array.from({ length: count }, (_, index) => makeGreetingBranch(260 + index * 4));
+  for (const { row } of greetings) {
+    if (headingTag) row.tagName = row.nodeName = headingTag.toUpperCase();
+    if (semanticLevel) {
+      row.setAttribute("role", "heading");
+      row.setAttribute("aria-level", String(semanticLevel));
+    }
+  }
+  if (nativeStyle) for (const { row } of greetings) {
+    if (nativeStyle.ariaHidden !== undefined) row.setAttribute("aria-hidden", nativeStyle.ariaHidden);
+    for (const [property, value, priority = ""] of nativeStyle.properties ?? []) {
+      row.style.setProperty(property, value, priority);
+    }
+  }
+  greetings.forEach(({ outer }) => main.appendChild(outer));
+  const decoys = [];
+  if (controlDecoys) {
+    const definitions = [
+      ["button", null, null],
+    ];
+    definitions.forEach(([tag, attribute, value], index) => {
+      const wrapper = new Element(tag, {
+        left: 520, top: 300 + index, right: 920, bottom: 370 + index, width: 400, height: 70,
+      });
+      if (attribute) wrapper.setAttribute(attribute, value);
+      if (value === "textbox") wrapper.setAttribute("contenteditable", "true");
+      const heading = new Element("h2", {
+        left: 560, top: 310 + index, right: 880, bottom: 360 + index, width: 320, height: 50,
+      });
+      heading.fontSize = 34;
+      wrapper.appendChild(heading);
+      main.appendChild(wrapper);
+      decoys.push({ wrapper, heading });
+    });
+  }
+  const group = new Element("section", {
+    left: 430, top: 400, right: 1030, bottom: 620, width: 600, height: 220,
+  });
+  const shell = new Element("section", {
+    left: 430, top: 430, right: 1030, bottom: 570, width: 600, height: 140,
+  });
+  const editor = new Element("textarea", {
+    left: 450, top: 450, right: 1010, bottom: 500, width: 560, height: 50,
+  });
+  shell.appendChild(editor);
+  shell.appendChild(new Element("button", {
+    left: 450, top: 520, right: 474, bottom: 544, width: 24, height: 24,
+  }));
+  group.appendChild(shell);
+  main.appendChild(group);
+  const walk = (node) => [node, ...node.children.flatMap(walk)];
+  const documentListeners = new Map();
+  const document = {
+    documentElement: html,
+    head,
+    body,
+    fullscreenElement: null,
+    createElement: (tag) => new Element(tag),
+    querySelector: (selector) => walk(html).find((node) => node.matches(selector)) ?? null,
+    querySelectorAll: (selector) => walk(html).filter((node) => node.matches(selector)),
+    getElementById: (id) => walk(html).find((node) => node.id === id) ?? null,
+    addEventListener(type, listener) {
+      const listeners = documentListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      documentListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) { documentListeners.get(type)?.delete(listener); },
+  };
+  const mediaListeners = new Set();
+  let forced = false;
+  const forcedQuery = {
+    get matches() { return forced; },
+    addEventListener(type, listener) { if (type === "change") mediaListeners.add(listener); },
+    removeEventListener(type, listener) { if (type === "change") mediaListeners.delete(listener); },
+  };
+  const normalQuery = { matches: false, addEventListener() {}, removeEventListener() {} };
+  const listeners = new Map();
+  const navigationListeners = new Set();
+  const resizeObservers = new Set();
+  class ResizeObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = new Set();
+      resizeObservers.add(this);
+    }
+    observe(target) { this.targets.add(target); }
+    disconnect() { this.targets.clear(); }
+  }
+  const navigation = {
+    currentEntry: { key: "visit-1" },
+    addEventListener(type, listener) { if (type === "currententrychange") navigationListeners.add(listener); },
+    removeEventListener(type, listener) { if (type === "currententrychange") navigationListeners.delete(listener); },
+  };
+  const frames = [];
+  const window = {
+    innerWidth: 1440,
+    innerHeight: 900,
+    screen: { availWidth: 1440, availHeight: 900 },
+    navigation,
+    ResizeObserver,
+    matchMedia: (query) => query === "(forced-colors: active)" ? forcedQuery : normalQuery,
+    requestAnimationFrame(callback) { frames.push(callback); return frames.length; },
+    getComputedStyle(element) {
+      const inheritedFont = (() => {
+        for (let node = element; node; node = node.parentElement) {
+          if (node.fontSize) return `${node.fontSize}px`;
+        }
+        return "16px";
+      })();
+      return {
+        display: element.style.getPropertyValue("display") || "block",
+        visibility: element.style.getPropertyValue("visibility") || "visible",
+        translate: element.style.getPropertyValue("translate") || "none",
+        fontSize: inheritedFont,
+        backgroundColor: "rgba(0, 0, 0, 0)",
+        backgroundImage: "none",
+        getPropertyValue(name) {
+          if (name === "font-size") return inheritedFont;
+          if (name === "font-family") return "sans-serif";
+          if (name === "font-weight") return "400";
+          if (name === "line-height") return "1.5";
+          if (name === "color") return "rgb(0, 0, 0)";
+          if (name === "text-align") return "center";
+          if (name === "--aura-greeting-x") return String(greetingX);
+          if (name === "--aura-greeting-y") return String(greetingY);
+          if (name === "--aura-greeting-max-ratio") return String(greetingMax);
+          return element.style.getPropertyValue(name);
+        },
+      };
+    },
+    addEventListener(type, listener) {
+      const set = listeners.get(type) ?? new Set();
+      set.add(listener);
+      listeners.set(type, set);
+    },
+    removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+  };
+  let timer = 0;
+  const intervals = new Set();
+  const timeouts = new Map();
+  const setInterval = () => { const id = ++timer; intervals.add(id); return id; };
+  const clearInterval = (id) => intervals.delete(id);
+  const setTimeout = (callback) => { const id = ++timer; timeouts.set(id, callback); return id; };
+  const clearTimeout = (id) => timeouts.delete(id);
+  class MutationObserver {
+    observe() {}
+    disconnect() {}
+  }
+  const injectPayload = async (nextDigest = digest) => {
+    const payload = await makePayload({ digest: nextDigest, phrases, mark, styled, shuffle });
+    const inject = new Function(
+      "window", "document", "MutationObserver",
+      "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+      payload,
+    );
+    return inject(window, document, MutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  };
+  await injectPayload();
+  const flushFrame = () => frames.shift()?.();
+  const flushTimeout = () => {
+    const next = timeouts.entries().next().value;
+    if (!next) return false;
+    const [id, callback] = next;
+    timeouts.delete(id);
+    callback();
+    return true;
+  };
+  const replacements = () => document.querySelectorAll(`[${G}="new-chat"]`);
+  const ownerCount = () => {
+    const native = greetings.filter(({ text }) => text.isConnected
+      && text.getBoundingClientRect().width > 0
+      && window.getComputedStyle(text).display !== "none"
+      && text.getAttribute("aria-hidden") !== "true").length;
+    const aura = replacements().filter((node) => window.getComputedStyle(node).display !== "none"
+      && window.getComputedStyle(node).visibility !== "hidden"
+      && node.getAttribute("aria-hidden") !== "true").length;
+    return native + aura;
+  };
+  return {
+    window,
+    document,
+    main,
+    group,
+    shell,
+    decoys,
+    greetings,
+    mediaListeners,
+    navigationListeners,
+    replacements,
+    ownerCount,
+    flushFrame,
+    flushTimeout,
+    injectPayload,
+    activeResizeObservers() {
+      return [...resizeObservers].filter((observer) => observer.targets.size).length;
+    },
+    triggerResize(target) {
+      for (const observer of resizeObservers) {
+        if (observer.targets.has(target)) {
+          observer.callback([{ target, contentRect: target.getBoundingClientRect() }], observer);
+        }
+      }
+    },
+    setForced(value) {
+      forced = value;
+      mediaListeners.forEach((listener) => listener({ matches: value }));
+    },
+    remountGreeting() {
+      greetings[0]?.outer.remove();
+      const next = makeGreetingBranch(260);
+      greetings.splice(0, greetings.length, next);
+      main.insertBefore(next.outer, group);
+      return next;
+    },
+  };
+}
+
+test("plain-div greeting binds outside the composer group and swaps with exactly one owner", async () => {
+  const app = await runtime({
+    mark: true,
+    nativeStyle: {
+      ariaHidden: "false",
+      properties: [["display", "grid", "important"]],
+    },
+  });
+  const state = app.window.__CLAUDE_AURA_STATE__;
+  const native = app.greetings[0].row;
+  assert.equal(app.document.getElementById("claude-aura-style").textContent, RUNTIME_CSS,
+    "the runtime CSS dictionary did not decode before style installation");
+  assert.equal(state.getGreetingProbe().status, "pending");
+  assert.equal(state.getGreetingProbe().candidateCount, 1);
+  assert.equal(app.ownerCount(), 1, "pending replacement must not create a second visible owner");
+  assert.equal(native.getAttribute("aria-hidden"), "false");
+  assert.equal(native.style.getPropertyValue("display"), "grid");
+  app.flushFrame();
+  assert.equal(state.getGreetingProbe().status, "verifying");
+  assert.equal(app.ownerCount(), 1, "activation frame must hand off to exactly one owner");
+  assert.equal(app.greetings[0].row.getAttribute(H), null,
+    "custom wording must not hide the wrapper that owns Claude's native mark");
+  assert.equal(app.greetings[0].text.getAttribute(H), "true");
+  assert.equal(app.greetings[0].mark.getAttribute(K), "native");
+  app.flushFrame();
+  assert.equal(state.getGreetingProbe().status, "custom");
+  assert.equal(app.ownerCount(), 1);
+  assert.equal(app.replacements()[0].parentElement, app.greetings[0].row,
+    "native mark and Aura text must remain in Claude's original flex/grid row");
+  assert.equal(app.replacements()[0].style.getPropertyValue("font-family"), "",
+    "native computed typography overrode the compiled greeting style");
+  assert.equal(app.replacements()[0].style.getPropertyValue("overflow-wrap"), "anywhere",
+    "custom text can overflow its bounded measure");
+  const phrase = app.replacements()[0].querySelector(`[${T}]`).textContent;
+  const compactDecoration = app.document.querySelector(`[${G}="decoration"]`);
+  assert(compactDecoration?.querySelector(`[${K}="compact"]`),
+    "custom greeting did not receive its registered compact mark");
+  assert.equal(compactDecoration.style.getPropertyValue("position"), "fixed",
+    "an opacity-zero compact mark must not reserve a layout gap");
+  const probe = state.getGreetingProbe();
+  assert.deepEqual(Object.keys(probe), [
+    "version", "digest", "context", "status", "candidateCount", "source",
+    "nativeConnected", "replacementConnected", "replacementVisible",
+    "nativeHidden", "visitEpoch", "shuffle", "rect",
+  ]);
+  assert(!JSON.stringify(probe).includes(phrase), "probe leaked personalized greeting text");
+  assert.deepEqual(Object.keys(probe.shuffle), [
+    "themeId", "phraseDigest", "order", "cursor", "lastIndex",
+  ]);
+  assert.equal(probe.shuffle.themeId, "default");
+  assert.match(probe.shuffle.phraseDigest, /^[a-f0-9]{64}$/);
+  assert.deepEqual([...probe.shuffle.order].sort(), [0, 1]);
+  assert.equal(probe.shuffle.cursor, 1);
+  assert.equal(probe.shuffle.lastIndex, probe.shuffle.order[0]);
+  assert(!JSON.stringify(probe.shuffle).includes(phrase),
+    "shuffle checkpoint leaked personalized greeting text");
+
+  const resumed = await runtime({ shuffle: probe.shuffle });
+  resumed.flushFrame();
+  resumed.flushFrame();
+  assert.notEqual(
+    resumed.replacements()[0].querySelector(`[${T}]`).textContent,
+    phrase,
+    "a fresh runtime did not resume at the next persisted shuffle index",
+  );
+
+  state.ensure();
+  assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase);
+  assert.equal(state.getGreetingProbe().visitEpoch, probe.visitEpoch);
+  assert.deepEqual(
+    [state.getGreetingProbe().rect.left, state.getGreetingProbe().rect.top],
+    [679, 345],
+    "stable repair composed the canvas offset through both wrapper and replacement",
+  );
+  app.setForced(true);
+  assert.equal(state.getGreetingProbe().status, "forced-colors");
+  assert.equal(app.ownerCount(), 1);
+  assert.equal(native.getAttribute("aria-hidden"), "false");
+  assert.equal(native.style.getPropertyValue("display"), "grid");
+  assert.equal(native.style.getPropertyPriority("display"), "important");
+  app.setForced(false);
+  app.flushFrame();
+  app.flushFrame();
+  assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase,
+    "forced-colors repair rerolled the semantic visit");
+
+  const epoch = state.getGreetingProbe().visitEpoch;
+  await app.injectPayload("greeting-runtime-b");
+  app.flushFrame();
+  app.flushFrame();
+  assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase,
+    "appearance-like reinjection rerolled the semantic visit");
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().visitEpoch, epoch);
+
+  app.remountGreeting();
+  app.window.__CLAUDE_AURA_STATE__.ensure();
+  app.flushFrame();
+  app.flushFrame();
+  assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase,
+    "Claude remount rerolled the semantic visit");
+
+  app.window.navigation.currentEntry = { key: "visit-2" };
+  app.navigationListeners.forEach((listener) => listener());
+  app.window.__CLAUDE_AURA_STATE__.ensure();
+  assert.notEqual(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase,
+    "new navigation did not advance the shuffle bag");
+  assert(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().visitEpoch > epoch);
+
+  const remounted = app.greetings[0].row;
+  app.window.__CLAUDE_AURA_STATE__.cleanup();
+  assert.equal(remounted.getAttribute("aria-hidden"), null);
+  assert.equal(remounted.style.getPropertyValue("display"), "");
+  assert.equal(app.replacements().length, 0);
+});
+
+test("custom wording without a portable style keeps native typography and safe wrapping", async () => {
+  const app = await runtime({
+    styled: false,
+    phrases: ["A".repeat(120)],
+  });
+  app.flushFrame();
+  app.flushFrame();
+  const replacement = app.replacements()[0];
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "custom");
+  assert.equal(replacement.style.getPropertyValue("font-family"), "sans-serif",
+    "unstyled custom wording did not inherit Claude's typography");
+  assert.equal(replacement.style.getPropertyValue("max-width"), "100%",
+    "unstyled custom wording lost its renderer-owned width bound");
+  assert.equal(replacement.style.getPropertyValue("white-space"), "normal");
+  assert.equal(replacement.style.getPropertyValue("overflow-wrap"), "anywhere",
+    "unstyled long wording can overflow instead of wrapping");
+});
+
+test("a failed compact mark restores Claude's native greeting", async () => {
+  const app = await runtime({ mark: true });
+  app.flushFrame();
+  app.flushFrame();
+  const image = app.document.querySelector(`[${G}="decoration"]`)?.querySelector(`[${K}="compact"]`);
+  assert.equal(typeof image?.onerror, "function", "compact mark has no decode failure path");
+  image.onerror();
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "unmeasurable");
+  assert.equal(app.replacements().length, 0);
+  assert.equal(app.greetings[0].text.getAttribute(H), null);
+  assert.equal(app.greetings[0].text.style.getPropertyValue("display"), "");
+  assert.equal(app.ownerCount(), 1, "compact mark failure did not fail open to Claude");
+  app.window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(app.replacements().length, 0, "repair retried a failed compact mark");
+  assert.equal(app.ownerCount(), 1, "repair hid Claude again after compact mark failure");
+});
+
+test("a failed compact mark also removes native-mode styling", async () => {
+  const app = await runtime({ mark: true, phrases: null });
+  const { row, text } = app.greetings[0];
+  const image = app.document.querySelector(`[${G}="decoration"]`)?.querySelector(`[${K}="compact"]`);
+  assert.equal(row.getAttribute(G), "native");
+  image.onerror();
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "unmeasurable");
+  assert.equal(row.getAttribute(G), null);
+  assert.equal(text.getAttribute(H), null);
+  assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
+  app.window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(row.getAttribute(G), null, "native styling retried after compact mark failure");
+});
+
+test("missing and ambiguous plain-div greetings fail open without mutation", async () => {
+  const missing = await runtime({ count: 0 });
+  assert.equal(missing.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "missing");
+  assert.equal(missing.window.__CLAUDE_AURA_STATE__.getGreetingProbe().candidateCount, 0);
+  assert.equal(missing.replacements().length, 0);
+
+  const ambiguous = await runtime({ count: 2 });
+  const probe = ambiguous.window.__CLAUDE_AURA_STATE__.getGreetingProbe();
+  assert.equal(probe.status, "ambiguous");
+  assert.equal(probe.candidateCount, 2);
+  assert.equal(ambiguous.replacements().length, 0);
+  for (const { row, mark } of ambiguous.greetings) {
+    assert.equal(row.getAttribute(H), null);
+    assert.equal(row.getAttribute(G), null);
+    assert.equal(mark.getAttribute(K), null);
+  }
+});
+
+test("heading-like text inside a control is never owned", async () => {
+  const app = await runtime({ controlDecoys: true });
+  app.flushFrame();
+  app.flushFrame();
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "custom");
+  assert.equal(app.window.__CLAUDE_AURA_STATE__.getGreetingProbe().candidateCount, 1);
+  assert.equal(app.ownerCount(), 1);
+  for (const { wrapper, heading } of app.decoys) {
+    assert.equal(wrapper.getAttribute(G), null);
+    assert.equal(heading.getAttribute(G), null);
+    assert.equal(wrapper.getAttribute(H), null);
+    assert.equal(heading.getAttribute(H), null);
+  }
+});
+
+test("native and custom placement outside the main canvas fail open", async () => {
+  const custom = await runtime({ greetingY: -0.4 });
+  custom.flushFrame();
+  custom.flushFrame();
+  assert.equal(custom.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "unmeasurable");
+  assert.equal(custom.replacements().length, 0);
+  assert.equal(custom.ownerCount(), 1);
+
+  const native = await runtime({ greetingY: -0.4, phrases: null });
+  assert.equal(native.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "unmeasurable");
+  assert.equal(native.greetings[0].row.getAttribute(G), null);
+  assert.equal(native.ownerCount(), 1);
+});
+
+test("an established custom greeting fails open when the observed canvas shrinks", async () => {
+  const app = await runtime();
+  app.flushFrame();
+  app.flushFrame();
+  const state = app.window.__CLAUDE_AURA_STATE__;
+  const phrase = app.replacements()[0].querySelector(`[${T}]`).textContent;
+  const cursor = state.getGreetingProbe().shuffle.cursor;
+  assert.equal(app.activeResizeObservers(), 1, "greeting lifecycle created duplicate active observers");
+
+  app.triggerResize(app.main);
+  assert.equal(app.flushTimeout(), true, "main ResizeObserver did not schedule a repair");
+  assert.equal(state.getGreetingProbe().status, "custom");
+  assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase,
+    "a geometry-only repair rerolled the greeting");
+  assert.equal(state.getGreetingProbe().shuffle.cursor, cursor);
+  assert.equal(app.activeResizeObservers(), 1, "stable repair rebound duplicate observers");
+
+  app.main.rect = {
+    left: 700, top: 0, right: 1440, bottom: 900, width: 740, height: 900,
+  };
+  app.triggerResize(app.main);
+  assert.equal(app.flushTimeout(), true);
+  assert.equal(state.getGreetingProbe().status, "unmeasurable");
+  assert.equal(app.replacements().length, 0);
+  assert.equal(app.ownerCount(), 1, "canvas shrink did not restore Claude's greeting");
+  assert.equal(app.activeResizeObservers(), 0, "failed ownership left a ResizeObserver bound");
+});
+
+test("an established custom greeting fails open when the observed composer moves above it", async () => {
+  const app = await runtime();
+  app.flushFrame();
+  app.flushFrame();
+  const state = app.window.__CLAUDE_AURA_STATE__;
+  app.shell.rect = {
+    left: 430, top: 330, right: 1030, bottom: 470, width: 600, height: 140,
+  };
+  app.triggerResize(app.shell);
+  assert.equal(app.flushTimeout(), true, "composer ResizeObserver did not schedule a repair");
+  assert.equal(state.getGreetingProbe().status, "unmeasurable");
+  assert.equal(app.replacements().length, 0);
+  assert.equal(app.ownerCount(), 1, "composer movement did not restore Claude's greeting");
+  assert.equal(app.activeResizeObservers(), 0);
+});
+
+test("a reparented native leaf restores even after its saved wrapper disconnects", async () => {
+  const app = await runtime();
+  app.flushFrame();
+  app.flushFrame();
+  const state = app.window.__CLAUDE_AURA_STATE__;
+  const { outer, text } = app.greetings[0];
+  const safeHost = new Element("section", {
+    left: 500, top: 250, right: 940, bottom: 350, width: 440, height: 100,
+  });
+  app.main.insertBefore(safeHost, app.group);
+  outer.remove();
+  safeHost.appendChild(text);
+
+  state.ensure();
+  assert.equal(state.getGreetingProbe().status, "missing");
+  assert.equal(text.getAttribute(H), null, "connected native leaf kept Aura's ownership marker");
+  assert.equal(text.getAttribute("aria-hidden"), null, "connected native leaf stayed hidden");
+  assert.equal(text.style.getPropertyValue("display"), "", "connected native leaf stayed display:none");
+  assert.equal(app.replacements().length, 0);
+  assert.equal(app.ownerCount(), 1);
+  assert.equal(app.activeResizeObservers(), 0);
+});
+
+test("a prior greeting owner is rejected after reparenting into a control or dialog", async () => {
+  for (const excluded of [
+    { tag: "button" },
+    { tag: "section", role: "dialog" },
+  ]) {
+    const app = await runtime();
+    app.flushFrame();
+    app.flushFrame();
+    const state = app.window.__CLAUDE_AURA_STATE__;
+    const container = new Element(excluded.tag, {
+      left: 500, top: 250, right: 940, bottom: 350, width: 440, height: 100,
+    });
+    if (excluded.role) container.setAttribute("role", excluded.role);
+    app.main.insertBefore(container, app.group);
+    container.appendChild(app.greetings[0].row);
+
+    state.ensure();
+    assert.equal(state.getGreetingProbe().status, "missing");
+    assert.equal(app.replacements().length, 0);
+    assert.equal(app.greetings[0].text.getAttribute(H), null);
+    assert.equal(app.greetings[0].text.style.getPropertyValue("display"), "");
+    assert.equal(app.ownerCount(), 1,
+      `${excluded.role ?? excluded.tag} reparenting did not fail open to Claude`);
+    assert.equal(app.activeResizeObservers(), 0);
+  }
+});
+
+test("native greeting styles and compact decoration restore Claude state exactly", async () => {
+  const app = await runtime({
+    phrases: null,
+    mark: true,
+    nativeStyle: {
+      ariaHidden: "false",
+      properties: [
+        ["display", "flex", "important"],
+        ["translate", "3px 4px", "important"],
+        ["max-width", "444px", "important"],
+      ],
+    },
+  });
+  const { row, mark } = app.greetings[0];
+  const probe = app.window.__CLAUDE_AURA_STATE__.getGreetingProbe();
+  assert.equal(probe.status, "native");
+  assert.equal(row.getAttribute(G), "native");
+  assert.equal(mark.getAttribute(K), "native");
+  assert(app.document.querySelector(`[${G}="decoration"]`)?.querySelector(`[${K}="compact"]`),
+    "native words did not receive an inert compact-mark alternative");
+  app.window.__CLAUDE_AURA_STATE__.cleanup();
+  assert.equal(row.getAttribute(G), null);
+  assert.equal(mark.getAttribute(K), null);
+  assert.equal(row.getAttribute("aria-hidden"), "false");
+  assert.equal(row.style.getPropertyValue("display"), "flex");
+  assert.equal(row.style.getPropertyPriority("display"), "important");
+  assert.equal(row.style.getPropertyValue("translate"), "3px 4px");
+  assert.equal(row.style.getPropertyPriority("translate"), "important");
+  assert.equal(row.style.getPropertyValue("max-width"), "444px");
+  assert.equal(row.style.getPropertyPriority("max-width"), "important");
+  assert.equal(app.document.querySelector(`[${G}="decoration"]`), null);
+});
+
+test("custom greeting copies a bounded native semantic heading level", async () => {
+  for (const options of [{ headingTag: "h2" }, { semanticLevel: 3 }]) {
+    const app = await runtime(options);
+    app.flushFrame();
+    app.flushFrame();
+    const replacement = app.replacements()[0];
+    assert.equal(replacement.getAttribute("aria-level"), options.headingTag ? "2" : "3");
+    assert.equal(app.greetings[0].row.getAttribute(H), "true",
+      "a semantic native heading must be hidden as one unit");
+    assert.equal(app.ownerCount(), 1);
+    app.window.__CLAUDE_AURA_STATE__.cleanup();
+  }
+});
+
+await runIfMain(import.meta.url);

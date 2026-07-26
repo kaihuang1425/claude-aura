@@ -7,8 +7,31 @@ export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.
 export const THEMES_DIR = path.join(PROJECT_ROOT, "themes");
 export const THEME_REGISTRY_PATH = path.join(THEMES_DIR, "registry.json");
 export const THEME_KIT_FILENAME = "theme.json";
-export const SUPPORTED_LOCALES = Object.freeze(["en", "zh-CN", "zh-TW"]);
-export const STUDIO_THEME_SCHEMA_VERSION = 2;
+export const SUPPORTED_LOCALES = Object.freeze(["en", "zh-CN", "zh-HKTW"]);
+export const STUDIO_THEME_SCHEMA_VERSION = 3;
+// Studio-authored kit documents. v2 predates the WO-21 greeting surface; v3 adds
+// the optional newChatGreetingStyle. Both load through the Studio path and are
+// normalized up to the current version in memory. Legacy hand-authored kits stay
+// schemaVersion 1 and load through the registry-entry path.
+export const STUDIO_KIT_SCHEMA_VERSIONS = new Set([2, 3]);
+// WO-21 new-chat greeting style allowlists. The portable theme carries only
+// presentation; personal phrases and names stay host-owned and never enter here.
+export const GREETING_FONT_CATEGORIES = new Set([
+  "system-sans", "humanist-sans", "rounded-sans", "editorial-serif",
+]);
+export const GREETING_COLOR_ROLES = new Set(["primary", "accent"]);
+export const GREETING_ALIGNMENTS = new Set(["start", "center", "end"]);
+export const GREETING_DECORATIONS = new Set(["none", "underline", "hairline", "glow"]);
+export const GREETING_MARK_SOURCES = new Set(["none", "native", "compact"]);
+export const GREETING_FONT_WEIGHTS = new Set([300, 400, 500, 600, 650, 700]);
+// Host-owned greeting personalization bounds (never enter the portable theme).
+export const GREETING_MAX_PHRASES = 12;
+export const GREETING_MAX_PHRASE_SCALARS = 120;
+export const GREETING_MAX_NAME_LENGTH = 40;
+export const GREETING_MAX_COMPILED_BYTES = 2048;
+export const GREETING_MAX_THEME_OVERRIDES = 64;
+export const GREETING_PREFERENCE_SOURCES = new Set(["claude", "custom"]);
+export const GREETING_THEME_OVERRIDE_MODES = new Set(["claude", "global", "custom"]);
 export const STUDIO_MAX_LAYERS = 8;
 export const STUDIO_MAX_HISTORY = 50;
 export const STUDIO_MAX_PATCH_CHANGES = 16;
@@ -46,11 +69,18 @@ export const DEFAULT_CONFIG = Object.freeze({
   theme: "default",
   appearance: "system",
   image: null,
+  // Per-user personal avatar: an absolute path to an image that overlays the
+  // Claude account picture in the sidebar footer. `null` = keep Claude's own
+  // avatar. Personal, never written into theme documents, exports, or packages.
+  avatar: null,
   imageOpacity: null,
   imagePosition: "center",
   imageZoom: 1,
   studioPreviewCrops: {},
   reduceMotion: false,
+  // Host-owned greeting personalization. `null` = use Claude's native greeting.
+  // Personal phrases/name never enter theme documents, exports, or packages.
+  greetingPreferences: null,
 });
 
 export const LEGACY_REQUIRED_TOKENS = [
@@ -130,6 +160,10 @@ export const ARTWORK_TYPES = new Map([
   [".avif", "image/avif"],
 ]);
 export const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
+// Personal avatars are small display elements (~40px), so cap them far below the
+// wallpaper. Like the wallpaper, the avatar is excluded from the chrome budget
+// but still ships inside the payload, so keep it lean.
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 export const MAX_ARTWORK_BYTES = 3 * 1024 * 1024;
 export const MAX_USER_RASTER_ARTWORK_BYTES = 400_000;
 export const MAX_USER_ARTWORK_TOTAL_BYTES = 1_400_000;
@@ -172,7 +206,7 @@ export const DEFAULT_LAUNCHER_STYLE = Object.freeze({
   accent: "#D66D4B",
   border: "#655C70",
   radius: 16,
-  borderWidth: 1,
+  borderWidth: 2,
 });
 export const BUILTIN_LAUNCHER_ASSET_PATTERN = /^assets\/theme-art\/([a-z][a-z0-9-]{1,39})\/launcher-mark\.png$/;
 export const USER_LAUNCHER_ASSET_PATTERN = /^launcher-mark\.png$/;

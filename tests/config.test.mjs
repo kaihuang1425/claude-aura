@@ -100,14 +100,14 @@ test("config writes are atomic, aliases migrate, and theme choice persists", asy
       "A rejected background zoom changed the persisted configuration");
     const show = JSON.parse(run(process.execPath, ["scripts/theme-cli.mjs", "show", "--config", configPath, "--json"]));
     assert.equal(show.theme.name, "study-library");
-    const localizedLabel = (await listThemes({ locale: "zh-TW" })).find((theme) => theme.name === "korean-idol").label;
+    const localizedLabel = (await listThemes({ locale: "zh-HKTW" })).find((theme) => theme.name === "korean-idol").label;
     const savedPayload = run(process.execPath, ["scripts/theme-cli.mjs", "set", "--config", configPath,
-      "--theme", "korean-idol", "--locale", "zh-TW", "--payload"]);
+      "--theme", "korean-idol", "--locale", "zh-HKTW", "--payload"]);
     assert(!Object.hasOwn(readPayloadSettings(savedPayload), "label"));
     assert.equal(JSON.parse(await fs.readFile(configPath, "utf8")).theme, "korean-idol");
     new Function(savedPayload);
     const localizedShow = JSON.parse(run(process.execPath, [
-      "scripts/theme-cli.mjs", "show", "--config", configPath, "--locale", "zh-TW", "--json",
+      "scripts/theme-cli.mjs", "show", "--config", configPath, "--locale", "zh-HKTW", "--json",
     ]));
     assert.equal(localizedShow.theme.label, localizedLabel);
 

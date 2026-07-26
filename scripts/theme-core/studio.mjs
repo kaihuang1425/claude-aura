@@ -5,6 +5,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   FROZEN_BUILTIN_THEME_IDS,
+  GREETING_ALIGNMENTS,
+  GREETING_COLOR_ROLES,
+  GREETING_DECORATIONS,
+  GREETING_FONT_CATEGORIES,
+  GREETING_FONT_WEIGHTS,
+  GREETING_MARK_SOURCES,
   MAX_CHROME_PAYLOAD_BYTES,
   MAX_USER_ARTWORK_TOTAL_BYTES,
   MAX_USER_RASTER_ARTWORK_BYTES,
@@ -51,7 +57,10 @@ import {
   strictNumber,
   studioRadiusPolicy,
   validateLauncherPngBytes,
+  validateNewChatGreetingStyle,
+  validateRegistryEntry,
   validateStudioThemeKitDocument,
+  validateTheme,
 } from "./validation.mjs";
 import {
   applyStudioSourceRecipe,
@@ -65,7 +74,12 @@ import {
   buildPayload,
   buildPayloadFromCompiled,
   compileTheme,
+  hasRegisteredGreetingCompactMark,
 } from "./compile.mjs";
+import {
+  resolveGreetingPhrases,
+  validateGreetingPreferences,
+} from "./greeting.mjs";
 
 export function studioUuid() {
   return crypto.randomUUID().toLowerCase();
@@ -559,6 +573,147 @@ export function studioStyleFromTheme(theme) {
   };
 }
 
+// WO-21 Studio greeting editing. The portable theme owns a full Light/Dark x
+// Standard/Wide matrix. Studio projects every frame so changing the preview axes
+// edits only the frame the user can currently see; `null` remains Claude-native.
+export function defaultStudioGreetingStyle() {
+  const frame = () => ({
+    font: "editorial-serif",
+    color: "primary",
+    fontSize: 34,
+    weight: 500,
+    italic: false,
+    letterSpacing: -0.01,
+    lineHeight: 1.15,
+    align: "center",
+    maxWidthRatio: 0.72,
+    xRatio: 0,
+    yRatio: 0,
+    decoration: "none",
+    mark: { source: "native", scale: 1 },
+  });
+  return {
+    light: { standard: frame(), wide: frame() },
+    dark: { standard: frame(), wide: frame() },
+  };
+}
+
+export function studioGreetingFrameState(frame) {
+  return {
+    font: frame.font,
+    color: frame.color,
+    fontSize: frame.fontSize,
+    weight: frame.weight,
+    italic: frame.italic,
+    align: frame.align,
+    letterSpacing: frame.letterSpacing,
+    lineHeight: frame.lineHeight,
+    maxWidthRatio: frame.maxWidthRatio,
+    xRatio: frame.xRatio,
+    yRatio: frame.yRatio,
+    decoration: frame.decoration,
+    markSource: frame.mark.source,
+    markScale: frame.mark.scale,
+  };
+}
+
+export function studioGreetingState(style, compactMarkAvailable = false) {
+  const matrix = style ?? defaultStudioGreetingStyle();
+  return {
+    native: style === null,
+    compactMarkAvailable: Boolean(compactMarkAvailable),
+    frames: Object.fromEntries(["light", "dark"].map((appearance) => [
+      appearance,
+      Object.fromEntries(["standard", "wide"].map((frame) => [
+        frame,
+        studioGreetingFrameState(matrix[appearance][frame]),
+      ])),
+    ])),
+  };
+}
+
+// Compact greeting marks are intentionally limited to frozen, registered recipe
+// assets. A duplicated built-in retains its sourceRecipe and therefore retains
+// the capability; a free-form custom theme never guesses an image's semantics.
+export function studioGreetingCompactMarkAvailable(document) {
+  return hasRegisteredGreetingCompactMark({
+    sourceRecipe: document.sourceRecipe,
+    variant: document.theme?.variant,
+    name: document.id,
+  });
+}
+
+const STUDIO_GREETING_NUMERIC_FIELDS = Object.freeze({
+  fontSize: [24, 72],
+  letterSpacing: [-0.06, 0.12],
+  lineHeight: [0.9, 1.5],
+  maxWidthRatio: [0.35, 0.9],
+  xRatio: [-0.45, 0.45],
+  yRatio: [-0.4, 0.45],
+});
+const STUDIO_GREETING_ENUM_FIELDS = Object.freeze({
+  font: GREETING_FONT_CATEGORIES,
+  color: GREETING_COLOR_ROLES,
+  align: GREETING_ALIGNMENTS,
+  decoration: GREETING_DECORATIONS,
+});
+
+const STUDIO_GREETING_FRAME_KEYS = Object.freeze([
+  "font", "color", "fontSize", "weight", "italic", "align", "letterSpacing",
+  "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "decoration", "markSource", "markScale",
+]);
+
+export function validateStudioGreetingFrame(value, label = "greeting frame") {
+  if (!isPlainObject(value)
+      || Object.keys(value).length !== STUDIO_GREETING_FRAME_KEYS.length
+      || STUDIO_GREETING_FRAME_KEYS.some((key) => !Object.hasOwn(value, key))) {
+    throw new Error(`${label} has an invalid shape`);
+  }
+  const frame = {
+    font: strictEnum(value.font, GREETING_FONT_CATEGORIES, `${label}.font`),
+    color: strictEnum(value.color, GREETING_COLOR_ROLES, `${label}.color`),
+    fontSize: strictNumber(value.fontSize, `${label}.fontSize`, 24, 72),
+    weight: value.weight,
+    italic: value.italic,
+    align: strictEnum(value.align, GREETING_ALIGNMENTS, `${label}.align`),
+    letterSpacing: strictNumber(value.letterSpacing, `${label}.letterSpacing`, -0.06, 0.12),
+    lineHeight: strictNumber(value.lineHeight, `${label}.lineHeight`, 0.9, 1.5),
+    maxWidthRatio: strictNumber(value.maxWidthRatio, `${label}.maxWidthRatio`, 0.35, 0.9),
+    xRatio: strictNumber(value.xRatio, `${label}.xRatio`, -0.45, 0.45),
+    yRatio: strictNumber(value.yRatio, `${label}.yRatio`, -0.4, 0.45),
+    decoration: strictEnum(value.decoration, GREETING_DECORATIONS, `${label}.decoration`),
+    mark: {
+      source: strictEnum(value.markSource, GREETING_MARK_SOURCES, `${label}.markSource`),
+      scale: strictNumber(value.markScale, `${label}.markScale`, 0.5, 1.5),
+    },
+  };
+  if (!GREETING_FONT_WEIGHTS.has(frame.weight)) {
+    throw new Error(`${label}.weight has an unsupported value`);
+  }
+  if (typeof frame.italic !== "boolean") throw new Error(`${label}.italic must be true or false`);
+  return frame;
+}
+
+// One pointer/keyboard/control gesture replaces one complete bounded frame and
+// therefore creates one coherent Undo entry. Reset is the only operation that
+// may carry null and always restores the entire greeting surface to Claude.
+export function mutateStudioGreetingDocument(document, change) {
+  const operation = strictEnum(change.operation, new Set(["set-frame", "reset"]), "greeting operation");
+  const appearance = strictEnum(change.appearance, new Set(["light", "dark"]), "greeting appearance");
+  const frame = strictEnum(change.frame, new Set(["standard", "wide"]), "greeting frame");
+  if (operation === "reset") {
+    if (change.value !== null) throw new Error("Greeting reset value must be null");
+    document.newChatGreetingStyle = null;
+    return;
+  }
+  const style = document.newChatGreetingStyle ?? defaultStudioGreetingStyle();
+  style[appearance][frame] = validateStudioGreetingFrame(
+    change.value,
+    `newChatGreetingStyle.${appearance}.${frame}`,
+  );
+  document.newChatGreetingStyle = validateNewChatGreetingStyle(style, "newChatGreetingStyle");
+}
+
 async function effectiveStudioDocumentTheme(document) {
   return applyStudioSourceRecipe(document.theme, {
     source: "user",
@@ -567,11 +722,83 @@ async function effectiveStudioDocumentTheme(document) {
   });
 }
 
-export async function canonicalStudioState(internal, editorRoot) {
+// WO-21: the personal greeting envelope is host-owned config, never theme data.
+// Studio keeps a private history aligned with the theme draft, but personal words
+// never enter the portable theme document or a kit export.
+export async function studioGreetingPreferences(configPath) {
+  const fallback = validateGreetingPreferences(null);
+  if (typeof configPath !== "string" || !configPath.trim()) return fallback;
+  try {
+    const config = await readConfig(configPath);
+    return validateGreetingPreferences(config.greetingPreferences ?? null);
+  } catch {
+    // Invalid personal data must never block theme editing; the renderer fails open
+    // to Claude's native greeting the same way.
+    return fallback;
+  }
+}
+
+// Runtime compilation intentionally fails open to Claude's native greeting when
+// custom words cannot produce one complete bounded payload. Studio has a
+// different responsibility: an actively selected custom candidate must remain
+// invalid so Save cannot silently turn the user's wording back into native
+// wording. Keep that distinction in one pure predicate for focused regression
+// coverage as well as the transactional evaluator.
+export function studioGreetingPreferenceError(preferences, themeId) {
+  const value = validateGreetingPreferences(preferences);
+  const override = value.themeOverrides[themeId] ?? null;
+  const requestsCustom = value.enabled
+    && value.source === "custom"
+    && override?.mode !== "claude";
+  return requestsCustom && resolveGreetingPhrases(value, themeId) === null
+    ? { code: "invalid-greeting", field: "greetingPreferences" }
+    : null;
+}
+
+function initializeStudioGreetingTracking(internal, preferences) {
+  if (internal.greetingCurrent !== undefined) return false;
+  const value = cloneJson(validateGreetingPreferences(preferences));
+  internal.greetingBaseline = cloneJson(value);
+  internal.greetingCurrent = cloneJson(value);
+  internal.greetingLastValid = cloneJson(value);
+  internal.greetingUndo = internal.undo.map(() => cloneJson(value));
+  internal.greetingRedo = internal.redo.map(() => cloneJson(value));
+  internal.greetingAppliedUndo = internal.appliedUndo.map(() => cloneJson(value));
+  internal.greetingAppliedRedo = internal.appliedRedo.map(() => cloneJson(value));
+  return true;
+}
+
+async function ensureStudioGreetingTracking(internal, configPath) {
+  const preferences = await studioGreetingPreferences(configPath);
+  const initialized = initializeStudioGreetingTracking(internal, preferences);
+  for (const [name, history, length] of [
+    ["undo", internal.greetingUndo, internal.undo.length],
+    ["redo", internal.greetingRedo, internal.redo.length],
+    ["applied undo", internal.greetingAppliedUndo, internal.appliedUndo.length],
+    ["applied redo", internal.greetingAppliedRedo, internal.appliedRedo.length],
+  ]) {
+    if (!Array.isArray(history) || history.length !== length) {
+      throw new Error(`Editor greeting ${name} history is invalid`);
+    }
+  }
+  for (const [name, value] of [
+    ["baseline", internal.greetingBaseline],
+    ["current", internal.greetingCurrent],
+    ["last valid", internal.greetingLastValid],
+    ...internal.greetingUndo.map((value, index) => [`undo ${index}`, value]),
+    ...internal.greetingRedo.map((value, index) => [`redo ${index}`, value]),
+    ...internal.greetingAppliedUndo.map((value, index) => [`applied undo ${index}`, value]),
+    ...internal.greetingAppliedRedo.map((value, index) => [`applied redo ${index}`, value]),
+  ]) validateGreetingPreferences(value, `editor greeting ${name}`);
+  return initialized;
+}
+
+export async function canonicalStudioState(internal, editorRoot, configPath = null) {
   if (!internal) return { active: false };
   const paths = studioPaths(editorRoot);
   await assertStudioActivePaths(paths, { requireActive: true, requireState: true });
   await initializeStudioLauncherTracking(internal, paths);
+  await ensureStudioGreetingTracking(internal, configPath);
   const document = internal.currentDocument;
   const effectiveDocumentTheme = await effectiveStudioDocumentTheme(document);
   const effectiveLastValidTheme = await effectiveStudioDocumentTheme(internal.lastValidDocument);
@@ -675,7 +902,8 @@ export async function canonicalStudioState(internal, editorRoot) {
     session: internal.session,
     revision: internal.revision,
     dirty: JSON.stringify(internal.currentDocument) !== JSON.stringify(internal.baselineDocument)
-      || internal.launcherMarkDigest !== internal.baselineLauncherMarkDigest,
+      || internal.launcherMarkDigest !== internal.baselineLauncherMarkDigest
+      || JSON.stringify(internal.greetingCurrent) !== JSON.stringify(internal.greetingBaseline),
     canUndo: internal.undo.length > 0,
     canRedo: internal.redo.length > 0,
     label: document.labels[internal.locale] ?? document.labels.en,
@@ -708,12 +936,17 @@ export async function canonicalStudioState(internal, editorRoot) {
         x: layout.offsetXRatio,
         y: layout.offsetYRatio,
       },
+      greeting: studioGreetingState(
+        document.newChatGreetingStyle,
+        studioGreetingCompactMarkAvailable(document),
+      ),
       inherited: Object.fromEntries(["fontUi", "fontDisplay", "radius", "shadow"]
         .map((token) => [
           token,
           document.sourceRecipe !== null && !document.controlOverrides.includes(token),
         ])),
     },
+    greetingPreferences: cloneJson(internal.greetingCurrent),
     layers,
     feedback: cloneJson(internal.feedback ?? emptyStudioFeedback()),
   };
@@ -784,6 +1017,58 @@ async function upgradeStudioLegacyFrames(document, paths) {
   return changed;
 }
 
+async function upgradeStudioSchemaV1Document(raw, label, paths) {
+  const entry = validateRegistryEntry(raw, label, { source: "user" });
+  if (!isPlainObject(raw.theme)) throw new Error(`${label}.theme must be an object`);
+  if (raw.theme.variant !== entry.id) {
+    throw new Error(`${label}.theme.variant must match id "${entry.id}"`);
+  }
+  const validatedTheme = validateTheme(raw.theme, `${label}.theme`, {
+    // Current and history entries may intentionally contain an invalid-but-editable
+    // launcher draft. The last-valid snapshots still govern what Aura applies.
+    enforceLauncherContrast: false,
+  });
+  if (validatedTheme.name !== entry.id) {
+    throw new Error(`${label}.theme.name must match id "${entry.id}"`);
+  }
+  if (validatedTheme.customCss.trim()) {
+    throw new Error(`${label}.theme.customCss must be empty in a standalone kit`);
+  }
+  const theme = {
+    ...validatedTheme,
+    label: entry.labels.en,
+    description: entry.descriptions.en,
+    labels: cloneJson(entry.labels),
+    descriptions: cloneJson(entry.descriptions),
+    swatches: cloneJson(entry.swatches),
+    preview: cloneJson(entry.preview),
+    studioPreview: entry.studioPreview,
+    studioPreviewFrame: entry.studioPreviewFrame ? cloneJson(entry.studioPreviewFrame) : null,
+    newChatLayout: entry.newChatLayout ? cloneJson(entry.newChatLayout) : null,
+    // Schema v1 predates portable greeting presentation. Personal greeting data
+    // is never accepted here and therefore cannot migrate into a theme document.
+    newChatGreetingStyle: null,
+    artwork: entry.artwork ? cloneJson(entry.artwork) : null,
+    artworkLayers: entry.artworkLayers ? cloneJson(entry.artworkLayers) : null,
+    schemaVersion: 1,
+    backgroundScope: "full-window",
+    sourceRecipe: null,
+    controlOverrides: [],
+    source: "user",
+    sourceDirectory: paths.active,
+    artworkRoot: paths.active,
+    artworkAllowedRoot: paths.active,
+  };
+  return studioDocumentFromResolvedSource({
+    entry: { ...entry, source: "user" },
+    theme,
+    targetId: entry.id,
+    paths,
+    copyLabels: false,
+    reuseActiveFiles: true,
+  });
+}
+
 async function validateAndUpgradeStudioDocuments(internal, paths) {
   if (!Array.isArray(internal.undo) || !Array.isArray(internal.redo)
       || internal.undo.length > STUDIO_MAX_HISTORY || internal.redo.length > STUDIO_MAX_HISTORY) {
@@ -814,6 +1099,12 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
       .filter(([, document]) => document !== null),
   ];
   for (const [name, document] of documents) {
+    if (document?.schemaVersion === 1) {
+      const upgraded = await upgradeStudioSchemaV1Document(document, `editor ${name} theme`, paths);
+      for (const key of Object.keys(document)) delete document[key];
+      Object.assign(document, upgraded);
+      changed = true;
+    }
     validateStudioThemeKitDocument(document, `editor ${name} theme`, {
       // Invalid-but-editable drafts are persisted deliberately so Studio can
       // keep the last-valid payload active while the user repairs them.
@@ -821,6 +1112,17 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
     });
     if (document.id !== internal.id) throw new Error(`Editor ${name} theme id does not match the session`);
     changed = await upgradeStudioLegacyFrames(document, paths) || changed;
+    // WO-21: normalize pre-greeting (v2) documents up to the current schema. The
+    // greeting surface starts Claude-native (null); personal phrases stay
+    // host-owned and never enter the theme document.
+    if (!Object.hasOwn(document, "newChatGreetingStyle")) {
+      document.newChatGreetingStyle = null;
+      changed = true;
+    }
+    if (document.schemaVersion !== STUDIO_THEME_SCHEMA_VERSION) {
+      document.schemaVersion = STUDIO_THEME_SCHEMA_VERSION;
+      changed = true;
+    }
     validateStudioThemeKitDocument(document, `editor ${name} theme`, {
       enforceLauncherContrast: false,
     });
@@ -1111,7 +1413,7 @@ export function appendCopyLabel(labels) {
   return {
     en: `${labels.en} Copy`.slice(0, 80),
     "zh-CN": `${labels["zh-CN"]}副本`.slice(0, 80),
-    "zh-TW": `${labels["zh-TW"]}副本`.slice(0, 80),
+    "zh-HKTW": `${labels["zh-HKTW"]}副本`.slice(0, 80),
   };
 }
 
@@ -1141,8 +1443,14 @@ export async function sourceThemeForStudio(themeId, userThemesDir, locale) {
   return { registry, entry, theme: await readRegisteredTheme(entry, locale) };
 }
 
-export async function studioDocumentFromSource({ sourceId, targetId, userThemesDir, locale, paths, copyLabels }) {
-  const { entry, theme } = await sourceThemeForStudio(sourceId, userThemesDir, locale);
+async function studioDocumentFromResolvedSource({
+  entry,
+  theme,
+  targetId,
+  paths,
+  copyLabels,
+  reuseActiveFiles = false,
+}) {
   const labels = copyLabels ? appendCopyLabel(theme.labels) : cloneJson(theme.labels);
   const document = {
     schemaVersion: STUDIO_THEME_SCHEMA_VERSION,
@@ -1153,9 +1461,10 @@ export async function studioDocumentFromSource({ sourceId, targetId, userThemesD
     preview: cloneJson(theme.preview),
     studioPreview: null,
     newChatLayout: theme.newChatLayout ? cloneJson(theme.newChatLayout) : null,
+    newChatGreetingStyle: theme.newChatGreetingStyle ? cloneJson(theme.newChatGreetingStyle) : null,
     backgroundScope: theme.backgroundScope ?? "full-window",
     artworkLayers: [],
-    sourceRecipe: entry.source === "builtin" ? sourceId : (theme.sourceRecipe ?? null),
+    sourceRecipe: entry.source === "builtin" ? entry.id : (theme.sourceRecipe ?? null),
     controlOverrides: entry.source === "builtin" ? [] : cloneJson(theme.controlOverrides ?? []),
     theme: serializeStudioTheme(theme, targetId),
   };
@@ -1167,7 +1476,9 @@ export async function studioDocumentFromSource({ sourceId, targetId, userThemesD
     if (!isPathWithin(theme.sourceDirectory, sourceMark) || !isPathWithin(paths.active, targetMark)) {
       throw new Error("Theme launcher mark escaped its owned folder");
     }
-    await fs.copyFile(sourceMark, targetMark, fsConstants.COPYFILE_EXCL);
+    if (!(reuseActiveFiles && sourceMark === targetMark)) {
+      await fs.copyFile(sourceMark, targetMark, fsConstants.COPYFILE_EXCL);
+    }
   }
   const sourceLayers = theme.artworkLayers ?? (theme.artwork ? [{ ...theme.artwork, role: "background" }] : []);
   const copiedArtwork = new Map();
@@ -1220,10 +1531,26 @@ export async function studioDocumentFromSource({ sourceId, targetId, userThemesD
     });
   }
   validateStudioThemeKitDocument(document, "editor theme");
+  return document;
+}
+
+export async function studioDocumentFromSource({ sourceId, targetId, userThemesDir, locale, paths, copyLabels }) {
+  const { entry, theme } = await sourceThemeForStudio(sourceId, userThemesDir, locale);
+  const document = await studioDocumentFromResolvedSource({
+    entry,
+    theme,
+    targetId,
+    paths,
+    copyLabels,
+  });
   return { document, source: entry.source };
 }
 
-export async function compileStudioDocument(document, context, { appearance = "system" } = {}) {
+export async function compileStudioDocument(
+  document,
+  context,
+  { appearance = "system", greetingPreferences = context.greetingPreferences ?? null } = {},
+) {
   const paths = studioPaths(context.editorRoot);
   await atomicWriteJson(paths.theme, document);
   const persisted = await readConfig(context.configPath);
@@ -1232,6 +1559,9 @@ export async function compileStudioDocument(document, context, { appearance = "s
     enabled: true,
     theme: document.id,
     appearance,
+    ...(greetingPreferences === null ? {} : {
+      greetingPreferences: validateGreetingPreferences(greetingPreferences),
+    }),
   };
   delete config.customTheme;
   const compiled = await compileTheme({
@@ -1289,10 +1619,24 @@ export async function studioFeedback(document, context, bundle) {
   return { valid: errors.length === 0, contrast, budget, errors };
 }
 
-export async function evaluateStudioDocument(document, context) {
+export async function evaluateStudioDocument(document, context, { greetingPreferences = context.greetingPreferences ?? null } = {}) {
   try {
     validateStudioThemeKitDocument(document, "editor theme");
-    const bundle = await compileStudioDocument(document, context, { appearance: "system" });
+    if (greetingPreferences !== null) {
+      const greetingError = studioGreetingPreferenceError(greetingPreferences, document.id);
+      if (greetingError) {
+        return {
+          bundle: null,
+          feedback: {
+            ...emptyStudioFeedback(),
+            valid: false,
+            errors: [greetingError],
+          },
+          error: "invalid-greeting",
+        };
+      }
+    }
+    const bundle = await compileStudioDocument(document, context, { appearance: "system", greetingPreferences });
     const feedback = await studioFeedback(document, context, bundle);
     return { bundle, feedback, error: feedback.valid ? null : "contrast-or-budget" };
   } catch (error) {
@@ -1363,12 +1707,15 @@ export async function beginStudioDocument(document, metadata, context) {
     appliedLauncherRedo: [],
     feedback: emptyStudioFeedback(),
   };
-  const evaluated = await evaluateStudioDocument(document, context);
+  initializeStudioGreetingTracking(internal, await studioGreetingPreferences(context.configPath));
+  const evaluated = await evaluateStudioDocument(document, context, {
+    greetingPreferences: internal.greetingCurrent,
+  });
   internal.feedback = evaluated.feedback;
   if (!evaluated.feedback.valid) throw new Error(evaluated.error ?? "The source theme is not valid for Studio");
   await persistStudioInternal(paths, internal);
   return {
-    state: await canonicalStudioState(internal, context.editorRoot),
+    state: await canonicalStudioState(internal, context.editorRoot, context.configPath),
     payload: evaluated.bundle.payload,
     themesChanged: false,
     configChanged: false,
@@ -1400,6 +1747,9 @@ export async function createThemeCopy(context) {
 export async function beginThemeEdit(context) {
   const locale = normalizeLocale(context.locale);
   const existing = await loadStudioInternal(context.editorRoot);
+  const greetingTrackingInitialized = existing
+    ? await ensureStudioGreetingTracking(existing, context.configPath)
+    : false;
   if (existing && existing.id === context.theme && context.reset === true) {
     existing.currentDocument = cloneJson(existing.baselineDocument);
     existing.lastValidDocument = cloneJson(existing.baselineDocument);
@@ -1413,16 +1763,24 @@ export async function beginThemeEdit(context) {
     existing.launcherRedo = [];
     existing.appliedLauncherUndo = [];
     existing.appliedLauncherRedo = [];
+    existing.greetingCurrent = cloneJson(existing.greetingBaseline);
+    existing.greetingLastValid = cloneJson(existing.greetingBaseline);
+    existing.greetingUndo = [];
+    existing.greetingRedo = [];
+    existing.greetingAppliedUndo = [];
+    existing.greetingAppliedRedo = [];
     existing.revision += 1;
     if (existing.launcherMarkDigest !== null) {
       await materializeStudioLauncherMark(studioPaths(context.editorRoot), existing.launcherMarkDigest);
     }
-    const evaluated = await evaluateStudioDocument(existing.currentDocument, { ...context, locale });
+    const evaluated = await evaluateStudioDocument(existing.currentDocument, { ...context, locale }, {
+      greetingPreferences: existing.greetingCurrent,
+    });
     if (!evaluated.feedback.valid) throw new Error("The editor baseline is no longer valid");
     existing.feedback = evaluated.feedback;
     await persistStudioInternal(studioPaths(context.editorRoot), existing);
     return {
-      state: withStudioResult(await canonicalStudioState(existing, context.editorRoot), "begin-theme-edit", true, null),
+      state: withStudioResult(await canonicalStudioState(existing, context.editorRoot, context.configPath), "begin-theme-edit", true, null),
       payload: evaluated.bundle.payload,
       themesChanged: false,
       configChanged: false,
@@ -1436,15 +1794,19 @@ export async function beginThemeEdit(context) {
       if (existing.lastValidLauncherMarkDigest !== null) {
         await materializeStudioLauncherMark(existingPaths, existing.lastValidLauncherMarkDigest);
       }
-      bundle = await compileStudioDocument(existing.lastValidDocument, { ...context, locale }, { appearance: "system" });
+      bundle = await compileStudioDocument(existing.lastValidDocument, { ...context, locale }, {
+        appearance: "system",
+        greetingPreferences: existing.greetingLastValid,
+      });
     } finally {
       if (existing.launcherMarkDigest !== null) {
         await materializeStudioLauncherMark(existingPaths, existing.launcherMarkDigest);
       }
       await atomicWriteJson(existingPaths.theme, existing.currentDocument);
     }
+    if (greetingTrackingInitialized) await persistStudioInternal(existingPaths, existing);
     return {
-      state: await canonicalStudioState(existing, context.editorRoot),
+      state: await canonicalStudioState(existing, context.editorRoot, context.configPath),
       payload: bundle.payload,
       themesChanged: false,
       configChanged: false,
@@ -1474,10 +1836,15 @@ export async function beginThemeEdit(context) {
 export async function mutateStudio(context, action, mutate) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
+  await ensureStudioGreetingTracking(internal, context.configPath);
   const before = cloneJson(internal.currentDocument);
+  const beforeGreeting = cloneJson(internal.greetingCurrent);
   const beforeLauncherMarkDigest = internal.launcherMarkDigest;
   const candidate = cloneJson(internal.currentDocument);
   const mutation = await mutate(candidate, internal);
+  const candidateGreeting = mutation?.greetingPreferences === undefined
+    ? beforeGreeting
+    : validateGreetingPreferences(mutation.greetingPreferences, "editor greeting candidate");
   internal.undo = [...internal.undo, before].slice(-STUDIO_MAX_HISTORY);
   internal.appliedUndo = [...internal.appliedUndo, cloneJson(internal.lastValidDocument)].slice(-STUDIO_MAX_HISTORY);
   internal.launcherUndo = [...internal.launcherUndo, beforeLauncherMarkDigest].slice(-STUDIO_MAX_HISTORY);
@@ -1485,26 +1852,37 @@ export async function mutateStudio(context, action, mutate) {
     ...internal.appliedLauncherUndo,
     internal.lastValidLauncherMarkDigest,
   ].slice(-STUDIO_MAX_HISTORY);
+  internal.greetingUndo = [...internal.greetingUndo, beforeGreeting].slice(-STUDIO_MAX_HISTORY);
+  internal.greetingAppliedUndo = [
+    ...internal.greetingAppliedUndo,
+    cloneJson(internal.greetingLastValid),
+  ].slice(-STUDIO_MAX_HISTORY);
   internal.redo = [];
   internal.appliedRedo = [];
   internal.launcherRedo = [];
   internal.appliedLauncherRedo = [];
+  internal.greetingRedo = [];
+  internal.greetingAppliedRedo = [];
   internal.currentDocument = candidate;
+  internal.greetingCurrent = cloneJson(candidateGreeting);
   internal.launcherMarkDigest = mutation?.launcherMarkDigest ?? beforeLauncherMarkDigest;
   internal.revision += 1;
   if (studioDocumentUsesLocalLauncher(candidate)) {
     if (internal.launcherMarkDigest === null) throw new Error("Editor launcher mark content is missing");
     await materializeStudioLauncherMark(studioPaths(context.editorRoot), internal.launcherMarkDigest);
   }
-  const evaluated = await evaluateStudioDocument(candidate, context);
+  const evaluated = await evaluateStudioDocument(candidate, context, {
+    greetingPreferences: candidateGreeting,
+  });
   internal.feedback = evaluated.feedback;
   if (evaluated.feedback.valid) {
     internal.lastValidDocument = cloneJson(candidate);
     internal.lastValidLauncherMarkDigest = internal.launcherMarkDigest;
+    internal.greetingLastValid = cloneJson(candidateGreeting);
   }
   await persistStudioInternal(studioPaths(context.editorRoot), internal);
   const state = withStudioResult(
-    await canonicalStudioState(internal, context.editorRoot),
+    await canonicalStudioState(internal, context.editorRoot, context.configPath),
     action,
     evaluated.feedback.valid,
     evaluated.error,
@@ -1682,6 +2060,7 @@ export function assertStudioPatchChanges(changes) {
     token: ["kind", "mode", "token", "value"],
     layer: ["kind", "index", "preset", "property", "value"],
     metadata: ["kind", "field", "locale", "value"],
+    greeting: ["kind", "operation", "appearance", "frame", "value"],
   };
   changes.forEach((change, index) => {
     if (!isPlainObject(change) || typeof change.kind !== "string" || !Object.hasOwn(shapes, change.kind)) {
@@ -1711,6 +2090,7 @@ export async function applyThemePatch(context) {
     for (const change of context.changes) {
       if (change.kind === "token") mutateStudioTokenDocument(document, change);
       else if (change.kind === "layer") mutateStudioLayerDocument(document, change);
+      else if (change.kind === "greeting") mutateStudioGreetingDocument(document, change);
       else mutateStudioMetadataDocument(document, change);
     }
   });
@@ -1812,23 +2192,33 @@ export async function moveThemeLayer(context) {
 export async function travelStudioHistory(context, action, direction) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
+  await ensureStudioGreetingTracking(internal, context.configPath);
   const source = direction === "undo" ? internal.undo : internal.redo;
   const appliedSource = direction === "undo" ? internal.appliedUndo : internal.appliedRedo;
   const launcherSource = direction === "undo" ? internal.launcherUndo : internal.launcherRedo;
   const appliedLauncherSource = direction === "undo"
     ? internal.appliedLauncherUndo : internal.appliedLauncherRedo;
+  const greetingSource = direction === "undo" ? internal.greetingUndo : internal.greetingRedo;
+  const appliedGreetingSource = direction === "undo"
+    ? internal.greetingAppliedUndo : internal.greetingAppliedRedo;
   if (!source.length) throw new Error(`There is nothing to ${direction}`);
   const destination = direction === "undo" ? internal.redo : internal.undo;
   const appliedDestination = direction === "undo" ? internal.appliedRedo : internal.appliedUndo;
   const launcherDestination = direction === "undo" ? internal.launcherRedo : internal.launcherUndo;
   const appliedLauncherDestination = direction === "undo"
     ? internal.appliedLauncherRedo : internal.appliedLauncherUndo;
+  const greetingDestination = direction === "undo" ? internal.greetingRedo : internal.greetingUndo;
+  const appliedGreetingDestination = direction === "undo"
+    ? internal.greetingAppliedRedo : internal.greetingAppliedUndo;
   destination.push(cloneJson(internal.currentDocument));
   appliedDestination.push(cloneJson(internal.lastValidDocument));
   launcherDestination.push(internal.launcherMarkDigest);
   appliedLauncherDestination.push(internal.lastValidLauncherMarkDigest);
+  greetingDestination.push(cloneJson(internal.greetingCurrent));
+  appliedGreetingDestination.push(cloneJson(internal.greetingLastValid));
   for (const history of [
     destination, appliedDestination, launcherDestination, appliedLauncherDestination,
+    greetingDestination, appliedGreetingDestination,
   ]) {
     if (history.length > STUDIO_MAX_HISTORY) history.splice(0, history.length - STUDIO_MAX_HISTORY);
   }
@@ -1836,10 +2226,13 @@ export async function travelStudioHistory(context, action, direction) {
   const historicalAppliedDocument = appliedSource.pop();
   internal.launcherMarkDigest = launcherSource.pop() ?? null;
   const historicalAppliedLauncher = appliedLauncherSource.pop() ?? null;
+  internal.greetingCurrent = greetingSource.pop();
+  const historicalAppliedGreeting = appliedGreetingSource.pop();
   const restoredHistoricalAppliedState = historicalAppliedDocument !== null;
   if (restoredHistoricalAppliedState) {
     internal.lastValidDocument = historicalAppliedDocument;
     internal.lastValidLauncherMarkDigest = historicalAppliedLauncher;
+    internal.greetingLastValid = historicalAppliedGreeting;
   }
   internal.revision += 1;
   const paths = studioPaths(context.editorRoot);
@@ -1847,12 +2240,15 @@ export async function travelStudioHistory(context, action, direction) {
     if (internal.launcherMarkDigest === null) throw new Error("Editor launcher mark history is missing");
     await materializeStudioLauncherMark(paths, internal.launcherMarkDigest);
   }
-  const evaluated = await evaluateStudioDocument(internal.currentDocument, context);
+  const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
+    greetingPreferences: internal.greetingCurrent,
+  });
   internal.feedback = evaluated.feedback;
   let fallbackBundle = null;
   if (evaluated.feedback.valid) {
     internal.lastValidDocument = cloneJson(internal.currentDocument);
     internal.lastValidLauncherMarkDigest = internal.launcherMarkDigest;
+    internal.greetingLastValid = cloneJson(internal.greetingCurrent);
   } else if (restoredHistoricalAppliedState) {
     // Undo/Redo can revisit an invalid editable document. Its historically
     // preceding valid payload may differ from the payload currently in Aura,
@@ -1864,7 +2260,10 @@ export async function travelStudioHistory(context, action, direction) {
         }
         await materializeStudioLauncherMark(paths, internal.lastValidLauncherMarkDigest);
       }
-      fallbackBundle = await compileStudioDocument(internal.lastValidDocument, context, { appearance: "system" });
+      fallbackBundle = await compileStudioDocument(internal.lastValidDocument, context, {
+        appearance: "system",
+        greetingPreferences: internal.greetingLastValid,
+      });
     } finally {
       if (studioDocumentUsesLocalLauncher(internal.currentDocument)) {
         await materializeStudioLauncherMark(paths, internal.launcherMarkDigest);
@@ -1876,7 +2275,7 @@ export async function travelStudioHistory(context, action, direction) {
   const payload = evaluated.feedback.valid ? evaluated.bundle.payload : fallbackBundle?.payload ?? null;
   return {
     state: withStudioResult(
-      await canonicalStudioState(internal, context.editorRoot),
+      await canonicalStudioState(internal, context.editorRoot, context.configPath),
       action,
       evaluated.feedback.valid,
       evaluated.error,
@@ -1966,7 +2365,15 @@ export async function validateStudioStage(document, stageDirectory, context) {
     const persisted = await readConfig(context.configPath);
     const compiled = await compileTheme({
       configPath: context.configPath,
-      config: { ...persisted, enabled: true, theme: document.id, appearance },
+      config: {
+        ...persisted,
+        enabled: true,
+        theme: document.id,
+        appearance,
+        ...(context.greetingPreferences === undefined ? {} : {
+          greetingPreferences: validateGreetingPreferences(context.greetingPreferences),
+        }),
+      },
       locale: context.locale,
       userThemesDir: context.userThemesDir,
       themeKitDirectory: stageDirectory,
@@ -1976,15 +2383,39 @@ export async function validateStudioStage(document, stageDirectory, context) {
   }
 }
 
+export function reconcileStudioGreetingShuffle(draft, persistedValue) {
+  const current = validateGreetingPreferences(draft, "editor greeting draft");
+  const persisted = validateGreetingPreferences(persistedValue ?? null, "persisted greeting preferences");
+  const editable = (value) => ({
+    enabled: value.enabled,
+    source: value.source,
+    displayName: value.displayName,
+    globalPhrases: value.globalPhrases,
+    themeOverrides: value.themeOverrides,
+  });
+  if (JSON.stringify(editable(current)) === JSON.stringify(editable(persisted))) {
+    current.shuffle = cloneJson(persisted.shuffle);
+  }
+  return current;
+}
+
 export async function saveThemeEdit(context) {
   const internal = await loadStudioInternal(context.editorRoot);
   assertStudioRevision(internal, context);
-  const evaluated = await evaluateStudioDocument(internal.currentDocument, context);
+  await ensureStudioGreetingTracking(internal, context.configPath);
+  const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
+    greetingPreferences: internal.greetingCurrent,
+  });
   if (!evaluated.feedback.valid) {
     internal.feedback = evaluated.feedback;
     await persistStudioInternal(studioPaths(context.editorRoot), internal);
     return {
-      state: withStudioResult(await canonicalStudioState(internal, context.editorRoot), "save-theme-edit", false, "contrast-or-budget"),
+      state: withStudioResult(
+        await canonicalStudioState(internal, context.editorRoot, context.configPath),
+        "save-theme-edit",
+        false,
+        evaluated.error ?? "contrast-or-budget",
+      ),
       payload: null,
       themesChanged: false,
       configChanged: false,
@@ -2011,7 +2442,16 @@ export async function saveThemeEdit(context) {
   });
   const previousConfig = await readConfig(context.configPath);
   const previousEditorStateRaw = await fs.readFile(paths.state, "utf8");
-  const nextConfig = { ...previousConfig, enabled: true, theme: internal.id };
+  const savedGreetingPreferences = reconcileStudioGreetingShuffle(
+    internal.greetingCurrent,
+    previousConfig.greetingPreferences,
+  );
+  const nextConfig = {
+    ...previousConfig,
+    enabled: true,
+    theme: internal.id,
+    greetingPreferences: savedGreetingPreferences,
+  };
   delete nextConfig.customTheme;
   let movedExisting = false;
   let installed = false;
@@ -2021,7 +2461,10 @@ export async function saveThemeEdit(context) {
   let completedInternal = null;
   try {
     await stageStudioTheme(internal.currentDocument, paths.active, stageDirectory);
-    await validateStudioStage(internal.currentDocument, stageDirectory, context);
+    await validateStudioStage(internal.currentDocument, stageDirectory, {
+      ...context,
+      greetingPreferences: internal.greetingCurrent,
+    });
     await callStudioFault(context, "after-stage");
     const destinationStat = await pathKind(destination);
     if (destinationStat) {
@@ -2053,6 +2496,7 @@ export async function saveThemeEdit(context) {
     const saved = await buildPayloadFromCompiled(compiled);
     new Function(saved.payload);
     const savedInternal = cloneJson(internal);
+    savedInternal.greetingCurrent = cloneJson(savedGreetingPreferences);
     savedInternal.source = "user";
     savedInternal.sourceId = savedInternal.id;
     savedInternal.isNew = false;
@@ -2060,6 +2504,8 @@ export async function saveThemeEdit(context) {
     savedInternal.lastValidDocument = cloneJson(savedInternal.currentDocument);
     savedInternal.baselineLauncherMarkDigest = savedInternal.launcherMarkDigest;
     savedInternal.lastValidLauncherMarkDigest = savedInternal.launcherMarkDigest;
+    savedInternal.greetingBaseline = cloneJson(savedInternal.greetingCurrent);
+    savedInternal.greetingLastValid = cloneJson(savedInternal.greetingCurrent);
     savedInternal.undo = [];
     savedInternal.redo = [];
     savedInternal.appliedUndo = [];
@@ -2068,10 +2514,14 @@ export async function saveThemeEdit(context) {
     savedInternal.launcherRedo = [];
     savedInternal.appliedLauncherUndo = [];
     savedInternal.appliedLauncherRedo = [];
+    savedInternal.greetingUndo = [];
+    savedInternal.greetingRedo = [];
+    savedInternal.greetingAppliedUndo = [];
+    savedInternal.greetingAppliedRedo = [];
     savedInternal.feedback = evaluated.feedback;
     savedInternal.revision += 1;
     const savedState = withStudioResult(
-      await canonicalStudioState(savedInternal, context.editorRoot),
+      await canonicalStudioState(savedInternal, context.editorRoot, context.configPath),
       "save-theme-edit",
       true,
       null,
@@ -2221,20 +2671,109 @@ export async function deleteUserTheme(context) {
   }
   const tombstone = path.join(userRoot, `.delete-${context.theme}-${studioHex()}`);
   await renameStudioPath(destination, tombstone);
+  // WO-21: atomically prune the deleted theme's host-owned greeting override so no
+  // orphaned personal phrases linger for a reusable theme id.
+  let configChanged = false;
+  try {
+    const overrides = config.greetingPreferences?.themeOverrides;
+    const hasOverride = isPlainObject(overrides) && Object.hasOwn(overrides, context.theme);
+    const hasShuffle = config.greetingPreferences?.shuffle?.themeId === context.theme;
+    if (hasOverride || hasShuffle) {
+      const nextConfig = cloneJson(config);
+      if (hasOverride) delete nextConfig.greetingPreferences.themeOverrides[context.theme];
+      if (hasShuffle) nextConfig.greetingPreferences.shuffle = null;
+      await callStudioFault(context, "before-delete-greeting-config");
+      await writeConfig(context.configPath, nextConfig);
+      configChanged = true;
+    }
+  } catch (error) {
+    try {
+      await runStudioRecoveryOperation(context, "rollback-deleted-theme", () => renameStudioPath(
+        tombstone,
+        destination,
+        { fileOperations: studioFileOperations(context.recoveryFileOperations) },
+      ));
+    } catch (rollbackError) {
+      const stagedRollbackError = new Error(
+        `rollback-deleted-theme: ${rollbackError.message}`,
+        { cause: rollbackError },
+      );
+      stagedRollbackError.code = rollbackError.code;
+      stagedRollbackError.recoveryStage = "rollback-deleted-theme";
+      const aggregate = new AggregateError(
+        [error, stagedRollbackError],
+        `Theme delete failed and rollback was incomplete; the deleted theme remains recoverable at ${tombstone}`,
+      );
+      aggregate.code = "STUDIO_ROLLBACK_INCOMPLETE";
+      aggregate.cause = error;
+      aggregate.recoveryArtifacts = [tombstone];
+      aggregate.recoveryDestination = destination;
+      throw aggregate;
+    }
+    throw error;
+  }
   await fs.rm(tombstone, { recursive: true, force: true }).catch(() => {});
-  const state = active ? await canonicalStudioState(active, context.editorRoot) : { active: false };
+  const state = active ? await canonicalStudioState(active, context.editorRoot, context.configPath) : { active: false };
   return {
     state: withStudioResult(state, "delete-user-theme", true, null),
     payload: null,
     themesChanged: true,
-    configChanged: false,
+    configChanged,
     apply: "none",
   };
 }
 
-export async function readStudioState({ editorRoot } = {}) {
+// WO-21 personal phrase editing. The personal envelope remains outside the theme
+// document, but it travels in an aligned private history until Save atomically commits
+// both drafts. Cancel therefore needs no compensating config write.
+export async function setGreetingPhrases(context) {
+  return mutateStudio(context, "set-greeting-phrases", (document, internal) => {
+    if (typeof context.enabled !== "boolean") {
+      throw new Error("greeting enabled must be true or false");
+    }
+    const overrides = cloneJson(internal.greetingCurrent.themeOverrides ?? {});
+    const mode = strictEnum(
+      context.overrideMode,
+      new Set(["global", "claude", "custom"]),
+      "greeting theme override mode",
+    );
+    overrides[document.id] = {
+      mode,
+      phrases: mode === "custom" ? context.overridePhrases : [],
+    };
+    return {
+      greetingPreferences: {
+        ...cloneJson(internal.greetingCurrent),
+        enabled: context.enabled,
+        source: context.source,
+        displayName: context.displayName,
+        globalPhrases: context.globalPhrases,
+        themeOverrides: overrides,
+        shuffle: null,
+      },
+    };
+  });
+}
+
+// One-click recovery to Claude must reset both ownership dimensions together:
+// portable presentation and host-owned wording. Stored lists and per-theme
+// choices remain available if the user later chooses custom wording again.
+export async function resetGreeting(context) {
+  return mutateStudio(context, "reset-greeting", (document, internal) => {
+    document.newChatGreetingStyle = null;
+    return {
+      greetingPreferences: {
+        ...cloneJson(internal.greetingCurrent),
+        source: "claude",
+        shuffle: null,
+      },
+    };
+  });
+}
+
+export async function readStudioState({ editorRoot, configPath = null } = {}) {
   const internal = await loadStudioInternal(editorRoot);
-  return canonicalStudioState(internal, editorRoot);
+  return canonicalStudioState(internal, editorRoot, configPath);
 }
 
 export async function hydrateStudioDraft({
@@ -2262,12 +2801,16 @@ export async function hydrateStudioDraft({
     editorRoot: paths.root,
     locale: normalizeLocale(locale),
   };
+  await ensureStudioGreetingTracking(internal, context.configPath);
   let bundle;
   try {
     if (internal.lastValidLauncherMarkDigest !== null) {
       await materializeStudioLauncherMark(paths, internal.lastValidLauncherMarkDigest);
     }
-    bundle = await compileStudioDocument(internal.lastValidDocument, context, { appearance: "system" });
+    bundle = await compileStudioDocument(internal.lastValidDocument, context, {
+      appearance: "system",
+      greetingPreferences: internal.greetingLastValid,
+    });
   } finally {
     if (internal.launcherMarkDigest !== null) {
       await materializeStudioLauncherMark(paths, internal.launcherMarkDigest);
@@ -2275,7 +2818,7 @@ export async function hydrateStudioDraft({
     await atomicWriteJson(paths.theme, internal.currentDocument);
   }
   return {
-    state: await canonicalStudioState(internal, paths.root),
+    state: await canonicalStudioState(internal, paths.root, context.configPath),
     payload: bundle.payload,
     themesChanged: false,
     configChanged: false,
@@ -2368,6 +2911,15 @@ export async function executeStudioRequest({
   } else if (request.type === "delete-user-theme") {
     assertStudioRequest(request, ["theme"]);
     result = await deleteUserTheme({ ...context, theme: request.theme });
+  } else if (request.type === "set-greeting-phrases") {
+    assertStudioRequest(request, [
+      "session", "revision", "enabled", "source", "displayName",
+      "globalPhrases", "overrideMode", "overridePhrases",
+    ]);
+    result = await setGreetingPhrases({ ...context, ...request });
+  } else if (request.type === "reset-greeting") {
+    assertStudioRequest(request, ["session", "revision"]);
+    result = await resetGreeting({ ...context, ...request });
   } else {
     throw new Error(`Unsupported Studio request type: ${request.type}`);
   }

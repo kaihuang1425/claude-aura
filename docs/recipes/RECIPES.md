@@ -266,3 +266,66 @@ provide or select this built-in-only channel.
   opacity 0.78 / mask none`; unknown contexts show neither. Light retains its
   atmosphere and portrait composition on new chat, while conversation and
   unknown contexts hide the isolated portrait.
+
+## WO-21 new-chat greeting recipes
+
+Delivery: a theme's `newChatGreetingStyle` (schema v3) is emitted as CSS keyed on
+`[data-claude-aura-greeting]` (with `[data-claude-aura-effective-mode="dark"]` /
+`[data-claude-aura-viewport="wide"]` variants) reusing the theme's own
+the approved system, humanist, rounded, and editorial font stacks plus the
+theme's semantic colour tokens. The renderer marks Claude's native heading
+(`data-claude-aura-greeting="native"`) for CSS to style in place, or, under
+**My phrases**, styles the Aura-owned heading node. `color: primary|accent`
+maps to `hsl(var(--aura-text-primary|--aura-accent-primary))`. X, Y, and maximum
+width remain unitless main-canvas ratios until the renderer measures and clamps
+them to pixels; CSS percentages are not used for placement.
+
+The compiler emits one full base frame and property-only deltas for Dark, Wide,
+and Dark+Wide. Validated phrases and presentation are indivisible: budget
+enforcement may not truncate a list or remove the greeting. Registered compact
+marks are limited to the audited local SVG assets for Japanese Film Editorial,
+Korean Prestige, and Japanese Idol.
+
+Authored recipes (exact values):
+
+- **Default** — centered warm display serif, restrained native mark.
+  Standard: editorial-serif / primary / 34px / 500 / letter-spacing -0.01em /
+  line-height 1.15 / center / max-width 0.72 / x 0 / y 0 / decoration none /
+  mark native @1. Wide: 40px / line-height 1.12 / max-width 0.68 (else identical).
+  Light and Dark share values; colour adapts via the theme token.
+- **Japanese Film Editorial** — start-aligned narrow editorial serif, cinnabar
+  accent, approved compact mark. Standard: editorial-serif / accent / 36px /
+  500 / not italic / -0.02em / 1.14 / start / max 0.56 / x -0.12 / y -0.04 /
+  none / compact @0.90. Wide: 42px / 1.12 / max 0.50 / x -0.16 / y -0.02 /
+  compact @0.95; other values unchanged. Light and Dark are identical.
+- **Korean Prestige** — precise center-left sans and approved rosette.
+  Standard: humanist-sans / primary / 32px / 400 / not italic / 0.03em / 1.20 /
+  start / max 0.62 / x -0.06 / y -0.02 / none / compact @0.85. Wide: 37px /
+  0.035em / 1.16 / max 0.58 / x -0.10 / y -0.01 / compact @0.90; other values
+  unchanged. Light and Dark are identical.
+- **Cartoon Studio** — rounded bold sans with a compact native ink accent.
+  Standard: rounded-sans / accent / 38px / 700 / not italic / -0.02em / 1.05 /
+  center / max 0.72 / x 0 / y -0.02 / none / native @0.80. Wide: 46px /
+  -0.025em / 1.03 / max 0.68 / y 0 / native @0.85; other values unchanged.
+  Light and Dark are identical.
+- **Anime Twilight** — light display sans with a static restrained glow.
+  Standard: humanist-sans / 36px / 400 / not italic / 0.02em / 1.12 / center /
+  max 0.70 / x -0.03 / y -0.03 / glow / native @0.75. Wide: 42px / 0.025em /
+  1.08 / max 0.66 / x -0.05 / y -0.01 / native @0.80; other values unchanged.
+  Light uses primary; Dark uses accent. Forced colors removes glow and framing.
+- **Study Library** — start-aligned book serif and quiet hairline.
+  Standard: editorial-serif / primary / 34px / 600 / not italic / -0.01em /
+  1.20 / start / max 0.60 / x -0.10 / y -0.02 / hairline / no mark. Wide:
+  40px / -0.015em / 1.17 / max 0.56 / x -0.14 / y -0.01; other values
+  unchanged. Light and Dark are identical.
+- **Japanese Idol** — asymmetric italic serif, soft accent, approved flower mark.
+  Light Standard: editorial-serif / accent / 37px / 600 / italic / 0.005em /
+  1.12 / start / max 0.58 / x -0.10 / y -0.03 / none / compact @0.85. Light
+  Wide: 44px / 1.08 / max 0.54 / x -0.14 / y -0.01 / compact @0.90. Dark uses
+  36px Standard and 43px Wide; all other values match Light.
+- **Korean Idol** — portrait-safe geometric sans aligned with the left-shifted
+  composer and retaining Claude's starburst. Standard: system-sans / primary /
+  34px / 650 / not italic / -0.025em / 1.12 / start / max 0.60 / x -0.12 /
+  y -0.02 / none / native @0.90. Wide: 40px / -0.03em / 1.08 / max 0.56 /
+  x -0.16 / y -0.01 / native @0.95; other values unchanged. Light and Dark
+  are identical.

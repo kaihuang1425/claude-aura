@@ -9,6 +9,13 @@ export {
   THEME_KIT_FILENAME,
   SUPPORTED_LOCALES,
   STUDIO_THEME_SCHEMA_VERSION,
+  STUDIO_KIT_SCHEMA_VERSIONS,
+  GREETING_FONT_CATEGORIES,
+  GREETING_COLOR_ROLES,
+  GREETING_ALIGNMENTS,
+  GREETING_DECORATIONS,
+  GREETING_MARK_SOURCES,
+  GREETING_FONT_WEIGHTS,
   STUDIO_MAX_LAYERS,
   STUDIO_MAX_HISTORY,
   STUDIO_MAX_PATCH_CHANGES,
@@ -22,6 +29,7 @@ export {
 } from "./theme-core/constants.mjs";
 export {
   validateTheme,
+  validateNewChatGreetingStyle,
   normalizeLocale,
 } from "./theme-core/validation.mjs";
 export {
@@ -37,9 +45,19 @@ export {
   resolveBrandWordmark,
 } from "./theme-core/artwork.mjs";
 export {
+  validateGreetingPreferences,
+  validateGreetingShuffleState,
+  validateGreetingPhrase,
+  greetingPhraseDigest,
+  resolveGreetingPhrases,
+  resolveGreetingRuntime,
+  DEFAULT_GREETING_PREFERENCES,
+} from "./theme-core/greeting.mjs";
+export {
   compileTheme,
   buildPayloadFromCompiled,
   buildPayload,
+  renderGreetingCss,
 } from "./theme-core/compile.mjs";
 export {
   createThemeCopy,
@@ -47,6 +65,8 @@ export {
   setThemeToken,
   setThemeLayer,
   applyThemePatch,
+  setGreetingPhrases,
+  resetGreeting,
   attachThemeLayerImage,
   removeThemeLayer,
   moveThemeLayer,

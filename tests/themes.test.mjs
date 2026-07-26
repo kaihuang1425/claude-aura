@@ -294,7 +294,7 @@ test("every theme provides complete semantic roles and a distinct component prof
     accent: "#D66D4B",
     border: "#655C70",
     radius: 16,
-    borderWidth: 1,
+    borderWidth: 2,
   }, "A theme without launcher metadata must receive the safe Aura default");
   assert.throws(() => validateTheme({
     ...legacyDefault,
@@ -630,7 +630,7 @@ test("theme metadata localizes independently for English, Simplified Chinese, an
   const [english, simplified, traditional] = await Promise.all([
     listThemes({ locale: "en" }),
     listThemes({ locale: "zh-CN" }),
-    listThemes({ locale: "zh-TW" }),
+    listThemes({ locale: "zh-HKTW" }),
   ]);
   assert.deepEqual(english.map((theme) => theme.name), THEME_IDS);
   assert.deepEqual(simplified.map((theme) => theme.name), THEME_IDS);
@@ -639,9 +639,9 @@ test("theme metadata localizes independently for English, Simplified Chinese, an
   assert.equal(simplified[0].label, "默认");
   assert.equal(traditional[0].label, "預設");
   assert.equal(normalizeLocale("zh-SG"), "zh-CN");
-  assert.equal(normalizeLocale("zh-MO"), "zh-TW");
+  assert.equal(normalizeLocale("zh-MO"), "zh-HKTW");
   assert.equal(normalizeLocale("zh_Hans_SG"), "zh-CN");
-  assert.equal(normalizeLocale("zh_Hant_TW"), "zh-TW");
+  assert.equal(normalizeLocale("zh_Hant_TW"), "zh-HKTW");
   assert.notEqual(simplified[1].description, traditional[1].description);
   for (const theme of [...simplified, ...traditional]) {
     assert(theme.label.trim());

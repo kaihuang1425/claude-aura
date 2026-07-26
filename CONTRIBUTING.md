@@ -24,3 +24,27 @@ WebView2 version, and operating system.
 Theme contributions must define both modes and pass the automated contrast
 guardrails. Keep names lowercase kebab-case and avoid third-party artwork unless
 its license and provenance are documented.
+
+## Interface copy
+
+Aura Studio keeps one file per language in `studio/locales/`, and the Windows
+window keeps one per language in `windows/locales/`. English, Simplified
+Chinese, and Traditional Chinese are written by hand; the remaining Studio
+languages are translated outside the repository. After changing English copy:
+
+```bash
+npm run locale:export
+```
+
+That writes a packet holding only the changed strings. Send it to a translator
+or translation model, then:
+
+```bash
+npm run locale:import dist/locale-tasks/locale-packet-<stamp>.json
+npm run locale:baseline
+npm test
+```
+
+`import` rejects the whole packet if any string is empty, uses an unknown key,
+or drops a `{0}` placeholder. The test suite fails while any language is behind
+English, so translations cannot quietly rot.

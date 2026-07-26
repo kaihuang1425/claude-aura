@@ -13,12 +13,12 @@
       "labels": {
         "en": "Default",
         "zh-CN": "默认",
-        "zh-TW": "預設"
+        "zh-HKTW": "預設"
       },
       "descriptions": {
         "en": "Claude Aura’s familiar indigo foundation with calm, balanced controls.",
         "zh-CN": "保留 Claude Aura 熟悉的靛蓝基调，界面清晰克制。",
-        "zh-TW": "保留 Claude Aura 熟悉的靛藍基調，畫面清楚、操作沉穩。"
+        "zh-HKTW": "保留 Claude Aura 熟悉的靛藍基調，畫面清楚、操作沉穩。"
       },
       "swatches": ["#F7F7FC", "#E8E9F5", "#4F46A8", "#26243B"],
       "preview": {
@@ -28,19 +28,29 @@
         "accent": "#5D54C7",
         "text": "#242238"
       },
-      "artwork": null
+      "artwork": null,
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 500, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 500, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } }
+        },
+        "dark": {
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 500, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 500, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } }
+        }
+      }
     },
     {
       "id": "japanese-film-editorial",
       "labels": {
         "en": "Japanese Film Editorial",
         "zh-CN": "日式电影编辑风",
-        "zh-TW": "日系電影編輯風"
+        "zh-HKTW": "日系電影編輯風"
       },
       "descriptions": {
         "en": "Warm paper, charcoal ink, muted indigo, and restrained vermilion.",
         "zh-CN": "暖象牙色纸张、墨线与朱红焦点，呈现沉静的电影编辑感。",
-        "zh-TW": "暖象牙紙、墨線與朱紅焦點，營造安靜的電影編輯質感。"
+        "zh-HKTW": "暖象牙紙、墨線與朱紅焦點，營造安靜的電影編輯質感。"
       },
       "swatches": ["#F2E8D5", "#252725", "#394563", "#B64B32"],
       "preview": {
@@ -52,6 +62,16 @@
       },
       "studioPreview": "assets/studio-previews/masters/japanese-film-editorial.png",
       "studioPreviewFrame": { "x": 77.76, "y": 8.98, "zoom": 3.651 },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.14, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.12, "yRatio": -0.04, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 42, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.5, "xRatio": -0.16, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.95 } }
+        },
+        "dark": {
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.14, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.12, "yRatio": -0.04, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 42, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.5, "xRatio": -0.16, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.95 } }
+        }
+      },
       "artwork": null,
       "artworkLayers": [
         {
@@ -109,12 +129,12 @@
       "labels": {
         "en": "Korean Prestige",
         "zh-CN": "韩式精品",
-        "zh-TW": "韓系精品"
+        "zh-HKTW": "韓系精品"
       },
       "descriptions": {
         "en": "Midnight navy, silver structure, and precise architectural glass.",
         "zh-CN": "午夜蓝配合银灰玻璃表面，结构利落，层次清晰。",
-        "zh-TW": "午夜藍搭配銀灰玻璃表面，結構俐落、層次清楚。"
+        "zh-HKTW": "午夜藍搭配銀灰玻璃表面，結構俐落、層次清楚。"
       },
       "swatches": ["#071426", "#152840", "#AAB5C7", "#4D84D8"],
       "preview": {
@@ -126,6 +146,16 @@
       },
       "studioPreview": "assets/studio-previews/masters/korean-prestige.png",
       "studioPreviewFrame": { "x": 82.34, "y": 8.61, "zoom": 3.274 },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 32, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.62, "xRatio": -0.06, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 37, "weight": 400, "italic": false, "letterSpacing": 0.035, "lineHeight": 1.16, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+        },
+        "dark": {
+          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 32, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.62, "xRatio": -0.06, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 37, "weight": 400, "italic": false, "letterSpacing": 0.035, "lineHeight": 1.16, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+        }
+      },
       "artwork": null,
       "artworkLayers": [
         {
@@ -183,12 +213,12 @@
       "labels": {
         "en": "Cartoon Studio",
         "zh-CN": "卡通工作室",
-        "zh-TW": "卡通工作室"
+        "zh-HKTW": "卡通工作室"
       },
       "descriptions": {
         "en": "Cream, coral, teal, and sunny yellow with friendly inked details.",
         "zh-CN": "奶油色、珊瑚色和青绿色搭配手绘轮廓，轻松但不失秩序。",
-        "zh-TW": "奶油色、珊瑚色與青綠色搭配手繪輪廓，輕鬆又有秩序。"
+        "zh-HKTW": "奶油色、珊瑚色與青綠色搭配手繪輪廓，輕鬆又有秩序。"
       },
       "swatches": ["#FFF6E7", "#EA6047", "#248C88", "#F4B62E"],
       "preview": {
@@ -200,6 +230,16 @@
       },
       "studioPreview": "assets/studio-previews/masters/cartoon-studio.png",
       "studioPreviewFrame": { "x": 92.79, "y": 10.48, "zoom": 3.651 },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 38, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.8 } },
+          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 46, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.03, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 0.85 } }
+        },
+        "dark": {
+          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 38, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.8 } },
+          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 46, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.03, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 0.85 } }
+        }
+      },
       "artwork": null,
       "artworkLayers": [
         {
@@ -242,12 +282,12 @@
       "labels": {
         "en": "Anime Twilight",
         "zh-CN": "动漫暮色",
-        "zh-TW": "動畫暮光"
+        "zh-HKTW": "動畫暮光"
       },
       "descriptions": {
         "en": "Twilight blue glass, pale cyan, violet, and warm window light.",
         "zh-CN": "暮蓝与紫色玻璃面板，配合柔和窗光和星空线条。",
-        "zh-TW": "暮藍與紫色玻璃面板，搭配柔和窗光與星空線條。"
+        "zh-HKTW": "暮藍與紫色玻璃面板，搭配柔和窗光與星空線條。"
       },
       "swatches": ["#111A49", "#393A85", "#9CE5EC", "#F0B875"],
       "preview": {
@@ -259,6 +299,16 @@
       },
       "studioPreview": "assets/studio-previews/masters/anime-twilight.png",
       "studioPreviewFrame": { "x": 96.1, "y": 8.25, "zoom": 3.374 },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 36, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": -0.03, "yRatio": -0.03, "decoration": "glow", "mark": { "source": "native", "scale": 0.75 } },
+          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 42, "weight": 400, "italic": false, "letterSpacing": 0.025, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.66, "xRatio": -0.05, "yRatio": -0.01, "decoration": "glow", "mark": { "source": "native", "scale": 0.8 } }
+        },
+        "dark": {
+          "standard": { "font": "humanist-sans", "color": "accent", "fontSize": 36, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": -0.03, "yRatio": -0.03, "decoration": "glow", "mark": { "source": "native", "scale": 0.75 } },
+          "wide": { "font": "humanist-sans", "color": "accent", "fontSize": 42, "weight": 400, "italic": false, "letterSpacing": 0.025, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.66, "xRatio": -0.05, "yRatio": -0.01, "decoration": "glow", "mark": { "source": "native", "scale": 0.8 } }
+        }
+      },
       "artwork": null,
       "artworkLayers": [
         {
@@ -277,12 +327,12 @@
       "labels": {
         "en": "Study Library",
         "zh-CN": "自习图书馆",
-        "zh-TW": "自習圖書館"
+        "zh-HKTW": "自習圖書館"
       },
       "descriptions": {
         "en": "Ivory paper, forest green, oxblood, graphite, and quiet brass.",
         "zh-CN": "象牙纸、森林绿和牛血红，营造安静的研究与阅读氛围。",
-        "zh-TW": "象牙紙、森林綠與牛血紅，營造安靜的研究與閱讀氛圍。"
+        "zh-HKTW": "象牙紙、森林綠與牛血紅，營造安靜的研究與閱讀氛圍。"
       },
       "swatches": ["#F4EEDC", "#1F523F", "#74343B", "#AA884C"],
       "preview": {
@@ -294,6 +344,16 @@
       },
       "studioPreview": "assets/studio-previews/masters/study-library.png",
       "studioPreviewFrame": { "x": 50, "y": 55, "zoom": 1 },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } }
+        },
+        "dark": {
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } }
+        }
+      },
       "artwork": null,
       "artworkLayers": [
         {
@@ -332,12 +392,12 @@
       "labels": {
         "en": "Japanese Idol",
         "zh-CN": "日式偶像",
-        "zh-TW": "日系偶像"
+        "zh-HKTW": "日系偶像"
       },
       "descriptions": {
         "en": "Warm cream, blush, rose, and pearlescent lilac with fine ribbons.",
         "zh-CN": "暖奶油色与柔粉色，辅以克制的丝带和舞台光元素。",
-        "zh-TW": "暖奶油色與柔粉色，點綴節制的緞帶與舞台光。"
+        "zh-HKTW": "暖奶油色與柔粉色，點綴節制的緞帶與舞台光。"
       },
       "swatches": ["#FFF5F1", "#EF879A", "#C7B3E6", "#F2A17C"],
       "preview": {
@@ -349,6 +409,16 @@
       },
       "studioPreview": "assets/studio-previews/masters/japanese-idol.png",
       "studioPreviewFrame": { "x": 86.85, "y": 9.49, "zoom": 3.194 },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 37, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 44, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+        },
+        "dark": {
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 43, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+        }
+      },
       "artwork": null,
       "artworkLayers": [
         {
@@ -410,12 +480,12 @@
       "labels": {
         "en": "Korean Idol",
         "zh-CN": "韩式偶像",
-        "zh-TW": "韓系偶像"
+        "zh-HKTW": "韓系偶像"
       },
       "descriptions": {
         "en": "Cool white, periwinkle, holographic silver, and structured music glass.",
         "zh-CN": "冷白与薰衣草色结合全息玻璃，采用利落的几何布局。",
-        "zh-TW": "冷白與薰衣草色結合全像玻璃，採用俐落的幾何編排。"
+        "zh-HKTW": "冷白與薰衣草色結合全像玻璃，採用俐落的幾何編排。"
       },
       "swatches": ["#F7F6FF", "#8F78DF", "#C6B7F2", "#79D7E4"],
       "preview": {
@@ -431,6 +501,16 @@
         "widthRatio": 0.76,
         "offsetXRatio": -0.07,
         "offsetYRatio": 0
+      },
+      "newChatGreetingStyle": {
+        "light": {
+          "standard": { "font": "system-sans", "color": "primary", "fontSize": 34, "weight": 650, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.12, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.9 } },
+          "wide": { "font": "system-sans", "color": "primary", "fontSize": 40, "weight": 650, "italic": false, "letterSpacing": -0.03, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.16, "yRatio": -0.01, "decoration": "none", "mark": { "source": "native", "scale": 0.95 } }
+        },
+        "dark": {
+          "standard": { "font": "system-sans", "color": "primary", "fontSize": 34, "weight": 650, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.12, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.9 } },
+          "wide": { "font": "system-sans", "color": "primary", "fontSize": 40, "weight": 650, "italic": false, "letterSpacing": -0.03, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.16, "yRatio": -0.01, "decoration": "none", "mark": { "source": "native", "scale": 0.95 } }
+        }
       },
       "artwork": null,
       "artworkLayers": [

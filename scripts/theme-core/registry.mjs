@@ -7,8 +7,10 @@ import {
   DEFAULT_CONFIG,
   FROZEN_BUILTIN_THEME_IDS,
   IMAGE_TYPES,
+  MAX_AVATAR_BYTES,
   MAX_IMAGE_BYTES,
   PROJECT_ROOT,
+  STUDIO_KIT_SCHEMA_VERSIONS,
   STUDIO_THEME_SCHEMA_VERSION,
   THEMES_DIR,
   THEME_ID_PATTERN,
@@ -56,10 +58,13 @@ export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
   const [realKitRoot, realKitPath] = await Promise.all([fs.realpath(kitRoot), fs.realpath(kitPath)]);
   if (!isPathWithin(realKitRoot, realKitPath)) throw new Error(`${THEME_KIT_FILENAME} must remain inside the theme kit`);
   const raw = await readJson(kitPath);
-  if (!isPlainObject(raw) || ![1, STUDIO_THEME_SCHEMA_VERSION].includes(raw.schemaVersion)) {
-    throw new Error(`${THEME_KIT_FILENAME} must use schemaVersion 1 or ${STUDIO_THEME_SCHEMA_VERSION}`);
+  const isStudioKit = STUDIO_KIT_SCHEMA_VERSIONS.has(raw?.schemaVersion);
+  if (!isPlainObject(raw) || !(raw.schemaVersion === 1 || isStudioKit)) {
+    throw new Error(`${THEME_KIT_FILENAME} must use schemaVersion 1 or ${[...STUDIO_KIT_SCHEMA_VERSIONS].join(" or ")}`);
   }
-  const entry = raw.schemaVersion === STUDIO_THEME_SCHEMA_VERSION
+  // Studio-authored kits (v2/v3) validate and normalize up to the current schema;
+  // legacy hand-authored kits (v1) load through the registry-entry path.
+  const entry = isStudioKit
     ? validateStudioThemeKitDocument(raw, THEME_KIT_FILENAME)
     : validateRegistryEntry(raw, THEME_KIT_FILENAME, { source: "user" });
   if (expectedId !== null && entry.id !== expectedId) {
@@ -69,7 +74,7 @@ export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
   if (raw.schemaVersion === 1 && raw.theme.variant !== entry.id) {
     throw new Error(`${THEME_KIT_FILENAME}.theme.variant must match id "${entry.id}"`);
   }
-  const theme = raw.schemaVersion === STUDIO_THEME_SCHEMA_VERSION
+  const theme = isStudioKit
     ? entry.theme
     : validateTheme(raw.theme, `${kitPath}.theme`);
   if (theme.name !== entry.id) throw new Error(`${THEME_KIT_FILENAME}.theme.name must match id "${entry.id}"`);
@@ -84,6 +89,7 @@ export async function readThemeKit(kitDirectory, { expectedId = null } = {}) {
     studioPreview: entry.studioPreview,
     studioPreviewFrame: entry.studioPreviewFrame ? { ...entry.studioPreviewFrame } : null,
     newChatLayout: entry.newChatLayout ? { ...entry.newChatLayout } : null,
+    newChatGreetingStyle: entry.newChatGreetingStyle ? cloneJson(entry.newChatGreetingStyle) : null,
     artwork: entry.artwork ? { ...entry.artwork } : null,
     artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => ({ ...layer })) : null,
     backgroundScope: entry.backgroundScope ?? "full-window",
@@ -231,6 +237,7 @@ export async function readRegisteredTheme(entry, locale) {
     studioPreview: entry.studioPreview,
     studioPreviewFrame: entry.studioPreviewFrame ? { ...entry.studioPreviewFrame } : null,
     newChatLayout: entry.newChatLayout ? { ...entry.newChatLayout } : null,
+    newChatGreetingStyle: entry.newChatGreetingStyle ? cloneJson(entry.newChatGreetingStyle) : null,
     artwork: entry.artwork ? { ...entry.artwork } : null,
     artworkLayers: entry.artworkLayers ? entry.artworkLayers.map((layer) => cloneJson(layer)) : null,
     schemaVersion: entry.schemaVersion ?? 1,
@@ -312,6 +319,7 @@ export async function resolveTheme(config, configPath, locale, { userThemesDir =
             studioPreview: null,
             studioPreviewFrame: null,
             newChatLayout: null,
+            newChatGreetingStyle: null,
             artwork: null,
             artworkLayers: null,
             source: "custom",
@@ -370,6 +378,40 @@ export async function resolveImage(config, configPath) {
   if (detectedMime !== mime) throw new Error(`Image extension does not match its content: ${imagePath}`);
   const animated = isAnimatedImage(bytes);
   return { path: imagePath, mime, animated, dataUrl: `data:${mime};base64,${bytes.toString("base64")}`, bytes: bytes.length };
+}
+
+// Personal account avatar (config.avatar). Mirrors resolveImage — reads the
+// user's chosen file, validates type by extension AND content, and returns a
+// data URL — but with the smaller avatar byte cap. A missing/removed file fails
+// open to null (the native Claude avatar) rather than throwing.
+export async function resolveAvatar(config, configPath) {
+  if (config.avatar === null || config.avatar === undefined || config.avatar === "") return null;
+  if (typeof config.avatar !== "string") throw new Error("avatar must be a file path or null");
+  const avatarPath = path.resolve(path.dirname(configPath), config.avatar);
+  const extension = path.extname(avatarPath).toLowerCase();
+  const mime = IMAGE_TYPES.get(extension);
+  if (!mime) throw new Error(`Unsupported avatar type: ${extension || "no extension"}`);
+  let stat;
+  try {
+    stat = await fs.stat(avatarPath);
+  } catch (error) {
+    if (isUnavailableFileError(error)) return null;
+    throw error;
+  }
+  if (!stat.isFile()) return null;
+  if (stat.size > MAX_AVATAR_BYTES) throw new Error(`Avatar exceeds 2 MB: ${avatarPath}`);
+  let bytes;
+  try {
+    bytes = await fs.readFile(avatarPath);
+  } catch (error) {
+    if (isUnavailableFileError(error)) return null;
+    throw error;
+  }
+  if (bytes.length > MAX_AVATAR_BYTES) throw new Error(`Avatar exceeds 2 MB: ${avatarPath}`);
+  const detectedMime = detectImageMime(bytes);
+  if (!detectedMime) throw new Error(`Avatar content is not a supported PNG, JPEG, WebP, GIF, or AVIF file: ${avatarPath}`);
+  if (detectedMime !== mime) throw new Error(`Avatar extension does not match its content: ${avatarPath}`);
+  return { path: avatarPath, mime, dataUrl: `data:${mime};base64,${bytes.toString("base64")}`, bytes: bytes.length };
 }
 
 async function publishConfigFile(resolved, temporary, fileOperations) {

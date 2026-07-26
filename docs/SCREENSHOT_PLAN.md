@@ -223,7 +223,7 @@ Use an installed profile with its active theme, appearance, personal
 wallpaper/assets, preview framing, and any saved or in-progress draft recorded.
 With no completed introduction, open Studio from the existing Aura launcher
 entry. Confirm one labelled modal greets the user, offers `en`, `zh-CN`, and
-`zh-TW`, explains how to try a theme, and leaves every recorded value
+`zh-HKTW`, explains how to try a theme, and leaves every recorded value
 unchanged. Complete the dialog using only the keyboard, including focus entry,
 Tab/Shift+Tab, language choice, **Try a theme**, **Skip**, Escape, visible
 focus, and close-destination focus. Confirm **Try a theme**, **Skip**, and
@@ -235,11 +235,11 @@ not apply or preview a theme.
 For each supported locale, select it in Settings, close and reopen Studio, and
 confirm the choice persists. Reopen the introduction from Settings and inspect
 its complete visible, status, and accessible copy in that locale; no mixed
-locale, missing key, clipped CJK text, or mechanically reused zh-CN/zh-TW copy
+locale, missing key, clipped CJK text, or mechanically reused zh-CN/zh-HKTW copy
 passes. Exit through the named path under test, restart again, and confirm it
 does not reopen automatically. Record the mechanical cases proving an unset
 or invalid saved choice maps `zh-CN`/`zh-SG`/`zh-Hans` Windows tags to `zh-CN`,
-maps `zh-TW`/`zh-HK`/`zh-MO`/`zh-Hant` tags to `zh-TW`, and maps every other
+maps `zh-HKTW`/`zh-HK`/`zh-MO`/`zh-Hant` tags to `zh-HKTW`, and maps every other
 tag to `en`, with `_` normalized to `-` and descendant tags covered.
 
 Before and after the matrix, compare the host-confirmed active theme,
@@ -283,7 +283,7 @@ pixels. This is a live Studio walkthrough, not a replacement for the required
 whole-window Aura captures.
 
 1. enter through Create's visual path, duplicate a built-in, give the copy
-   distinct en, zh-CN, and zh-TW metadata, and make valid Dark token changes in
+   distinct en, zh-CN, and zh-HKTW metadata, and make valid Dark token changes in
    Quick customize. Confirm entering the draft switches to neutral chrome and
    that Quick customize and Advanced keep the same neutral profile. At both the
    normal 1080×720 size and the supported 760×560 minimum, confirm the primary
@@ -376,7 +376,7 @@ the personal-wallpaper distinction, the
 visible in-memory-capture privacy notice, actionable validation recovery,
 keyboard operation of every edited control, visible focus, the host-confirmed
 save result, and the restart boundary.
-Record the automated complete-key localization result for en, zh-CN, and zh-TW
+Record the automated complete-key localization result for en, zh-CN, and zh-HKTW
 alongside the locale used for the end-to-end walkthrough.
 Also enter Windows forced-colors/high-contrast mode and confirm Studio ignores
 the projected colors where required, preserves visible native focus and readable
@@ -489,7 +489,7 @@ fixture, reconstructed Code UI, headless screenshot, contact sheet, QA board,
 or image golden cannot satisfy HUMAN CHECKPOINT CODE. Confirm separately that
 native Claude Desktop remains unchanged and unthemed, and record a copy review
 of the complete benefits, tradeoffs, known limitations, privacy, process, and
-separate-history disclosure in `en`, `zh-CN`, and `zh-TW`, including that local
+separate-history disclosure in `en`, `zh-CN`, and `zh-HKTW`, including that local
 execution does not keep file content, paths, diffs, or tool/command output
 on-device when Claude Code includes them in model requests or synchronized
 sessions.
@@ -548,17 +548,23 @@ compact target picker and direct selection where supported. Record:
   continuity, keyboard parity, and no Cartesian state tree, third pane, nested
   scroller, or unregistered placeholder.
 
-For WO-26, review both a migrated `step` theme and an explicitly opted-in
-`fluid` target at CSS widths below 1180, exactly 1180, midpoint 1370, 1439,
-1440, exactly 1560, and above 1560. Record the resolved values from theme core,
-Studio, renderer, and overlay in the manifest and confirm they agree. Standard
-and Wide must remain the only saved endpoints; merely resizing or typing a
-custom dimension creates no patch or Undo entry. At the midpoint, verify the
-disclosed Both endpoints gesture and the Advanced Standard-only/Wide-only
-alternatives. Confirm categorical asset, anchor, text, page, visibility, mask,
-and interaction values never interpolate, incompatible endpoints stay `step`
-with a named reason, and navigation/resizing leaves no cross-fade, duplicate,
-or ghosted surface.
+For WO-26, review a migrated legacy `step` theme plus an explicitly opted-in
+theme containing at least Compact, Standard, Laptop, and Wide saved layout
+sets. Record every exact set width, every adjacent midpoint, every step
+breakpoint, below-first and above-last widths, and representative height-only
+changes. Record the resolved values from theme core, Studio, renderer, and
+overlay in the manifest and confirm they agree.
+
+Merely resizing or typing a custom dimension must create no set, patch, or Undo
+entry. At an intermediate preview, handles remain inert until **Add layout set
+here** or an existing **Editing layout** is selected. Add a set at one midpoint
+and confirm there is no visual jump; then edit one prompt, artwork, greeting,
+and widget value in that set and verify independent sparse provenance,
+interpolation, Undo, save, restart, duplicate, rename, resize, and delete
+cleanup. Confirm categorical asset, anchor, text, page, visibility, mask, and
+interaction values never interpolate, incompatible data leaves the last-valid
+payload active with a named reason, and navigation/resizing leaves no
+cross-fade, duplicate, or ghosted surface.
 
 For WO-28, select **Widgets → Loading screen** and customize one temporary
 theme from its inherited permanent profile. Exercise Quick and Advanced,
@@ -573,7 +579,7 @@ failure never delays revealing usable live `claude.ai`.
 
 For WO-22, export the latest schema-v6 temporary theme and import it into a
 clean profile. Confirm its content-addressed sidebar mark, Interface overrides,
-bounded filters, responsive mode/endpoints, portable greeting style, Instant
+  bounded filters, responsive mode/layout sets, portable greeting style, Instant
 prompts, and loading-screen data/assets round-trip byte- and value-correctly.
 Confirm personal greeting names, phrases, shuffle state, wallpaper, launcher
 position, and every other host-owned preference are absent. Tampered checksums,
@@ -602,7 +608,8 @@ Add representative whole-window and manifest evidence for:
   temporary custom theme, each restoring Claude's native greeting exactly;
 - long Latin and CJK phrases, `{name}` substitution from the Studio-entered
   name, and per-theme-over-global phrase precedence;
-- resize, Standard/Wide switching, appearance changes, SPA remount, and
+- resize, saved-layout switching (including migrated Standard/Wide), appearance
+  changes, SPA remount, and
   same-theme reapply without a reroll, duplicate heading, or stale marker;
 - missing or ambiguous discovery, registered-mark failure, reinjection, and
   cleanup failing open with the native greeting visible; and
@@ -615,7 +622,7 @@ phrase exactly once with heading semantics, hides duplicate native semantics
 only after the replacement is ready, remains non-focusable and non-live, and
 restores the native heading on failure. Complete the Studio and WO-20 greeting
 controls using only the keyboard with visible focus, including source change,
-phrase editing, Standard/Wide selection, movement, resize, Undo/Redo,
+  phrase editing, saved-layout selection, movement, resize, Undo/Redo,
 validation recovery, save, restart, and Reset to Claude.
 
 Judge only what Aura controls: artwork identity, visibility, crop, focal

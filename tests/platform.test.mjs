@@ -51,20 +51,49 @@ test("legacy macOS CDP validation rejects unsafe endpoints", async () => {
   }
 });
 
+// Windows can expose several bash launchers. The WindowsApps alias is WSL, which
+// rejects Windows paths, so prefer a native (Git for Windows) bash, probe that the
+// launcher actually starts, and always pass repo-relative arguments every launcher
+// resolves against PROJECT_ROOT.
+function resolveBashPath() {
+  if (process.platform !== "win32") return "/bin/bash";
+  const discovered = (spawnSync("where.exe", ["bash.exe"], { encoding: "utf8" }).stdout ?? "")
+    .split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const isAlias = (candidate) => /[\\/]WindowsApps[\\/]/i.test(candidate);
+  const gitBash = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA]
+    .filter(Boolean).map((root) => path.join(root, "Git", "bin", "bash.exe"));
+  const ranked = [...new Set([
+    ...discovered.filter((candidate) => !isAlias(candidate)),
+    ...gitBash,
+    ...discovered.filter(isAlias),
+  ])];
+  for (const candidate of ranked) {
+    const probe = spawnSync(candidate, ["-c", "exit 0"], { cwd: PROJECT_ROOT, encoding: "utf8" });
+    if (!probe.error && probe.status === 0) return candidate;
+  }
+  return null;
+}
+
 test("JavaScript and platform scripts parse", async () => {
   const themeCoreModules = (await fs.readdir(path.join(PROJECT_ROOT, "scripts", "theme-core")))
     .filter((file) => file.endsWith(".mjs"))
     .sort()
     .map((file) => `scripts/theme-core/${file}`);
+  const studioLocaleScripts = (await fs.readdir(path.join(PROJECT_ROOT, "studio", "locales")))
+    .filter((file) => file.endsWith(".js"))
+    .sort()
+    .map((file) => `studio/locales/${file}`);
   const jsFiles = [
     "assets/renderer-inject.js",
     "studio/app.js",
     "studio/editor.js",
+    ...studioLocaleScripts,
     "scripts/build-aura-icon.mjs",
     "scripts/build-launcher-assets.mjs",
     "scripts/build-studio-themes.mjs",
     "scripts/build-release.mjs",
     "scripts/injector.mjs",
+    "scripts/locale-tasks.mjs",
     "scripts/asset-audit.mjs",
     "scripts/state-cli.mjs",
     "scripts/theme-cli.mjs",
@@ -84,11 +113,10 @@ test("JavaScript and platform scripts parse", async () => {
     ].join(";");
     run("powershell.exe", ["-NoProfile", "-Command", command]);
   }
-  const bash = process.platform === "win32" ? spawnSync("where.exe", ["bash.exe"], { encoding: "utf8" }) : null;
-  const bashPath = process.platform === "win32" ? bash?.stdout?.split(/\r?\n/).find(Boolean) : "/bin/bash";
+  const bashPath = resolveBashPath();
   if (bashPath) {
     const shellFiles = (await fs.readdir(path.join(PROJECT_ROOT, "macos"))).filter((file) => file.endsWith(".sh"));
-    run(bashPath.trim(), ["-n", ...shellFiles.map((file) => path.join(PROJECT_ROOT, "macos", file))]);
+    run(bashPath, ["-n", ...shellFiles.map((file) => `macos/${file}`)]);
   }
 });
 
@@ -527,8 +555,6 @@ test("release and installers exclude unsafe composite references and binary patc
       "LICENSE",
       "NOTICE.md",
       "README.md",
-      "README.zh-CN.md",
-      "README.zh-TW.md",
       "SECURITY.md",
       "THIRD_PARTY_NOTICES.md",
       "Uninstall Claude Aura.cmd",
@@ -536,6 +562,10 @@ test("release and installers exclude unsafe composite references and binary patc
       "package.json",
     ]) {
       assert(names.includes(`claude-aura/${rootFile}`), `Release omitted required root file ${rootFile}`);
+    }
+    for (const localizedReadme of ["README.zh-CN.md", "README.zh-HKTW.md"]) {
+      assert(names.includes(`claude-aura/readmes/${localizedReadme}`),
+        `Release omitted localized readme ${localizedReadme}`);
     }
     assert.deepEqual(names.filter((name) => name.startsWith("claude-aura/docs/")).sort(), [
       "claude-aura/docs/ACCEPTANCE_AUDIT.md",

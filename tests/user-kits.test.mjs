@@ -2,6 +2,7 @@
 import { test, runIfMain } from "./support/harness.mjs";
 import { deflateSync } from "node:zlib";
 import { STUDIO_MAX_HISTORY, STUDIO_MAX_PATCH_CHANGES } from "../scripts/theme-core.mjs";
+import { expandRendererCss } from "../scripts/theme-core/compile.mjs";
 import {
   atomicWriteText,
   garbageCollectStudioLauncherMarks,
@@ -14,6 +15,7 @@ import {
 } from "../scripts/theme-core/studio.mjs";
 import {
   validateLauncherPngBytes,
+  validateStudioThemeKitDocument,
   validateUserThemeArtwork,
 } from "../scripts/theme-core/validation.mjs";
 import {
@@ -66,6 +68,16 @@ const TEST_PNG_CRC_TABLE = Uint32Array.from({ length: 256 }, (_, index) => {
   }
   return value >>> 0;
 });
+
+function readInstalledCss(payload) {
+  const payloadInvocation = payload.lastIndexOf("})(");
+  assert(payloadInvocation >= 0, "Renderer payload lost its invocation");
+  const encodedCss = /^"(?:\\[\s\S]|[^"\\])*"/.exec(payload.slice(payloadInvocation + 3))?.[0];
+  assert(encodedCss, "Renderer payload lost its installed stylesheet");
+  const settings = readPayloadSettings(payload);
+  const css = JSON.parse(encodedCss);
+  return settings.C === 1 ? expandRendererCss(css) : css;
+}
 
 function testPngCrc32(bytes) {
   let value = 0xffffffff;
@@ -394,7 +406,7 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       "Validated user themes must append after built-ins");
     assert.equal(registry.themes.at(-1).source, "user");
     assert.deepEqual(initialWarnings, []);
-    const localizedThemes = await listThemes({ locale: "zh-TW", userThemesDir });
+    const localizedThemes = await listThemes({ locale: "zh-HKTW", userThemesDir });
     const installedTheme = localizedThemes.find((theme) => theme.name === themeId);
     assert(installedTheme, "The installed user theme did not appear in the runtime list");
     assert.equal(installedTheme.source, "user");
@@ -444,6 +456,15 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       assert(registryTheme, `CLI listed an unknown theme ${theme.name}`);
       assert.deepEqual(theme.studioStyle, studioStyleFromTheme(registryTheme),
         `CLI theme ${theme.name} did not carry its exact validated Studio shell style`);
+      // Studio draws its gallery cards from this list, and the host resolves a
+      // duplicate's permanent identity profile through its recipe. Dropping any
+      // of these leaves the Windows host holding a permanent null.
+      assert.deepEqual(theme.studioPreview, registryTheme.studioPreview ?? null,
+        `CLI theme ${theme.name} did not carry its card preview master`);
+      assert.deepEqual(theme.studioPreviewFrame, registryTheme.studioPreviewFrame ?? null,
+        `CLI theme ${theme.name} did not carry its card preview framing`);
+      assert.deepEqual(theme.sourceRecipe, registryTheme.sourceRecipe ?? null,
+        `CLI theme ${theme.name} did not carry its Studio source recipe`);
     }
 
     const invalidKit = path.join(temporary, "invalid-kit");
@@ -624,6 +645,16 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
         assert.deepEqual(copiedCompiled.theme[primitive], sourceCompiled.theme[primitive],
           `${builtInThemeId} no-op Studio copy changed effective ${primitive}`);
       }
+      assert.deepEqual(
+        activeStudioDocument.newChatGreetingStyle,
+        sourceCompiled.theme.newChatGreetingStyle,
+        `${builtInThemeId} duplicate did not preserve its portable greeting recipe`,
+      );
+      assert.deepEqual(
+        copiedCompiled.theme.newChatGreetingStyle,
+        sourceCompiled.theme.newChatGreetingStyle,
+        `${builtInThemeId} duplicate changed its effective portable greeting recipe`,
+      );
 
       const sourceLayers = builtInThemes.get(builtInThemeId)?.artworkLayers ?? [];
       assert.equal(activeStudioDocument.artworkLayers.length, sourceLayers.length,
@@ -689,9 +720,13 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
         }));
         assert.equal(studioResult.state.tokens.light.sidebarAlpha, sidebarAlpha,
           "A light-sidebar edit did not update the editable theme");
-        assert(studioResult.payload.includes(
-          'html.claude-aura [data-aura-role=\\"sidebar-row\\"]{color:hsl(var(--aura-sidebar-text-primary)) !important',
-        ), "A light-sidebar editor draft did not apply its foreground through the discovered sidebar-row role");
+        const editedSidebar = await compileTheme({
+          config: { ...DEFAULT_CONFIG, theme: activeStudioDocument.id },
+          themeKitDirectory: activeStudioDirectory,
+        });
+        assert.match(editedSidebar.css,
+          /html\.claude-aura \[data-aura-role="sidebar-row"\]\s*\{\s*color:\s*hsl\(var\(--aura-sidebar-text-primary\)\) !important/,
+          "A light-sidebar editor draft did not apply its foreground through the discovered sidebar-row role");
         assert(!studioResult.payload.includes("[data-claude-aura-sidebar] svg"),
           "A light-label editor draft broadly restyled native SVG logos or unrelated icons");
       }
@@ -703,7 +738,7 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     // metadata fields. Those fields remain the English canonical values while
     // labels/descriptions continue to carry all three independently authored
     // locale strings.
-    for (const locale of ["zh-CN", "zh-TW"]) {
+    for (const locale of ["zh-CN", "zh-HKTW"]) {
       for (const builtInThemeId of THEME_IDS) {
         studioResult = await studioRequest(
           { type: "create-theme-copy", theme: builtInThemeId },
@@ -769,9 +804,10 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
         `${idolThemeId} no-op duplication changed its new-chat layout`);
       assert(idolCompiled.css.includes(`[data-claude-aura-variant="${idolThemeId}"]`),
         `${idolThemeId} duplication lost its variant-scoped recipe selectors`);
-      assert(studioResult.payload.includes(`data-claude-aura-variant=\\"${idolThemeId}\\"`),
-        `${idolThemeId} payload omitted its variant-scoped recipe selectors`);
       let idolRuntime = readPayloadSettings(studioResult.payload);
+      const installedCss = readInstalledCss(studioResult.payload);
+      assert(installedCss.includes(`[data-claude-aura-variant="${idolThemeId}"]`),
+        `${idolThemeId} payload omitted its variant-scoped recipe selectors`);
       assert.equal(idolRuntime.artLayers[legacyLayerIndex].p, legacyLayer.legacy.position);
       assert.equal(idolRuntime.artLayers[legacyLayerIndex].s, legacyLayer.legacy.size);
       assert.equal(Object.hasOwn(idolRuntime.artLayers[legacyLayerIndex], "n"), false,
@@ -942,10 +978,11 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     }));
     assert.equal(studioResult.state.tokens.light.sidebarAlpha, editedSidebarAlpha,
       "A valid sidebar edit did not update the editable theme");
-    assert(studioResult.payload.includes(
-      'html.claude-aura [data-aura-role=\\"sidebar-row\\"]{color:hsl(var(--aura-sidebar-text-primary)) !important',
+    const editedSidebarCss = readInstalledCss(studioResult.payload);
+    assert(editedSidebarCss.includes(
+      'html.claude-aura [data-aura-role="sidebar-row"]{color:hsl(var(--aura-sidebar-text-primary)) !important',
     ), "A valid editor draft did not apply sidebar foreground through its discovered row role");
-    assert(!studioResult.payload.includes("[data-claude-aura-sidebar] svg"),
+    assert(!editedSidebarCss.includes("[data-claude-aura-sidebar] svg"),
       "A valid editor draft broadly restyled native SVG logos or unrelated icons");
     const validDraftStudioStyle = structuredClone(studioResult.state.studioStyle);
     const restartedDraft = JSON.parse(run(process.execPath, [
@@ -1484,20 +1521,20 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       "A rejected multi-change patch advanced the public revision");
 
     const metadataBeforePatch = JSON.parse(JSON.stringify(studioResult.state.metadata));
-    assert.deepEqual(Object.keys(metadataBeforePatch.labels).sort(), ["en", "zh-CN", "zh-TW"],
+    assert.deepEqual(Object.keys(metadataBeforePatch.labels).sort(), ["en", "zh-CN", "zh-HKTW"],
       "Canonical Studio state omitted or added a label locale");
-    assert.deepEqual(Object.keys(metadataBeforePatch.descriptions).sort(), ["en", "zh-CN", "zh-TW"],
+    assert.deepEqual(Object.keys(metadataBeforePatch.descriptions).sort(), ["en", "zh-CN", "zh-HKTW"],
       "Canonical Studio state omitted or added a description locale");
     const patchedMetadata = {
       labels: {
         en: "Studio Patch Theme",
         "zh-CN": "Studio Patch Theme zh-CN",
-        "zh-TW": "Studio Patch Theme zh-TW",
+        "zh-HKTW": "Studio Patch Theme zh-HKTW",
       },
       descriptions: {
         en: "A theme updated in one transaction.",
         "zh-CN": "A theme updated in one transaction (zh-CN).",
-        "zh-TW": "A theme updated in one transaction (zh-TW).",
+        "zh-HKTW": "A theme updated in one transaction (zh-HKTW).",
       },
     };
     const layerBeforePatch = JSON.parse(JSON.stringify(studioResult.state.layers[0]));
@@ -1944,6 +1981,197 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     assert.equal((await listThemes({ userThemesDir })).some((theme) => theme.name === themeId), false);
     assert.equal((await fs.stat(collisionFolder)).isDirectory(), true,
       "One-folder uninstall removed a different user theme folder");
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("WO-21 migrates every legacy Studio slot and keeps personal greetings out of theme files", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-greeting-migration-"));
+  const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
+  const authoringRoot = path.join(temporary, "authoring");
+  const userThemesDir = path.join(temporary, "user-themes");
+  const editorRoot = path.join(temporary, "editor");
+  const configPath = path.join(temporary, "config.json");
+  const legacyId = "legacy-greeting-migration";
+  try {
+    await Promise.all([
+      fs.mkdir(authoringRoot, { recursive: true }),
+      fs.mkdir(userThemesDir, { recursive: true }),
+    ]);
+    run(process.execPath, [cliPath, "scaffold", legacyId], { cwd: authoringRoot });
+    const sourceKit = path.join(authoringRoot, "themes", legacyId);
+    const installedKit = path.join(userThemesDir, legacyId);
+    await fs.cp(sourceKit, installedKit, { recursive: true });
+    await writeConfig(configPath, { ...DEFAULT_CONFIG });
+    const request = (message) => executeStudioRequest({
+      request: message,
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+    });
+    const action = (result, type, values = {}) => ({
+      type,
+      session: result.state.session,
+      revision: result.state.revision,
+      ...values,
+    });
+
+    const installedThemePath = path.join(installedKit, "theme.json");
+    const installedV1Bytes = await fs.readFile(installedThemePath, "utf8");
+    const installedV1 = JSON.parse(installedV1Bytes);
+    assert.equal(installedV1.schemaVersion, 1);
+
+    let result = await request({ type: "begin-theme-edit", theme: legacyId, reset: false });
+    const activePaths = studioPaths(editorRoot);
+    const openedDocument = JSON.parse(await fs.readFile(activePaths.theme, "utf8"));
+    assert.equal(openedDocument.schemaVersion, STUDIO_THEME_SCHEMA_VERSION,
+      "Opening an installed schema-v1 kit did not create a schema-v3 Studio document");
+    assert.equal(openedDocument.newChatGreetingStyle, null,
+      "Opening an installed schema-v1 kit invented portable greeting presentation");
+    const openedInternal = JSON.parse(await fs.readFile(activePaths.state, "utf8"));
+    for (const property of ["baselineDocument", "currentDocument", "lastValidDocument"]) {
+      assert.equal(openedInternal[property].schemaVersion, STUDIO_THEME_SCHEMA_VERSION,
+        `Opening schema v1 did not normalize ${property}`);
+      assert.equal(openedInternal[property].newChatGreetingStyle, null,
+        `Opening schema v1 did not initialize ${property}.newChatGreetingStyle`);
+    }
+    assert.equal(await fs.readFile(installedThemePath, "utf8"), installedV1Bytes,
+      "Opening an installed schema-v1 kit rewrote the installed file");
+
+    const schemaV1 = structuredClone(installedV1);
+    const schemaV2 = structuredClone(openedDocument);
+    schemaV2.schemaVersion = 2;
+    delete schemaV2.newChatGreetingStyle;
+    const legacyState = structuredClone(openedInternal);
+    legacyState.version = 1;
+    legacyState.baselineDocument = structuredClone(schemaV1);
+    legacyState.currentDocument = structuredClone(schemaV2);
+    legacyState.lastValidDocument = structuredClone(schemaV1);
+    legacyState.undo = [structuredClone(schemaV1), structuredClone(schemaV2)];
+    legacyState.redo = [structuredClone(schemaV2), structuredClone(schemaV1)];
+    legacyState.appliedUndo = [structuredClone(schemaV2), structuredClone(schemaV1)];
+    legacyState.appliedRedo = [structuredClone(schemaV1), structuredClone(schemaV2)];
+    legacyState.launcherUndo = [null, null];
+    legacyState.launcherRedo = [null, null];
+    legacyState.appliedLauncherUndo = [null, null];
+    legacyState.appliedLauncherRedo = [null, null];
+    for (const property of [
+      "greetingBaseline", "greetingCurrent", "greetingLastValid",
+      "greetingUndo", "greetingRedo", "greetingAppliedUndo", "greetingAppliedRedo",
+    ]) delete legacyState[property];
+    await fs.writeFile(activePaths.state, `${JSON.stringify(legacyState, null, 2)}\n`, "utf8");
+    await fs.writeFile(activePaths.theme, `${JSON.stringify(schemaV2, null, 2)}\n`, "utf8");
+
+    result = await request({ type: "begin-theme-edit", theme: legacyId, reset: false });
+    const migrated = JSON.parse(await fs.readFile(activePaths.state, "utf8"));
+    assert.equal(migrated.version, 2, "Legacy Studio state did not persist its current envelope version");
+    const migratedSlots = [
+      ["baseline", migrated.baselineDocument],
+      ["current", migrated.currentDocument],
+      ["last valid", migrated.lastValidDocument],
+      ...migrated.undo.map((document, index) => [`undo ${index}`, document]),
+      ...migrated.redo.map((document, index) => [`redo ${index}`, document]),
+      ...migrated.appliedUndo.map((document, index) => [`applied undo ${index}`, document]),
+      ...migrated.appliedRedo.map((document, index) => [`applied redo ${index}`, document]),
+    ];
+    assert.equal(migratedSlots.length, 11, "The migration fixture stopped covering every history family");
+    for (const [label, document] of migratedSlots) {
+      assert.equal(document.schemaVersion, STUDIO_THEME_SCHEMA_VERSION,
+        `Migration left ${label} on an older theme schema`);
+      assert(Object.hasOwn(document, "newChatGreetingStyle"),
+        `Migration omitted ${label}.newChatGreetingStyle`);
+      assert.equal(document.newChatGreetingStyle, null,
+        `Migration invented greeting presentation in ${label}`);
+    }
+    for (const [label, values, expectedLength] of [
+      ["personal undo", migrated.greetingUndo, migrated.undo.length],
+      ["personal redo", migrated.greetingRedo, migrated.redo.length],
+      ["personal applied undo", migrated.greetingAppliedUndo, migrated.appliedUndo.length],
+      ["personal applied redo", migrated.greetingAppliedRedo, migrated.appliedRedo.length],
+    ]) {
+      assert.equal(values.length, expectedLength, `${label} was not aligned during legacy migration`);
+    }
+    assert.equal(await fs.readFile(installedThemePath, "utf8"), installedV1Bytes,
+      "Migrating active v1/v2 history rewrote the installed schema-v1 kit");
+    result = await request(action(result, "discard-theme-edit"));
+    assert.equal(result.state.active, false);
+
+    const privacyThemeId = "default-copy";
+    const displayName = "PRIVACY_DISPLAY_NAME_CANARY";
+    const globalPhrase = "PRIVACY_GLOBAL_PHRASE_CANARY {name}";
+    const overridePhrases = [
+      "PRIVACY_THEME_PHRASE_CANARY {name}",
+      "PRIVACY_THEME_SECOND_CANARY",
+    ];
+    const effectiveOverridePhrases = [
+      `PRIVACY_THEME_PHRASE_CANARY ${displayName}`,
+      overridePhrases[1],
+    ];
+    const phraseDigest = crypto.createHash("sha256")
+      .update(JSON.stringify(effectiveOverridePhrases), "utf8")
+      .digest("hex");
+    const greetingPreferences = {
+      enabled: true,
+      source: "custom",
+      displayName,
+      globalPhrases: [globalPhrase],
+      themeOverrides: {
+        [privacyThemeId]: { mode: "custom", phrases: overridePhrases },
+      },
+      shuffle: {
+        themeId: privacyThemeId,
+        phraseDigest,
+        order: [1, 0],
+        cursor: 1,
+        lastIndex: 1,
+      },
+    };
+    await writeConfig(configPath, { ...DEFAULT_CONFIG, greetingPreferences });
+
+    const assertPortableOnly = (document, label) => {
+      const serialized = JSON.stringify(document);
+      assert.equal(Object.hasOwn(document, "greetingPreferences"), false,
+        `${label} contains the host-owned greeting envelope`);
+      for (const canary of [
+        displayName, globalPhrase, ...overridePhrases, ...effectiveOverridePhrases, phraseDigest,
+      ]) {
+        assert(!serialized.includes(canary), `${label} leaked personal greeting value ${canary}`);
+      }
+    };
+
+    let privacyResult = await request({ type: "create-theme-copy", theme: "default" });
+    assert.equal(privacyResult.state.id, privacyThemeId);
+    const activePrivacyDocument = JSON.parse(await fs.readFile(studioPaths(editorRoot).theme, "utf8"));
+    assertPortableOnly(activePrivacyDocument, "Duplicated theme.json");
+    privacyResult = await request(action(privacyResult, "save-theme-edit"));
+    assert.equal(privacyResult.state.actionSucceeded, true);
+    const savedPrivacyPath = path.join(userThemesDir, privacyThemeId, "theme.json");
+    const savedPrivacyDocument = JSON.parse(await fs.readFile(savedPrivacyPath, "utf8"));
+    assertPortableOnly(savedPrivacyDocument, "Saved theme.json");
+    const persistedConfig = JSON.parse(await fs.readFile(configPath, "utf8"));
+    assert.deepEqual(persistedConfig.greetingPreferences, greetingPreferences,
+      "Saving a theme changed or removed its host-owned greeting preferences");
+    assert.equal(persistedConfig.theme, privacyThemeId);
+
+    const poisonedV3 = { ...structuredClone(savedPrivacyDocument), greetingPreferences };
+    assert.throws(
+      () => validateStudioThemeKitDocument(poisonedV3, "poisoned schema-v3 theme"),
+      /unsupported property|host-owned/,
+      "Schema-v3 validation accepted host-owned greeting preferences",
+    );
+    const poisonedV1Directory = path.join(temporary, "poisoned-schema-v1");
+    await fs.cp(sourceKit, poisonedV1Directory, { recursive: true });
+    const poisonedV1Path = path.join(poisonedV1Directory, "theme.json");
+    const poisonedV1 = JSON.parse(await fs.readFile(poisonedV1Path, "utf8"));
+    poisonedV1.greetingPreferences = greetingPreferences;
+    await fs.writeFile(poisonedV1Path, `${JSON.stringify(poisonedV1, null, 2)}\n`, "utf8");
+    await assert.rejects(
+      readThemeKit(poisonedV1Directory),
+      /greetingPreferences is host-owned/,
+      "Schema-v1 validation accepted host-owned greeting preferences",
+    );
   } finally {
     await fs.rm(temporary, { recursive: true, force: true });
   }

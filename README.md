@@ -1,15 +1,27 @@
-<a id="readme-top"></a>
+﻿<a id="readme-top"></a>
 
 # Claude Aura
 
 <p align="center">
   <strong>English</strong> ·
-  <a href="./README.zh-CN.md">简体中文</a> ·
-  <a href="./README.zh-TW.md">繁體中文</a>
+  <a href="./readmes/README.zh-CN.md">简体中文</a> ·
+  <a href="./readmes/README.zh-HKTW.md">繁體中文</a> ·
+  <a href="./readmes/README.hi.md">हिंदी</a> ·
+  <a href="./readmes/README.es.md">Español</a> ·
+  <a href="./readmes/README.fr.md">Français</a> ·
+  <a href="./readmes/README.id.md">Bahasa Indonesia</a> ·
+  <a href="./readmes/README.ja.md">日本語</a> ·
+  <a href="./readmes/README.ko.md">한국어</a> ·
+  <a href="./readmes/README.pt-BR.md">Português (Brasil)</a> ·
+  <a href="./readmes/README.de.md">Deutsch</a> ·
+  <a href="./readmes/README.it.md">Italiano</a> ·
+  <a href="./readmes/README.vi.md">Tiếng Việt</a> ·
+  <a href="./readmes/README.pl.md">Polski</a> ·
+  <a href="./readmes/README.tr.md">Türkçe</a>
 </p>
 
 <p align="center">
-  <strong>A reversible Windows theme companion for the live Claude website.</strong><br>
+  <strong>Give the live Claude website a personal, reversible theme on Windows.</strong><br>
   Local themes · No Claude Desktop patching · One-click return to the original look
 </p>
 
@@ -21,13 +33,25 @@
   <a href="./SECURITY.md">Security</a>
 </p>
 
+<p align="center">
+  <img src="./docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
+       alt="Japanese Film Editorial dark new-chat reference preview"
+       width="900"><br>
+  <sub>Dark · New chat · user-supplied documentation showcase</sub>
+</p>
+
+<p align="center"><sub>Reference preview · not an importable theme background or live acceptance evidence</sub></p>
+
 > **Independent project.** Claude Aura is unofficial and is not affiliated
 > with, endorsed by, sponsored by, or approved by Anthropic PBC. Aura displays
 > the live website at `claude.ai`; it does not provide Claude or modify
 > Anthropic's installed applications. Claude, Anthropic, and related names and
 > marks belong to Anthropic PBC. The project license grants no rights to those
 > materials.
->
+
+<details>
+<summary><strong>Public or commercial release trademark note</strong></summary>
+
 > **Before public or commercial release:** Anthropic's current
 > [Trademark Guidelines](https://www.anthropic.com/legal/trademark-guidelines)
 > require prior approval for its names and marks and prohibit altered marks. A
@@ -35,24 +59,53 @@
 > or theme-styled Claude wordmarks needs written permission and appropriate
 > legal review.
 
-## Contents
+</details>
 
-- [About Claude Aura](#about-claude-aura)
-- [Theme showcase](#theme-showcase)
-- [Built with](#built-with)
-- [Getting started](#getting-started)
-- [Use Aura](#use-aura)
-- [Built-in themes](#built-in-themes)
-- [Create a custom theme](#create-a-custom-theme)
-- [Local data](#local-data)
-- [Safety and privacy](#safety-and-privacy)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License and notices](#license-and-notices)
-- [Support](#support)
-- [Acknowledgments](#acknowledgments)
+<a id="contents"></a>
+<details>
+<summary><strong>Contents</strong></summary>
 
-## About Claude Aura
+- [Claude Aura](#claude-aura)
+  - [Why Aura](#why-aura)
+  - [Quick start](#quick-start)
+    - [Requirements](#requirements)
+    - [Installation](#installation)
+    - [Uninstall](#uninstall)
+  - [Theme showcase](#theme-showcase)
+    - [Japanese Film Editorial](#japanese-film-editorial)
+    - [Japanese Idol](#japanese-idol)
+    - [Korean Idol](#korean-idol)
+  - [Use Aura](#use-aura)
+  - [Create a custom theme](#create-a-custom-theme)
+  - [How Aura works](#how-aura-works)
+  - [Safety and privacy](#safety-and-privacy)
+  - [Roadmap](#roadmap)
+  - [Support and documentation](#support-and-documentation)
+    - [Documentation map](#documentation-map)
+  - [Charitable support](#charitable-support)
+  - [License and notices](#license-and-notices)
+  - [Acknowledgments](#acknowledgments)
+
+</details>
+
+<a id="about-claude-aura"></a>
+## Why Aura
+
+- **Use the live Claude website.** Aura keeps the real interface and native controls instead of replacing them with a reconstructed screen.
+- **Keep the change local and reversible.** It applies local styling without patching Claude Desktop, and **Original look** removes Aura's presentation layer in one click.
+- **Start with eight built-in themes.** Each is available as a stable, read-only starting point for a personalized workspace.
+- **Create themes without overwriting the originals.** Claude Aura Studio supports local colors, typography, shapes, effects, and artwork.
+
+Aura 0.3 currently themes the live website only. It does not yet theme native
+Claude Desktop Code or the Claude Code terminal, and ordinary chat inside Aura
+does not gain local-project access. Before the final release, Aura Code must
+pass a release-blocking proof with a themed official
+[Remote Control](https://code.claude.com/docs/en/remote-control) session on live
+`claude.ai/code`; matching terminal-theme export covers restricted
+environments without patching Claude Desktop.
+
+<details>
+<summary><strong>Complete capabilities and exclusions</strong></summary>
 
 Claude Aura opens the real `claude.ai` website in a dedicated Microsoft Edge
 WebView2 window and applies a local visual theme. It is designed for people who
@@ -67,39 +120,81 @@ live interface with a screenshot.
 | Provides Studio for local custom themes | Claim to be an Anthropic product or official theme system |
 | Offers **Original look** inside the app | Delete saved themes when styling is turned off |
 
-Aura 0.3 currently themes the live website only. It does not yet theme native
-Claude Desktop Code or the Claude Code terminal, and ordinary chat inside Aura
-does not gain local-project access. Before the final release, Aura Code must
-pass a release-blocking proof with a themed official
-[Remote Control](https://code.claude.com/docs/en/remote-control) session on live
-`claude.ai/code`; matching terminal-theme export covers restricted
-environments without patching Claude Desktop.
+</details>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<a id="getting-started"></a>
+## Quick start
+
+### Requirements
+
+- Windows 10 or Windows 11
+- Internet access and a Claude account
+- [Node.js 22 or newer](https://nodejs.org/en/download)
+- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+
+WebView2 is present on most current Windows computers. If Aura cannot open its
+browser window, install or repair the Evergreen WebView2 Runtime and try again.
+Claude Desktop is optional and remains a separate application.
+
+### Installation
+
+1. Download the
+   [latest release ZIP](https://github.com/erichuang1425/claude-aura/releases).
+2. In File Explorer, right-click the ZIP and select **Extract All**.
+3. Open the extracted folder and double-click **Install Claude Aura.cmd**.
+4. Wait for the installer to close and the **Claude Aura** window to open.
+5. Sign in inside Aura if `claude.ai` asks you to.
+6. Click the floating Aura button to open Studio, then choose **Themes**.
+
+Installation does not patch or replace Claude Desktop.
+
+<details>
+<summary><strong>Installer behavior, application location, developer checkouts, and uninstall</strong></summary>
+
+The non-elevated installer runs its built-in validation checks, then copies the
+application files to:
+
+```text
+%LOCALAPPDATA%\ClaudeAura\app
+```
+
+It creates **Claude Aura** and **Claude Aura Studio** shortcuts on the Desktop
+and in the Start menu. Theme settings and sign-in data are stored separately
+from the application, so reinstalling Aura does not silently replace them.
+
+Developers may clone the repository instead of downloading a ZIP and run the
+same installer from the checkout. A checkout runs the complete repository test
+suite before installation.
+
+### Uninstall
+
+First right-click the floating Aura button and select **Exit Claude Aura**.
+Then open **Start > Claude Aura > Uninstall Claude Aura**, or double-click
+**Uninstall Claude Aura.cmd** in an extracted release. The uninstaller refuses
+to continue while Aura is still open.
+
+By default, uninstall removes the Aura application and shortcuts but keeps local
+theme settings and Aura's separate WebView sign-in profile for a later
+reinstall. The uninstaller asks before removing those folders too. That optional
+erase removes Aura's local sign-in session; it never removes Claude Desktop,
+the user's Anthropic account, or server-side account data.
+
+</details>
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<a id="theme-showcase"></a>
 ## Theme showcase
 
-> **Reference status:** These user-supplied images communicate the intended
-> visual direction. They may contain illustrative interface content and are
-> not live acceptance evidence or proof of current `claude.ai` behavior. They
-> are not theme backgrounds, must not be imported into Aura, and are excluded
-> from release installers.
->
-> The previews contain third-party product UI, names or marks, and human-like
-> portrait artwork. Their inclusion does not grant reuse rights. Confirm the
-> applicable interface, trademark, artwork, and likeness rights before further
-> publication or redistribution.
+Aura's visual system is demonstrated below through New chat and Conversation references. The featured Japanese Film Editorial New chat preview appears at the top of this README.
+
+**Default · Japanese Film Editorial · Korean Prestige · Cartoon Studio · Anime Twilight · Study Library · Japanese Idol · Korean Idol**
 
 ### Japanese Film Editorial
 
 Warm paper, charcoal ink, muted indigo, and restrained vermilion.
-
-<p align="center">
-  <img src="./docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="Japanese Film Editorial dark new-chat reference preview"
-       width="900"><br>
-  <sub>Dark · New chat · user-supplied documentation showcase</sub>
-</p>
 
 <details>
 <summary>See the Conversation view</summary>
@@ -159,74 +254,47 @@ Cool white, periwinkle, holographic silver, and structured music glass.
 
 </details>
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+<details>
+<summary><strong>Reference status and reuse boundaries</strong></summary>
 
-## Built with
+> **Reference status:** These user-supplied images communicate the intended
+> visual direction. They may contain illustrative interface content and are
+> not live acceptance evidence or proof of current `claude.ai` behavior. They
+> are not theme backgrounds, must not be imported into Aura, and are excluded
+> from release installers.
+>
+> The previews contain third-party product UI, names or marks, and human-like
+> portrait artwork. Their inclusion does not grant reuse rights. Confirm the
+> applicable interface, trademark, artwork, and likeness rights before further
+> publication or redistribution.
 
-| Part | Purpose |
-| --- | --- |
-| Windows PowerShell and WinForms | Installer, Aura window, Studio, shortcuts, and local controls |
-| Microsoft Edge WebView2 | Displays the real `claude.ai` website |
-| Node.js 22+ | Validates themes and builds the local theme styling |
-| Local HTML, CSS, JavaScript, SVG, and WebP | Supplies Aura styling and built-in theme assets |
+</details>
 
-The project has no npm package or runtime font dependency.
+<a id="built-in-themes"></a>
+<details>
+<summary><strong>All built-in themes and stable IDs</strong></summary>
 
-## Getting started
+Aura ships with eight built-in themes in a stable order:
 
-### Requirements
+| # | Theme | Stable ID |
+| ---: | --- | --- |
+| 1 | Default | `default` |
+| 2 | Japanese Film Editorial | `japanese-film-editorial` |
+| 3 | Korean Prestige | `korean-prestige` |
+| 4 | Cartoon Studio | `cartoon-studio` |
+| 5 | Anime Twilight | `anime-twilight` |
+| 6 | Study Library | `study-library` |
+| 7 | Japanese Idol | `japanese-idol` |
+| 8 | Korean Idol | `korean-idol` |
 
-- Windows 10 or Windows 11
-- Internet access and a Claude account
-- [Node.js 22 or newer](https://nodejs.org/en/download)
-- [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+Built-ins are read-only. Studio makes an editable copy when you want to
+customize one.
 
-WebView2 is present on most current Windows computers. If Aura cannot open its
-browser window, install or repair the Evergreen WebView2 Runtime and try again.
-Claude Desktop is optional and remains a separate application.
-
-### Installation
-
-1. Download the
-   [latest release ZIP](https://github.com/erichuang1425/claude-aura/releases).
-2. In File Explorer, right-click the ZIP and select **Extract All**.
-3. Open the extracted folder and double-click **Install Claude Aura.cmd**.
-4. Wait for the installer to close and the **Claude Aura** window to open.
-5. Sign in inside Aura if `claude.ai` asks you to.
-6. Click the floating Aura button to open Studio, then choose **Themes**.
-
-The non-elevated installer runs its built-in validation checks, then copies the
-application files to:
-
-```text
-%LOCALAPPDATA%\ClaudeAura\app
-```
-
-It creates **Claude Aura** and **Claude Aura Studio** shortcuts on the Desktop
-and in the Start menu. Theme settings and sign-in data are stored separately
-from the application, so reinstalling Aura does not silently replace them.
-
-Installation does not patch or replace Claude Desktop.
-
-Developers may clone the repository instead of downloading a ZIP and run the
-same installer from the checkout. A checkout runs the complete repository test
-suite before installation.
-
-### Uninstall
-
-First right-click the floating Aura button and select **Exit Claude Aura**.
-Then open **Start > Claude Aura > Uninstall Claude Aura**, or double-click
-**Uninstall Claude Aura.cmd** in an extracted release. The uninstaller refuses
-to continue while Aura is still open.
-
-By default, uninstall removes the Aura application and shortcuts but keeps local
-theme settings and Aura's separate WebView sign-in profile for a later
-reinstall. The uninstaller asks before removing those folders too. That optional
-erase removes Aura's local sign-in session; it never removes Claude Desktop,
-the user's Anthropic account, or server-side account data.
+</details>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<a id="use-aura"></a>
 ## Use Aura
 
 | Action | What it does |
@@ -252,24 +320,9 @@ deleting that file makes the wallpaper unavailable. Theme artwork imported
 through the editor follows a different path: Studio copies or converts it into
 Aura-owned theme folders.
 
-## Built-in themes
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-Aura ships with eight built-in themes in a stable order:
-
-| # | Theme | Stable ID |
-| ---: | --- | --- |
-| 1 | Default | `default` |
-| 2 | Japanese Film Editorial | `japanese-film-editorial` |
-| 3 | Korean Prestige | `korean-prestige` |
-| 4 | Cartoon Studio | `cartoon-studio` |
-| 5 | Anime Twilight | `anime-twilight` |
-| 6 | Study Library | `study-library` |
-| 7 | Japanese Idol | `japanese-idol` |
-| 8 | Korean Idol | `korean-idol` |
-
-Built-ins are read-only. Studio makes an editable copy when you want to
-customize one.
-
+<a id="create-a-custom-theme"></a>
 ## Create a custom theme
 
 1. Open **Claude Aura Studio** from the Desktop or Start menu.
@@ -294,23 +347,21 @@ memory only for the current editing session, and is never written to disk.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Local data
+<a id="built-with"></a>
+## How Aura works
 
-Aura separates its application, settings, themes, drafts, and browser profile:
-
-| Path | Contents |
+| Part | Purpose |
 | --- | --- |
-| `%LOCALAPPDATA%\ClaudeAura\app` | Installed Aura application |
-| `%LOCALAPPDATA%\ClaudeAura\data` | Settings, logs, and Aura-owned local state |
-| `%LOCALAPPDATA%\ClaudeAura\data\themes` | Saved custom themes and derived artwork |
-| `%LOCALAPPDATA%\ClaudeAura\data\theme-drafts` | In-progress Studio drafts |
-| `%LOCALAPPDATA%\ClaudeAura\webview` | Aura's separate WebView2 sign-in profile |
+| Windows PowerShell and WinForms | Installer, Aura window, Studio, shortcuts, and local controls |
+| Microsoft Edge WebView2 | Displays the real `claude.ai` website |
+| Node.js 22+ | Validates themes and builds the local theme styling |
+| Local HTML, CSS, JavaScript, SVG, and WebP | Supplies Aura styling and built-in theme assets |
 
-Treat the `webview` folder like any signed-in browser profile. Do not publish
-or share it. The default uninstall keeps `data` and `webview`; choose the
-explicit removal option only when you also want those local settings, themes,
-and the separate sign-in profile erased.
+The project has no npm package or runtime font dependency.
 
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<a id="safety-and-privacy"></a>
 ## Safety and privacy
 
 - Aura loads the real HTTPS website at `claude.ai` in Microsoft Edge WebView2.
@@ -331,8 +382,30 @@ Read [SECURITY.md](./SECURITY.md) for the trust boundary and
 [Troubleshooting](./docs/TROUBLESHOOTING.md) for sign-in, loading, theme, image,
 and WebView2 help.
 
+<a id="local-data"></a>
+<details>
+<summary><strong>Local data folders and uninstall retention</strong></summary>
+
+Aura separates its application, settings, themes, drafts, and browser profile:
+
+| Path | Contents |
+| --- | --- |
+| `%LOCALAPPDATA%\ClaudeAura\app` | Installed Aura application |
+| `%LOCALAPPDATA%\ClaudeAura\data` | Settings, logs, and Aura-owned local state |
+| `%LOCALAPPDATA%\ClaudeAura\data\themes` | Saved custom themes and derived artwork |
+| `%LOCALAPPDATA%\ClaudeAura\data\theme-drafts` | In-progress Studio drafts |
+| `%LOCALAPPDATA%\ClaudeAura\webview` | Aura's separate WebView2 sign-in profile |
+
+Treat the `webview` folder like any signed-in browser profile. Do not publish
+or share it. The default uninstall keeps `data` and `webview`; choose the
+explicit removal option only when you also want those local settings, themes,
+and the separate sign-in profile erased.
+
+</details>
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<a id="roadmap"></a>
 ## Roadmap
 
 - [x] Dedicated Windows WebView2 companion and reversible **Original look**
@@ -349,7 +422,40 @@ See the
 public status. A reference preview never substitutes for required live Aura
 acceptance evidence.
 
-## Contributing
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+<a id="support"></a>
+## Support and documentation
+
+Start with [Troubleshooting](./docs/TROUBLESHOOTING.md). For a reproducible bug
+or feature request, use the
+[repository's Issues page](https://github.com/erichuang1425/claude-aura/issues).
+
+When reporting a bug, include the Windows, Node.js, and WebView2 versions, the
+active theme ID, and the steps that reproduce the problem. Review logs before
+sharing them; Aura's UI log is stored at:
+
+```text
+%LOCALAPPDATA%\ClaudeAura\data\aura-ui.log
+```
+
+Report security issues through a private repository security advisory, as
+described in [SECURITY.md](./SECURITY.md).
+
+### Documentation map
+
+- [Troubleshooting](./docs/TROUBLESHOOTING.md)
+- [Security and trust boundary](./SECURITY.md)
+- [Theming guide](./docs/THEMING.md)
+- [Theme Kit Specification](./docs/THEME_KIT_SPEC.md)
+- [Implementation report](./docs/IMPLEMENTATION_REPORT.md)
+- [File Manifest](./docs/FILE_MANIFEST.md)
+- [Contributing guide](./CONTRIBUTING.md)
+- [Repository issues](https://github.com/erichuang1425/claude-aura/issues)
+
+<a id="contributing"></a>
+<details>
+<summary><strong>Contributing checks and project boundaries</strong></summary>
 
 Run the required checks before submitting a change:
 
@@ -378,8 +484,43 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md), the
 [File Manifest](./docs/FILE_MANIFEST.md) before changing the theme system or
 release tree.
 
+</details>
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+<a id="charitable-support"></a>
+## Charitable support
+
+Claude Aura does not accept personal donations, tips, sponsorships, referral
+payments, or other financial support. The owner is currently in the United
+Kingdom under [Student route conditions](https://www.gov.uk/guidance/immigration-rules/immigration-rules-appendix-student),
+which prohibit self-employment or business activity except in limited
+circumstances. To avoid any potential conflict with those conditions, the owner
+cannot accept project-linked donations or tips while they apply.
+
+<details>
+<summary><strong>Student-route context, independent nonprofits, and donation boundaries</strong></summary>
+
+Readers who would like to support related public-interest work may donate
+directly to either independent nonprofit:
+
+- [International Rescue Committee UK](https://help.rescue-uk.org/donate-web)
+  helps people affected by conflict and disaster, including refugees rebuilding
+  their lives in the United Kingdom. The wider International Rescue Committee
+  also participates in Claude Corps.
+- [CodePath](https://www.every.org/codepath) provides free technical education
+  and works with Anthropic as the nonprofit partner for
+  [Claude Corps](https://www.anthropic.com/news/claude-corps).
+
+These links lead directly to third parties. Claude Aura and its owner do not
+collect, process, control, receive, or financially benefit from any donation.
+The organizations handle their own donation processing and receipts. Their
+listing does not imply affiliation, sponsorship, endorsement, or an official
+fundraising partnership with Claude Aura.
+
+</details>
+
+<a id="license-and-notices"></a>
 ## License and notices
 
 Project-authored software is distributed under the [MIT License](./LICENSE).
@@ -399,23 +540,7 @@ redistributing protected names, marks, interface captures, artwork, or
 recognizable likenesses. This repository and README do not grant that
 permission.
 
-## Support
-
-Start with [Troubleshooting](./docs/TROUBLESHOOTING.md). For a reproducible bug
-or feature request, use the
-[repository's Issues page](https://github.com/erichuang1425/claude-aura/issues).
-
-When reporting a bug, include the Windows, Node.js, and WebView2 versions, the
-active theme ID, and the steps that reproduce the problem. Review logs before
-sharing them; Aura's UI log is stored at:
-
-```text
-%LOCALAPPDATA%\ClaudeAura\data\aura-ui.log
-```
-
-Report security issues through a private repository security advisory, as
-described in [SECURITY.md](./SECURITY.md).
-
+<a id="acknowledgments"></a>
 ## Acknowledgments
 
 - [Codex Dream Skin](https://github.com/Fei-Away/Codex-Dream-Skin) informed the

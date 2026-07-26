@@ -4,7 +4,8 @@ param(
   [string]$Theme,
   [string]$Image,
   [switch]$ClearImage,
-  [switch]$OpenStudio
+  [switch]$OpenStudio,
+  [switch]$RescueSession
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,20 +17,44 @@ $ConfigPath = Join-Path $DataRoot 'config.json'
 $UserThemesRoot = Join-Path $DataRoot 'themes'
 $WebDataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\webview'
 $LogPath = Join-Path $DataRoot 'aura-ui.log'
-$UiCopyPath = Join-Path $PSScriptRoot 'ui-copy.json'
+$UiCopyRoot = Join-Path $PSScriptRoot 'locales'
 $StudioRoot = Join-Path $Root 'studio'
 $ThemeArtRoot = Join-Path $Root 'assets\theme-art'
 $StudioPreviewRoot = Join-Path $Root 'assets\studio-previews\masters'
 $AuraIconPath = Join-Path $Root 'assets\brand\claude-aura.ico'
 $ShortcutIconRoot = Join-Path $DataRoot 'shortcut-icons'
 $StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
+$AvatarRoot = Join-Path $DataRoot 'avatar'
+$AvatarStatePath = Join-Path $AvatarRoot 'crop.json'
+$AvatarBakedPath = Join-Path $AvatarRoot 'current.png'
+# The avatar renders around 32 logical pixels; 256 keeps it crisp on any DPI while
+# keeping the embedded data URL small, since the baked square ships in the payload.
+$AvatarBakeSize = 256
 $StudioPreferencesPath = Join-Path $DataRoot 'studio-preferences.json'
 $StudioIntroductionVersion = 1
 $StudioBackgroundMaxBytes = 16 * 1024 * 1024
+$AvatarSourceMaxBytes = 16 * 1024 * 1024
 $StudioMirrorJpegMaxBytes = 8000000
 $StudioEditorRoot = Join-Path $DataRoot 'theme-drafts'
 $StudioEditorPreviewRoot = Join-Path $StudioEditorRoot 'preview'
 $StudioEditorImportRoot = Join-Path $StudioEditorRoot 'imports'
+$StudioLocaleIds = @(
+  'en',
+  'hi',
+  'es',
+  'fr',
+  'id',
+  'ja',
+  'ko',
+  'pt-BR',
+  'de',
+  'it',
+  'vi',
+  'pl',
+  'tr',
+  'zh-CN',
+  'zh-HKTW'
+)
 $StudioEditorImageMaxBytes = 16 * 1024 * 1024
 $ThemeAssetConverter = Join-Path $Root 'scripts\convert-theme-assets.mjs'
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -43,32 +68,60 @@ function Write-AuraUiLog {
   } catch {}
 }
 
+function Get-AuraUiCopyFile {
+  # Window copy is one file per language under windows/locales. Reading them
+  # separately keeps a translation edit inside a single file.
+  param([Parameter(Mandatory = $true)][string]$Locale)
+  $path = Join-Path $UiCopyRoot ('{0}.json' -f $Locale)
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
+  return ([IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json)
+}
+
 function Get-AuraUiCopy {
   param([AllowEmptyString()][string]$Locale)
   $tag = if ($Locale) { $Locale.Replace('_', '-') } else { 'en' }
   $localeKey = if ($tag -match '^zh-(?i:cn|sg|hans)(?:-|$)' -or $tag -match '^zh-(?i:hans)(?:-|$)') {
     'zh-CN'
-  } elseif ($tag -match '^zh-(?i:tw|hk|mo|hant)(?:-|$)' -or $tag -match '^zh-(?i:hant)(?:-|$)') {
-    'zh-TW'
+  } elseif ($tag -match '^zh-(?i:hktw|tw|hk|mo|hant)(?:-|$)' -or $tag -match '^zh-(?i:hant)(?:-|$)') {
+    'zh-HKTW'
   } else {
     'en'
   }
-  $source = [IO.File]::ReadAllText($UiCopyPath, [Text.Encoding]::UTF8)
-  $allCopy = $source | ConvertFrom-Json
-  $property = $allCopy.PSObject.Properties[$localeKey]
-  if ($null -eq $property) { $property = $allCopy.PSObject.Properties['en'] }
-  return $property.Value
+  # English is the base layer, so a language file that is missing or still
+  # incomplete shows English words instead of blank labels and buttons.
+  $baseCopy = Get-AuraUiCopyFile -Locale 'en'
+  if ($null -eq $baseCopy) {
+    throw "Claude Aura interface copy is missing: $(Join-Path $UiCopyRoot 'en.json')"
+  }
+  $copy = [ordered]@{}
+  foreach ($property in $baseCopy.PSObject.Properties) { $copy[$property.Name] = $property.Value }
+  if ($localeKey -cne 'en') {
+    $localizedCopy = Get-AuraUiCopyFile -Locale $localeKey
+    if ($null -ne $localizedCopy) {
+      foreach ($property in $localizedCopy.PSObject.Properties) {
+        if ($property.Value -is [string] -and $property.Value.Trim()) { $copy[$property.Name] = $property.Value }
+      }
+    } else {
+      Write-AuraUiLog -Message "Interface copy for $localeKey is missing; English is in use."
+    }
+  }
+  return [PSCustomObject]$copy
 }
 
 function ConvertTo-AuraUiLocale {
   param([AllowEmptyString()][string]$Locale)
   $tag = if ($Locale) { $Locale.Replace('_', '-') } else { 'en' }
+  if ($tag -match '^pt(?:-|$)' -or $tag -eq 'pt') {
+    return 'pt-BR'
+  }
   if ($tag -match '^zh-(?i:cn|sg|hans)(?:-|$)' -or $tag -match '^zh-(?i:hans)(?:-|$)') {
     return 'zh-CN'
   }
-  if ($tag -match '^zh-(?i:tw|hk|mo|hant)(?:-|$)' -or $tag -match '^zh-(?i:hant)(?:-|$)') {
-    return 'zh-TW'
+  if ($tag -match '^zh-(?i:hktw|tw|hk|mo|hant)(?:-|$)' -or $tag -match '^zh-(?i:hant)(?:-|$)') {
+    return 'zh-HKTW'
   }
+  $base = $tag.Split('-')[0]
+  if ($base -cin $StudioLocaleIds) { return $base }
   return 'en'
 }
 
@@ -102,7 +155,7 @@ function Get-AuraUiStudioPreferences {
         $names -cnotcontains 'introductionVersion' -or
         ($value.schemaVersion -isnot [int] -and $value.schemaVersion -isnot [long]) -or
         $value.schemaVersion -ne 1 -or
-        $value.locale -isnot [string] -or $value.locale -cnotin @('en', 'zh-CN', 'zh-TW') -or
+        $value.locale -isnot [string] -or $value.locale -cnotin $StudioLocaleIds -or
         ($value.introductionVersion -isnot [int] -and $value.introductionVersion -isnot [long]) -or
         $value.introductionVersion -lt 0 -or
         $value.introductionVersion -gt $StudioIntroductionVersion) {
@@ -124,8 +177,8 @@ function Write-AuraUiStudioPreferences {
     [Parameter(Mandatory = $true)][string]$Locale,
     [Parameter(Mandatory = $true)][int]$IntroductionVersion
   )
-  if ($Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
-    throw 'Aura Studio locale must be en, zh-CN, or zh-TW.'
+  if ($Locale -cnotin $StudioLocaleIds) {
+    throw 'Aura Studio locale must be in the supported locale list.'
   }
   if ($IntroductionVersion -lt 0 -or $IntroductionVersion -gt $StudioIntroductionVersion) {
     throw 'Aura Studio introduction version is invalid.'
@@ -163,7 +216,7 @@ function Write-AuraUiStudioPreferences {
 
 function Get-AuraUiStudioUrl {
   param([switch]$PreserveView)
-  if ($script:Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
+  if ($script:Locale -cnotin $StudioLocaleIds) {
     throw 'Aura Studio cannot navigate with an invalid locale.'
   }
   $url = 'https://aura.studio/index.html?locale={0}' -f [Uri]::EscapeDataString($script:Locale)
@@ -479,7 +532,7 @@ function Invoke-AuraUiNode {
   $start.RedirectStandardOutput = $true
   $start.RedirectStandardError = $true
   # The helper emits UTF-8. Decode it as UTF-8 explicitly; otherwise .NET falls
-  # back to the console/OEM code page (for example Big5 on a zh-TW system), which
+  # back to the console/OEM code page (for example Big5 on a zh-HKTW system), which
   # corrupts localized theme metadata and can swallow JSON quote bytes.
   $start.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
   $start.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -514,13 +567,76 @@ function Update-AuraUiThemes {
   return $script:Themes
 }
 
+function ConvertFrom-AuraUiPayloadSettings {
+  param([Parameter(Mandatory = $true)][string]$Payload)
+  # buildPayloadFromCompiled ends with `})(<CSS JSON string>,<settings JSON>)`.
+  # Locate the unescaped separator after the CSS string and parse the settings
+  # object. Searching the whole payload for a short compact key is unsafe:
+  # valid custom CSS can contain text such as `"t":"other-theme"`.
+  $settingsMarker = '",{'
+  $settingsIndex = $Payload.LastIndexOf($settingsMarker)
+  if ($settingsIndex -lt 0 -or -not $Payload.EndsWith('})', [StringComparison]::Ordinal)) {
+    return $null
+  }
+  $settingsStart = $settingsIndex + 2
+  $settingsLength = $Payload.Length - $settingsStart - 1
+  if ($settingsLength -lt 2) { return $null }
+  try {
+    $settings = $Payload.Substring($settingsStart, $settingsLength) | ConvertFrom-Json
+  } catch {
+    return $null
+  }
+  if ($settings -isnot [System.Management.Automation.PSCustomObject]) { return $null }
+  return $settings
+}
+
 function Set-AuraUiPayloadState {
   param([Parameter(Mandatory = $true)][string]$Payload)
   $script:Payload = $Payload
-  $match = [regex]::Match($script:Payload, '"label":"(?<label>[^"\\]+)"')
-  if ($match.Success) { $script:ActiveLabel = $match.Groups['label'].Value }
-  $themeMatch = [regex]::Match($script:Payload, '"theme":"(?<theme>[^"\\]+)"')
-  if ($themeMatch.Success) { $script:ActiveThemeName = $themeMatch.Groups['theme'].Value }
+  $script:GreetingShuffleCheckpointSummary = $null
+  $runtimeSettings = ConvertFrom-AuraUiPayloadSettings -Payload $script:Payload
+  $runtimeLabel = if ($null -ne $runtimeSettings) {
+    Get-AuraUiPropertyValue -InputObject $runtimeSettings -Names @('label')
+  } else { $null }
+  if ($runtimeLabel -is [string] -and $runtimeLabel.Trim()) {
+    $script:ActiveLabel = [string]$runtimeLabel
+  } elseif ($null -eq $runtimeSettings) {
+    $match = [regex]::Match($script:Payload, '"label":"(?<label>[^"\\]+)"')
+    if ($match.Success) { $script:ActiveLabel = $match.Groups['label'].Value }
+  }
+  $runtimeTheme = if ($null -ne $runtimeSettings) {
+    Get-AuraUiPropertyValue -InputObject $runtimeSettings -Names @('theme', 't')
+  } else { $null }
+  if ($runtimeTheme -is [string] -and $runtimeTheme -cmatch '^[a-z][a-z0-9-]{1,39}$') {
+    $script:ActiveThemeName = [string]$runtimeTheme
+  } elseif ($null -eq $runtimeSettings) {
+    # Backward-compatible fallback for a development payload that predates the
+    # final two-argument renderer wrapper. Current payloads never reach this
+    # branch, so CSS text cannot impersonate the compact identity.
+    $themeMatch = [regex]::Match(
+      $script:Payload,
+      '"(?:theme|t)":"(?<theme>[^"\\]+)"')
+    if ($themeMatch.Success) { $script:ActiveThemeName = $themeMatch.Groups['theme'].Value }
+  } else {
+    $script:ActiveThemeName = $null
+  }
+  # Runtime settings use the compact `x` key; accept the long key as a
+  # development/backward-compatible form so delayed probes bind to the payload
+  # that actually reached the page.
+  $runtimeDigest = if ($null -ne $runtimeSettings) {
+    Get-AuraUiPropertyValue -InputObject $runtimeSettings -Names @('digest', 'x')
+  } else { $null }
+  $script:ActivePayloadDigest = if ($runtimeDigest -is [string] -and
+      $runtimeDigest -cmatch '^[0-9a-f]{64}$') {
+    [string]$runtimeDigest
+  } elseif ($null -eq $runtimeSettings) {
+    $digestMatch = [regex]::Match(
+      $script:Payload,
+      '"(?:digest|x)":"(?<digest>[0-9a-f]{64})"')
+    if ($digestMatch.Success) { $digestMatch.Groups['digest'].Value } else { $null }
+  } else {
+    $null
+  }
   [void](Update-AuraUiLauncherStyle)
   Update-AuraUiLoadingTheme
   # An identity commit can land after the main window is already visible; refresh
@@ -565,6 +681,124 @@ function Test-AuraUiSignInUri {
       $uriHost -eq 'accounts.google.com' -or $uriHost.EndsWith('.accounts.google.com') -or
       $uriHost -eq 'appleid.apple.com' -or $uriHost -eq 'login.microsoftonline.com'
   } catch { return $false }
+}
+
+function Get-AuraUiNavigationRequestIdentity {
+  param([AllowNull()][object]$Value)
+  try {
+    $uri = if ($Value -is [Uri]) { $Value } else { [Uri]"$Value" }
+    if ($uri.Scheme -cne 'https' -or $uri.UserInfo) { return $null }
+    $components = [UriComponents]::SchemeAndServer -bor [UriComponents]::PathAndQuery
+    return $uri.GetComponents($components, [UriFormat]::UriEscaped)
+  } catch { return $null }
+}
+
+function Test-AuraUiCloudflareChallengeSignal {
+  param(
+    [AllowNull()][object]$NavigationId,
+    [AllowNull()][object]$NavigationUri,
+    [AllowNull()][object]$RequestUri,
+    [int]$StatusCode,
+    [AllowNull()][string]$MitigatedHeader
+  )
+  if ($null -eq $NavigationId -or $StatusCode -lt 100 -or $StatusCode -gt 599) { return $false }
+  $navigationIdentity = Get-AuraUiNavigationRequestIdentity -Value $NavigationUri
+  $requestIdentity = Get-AuraUiNavigationRequestIdentity -Value $RequestUri
+  if (-not $navigationIdentity -or -not $requestIdentity -or
+      -not [string]::Equals($navigationIdentity, $requestIdentity, [StringComparison]::Ordinal) -or
+      -not (Test-AuraUiClaudeUri -Value $RequestUri)) {
+    return $false
+  }
+  return [string]::Equals(
+    "$MitigatedHeader".Trim(),
+    'challenge',
+    [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Test-AuraUiRescueChallengeCandidate {
+  param(
+    [AllowNull()][object]$Candidate,
+    [UInt64]$CompletedNavigationId,
+    [AllowNull()][object]$CurrentSource,
+    [AllowNull()][Nullable[int]]$CompletedStatusCode
+  )
+  if ($null -eq $Candidate -or
+      $null -eq $Candidate.PSObject.Properties['NavigationId'] -or
+      $null -eq $Candidate.PSObject.Properties['RequestIdentity'] -or
+      [UInt64]$Candidate.NavigationId -ne $CompletedNavigationId) {
+    return $false
+  }
+  if ($null -ne $CompletedStatusCode -and
+      ($null -eq $Candidate.PSObject.Properties['StatusCode'] -or
+        [int]$Candidate.StatusCode -ne [int]$CompletedStatusCode)) {
+    return $false
+  }
+  $currentIdentity = Get-AuraUiNavigationRequestIdentity -Value $CurrentSource
+  return $currentIdentity -and [string]::Equals(
+    [string]$Candidate.RequestIdentity,
+    $currentIdentity,
+    [StringComparison]::Ordinal)
+}
+
+function Test-AuraUiRescueNavigationFallback {
+  param(
+    [AllowNull()][object]$CurrentNavigationId,
+    [UInt64]$CompletedNavigationId,
+    [AllowNull()][object]$CurrentSource,
+    [int]$HttpStatusCode
+  )
+  return $null -ne $CurrentNavigationId -and
+    [UInt64]$CurrentNavigationId -eq $CompletedNavigationId -and
+    $HttpStatusCode -eq 403 -and
+    (Test-AuraUiClaudeUri -Value $CurrentSource)
+}
+
+function Complete-AuraUiPendingNavigationVerification {
+  if ($null -eq $script:PendingNavigationCompletion -or
+      [DateTime]::UtcNow -lt [DateTime]$script:PendingNavigationCompletion.DueUtc) {
+    return
+  }
+  $pending = $script:PendingNavigationCompletion
+  $script:PendingNavigationCompletion = $null
+  if ($null -eq $script:ActiveNavigationId -or
+      [UInt64]$script:ActiveNavigationId -ne [UInt64]$pending.NavigationId) {
+    return
+  }
+
+  # WebResourceResponseReceived is explicitly non-blocking. Keep the genuine
+  # Claude document visible while giving a late cf-mitigated callback one short,
+  # bounded UI-timer turn before any renderer or Studio mirror work can begin.
+  $challengeCandidate = Test-AuraUiRescueChallengeCandidate `
+    -Candidate $script:RescueChallengeCandidate `
+    -CompletedNavigationId ([UInt64]$pending.NavigationId) `
+    -CurrentSource $script:WebView.Source `
+    -CompletedStatusCode ([int]$pending.StatusCode)
+  $navigationId = [UInt64]$pending.NavigationId
+  $script:ActiveNavigationId = $null
+  $script:ActiveNavigationUri = $null
+  $script:RescueVerificationPending = $false
+  if ($challengeCandidate) {
+    Enter-AuraUiRescueMode -NavigationId $navigationId -Reason Challenge
+    return
+  }
+
+  $script:RescueChallengeCandidate = $null
+  if (Test-AuraUiClaudeUri -Value $script:WebView.Source) {
+    if ($script:RescueActive) { Exit-AuraUiRescueMode }
+    $script:ReadyNavigationId = $navigationId
+    $script:PageReady = $true
+    Hide-AuraUiLoading
+    Show-AuraUiLauncherHint
+    $enabled = $true
+    if ($null -ne $script:Config.PSObject.Properties['enabled']) {
+      $enabled = [bool]$script:Config.enabled
+    }
+    if ($enabled) { Apply-AuraUiTheme }
+  } else {
+    $script:ReadyNavigationId = $null
+    Hide-AuraUiLoading
+  }
+  Request-AuraUiContextMirror
 }
 
 function Get-AuraUiNewWindowDisposition {
@@ -945,6 +1179,7 @@ function Update-AuraUiLoadingTheme {
     }
     Set-AuraUiLoadingLayout
     $script:LoadingPanel.Invalidate()
+    Update-AuraUiRescueWindowTheme
   } catch {
     Write-AuraUiLog -Message "Loading-screen theme could not be refreshed: $($_.Exception.Message)"
   }
@@ -992,8 +1227,375 @@ function Get-AuraUiNavigationCompletionDisposition {
   return 'Failure'
 }
 
+function Get-AuraUiRescueBreakerTransition {
+  param(
+    [ValidateSet('Closed', 'Open', 'HalfOpen')][string]$State,
+    [ValidateRange(0, 2)][int]$Count,
+    [bool]$Distinct
+  )
+  if (-not $Distinct) {
+    return [PSCustomObject]@{ State = $State; Count = $Count }
+  }
+  $nextCount = [Math]::Min(2, $Count + 1)
+  $nextState = if ($State -ceq 'HalfOpen' -or $State -ceq 'Open' -or $nextCount -ge 2) {
+    'Open'
+  } else {
+    'Closed'
+  }
+  return [PSCustomObject]@{ State = $nextState; Count = $nextCount }
+}
+
+function Stop-AuraUiMirrorForRescue {
+  # Invalidate any in-flight probe/capture without reading or serializing the
+  # access-check document. Completed stale work is drained by the normal timer.
+  $script:MirrorGeneration = [long]$script:MirrorGeneration + 1
+  $script:MirrorDue = $null
+  $script:MirrorSemanticRetries = 0
+  $script:MirrorSemanticPreviousContext = $null
+  $script:MirrorGeometry = $null
+  Stop-AuraUiGreetingProbe
+}
+
+function Update-AuraUiRescueWindowCopy {
+  if ($null -eq $script:RescueForm -or $script:RescueForm.IsDisposed) { return }
+  $isAccessDenied = $script:RescueReason -ceq 'AccessDenied'
+  $eyebrow = if ($isAccessDenied) {
+    "$($script:UiCopy.rescueAccessEyebrow)"
+  } else {
+    "$($script:UiCopy.rescueEyebrow)"
+  }
+  $title = if ($isAccessDenied) {
+    "$($script:UiCopy.rescueAccessTitle)"
+  } else {
+    "$($script:UiCopy.rescueTitle)"
+  }
+  $body = if ($script:IsRescueSession -and $isAccessDenied) {
+    "$($script:UiCopy.rescueAccessPrivateBody)"
+  } elseif ($script:IsRescueSession) {
+    "$($script:UiCopy.rescuePrivateBody)"
+  } elseif ($script:RescueBreakerState -ceq 'Open' -and $isAccessDenied) {
+    "$($script:UiCopy.rescueAccessRepeatedBody)"
+  } elseif ($script:RescueBreakerState -ceq 'Open') {
+    "$($script:UiCopy.rescueRepeatedBody)"
+  } elseif ($isAccessDenied) {
+    "$($script:UiCopy.rescueAccessBody)"
+  } else {
+    "$($script:UiCopy.rescueBody)"
+  }
+  $script:RescueForm.AccessibleName = "$($script:UiCopy.rescueAccessibleName)"
+  $script:RescueForm.Text = "$($script:UiCopy.rescueAccessibleName)"
+  $script:RescueEyebrowLabel.Text = $eyebrow
+  $script:RescueTitleLabel.Text = $title
+  $script:RescueBodyLabel.Text = $body
+  $script:RescueBrowserButton.Text = "$($script:UiCopy.rescueOpenBrowser)"
+  $script:RescueCleanButton.Text = if ($script:IsRescueSession) {
+    "$($script:UiCopy.rescueCleanSessionActive)"
+  } else {
+    "$($script:UiCopy.rescueCleanSession)"
+  }
+  $script:RescueCleanButton.Enabled = -not $script:IsRescueSession
+  $script:RescueRetryButton.Text = if ($script:RescueBreakerState -ceq 'HalfOpen') {
+    "$($script:UiCopy.rescueRetrying)"
+  } else {
+    "$($script:UiCopy.rescueRetryHere)"
+  }
+  $script:RescueRetryButton.Enabled = $script:RescueBreakerState -cne 'HalfOpen'
+  $script:RescueForm.AccessibleDescription = $body
+}
+
+function Update-AuraUiRescueWindowTheme {
+  if ($null -eq $script:RescueForm -or $script:RescueForm.IsDisposed) { return }
+  try {
+    $profile = Get-AuraUiLoadingProfile
+    $script:RescueForm.BackColor = $profile.Surface
+    $script:RescueAccentPanel.BackColor = $profile.Accent
+    $script:RescueEyebrowLabel.ForeColor = $profile.Accent
+    $script:RescueTitleLabel.ForeColor = $profile.Text
+    $script:RescueBodyLabel.ForeColor = $profile.Muted
+    $script:RescueBrowserButton.BackColor = $profile.Accent
+    $script:RescueBrowserButton.ForeColor = $profile.AccentText
+    $script:RescueBrowserButton.FlatAppearance.BorderColor = $profile.Accent
+    foreach ($button in @($script:RescueCleanButton, $script:RescueRetryButton)) {
+      $button.BackColor = $profile.Surface
+      $button.ForeColor = $profile.Text
+      $button.FlatAppearance.BorderColor = $profile.Border
+    }
+    foreach ($button in @(
+        $script:RescueBrowserButton,
+        $script:RescueCleanButton,
+        $script:RescueRetryButton)) {
+      $button.UseVisualStyleBackColor = [bool]$profile.HighContrast
+    }
+  } catch {
+    Write-AuraUiLog -Message 'Rescue window theme refresh failed.'
+  }
+}
+
+function Update-AuraUiRescueWindowPosition {
+  if ($null -eq $script:RescueForm -or $script:RescueForm.IsDisposed -or
+      $null -eq $script:Form -or $script:Form.IsDisposed) {
+    return
+  }
+  try {
+    $origin = $script:Form.PointToScreen([Drawing.Point]::Empty)
+    $workingArea = [System.Windows.Forms.Screen]::FromControl($script:Form).WorkingArea
+    $left = [Math]::Max(
+      $workingArea.Left + 12,
+      [Math]::Min($origin.X + 24, $workingArea.Right - $script:RescueForm.Width - 12))
+    $top = [Math]::Max(
+      $workingArea.Top + 12,
+      [Math]::Min(
+        $origin.Y + $script:Form.ClientSize.Height - $script:RescueForm.Height - 24,
+        $workingArea.Bottom - $script:RescueForm.Height - 12))
+    $script:RescueForm.Location = [Drawing.Point]::new($left, $top)
+  } catch {
+    Write-AuraUiLog -Message 'Rescue window position refresh failed.'
+  }
+}
+
+function New-AuraUiRescueWindow {
+  $form = [System.Windows.Forms.Form]::new()
+  $form.Text = ''
+  $form.AccessibleRole = [System.Windows.Forms.AccessibleRole]::Dialog
+  $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+  $form.ControlBox = $true
+  $form.MinimizeBox = $false
+  $form.MaximizeBox = $false
+  $form.ShowIcon = $false
+  $form.ShowInTaskbar = $false
+  $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+  $form.ClientSize = [Drawing.Size]::new(560, 286)
+  $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
+  $form.KeyPreview = $true
+
+  $script:RescueAccentPanel = [System.Windows.Forms.Panel]::new()
+  $script:RescueAccentPanel.Bounds = [Drawing.Rectangle]::new(0, 0, 7, 286)
+  $script:RescueAccentPanel.Anchor = 'Top,Bottom,Left'
+  $script:RescueAccentPanel.TabStop = $false
+
+  $script:RescueEyebrowLabel = [System.Windows.Forms.Label]::new()
+  $script:RescueEyebrowLabel.Bounds = [Drawing.Rectangle]::new(32, 24, 496, 22)
+  $script:RescueEyebrowLabel.Font = [Drawing.Font]::new('Segoe UI Semibold', 9)
+  $script:RescueEyebrowLabel.BackColor = [Drawing.Color]::Transparent
+
+  $script:RescueTitleLabel = [System.Windows.Forms.Label]::new()
+  $script:RescueTitleLabel.Bounds = [Drawing.Rectangle]::new(32, 50, 496, 38)
+  $script:RescueTitleLabel.Font = [Drawing.Font]::new('Segoe UI Semibold', 17)
+  $script:RescueTitleLabel.BackColor = [Drawing.Color]::Transparent
+
+  $script:RescueBodyLabel = [System.Windows.Forms.Label]::new()
+  $script:RescueBodyLabel.Bounds = [Drawing.Rectangle]::new(32, 96, 496, 86)
+  $script:RescueBodyLabel.Font = [Drawing.Font]::new('Segoe UI', 10)
+  $script:RescueBodyLabel.BackColor = [Drawing.Color]::Transparent
+
+  $script:RescueBrowserButton = [System.Windows.Forms.Button]::new()
+  $script:RescueBrowserButton.Bounds = [Drawing.Rectangle]::new(32, 214, 154, 42)
+  $script:RescueCleanButton = [System.Windows.Forms.Button]::new()
+  $script:RescueCleanButton.Bounds = [Drawing.Rectangle]::new(196, 214, 190, 42)
+  $script:RescueRetryButton = [System.Windows.Forms.Button]::new()
+  $script:RescueRetryButton.Bounds = [Drawing.Rectangle]::new(396, 214, 132, 42)
+  foreach ($button in @(
+      $script:RescueBrowserButton,
+      $script:RescueCleanButton,
+      $script:RescueRetryButton)) {
+    $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $button.FlatAppearance.BorderSize = 1
+    $button.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $button.Font = [Drawing.Font]::new('Segoe UI Semibold', 9)
+    $button.TabStop = $true
+    $button.AutoEllipsis = $true
+  }
+
+  $script:RescueBrowserButton.add_Click({ Open-AuraUiRescueInBrowser })
+  $script:RescueCleanButton.add_Click({ Request-AuraUiCleanSession })
+  $script:RescueRetryButton.add_Click({ Request-AuraUiRescueRetry })
+  $form.AcceptButton = $script:RescueBrowserButton
+  $form.add_KeyDown({
+    param($sender, $eventArgs)
+    if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Escape) {
+      $sender.Hide()
+      if ($null -ne $script:WebView -and -not $script:WebView.IsDisposed) { $script:WebView.Focus() }
+    }
+  })
+  $form.add_FormClosing({
+    param($sender, $eventArgs)
+    if (-not $script:Closing -and
+        $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
+      $eventArgs.Cancel = $true
+      $sender.Hide()
+    }
+  })
+  $form.Controls.AddRange(@(
+    $script:RescueAccentPanel,
+    $script:RescueEyebrowLabel,
+    $script:RescueTitleLabel,
+    $script:RescueBodyLabel,
+    $script:RescueBrowserButton,
+    $script:RescueCleanButton,
+    $script:RescueRetryButton
+  ))
+  $script:RescueForm = $form
+  Update-AuraUiRescueWindowCopy
+  Update-AuraUiRescueWindowTheme
+  return $form
+}
+
+function Show-AuraUiRescueWindow {
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if ($null -eq $script:RescueForm -or $script:RescueForm.IsDisposed) {
+    [void](New-AuraUiRescueWindow)
+  }
+  Update-AuraUiRescueWindowCopy
+  Update-AuraUiRescueWindowTheme
+  Update-AuraUiRescueWindowPosition
+  if (-not $script:RescueForm.Visible) {
+    $script:RescueForm.Show($script:Form)
+  } else {
+    $script:RescueForm.BringToFront()
+  }
+  Update-AuraUiRescueWindowPosition
+  $script:RescueBrowserButton.Select()
+}
+
+function Hide-AuraUiRescueWindow {
+  if ($null -ne $script:RescueForm -and -not $script:RescueForm.IsDisposed) {
+    $script:RescueForm.Hide()
+  }
+}
+
+function Enter-AuraUiRescueMode {
+  param(
+    [UInt64]$NavigationId,
+    [ValidateSet('Challenge', 'AccessDenied')][string]$Reason = 'Challenge'
+  )
+  $distinct = $null -eq $script:RescueLastNavigationId -or
+    [UInt64]$script:RescueLastNavigationId -ne $NavigationId
+  $transition = Get-AuraUiRescueBreakerTransition `
+    -State $script:RescueBreakerState `
+    -Count $script:RescueAttemptCount `
+    -Distinct $distinct
+  $script:RescueBreakerState = [string]$transition.State
+  $script:RescueAttemptCount = [int]$transition.Count
+  if ($distinct) { $script:RescueLastNavigationId = $NavigationId }
+  $script:RescueGeneration = [long]$script:RescueGeneration + 1
+  $script:RescueReason = $Reason
+  $script:RescueActive = $true
+  $script:RescueChallengeCandidate = $null
+  $script:RescueVerificationPending = $false
+  $script:PendingNavigationCompletion = $null
+  $script:ReadyNavigationId = $null
+  $script:PageReady = $false
+  $script:PendingApply = $false
+  $script:PendingRestore = $false
+  Stop-AuraUiMirrorForRescue
+  Hide-AuraUiLoading
+  Write-AuraUiLog -Message $(if ($Reason -ceq 'AccessDenied') {
+      'Rescue mode entered: access denied.'
+    } elseif ($script:RescueBreakerState -ceq 'Open') {
+      'Rescue mode entered: repeated access challenge.'
+    } else {
+      'Rescue mode entered: access challenge.'
+    })
+  Show-AuraUiRescueWindow
+}
+
+function Exit-AuraUiRescueMode {
+  $script:RescueGeneration = [long]$script:RescueGeneration + 1
+  $script:RescueActive = $false
+  $script:RescueReason = 'Challenge'
+  $script:RescueChallengeCandidate = $null
+  $script:RescueVerificationPending = $false
+  $script:PendingNavigationCompletion = $null
+  $script:RescueAttemptCount = 0
+  $script:RescueBreakerState = 'Closed'
+  $script:RescueLastNavigationId = $null
+  Hide-AuraUiRescueWindow
+}
+
+function Open-AuraUiRescueInBrowser {
+  if (-not $script:RescueActive) { return }
+  try {
+    Start-Process -FilePath 'https://claude.ai/' | Out-Null
+  } catch {
+    Write-AuraUiLog -Message 'Rescue browser launch failed.'
+    Show-AuraUiMessage `
+      -Title "$($script:UiCopy.rescueBrowserFailedTitle)" `
+      -Message "$($script:UiCopy.rescueBrowserFailedMessage)" `
+      -Icon Warning
+  }
+}
+
+function Request-AuraUiRescueRetry {
+  if (-not $script:RescueActive -or $script:RescueBreakerState -ceq 'HalfOpen' -or
+      -not $script:WebReady -or $null -eq $script:WebView.CoreWebView2) {
+    return
+  }
+  $script:RescueBreakerState = 'HalfOpen'
+  Update-AuraUiRescueWindowCopy
+  Hide-AuraUiLoading
+  try {
+    $script:WebView.CoreWebView2.Navigate('https://claude.ai/')
+  } catch {
+    $script:RescueBreakerState = 'Open'
+    Write-AuraUiLog -Message 'Rescue retry could not start.'
+    Show-AuraUiRescueWindow
+  }
+}
+
+function Request-AuraUiCleanSession {
+  if (-not $script:RescueActive -or $script:IsRescueSession) { return }
+  $rescueGeneration = [long]$script:RescueGeneration
+  $owner = if ($null -ne $script:RescueForm -and -not $script:RescueForm.IsDisposed) {
+    $script:RescueForm
+  } else {
+    $script:Form
+  }
+  $result = [System.Windows.Forms.MessageBox]::Show(
+    $owner,
+    "$($script:UiCopy.rescueConfirmMessage)",
+    "$($script:UiCopy.rescueConfirmTitle)",
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question,
+    [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+  if ($result -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+  if (-not $script:RescueActive -or $script:IsRescueSession -or
+      [long]$script:RescueGeneration -ne $rescueGeneration) {
+    return
+  }
+  $script:RescueRestartRequested = $true
+  Request-AuraUiExit
+}
+
+function Start-AuraUiCleanSessionProcess {
+  $hostExecutable = [IO.Path]::GetFullPath("$($script:HostExecutable)")
+  $scriptPath = [IO.Path]::GetFullPath("$($script:CurrentScriptPath)")
+  $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd([IO.Path]::DirectorySeparatorChar)
+  if (-not (Test-Path -LiteralPath $hostExecutable -PathType Leaf) -or
+      -not (Test-Path -LiteralPath $scriptPath -PathType Leaf) -or
+      [IO.Path]::GetFileName($scriptPath) -cne 'aura-ui.ps1' -or
+      -not $scriptPath.StartsWith(
+        $rootPath + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The clean Aura session launcher is unavailable.'
+  }
+  $arguments = '-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File "{0}" -RescueSession' -f (
+    $scriptPath.Replace('"', '""'))
+  Start-Process `
+    -FilePath $hostExecutable `
+    -ArgumentList $arguments `
+    -WorkingDirectory $Root | Out-Null
+}
+
 function Start-AuraUiScript {
   param([string]$Source, [ValidateSet('Apply', 'Restore')][string]$Action, [bool]$Cover = $false)
+  if ($script:RescueActive -or $script:RescueVerificationPending) {
+    if ($Cover) { Hide-AuraUiLoading }
+    return
+  }
+  if ($null -ne $script:RescueChallengeCandidate) {
+    if ($Cover) { Hide-AuraUiLoading }
+    return
+  }
   if (-not $script:WebReady -or $null -eq $script:WebView.CoreWebView2) { return }
   if ($null -ne $script:ScriptTask -and -not $script:ScriptTask.IsCompleted) {
     # A script is already running (a common case during the sign-in redirect
@@ -1017,6 +1619,14 @@ function Start-AuraUiScript {
 
 function Apply-AuraUiTheme {
   param([bool]$Cover = $false)
+  if ($script:RescueActive -or $script:RescueVerificationPending) {
+    if ($Cover) { Hide-AuraUiLoading }
+    return
+  }
+  if ($null -ne $script:RescueChallengeCandidate) {
+    if ($Cover) { Hide-AuraUiLoading }
+    return
+  }
   if (-not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
     if ($Cover) { Hide-AuraUiLoading }
     return
@@ -1146,7 +1756,7 @@ function Get-AuraUiLauncherDefaultStyle {
     accent = '#D66D4B'
     border = '#655C70'
     radius = 16
-    borderWidth = 1
+    borderWidth = 2
   }
 }
 
@@ -2280,7 +2890,11 @@ function New-AuraUiIdentityCandidate {
     if ($null -eq $appearance.Mark -or -not $appearance.AssetPath -or -not $appearance.IdentityPath) {
       throw 'The launcher mark and identity assets could not both be loaded.'
     }
-    $expectedIconBytes = if ("$($Style.source)" -cin @('user', 'editor')) {
+    # A duplicated theme is a user theme that can still carry a built-in mark.
+    # Those keep the authored multi-frame ICO, which is deliberately not a
+    # re-render of the 96 px PNG, so only a genuinely custom mark is rebuilt.
+    $builtInThemeId = Get-AuraUiBuiltInLauncherThemeId -Style $Style
+    $expectedIconBytes = if (-not $builtInThemeId -and "$($Style.source)" -cin @('user', 'editor')) {
       New-AuraUiMultiFramePngIconBytes -SourceBytes $assetBytes
     } else { $null }
     $shortcutIconPath = Get-AuraUiShortcutIconPath -Style $Style `
@@ -2289,7 +2903,7 @@ function New-AuraUiIdentityCandidate {
     if (-not $shortcutIconPath -or -not (Test-AuraUiOwnedShortcutIconPath -Path $shortcutIconPath)) {
       throw 'The candidate shortcut icon is not an Aura-owned Windows icon.'
     }
-    if (Get-AuraUiBuiltInLauncherThemeId -Style $Style) {
+    if ($builtInThemeId) {
       if (-not [string]::Equals(
           [IO.Path]::GetFullPath($shortcutIconPath), [IO.Path]::GetFullPath($appearance.IdentityPath),
           [StringComparison]::OrdinalIgnoreCase)) {
@@ -2585,7 +3199,14 @@ function Update-AuraUiLauncherStyle {
   }
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return $false }
   $requestedStyle = Get-AuraUiLauncherStyle
-  $defaultStyle = Get-AuraUiLauncherDefaultStyle
+  # The Default candidate is a last resort, but it still has to respect Light and
+  # Dark. Its authored material is dark, so an unresolved fallback would paint a
+  # dark launcher over a light theme.
+  $defaultTheme = Get-AuraUiThemeByName -Name 'default'
+  $defaultStyle = Resolve-AuraUiLauncherModeMaterial -Raw (Get-AuraUiLauncherDefaultStyle) `
+    -StudioStyle $(if ($null -ne $defaultTheme) {
+      Get-AuraUiPropertyValue -InputObject $defaultTheme -Names @('studioStyle')
+    } else { $null }) -Dark (Test-AuraUiDarkChrome)
   Add-Member -InputObject $defaultStyle -NotePropertyName source -NotePropertyValue 'builtin' -Force
   Add-Member -InputObject $defaultStyle -NotePropertyName theme -NotePropertyValue 'default' -Force
   $styles = @($requestedStyle, $defaultStyle)
@@ -3427,6 +4048,28 @@ function Test-AuraUiStudioExactProperties {
   return $true
 }
 
+function Get-AuraUiUnicodeScalarLength {
+  param([Parameter(Mandatory = $true)][string]$Value)
+  $count = 0
+  for ($index = 0; $index -lt $Value.Length; $index++) {
+    $codeUnit = [int]$Value[$index]
+    if ($codeUnit -ge 0xD800 -and $codeUnit -le 0xDBFF) {
+      if ($index + 1 -ge $Value.Length) {
+        throw 'Text contains an incomplete Unicode surrogate pair.'
+      }
+      $low = [int]$Value[$index + 1]
+      if ($low -lt 0xDC00 -or $low -gt 0xDFFF) {
+        throw 'Text contains an invalid Unicode surrogate pair.'
+      }
+      $index++
+    } elseif ($codeUnit -ge 0xDC00 -and $codeUnit -le 0xDFFF) {
+      throw 'Text contains an invalid Unicode surrogate pair.'
+    }
+    $count++
+  }
+  return $count
+}
+
 function ConvertTo-AuraUiStudioInteger {
   param(
     [AllowNull()][object]$Value,
@@ -3584,7 +4227,7 @@ function ConvertTo-AuraUiStudioEditorState {
   $allowed = @(
     'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
     'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
-    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'layers', 'feedback',
+    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'layers', 'feedback',
     'lastAction', 'actionSucceeded', 'error')
   $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($name in $actual) {
@@ -3598,7 +4241,7 @@ function ConvertTo-AuraUiStudioEditorState {
     $required = @(
       'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
       'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
-      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'layers', 'feedback')
+      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'layers', 'feedback')
     foreach ($name in $required) {
       if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
     }
@@ -3629,11 +4272,11 @@ function ConvertTo-AuraUiStudioEditorState {
     foreach ($field in @('labels', 'descriptions')) {
       $localized = $State.metadata.$field
       if ($localized -isnot [System.Management.Automation.PSCustomObject] -or
-          -not (Test-AuraUiStudioExactProperties -Message $localized -Names @('en', 'zh-CN', 'zh-TW'))) {
+          -not (Test-AuraUiStudioExactProperties -Message $localized -Names @('en', 'zh-CN', 'zh-HKTW'))) {
         throw "Aura Studio editor state has invalid localized $field."
       }
       $maximum = if ($field -ceq 'labels') { 80 } else { 220 }
-      foreach ($locale in @('en', 'zh-CN', 'zh-TW')) {
+      foreach ($locale in @('en', 'zh-CN', 'zh-HKTW')) {
         $text = $localized.$locale
         if ($text -isnot [string] -or -not $text.Trim() -or $text.Length -gt $maximum) {
           throw "Aura Studio editor state has invalid $field.$locale."
@@ -3681,7 +4324,7 @@ function ConvertTo-AuraUiStudioEditorState {
         'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
         'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
         'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
-        'delete-user-theme'))) {
+        'delete-user-theme', 'set-greeting-phrases', 'reset-greeting'))) {
     throw 'Aura Studio editor state has an invalid last action.'
   }
   if ($null -ne $State.PSObject.Properties['error'] -and $null -ne $State.error -and
@@ -3962,6 +4605,18 @@ function Invoke-AuraUiSetThemeLayer {
 }
 
 function Invoke-AuraUiApplyThemePatch {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiSetGreetingPhrases {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiResetGreeting {
   param([Parameter(Mandatory = $true)][object]$Request)
   Assert-AuraUiStudioEditorSession -Request $Request
   return Invoke-AuraUiStudioEditorRequest -Request $Request
@@ -4326,11 +4981,11 @@ function Send-AuraUiStudioState {
     [AllowEmptyString()][string]$Status = '',
     [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok',
     [ValidateSet(
-      '', 'set-image-framing', 'set-card-preview-crop',
+      '', 'set-image-framing', 'set-card-preview-crop', 'set-avatar', 'set-avatar-framing',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
-      'delete-user-theme')][string]$Action = '',
+      'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')][string]$Action = '',
     [bool]$ActionSucceeded = $true
   )
   if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
@@ -4351,6 +5006,9 @@ function Send-AuraUiStudioState {
     $imageValue = if ($null -ne $script:Config) {
       Get-AuraUiPropertyValue -InputObject $script:Config -Names @('image')
     } else { $null }
+    $avatarValue = if ($null -ne $script:Config) {
+      Get-AuraUiPropertyValue -InputObject $script:Config -Names @('avatar')
+    } else { $null }
     $imagePreviewUrl = Sync-AuraUiStudioBackgroundPreview
     $state = [ordered]@{
       type = 'state'
@@ -4362,6 +5020,11 @@ function Send-AuraUiStudioState {
       introductionRequested = [bool]$script:StudioIntroductionRequested
       enabled = $enabled
       hasImage = ($null -ne $imageValue -and "$imageValue".Trim().Length -gt 0)
+      hasAvatar = ($null -ne $avatarValue -and "$avatarValue".Trim().Length -gt 0)
+      avatarPreviewUrl = Get-AuraUiAvatarPreviewUrl
+      avatarCrop = Get-AuraUiAvatarCrop
+      avatarBackground = Get-AuraUiAvatarBackground
+      avatarHasAlpha = Test-AuraUiAvatarHasAlpha
       imagePreviewUrl = $imagePreviewUrl
       backgroundAspectRatio = Get-AuraUiBackgroundAspectRatio
       backgroundCrop = Get-AuraUiStudioBackgroundCrop
@@ -4495,6 +5158,11 @@ function Request-AuraUiMirror {
   $script:MirrorGeneration = [long]$script:MirrorGeneration + 1
   $script:MirrorSemanticRetries = 0
   $script:MirrorSemanticPreviousContext = $null
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate) {
+    $script:MirrorDue = $null
+    return
+  }
   if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) {
     $script:MirrorDue = $null
     return
@@ -4506,6 +5174,8 @@ function Request-AuraUiMirror {
 }
 
 function Request-AuraUiContextMirror {
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate) { return }
   $previousContext = $null
   if ($null -ne $script:MirrorGeometry -and
       [string]$script:MirrorGeometry.context -in @('new-chat', 'conversation')) {
@@ -4516,7 +5186,250 @@ function Request-AuraUiContextMirror {
   $script:MirrorSemanticPreviousContext = $previousContext
 }
 
+function ConvertTo-AuraUiGreetingShuffleCheckpoint {
+  param(
+    [Parameter(Mandatory = $true)][object]$Value,
+    [Parameter(Mandatory = $true)][string]$ExpectedTheme
+  )
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value -Names @(
+        'themeId', 'phraseDigest', 'order', 'cursor', 'lastIndex')) -or
+      $Value.themeId -isnot [string] -or
+      -not [string]::Equals([string]$Value.themeId, $ExpectedTheme, [StringComparison]::Ordinal) -or
+      $Value.phraseDigest -isnot [string] -or
+      $Value.phraseDigest -cnotmatch '^[a-f0-9]{64}$' -or
+      $Value.order -isnot [System.Array]) {
+    throw 'Greeting shuffle checkpoint has an invalid shape.'
+  }
+  $rawOrder = @($Value.order)
+  if ($rawOrder.Count -lt 1 -or $rawOrder.Count -gt 12) {
+    throw 'Greeting shuffle checkpoint has an invalid order.'
+  }
+  $order = [Collections.Generic.List[int]]::new()
+  $seen = [Collections.Generic.HashSet[int]]::new()
+  foreach ($rawIndex in $rawOrder) {
+    $index = ConvertTo-AuraUiStudioInteger `
+      -Value $rawIndex -Minimum 0 -Maximum ($rawOrder.Count - 1) -Label 'Greeting shuffle index'
+    if (-not $seen.Add($index)) { throw 'Greeting shuffle checkpoint has a duplicate index.' }
+    $order.Add($index)
+  }
+  $cursor = ConvertTo-AuraUiStudioInteger `
+    -Value $Value.cursor -Minimum 1 -Maximum $order.Count -Label 'Greeting shuffle cursor'
+  $lastIndex = ConvertTo-AuraUiStudioInteger `
+    -Value $Value.lastIndex -Minimum 0 -Maximum ($order.Count - 1) -Label 'Greeting shuffle last index'
+  if ($lastIndex -ne $order[$cursor - 1]) {
+    throw 'Greeting shuffle checkpoint does not name its completed selection.'
+  }
+  return [ordered]@{
+    themeId = $ExpectedTheme
+    phraseDigest = [string]$Value.phraseDigest
+    order = @($order)
+    cursor = $cursor
+    lastIndex = $lastIndex
+  }
+}
+
+function Invoke-AuraUiGreetingShuffleCheckpoint {
+  param([Parameter(Mandatory = $true)][object]$Shuffle)
+  $json = $Shuffle | ConvertTo-Json -Depth 4 -Compress
+  $summary = ([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json))).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+  if ([string]::Equals(
+      $summary, [string]$script:GreetingShuffleCheckpointSummary,
+      [StringComparison]::Ordinal)) {
+    return
+  }
+  $raw = Invoke-AuraUiNode -CommandArguments @(
+    $ThemeCli, 'greeting-checkpoint', '--config', $ConfigPath, '--state-base64', $summary)
+  try { $result = $raw | ConvertFrom-Json }
+  catch { throw 'Greeting checkpoint helper returned invalid JSON.' }
+  if ($result -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $result -Names @('changed', 'shuffle')) -or
+      $result.changed -isnot [bool]) {
+    throw 'Greeting checkpoint helper returned an invalid response.'
+  }
+  $returned = ConvertTo-AuraUiGreetingShuffleCheckpoint `
+    -Value $result.shuffle -ExpectedTheme ([string]$Shuffle.themeId)
+  if (($returned | ConvertTo-Json -Depth 4 -Compress) -cne $json) {
+    throw 'Greeting checkpoint helper changed the bounded state.'
+  }
+  if ($result.changed) {
+    $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  }
+  # Do not compile, apply, reroll, or send personal words back through Studio.
+  $script:GreetingShuffleCheckpointSummary = $summary
+}
+
+function Stop-AuraUiGreetingProbe {
+  $script:GreetingProbeGeneration = [long]$script:GreetingProbeGeneration + 1
+  $script:GreetingProbeDue = $null
+  $script:GreetingProbeRetries = 0
+  $script:GreetingProbeTask = $null
+  $script:GreetingProbeTaskGeneration = [long]-1
+  $script:GreetingProbeTaskDigest = $null
+}
+
+function Request-AuraUiGreetingProbe {
+  $script:GreetingProbeGeneration = [long]$script:GreetingProbeGeneration + 1
+  $script:GreetingProbeRetries = 4
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate -or
+      -not $script:WebReady -or $null -eq $script:WebView -or
+      $null -eq $script:WebView.CoreWebView2 -or
+      -not (Get-AuraUiEnabled) -or
+      -not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+    $script:GreetingProbeDue = $null
+    return
+  }
+  $script:GreetingProbeDue = [DateTime]::UtcNow.AddMilliseconds(250)
+}
+
+function Update-AuraUiGreetingProbe {
+  if ($null -ne $script:GreetingProbeTask) {
+    if (-not $script:GreetingProbeTask.IsCompleted) { return }
+    $task = $script:GreetingProbeTask
+    $generation = $script:GreetingProbeTaskGeneration
+    $expectedDigest = $script:GreetingProbeTaskDigest
+    $script:GreetingProbeTask = $null
+    $script:GreetingProbeTaskGeneration = [long]-1
+    $script:GreetingProbeTaskDigest = $null
+    try {
+      $raw = $task.GetAwaiter().GetResult()
+      if ($generation -ne $script:GreetingProbeGeneration -or
+          -not $expectedDigest -or
+          -not [string]::Equals(
+            [string]$expectedDigest, [string]$script:ActivePayloadDigest,
+            [StringComparison]::Ordinal)) {
+        return
+      }
+      $probe = if ($raw -and $raw -cne 'null') { $raw | ConvertFrom-Json } else { $null }
+      if ($null -eq $probe -or
+          $probe -isnot [System.Management.Automation.PSCustomObject] -or
+          -not (Test-AuraUiStudioExactProperties -Message $probe -Names @(
+              'version', 'digest', 'context', 'status', 'candidateCount', 'source',
+              'nativeConnected', 'replacementConnected', 'replacementVisible',
+              'nativeHidden', 'visitEpoch', 'shuffle', 'rect')) -or
+          $probe.version -ne 1 -or
+          $probe.digest -isnot [string] -or
+          -not [string]::Equals(
+            [string]$probe.digest, [string]$expectedDigest,
+            [StringComparison]::Ordinal) -or
+          $probe.context -isnot [string] -or
+          $probe.context -cnotin @('new-chat', 'conversation', 'other') -or
+          $probe.status -isnot [string] -or
+          $probe.status -cnotin @(
+            'inactive', 'missing', 'ambiguous', 'pending', 'verifying', 'unmeasurable',
+            'native', 'custom', 'forced-colors', 'conversation', 'other') -or
+          $probe.source -isnot [string] -or
+          $probe.source -cnotin @('inactive', 'native', 'custom') -or
+          $probe.nativeConnected -isnot [bool] -or
+          $probe.replacementConnected -isnot [bool] -or
+          $probe.replacementVisible -isnot [bool] -or
+          $probe.nativeHidden -isnot [bool]) {
+        throw 'Greeting probe returned an invalid bounded result.'
+      }
+      $status = [string]$probe.status
+      $shuffleCheckpoint = $null
+      try {
+        $candidateCount = ConvertTo-AuraUiStudioInteger `
+          -Value $probe.candidateCount -Minimum -1 -Maximum 32 -Label 'Greeting candidate count'
+        [void](ConvertTo-AuraUiStudioInteger `
+          -Value $probe.visitEpoch -Minimum 0 -Maximum 2147483647 -Label 'Greeting visit epoch')
+        if ($null -ne $probe.shuffle) {
+          if (-not $script:ActiveThemeName) {
+            throw 'Greeting shuffle checkpoint has no active theme.'
+          }
+          $shuffleCheckpoint = ConvertTo-AuraUiGreetingShuffleCheckpoint `
+            -Value $probe.shuffle -ExpectedTheme ([string]$script:ActiveThemeName)
+        }
+        if ($null -ne $probe.rect) {
+          if ($probe.rect -isnot [System.Management.Automation.PSCustomObject] -or
+              -not (Test-AuraUiStudioExactProperties -Message $probe.rect `
+                -Names @('left', 'top', 'width', 'height'))) {
+            throw 'Greeting probe rectangle has an invalid shape.'
+          }
+          [void](ConvertTo-AuraUiStudioNumber `
+            -Value $probe.rect.left -Minimum -100000 -Maximum 100000 -Label 'Greeting left')
+          [void](ConvertTo-AuraUiStudioNumber `
+            -Value $probe.rect.top -Minimum -100000 -Maximum 100000 -Label 'Greeting top')
+          [void](ConvertTo-AuraUiStudioNumber `
+            -Value $probe.rect.width -Minimum 0 -Maximum 100000 -Label 'Greeting width')
+          [void](ConvertTo-AuraUiStudioNumber `
+            -Value $probe.rect.height -Minimum 0 -Maximum 100000 -Label 'Greeting height')
+        }
+      } catch {
+        throw 'Greeting probe returned an invalid bounded result.'
+      }
+      $unsettled = $status -in @(
+        'missing', 'ambiguous', 'pending', 'verifying', 'unmeasurable', 'other')
+      if ($unsettled -and $script:GreetingProbeRetries -gt 0) {
+        $script:GreetingProbeRetries--
+        $script:GreetingProbeDue = [DateTime]::UtcNow.AddMilliseconds(300)
+        return
+      }
+      if ($status -ceq 'custom' -and $probe.source -ceq 'custom') {
+        if ($null -eq $shuffleCheckpoint) {
+          throw 'Custom greeting probe omitted its bounded shuffle checkpoint.'
+        }
+        Invoke-AuraUiGreetingShuffleCheckpoint -Shuffle $shuffleCheckpoint
+      } elseif ($null -ne $shuffleCheckpoint -and $probe.source -cne 'custom') {
+        throw 'Native greeting probe returned a custom shuffle checkpoint.'
+      }
+      $summary = "$status`:$candidateCount`:$($probe.source)"
+      if (-not [string]::Equals(
+          $summary, [string]$script:GreetingProbeLastSummary,
+          [StringComparison]::Ordinal)) {
+        $previousFailure = [string]$script:GreetingProbeLastStatus -in @(
+          'missing', 'ambiguous', 'unmeasurable')
+        if ($status -in @('missing', 'ambiguous', 'unmeasurable')) {
+          Write-AuraUiLog -Message (
+            "Greeting binding status: $status (candidates: $candidateCount).")
+        } elseif ($previousFailure -and $status -in @('native', 'custom')) {
+          Write-AuraUiLog -Message "Greeting binding recovered: $status."
+        }
+        $script:GreetingProbeLastSummary = $summary
+        $script:GreetingProbeLastStatus = $status
+      }
+    } catch {
+      if ($generation -eq $script:GreetingProbeGeneration -and
+          -not $script:RescueActive -and -not $script:RescueVerificationPending -and
+          $null -eq $script:RescueChallengeCandidate) {
+        Write-AuraUiLog -Message "Greeting binding probe failed: $($_.Exception.Message)"
+      }
+    }
+    return
+  }
+  if ($null -eq $script:GreetingProbeDue -or
+      [DateTime]::UtcNow -lt $script:GreetingProbeDue) {
+    return
+  }
+  $script:GreetingProbeDue = $null
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate -or
+      -not $script:WebReady -or $null -eq $script:WebView -or
+      $null -eq $script:WebView.CoreWebView2 -or
+      -not (Get-AuraUiEnabled) -or
+      -not $script:ActivePayloadDigest -or
+      -not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+    return
+  }
+  $probeSource = '(() => { try { const state = window.__CLAUDE_AURA_STATE__; return state && typeof state.getGreetingProbe === "function" ? state.getGreetingProbe() : null; } catch { return null; } })()'
+  try {
+    $script:GreetingProbeTaskGeneration = [long]$script:GreetingProbeGeneration
+    $script:GreetingProbeTaskDigest = [string]$script:ActivePayloadDigest
+    $script:GreetingProbeTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($probeSource)
+  } catch {
+    $script:GreetingProbeTaskGeneration = [long]-1
+    $script:GreetingProbeTaskDigest = $null
+    if (-not $script:RescueActive -and -not $script:RescueVerificationPending -and
+        $null -eq $script:RescueChallengeCandidate) {
+      Write-AuraUiLog -Message "Greeting binding probe failed: $($_.Exception.Message)"
+    }
+  }
+}
+
 function Start-AuraUiMirrorCapture {
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate) { return }
   if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) { return }
   if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
   try {
@@ -4602,18 +5515,57 @@ function Update-AuraUiMirror {
               width = [double]$geometry.prompt.width; height = [double]$geometry.prompt.height
             }
           }
+          $greetingGeometry = [ordered]@{
+            status = 'inactive'
+            source = 'none'
+            rect = $null
+          }
+          if ($null -ne $geometry.greeting -and
+              [string]$geometry.greeting.status -in @('found', 'missing', 'ambiguous', 'inactive') -and
+              [string]$geometry.greeting.source -in @('native', 'custom', 'none')) {
+            $greetingGeometry.status = [string]$geometry.greeting.status
+            $greetingGeometry.source = [string]$geometry.greeting.source
+            if ($greetingGeometry.status -eq 'found' -and $null -ne $geometry.greeting.rect) {
+              $candidateGreetingRect = [ordered]@{
+                left = [double]$geometry.greeting.rect.left
+                top = [double]$geometry.greeting.rect.top
+                width = [double]$geometry.greeting.rect.width
+                height = [double]$geometry.greeting.rect.height
+              }
+              if (-not [double]::IsNaN($candidateGreetingRect.left) -and
+                  -not [double]::IsInfinity($candidateGreetingRect.left) -and
+                  -not [double]::IsNaN($candidateGreetingRect.top) -and
+                  -not [double]::IsInfinity($candidateGreetingRect.top) -and
+                  $candidateGreetingRect.width -gt 0 -and
+                  $candidateGreetingRect.height -gt 0 -and
+                  $candidateGreetingRect.width -le $width -and
+                  $candidateGreetingRect.height -le $height) {
+                $greetingGeometry.rect = $candidateGreetingRect
+              } else {
+                $greetingGeometry.status = 'missing'
+                $greetingGeometry.source = 'none'
+              }
+            }
+          }
           $payload['geometry'] = [ordered]@{
             context = [string]$geometry.context
             mode = [string]$geometry.mode
             viewport = $mirrorViewport
             main = $rect
             prompt = $promptRect
+            greeting = $greetingGeometry
           }
         }
         $script:StudioWebView.CoreWebView2.PostWebMessageAsJson(($payload | ConvertTo-Json -Depth 6 -Compress))
       }
     } catch {
-      Write-AuraUiLog -Message "Aura mirror capture failed: $($_.Exception.Message)"
+      if ($captureGeneration -ne $script:MirrorGeneration -or
+          $script:RescueActive -or $script:RescueVerificationPending -or
+          $null -ne $script:RescueChallengeCandidate) {
+        Write-AuraUiLog -Message 'A stale mirror capture ended during navigation verification.'
+      } else {
+        Write-AuraUiLog -Message "Aura mirror capture failed: $($_.Exception.Message)"
+      }
     } finally {
       if ($null -ne $stream) { $stream.Dispose() }
     }
@@ -4631,7 +5583,13 @@ function Update-AuraUiMirror {
       if ($probeGeneration -ne $script:MirrorGeneration) { return }
       if ($raw -and $raw -cne 'null') { $script:MirrorGeometry = $raw | ConvertFrom-Json }
     } catch {
-      Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
+      if ($probeGeneration -ne $script:MirrorGeneration -or
+          $script:RescueActive -or $script:RescueVerificationPending -or
+          $null -ne $script:RescueChallengeCandidate) {
+        Write-AuraUiLog -Message 'A stale mirror probe ended during navigation verification.'
+      } else {
+        Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
+      }
     }
     $semanticContext = if ($null -ne $script:MirrorGeometry) { [string]$script:MirrorGeometry.context } else { 'other' }
     $semanticUnsettled = $semanticContext -notin @('new-chat', 'conversation') -or
@@ -4654,13 +5612,18 @@ function Update-AuraUiMirror {
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) { return }
   # The renderer marks the live layout; read it so the Studio stage aligns
   # its overlays with the real sidebar, prompt block, context, and mode.
-  $probe = '(() => { try { const root = document.documentElement; const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }; const viewport = root.dataset.claudeAuraViewport; return { context: root.dataset.claudeAuraContext || "other", mode: root.dataset.claudeAuraEffectiveMode || "light", viewport: viewport === "normal" || viewport === "wide" ? viewport : null, innerWidth: window.innerWidth, innerHeight: window.innerHeight, main: rect(document.querySelector("[data-claude-aura-main-canvas]")), prompt: rect(document.querySelector("[data-claude-aura-prompt]")) }; } catch { return null; } })()'
+  $probe = '(() => { try { const root = document.documentElement; const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }; const viewport = root.dataset.claudeAuraViewport; const state = window.__CLAUDE_AURA_STATE__; const gp = state && typeof state.getGreetingProbe === "function" ? state.getGreetingProbe() : null; const greetingStatus = gp?.status === "native" || gp?.status === "custom" ? "found" : gp?.status === "ambiguous" ? "ambiguous" : gp?.status === "missing" || gp?.status === "pending" || gp?.status === "verifying" || gp?.status === "unmeasurable" ? "missing" : "inactive"; const greetingSource = gp?.source === "native" || gp?.source === "custom" ? gp.source : "none"; return { context: root.dataset.claudeAuraContext || "other", mode: root.dataset.claudeAuraEffectiveMode || "light", viewport: viewport === "normal" || viewport === "wide" ? viewport : null, innerWidth: window.innerWidth, innerHeight: window.innerHeight, main: rect(document.querySelector("[data-claude-aura-main-canvas]")), prompt: rect(document.querySelector("[data-claude-aura-prompt]")), greeting: { status: greetingStatus, source: greetingSource, rect: greetingStatus === "found" ? gp.rect : null } }; } catch { return null; } })()'
   try {
     $script:MirrorProbeGeneration = [long]$script:MirrorGeneration
     $script:MirrorProbeTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($probe)
   } catch {
     $script:MirrorProbeGeneration = [long]-1
-    Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
+    if ($script:RescueActive -or $script:RescueVerificationPending -or
+        $null -ne $script:RescueChallengeCandidate) {
+      Write-AuraUiLog -Message 'A mirror probe was skipped during navigation verification.'
+    } else {
+      Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
+    }
     Start-AuraUiMirrorCapture
   }
 }
@@ -4974,6 +5937,298 @@ function Invoke-AuraUiClearBackground {
   Send-AuraUiStudioState -Status "$($script:UiCopy.removingBackground)" -Tone busy
 }
 
+function Read-AuraUiAvatarState {
+  if (-not (Test-Path -LiteralPath $AvatarStatePath -PathType Leaf)) { return $null }
+  try {
+    $raw = Get-Content -LiteralPath $AvatarStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($raw -is [System.Management.Automation.PSCustomObject]) { return $raw }
+  } catch {}
+  return $null
+}
+
+function Get-AuraUiAvatarCrop {
+  # The framing the user last confirmed, defaulting to a centered, unzoomed square.
+  $x = 50.0; $y = 50.0; $zoom = 1.0
+  $state = Read-AuraUiAvatarState
+  $crop = if ($null -ne $state) { $state.crop } else { $null }
+  if ($null -ne $crop) {
+    try { $x = ConvertTo-AuraUiStudioNumber -Value $crop.x -Minimum 0 -Maximum 100 -Label 'Avatar x' } catch {}
+    try { $y = ConvertTo-AuraUiStudioNumber -Value $crop.y -Minimum 0 -Maximum 100 -Label 'Avatar y' } catch {}
+    try { $zoom = ConvertTo-AuraUiStudioNumber -Value $crop.zoom -Minimum 1 -Maximum 2 -Label 'Avatar zoom' } catch {}
+  }
+  return [ordered]@{ x = $x; y = $y; zoom = $zoom }
+}
+
+function Get-AuraUiAvatarBackground {
+  $state = Read-AuraUiAvatarState
+  if ($null -eq $state) { return 'transparent' }
+  try { return ConvertTo-AuraUiAvatarBackground -Value $state.background } catch { return 'transparent' }
+}
+
+function Test-AuraUiAvatarHasAlpha {
+  $state = Read-AuraUiAvatarState
+  if ($null -eq $state) { return $false }
+  return $state.hasAlpha -eq $true
+}
+
+function Get-AuraUiAvatarSourcePath {
+  $state = Read-AuraUiAvatarState
+  if ($null -eq $state -or -not $state.source) { return $null }
+  $name = [string]$state.source
+  if ($name -notmatch '^source\.(png|jpg|jpeg|gif)$') { return $null }
+  $path = Join-Path $AvatarRoot $name
+  if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+  return $null
+}
+
+function Get-AuraUiAvatarPreviewUrl {
+  # The unmodified original, served to the Studio crop editor over the sandboxed
+  # aura.avatar host so the framing preview matches what the host will bake.
+  $state = Read-AuraUiAvatarState
+  if ($null -eq (Get-AuraUiAvatarSourcePath)) { return $null }
+  $hash = if ($null -ne $state -and $state.hash) { [string]$state.hash } else { 'x' }
+  return "https://aura.avatar/$([Uri]::EscapeDataString([string]$state.source))?v=$hash"
+}
+
+function Clear-AuraUiAvatarFiles {
+  foreach ($name in @('crop.json', 'current.png')) {
+    $path = Join-Path $AvatarRoot $name
+    try { if (Test-Path -LiteralPath $path -PathType Leaf) { [IO.File]::Delete($path) } } catch {}
+  }
+  try {
+    if (Test-Path -LiteralPath $AvatarRoot -PathType Container) {
+      foreach ($file in @(Get-ChildItem -LiteralPath $AvatarRoot -Filter 'source.*' -File -ErrorAction SilentlyContinue)) {
+        try { [IO.File]::Delete($file.FullName) } catch {}
+      }
+    }
+  } catch {}
+}
+
+function ConvertTo-AuraUiAvatarBackground {
+  # 'transparent' (keep the alpha channel) or an exact #RRGGBB fill.
+  param([AllowNull()][object]$Value)
+  if ($null -eq $Value) { return 'transparent' }
+  $text = "$Value".Trim()
+  if (-not $text -or [string]::Equals($text, 'transparent', [StringComparison]::OrdinalIgnoreCase)) {
+    return 'transparent'
+  }
+  if ($text -cnotmatch '^#[0-9A-Fa-f]{6}$') { throw 'Avatar background must be transparent or a #RRGGBB color.' }
+  return $text.ToUpperInvariant()
+}
+
+function Test-AuraUiImageHasAlpha {
+  # Does the source actually contain see-through pixels? Rendering a small copy
+  # over a cleared canvas catches PNG alpha and indexed GIF transparency alike,
+  # without walking every pixel of a large photograph. A small tolerance keeps
+  # antialiased edge blending from reporting a fully opaque image as transparent.
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = $null; $source = $null; $probe = $null; $graphics = $null
+  try {
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Image]::FromStream($stream)
+    $side = 64
+    $probe = [Drawing.Bitmap]::new($side, $side, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [Drawing.Graphics]::FromImage($probe)
+    $graphics.Clear([Drawing.Color]::Transparent)
+    $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+    $graphics.DrawImage($source, [Drawing.Rectangle]::new(0, 0, $side, $side))
+    $graphics.Dispose(); $graphics = $null
+    $sheer = 0
+    for ($y = 0; $y -lt $side; $y++) {
+      for ($x = 0; $x -lt $side; $x++) {
+        if ($probe.GetPixel($x, $y).A -lt 250) { $sheer++ }
+      }
+    }
+    return $sheer -gt (($side * $side) * 0.005)
+  } catch {
+    Write-AuraUiLog -Message "Avatar transparency could not be inspected: $($_.Exception.Message)"
+    return $false
+  } finally {
+    if ($null -ne $graphics) { try { $graphics.Dispose() } catch {} }
+    if ($null -ne $probe) { try { $probe.Dispose() } catch {} }
+    if ($null -ne $source) { try { $source.Dispose() } catch {} }
+    if ($null -ne $stream) { try { $stream.Dispose() } catch {} }
+  }
+}
+
+function Invoke-AuraUiBakeAvatar {
+  # Crop the original into a square PNG per the confirmed x/y/zoom framing, so the
+  # renderer only ever displays a ready-made square (no crop code in the payload).
+  param(
+    [Parameter(Mandatory = $true)][string]$SourcePath,
+    [Parameter(Mandatory = $true)][double]$X,
+    [Parameter(Mandatory = $true)][double]$Y,
+    [Parameter(Mandatory = $true)][double]$Zoom,
+    [AllowNull()][string]$Background = 'transparent'
+  )
+  $stream = $null; $source = $null; $bitmap = $null; $graphics = $null
+  try {
+    $stream = [IO.File]::Open($SourcePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Image]::FromStream($stream)
+    $w = [double]$source.Width; $h = [double]$source.Height
+    if ($w -le 0 -or $h -le 0) { throw 'Avatar source has no pixels.' }
+    $size = [int]$AvatarBakeSize
+    $zoomValue = [Math]::Max(1.0, [Math]::Min(2.0, $Zoom))
+    $scale = [Math]::Max($size / $w, $size / $h) * $zoomValue
+    $overflowX = [Math]::Max(0.0, ($w * $scale) - $size)
+    $overflowY = [Math]::Max(0.0, ($h * $scale) - $size)
+    $srcSide = $size / $scale
+    $srcLeft = ($overflowX * ([Math]::Max(0.0, [Math]::Min(100.0, $X)) / 100.0)) / $scale
+    $srcTop = ($overflowY * ([Math]::Max(0.0, [Math]::Min(100.0, $Y)) / 100.0)) / $scale
+    $bitmap = [Drawing.Bitmap]::new($size, $size, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    $graphics.CompositingQuality = [Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::HighQuality
+    # Paint the chosen backdrop first so a PNG or GIF with transparency lands on a
+    # solid square instead of showing Claude's own avatar through its gaps.
+    $backgroundValue = ConvertTo-AuraUiAvatarBackground -Value $Background
+    if ($backgroundValue -cne 'transparent') {
+      $graphics.Clear([Drawing.ColorTranslator]::FromHtml($backgroundValue))
+    }
+    $graphics.DrawImage(
+      $source, [Drawing.Rectangle]::new(0, 0, $size, $size),
+      [single]$srcLeft, [single]$srcTop, [single]$srcSide, [single]$srcSide,
+      [Drawing.GraphicsUnit]::Pixel)
+    $graphics.Dispose(); $graphics = $null
+    [IO.Directory]::CreateDirectory($AvatarRoot) | Out-Null
+    $temporary = "$AvatarBakedPath.tmp-$([Guid]::NewGuid().ToString('N'))"
+    $bitmap.Save($temporary, [Drawing.Imaging.ImageFormat]::Png)
+    $bitmap.Dispose(); $bitmap = $null
+    [IO.File]::Copy($temporary, $AvatarBakedPath, $true)
+    try { [IO.File]::Delete($temporary) } catch {}
+    return $true
+  } catch {
+    Write-AuraUiLog -Message "Avatar could not be baked: $($_.Exception.Message)"
+    return $false
+  } finally {
+    if ($null -ne $graphics) { try { $graphics.Dispose() } catch {} }
+    if ($null -ne $bitmap) { try { $bitmap.Dispose() } catch {} }
+    if ($null -ne $source) { try { $source.Dispose() } catch {} }
+    if ($null -ne $stream) { try { $stream.Dispose() } catch {} }
+  }
+}
+
+function Save-AuraUiAvatarState {
+  param(
+    [Parameter(Mandatory = $true)][string]$SourceName,
+    [Parameter(Mandatory = $true)][string]$Hash,
+    [Parameter(Mandatory = $true)][double]$X,
+    [Parameter(Mandatory = $true)][double]$Y,
+    [Parameter(Mandatory = $true)][double]$Zoom,
+    [AllowNull()][string]$Background = 'transparent',
+    [bool]$HasAlpha = $false
+  )
+  $state = [ordered]@{
+    source = $SourceName
+    hash = $Hash
+    hasAlpha = $HasAlpha
+    background = (ConvertTo-AuraUiAvatarBackground -Value $Background)
+    crop = [ordered]@{ x = $X; y = $Y; zoom = $Zoom }
+  }
+  [IO.Directory]::CreateDirectory($AvatarRoot) | Out-Null
+  [IO.File]::WriteAllText($AvatarStatePath, ($state | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+}
+
+function Invoke-AuraUiChooseAvatar {
+  param([AllowNull()][System.Windows.Forms.IWin32Window]$Owner)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseAvatarTitle)"
+    # Sources are cropped with GDI+, which decodes PNG, JPEG, and GIF (not WebP/AVIF).
+    $dialog.Filter = "$($script:UiCopy.imagesFilter)|*.png;*.jpg;*.jpeg;*.gif"
+    $dialog.CheckFileExists = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      Send-AuraUiStudioState
+      return $false
+    }
+    $chosen = $dialog.FileName
+    $extension = [IO.Path]::GetExtension($chosen).ToLowerInvariant()
+    if ($extension -notmatch '^\.(png|jpg|jpeg|gif)$') {
+      Show-AuraUiMessage -Title "$($script:UiCopy.appearanceNotChangedTitle)" -Icon Warning -Message "$($script:UiCopy.invalidBackgroundMessage)"
+      Send-AuraUiStudioState
+      return $false
+    }
+    $info = [IO.FileInfo]::new($chosen)
+    if ($info.Length -gt $AvatarSourceMaxBytes) {
+      Show-AuraUiMessage -Title "$($script:UiCopy.appearanceNotChangedTitle)" -Icon Warning -Message "$($script:UiCopy.invalidBackgroundMessage)"
+      Send-AuraUiStudioState
+      return $false
+    }
+    Clear-AuraUiAvatarFiles
+    [IO.Directory]::CreateDirectory($AvatarRoot) | Out-Null
+    $sourceName = "source$extension"
+    $sourcePath = Join-Path $AvatarRoot $sourceName
+    [IO.File]::Copy($chosen, $sourcePath, $true)
+    $hash = 'x'
+    try {
+      $sha = [Security.Cryptography.SHA256]::Create()
+      $bytes = [IO.File]::ReadAllBytes($sourcePath)
+      $hash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '').ToLowerInvariant()
+      $sha.Dispose()
+    } catch {}
+    # Keep the image exactly as authored by default; the framing editor offers the
+    # backdrop swatches whenever the source actually has see-through pixels.
+    $hasAlpha = Test-AuraUiImageHasAlpha -Path $sourcePath
+    if (-not (Invoke-AuraUiBakeAvatar -SourcePath $sourcePath -X 50 -Y 50 -Zoom 1 -Background 'transparent')) {
+      Clear-AuraUiAvatarFiles
+      Show-AuraUiMessage -Title "$($script:UiCopy.appearanceNotChangedTitle)" -Icon Warning -Message "$($script:UiCopy.invalidBackgroundMessage)"
+      Send-AuraUiStudioState
+      return $false
+    }
+    Save-AuraUiAvatarState -SourceName $sourceName -Hash $hash -X 50 -Y 50 -Zoom 1 `
+      -Background 'transparent' -HasAlpha $hasAlpha
+    Set-AuraUiConfig -Options @('--avatar', $AvatarBakedPath, '--enabled', 'true')
+    Apply-AuraUiTheme
+    # Open the framing editor immediately so the user positions the crop before
+    # settling on it, mirroring the theme-card preview flow.
+    Send-AuraUiStudioState -Status "$($script:UiCopy.applyingAvatar)" -Tone busy -Action 'set-avatar'
+    return $true
+  } finally {
+    $dialog.Dispose()
+  }
+}
+
+function Invoke-AuraUiSetAvatarFraming {
+  param(
+    [Parameter(Mandatory = $true)][object]$X,
+    [Parameter(Mandatory = $true)][object]$Y,
+    [Parameter(Mandatory = $true)][object]$Zoom,
+    [AllowNull()][object]$Background = $null
+  )
+  $sourcePath = Get-AuraUiAvatarSourcePath
+  if (-not $sourcePath) { throw 'No avatar is available to frame.' }
+  $state = Read-AuraUiAvatarState
+  $hash = if ($null -ne $state -and $state.hash) { [string]$state.hash } else { 'x' }
+  $sourceName = [string]$state.source
+  $hasAlpha = $state.hasAlpha -eq $true
+  $xValue = ConvertTo-AuraUiStudioNumber -Value $X -Minimum 0 -Maximum 100 -Label 'Avatar x'
+  $yValue = ConvertTo-AuraUiStudioNumber -Value $Y -Minimum 0 -Maximum 100 -Label 'Avatar y'
+  $zoomValue = ConvertTo-AuraUiStudioNumber -Value $Zoom -Minimum 1 -Maximum 2 -Label 'Avatar zoom'
+  $backgroundValue = if ($null -eq $Background) {
+    Get-AuraUiAvatarBackground
+  } else {
+    ConvertTo-AuraUiAvatarBackground -Value $Background
+  }
+  if (-not (Invoke-AuraUiBakeAvatar -SourcePath $sourcePath -X $xValue -Y $yValue -Zoom $zoomValue `
+      -Background $backgroundValue)) {
+    throw 'The avatar could not be reframed.'
+  }
+  Save-AuraUiAvatarState -SourceName $sourceName -Hash $hash -X $xValue -Y $yValue -Zoom $zoomValue `
+    -Background $backgroundValue -HasAlpha $hasAlpha
+  Set-AuraUiConfig -Options @('--avatar', $AvatarBakedPath, '--enabled', 'true')
+  Apply-AuraUiTheme
+  Send-AuraUiStudioState -Status "$($script:UiCopy.backgroundPositionSaved)" -Action 'set-avatar-framing'
+}
+
+function Invoke-AuraUiClearAvatar {
+  Clear-AuraUiAvatarFiles
+  Set-AuraUiConfig -Options @('--clear-avatar', '--enabled', 'true')
+  Apply-AuraUiTheme
+  Send-AuraUiStudioState -Status "$($script:UiCopy.removingAvatar)" -Tone busy
+}
+
 function Invoke-AuraUiSetImageFraming {
   param(
     [Parameter(Mandatory = $true)][object]$X,
@@ -5058,6 +6313,7 @@ function Invoke-AuraUiSetAppearance {
 function Update-AuraUiLocalizedChrome {
   try {
     if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed) {
+      $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
       $script:StudioForm.AccessibleName = "$($script:UiCopy.studioTitle)"
     }
     if ($null -ne $script:TrayOpenStudioItem -and -not $script:TrayOpenStudioItem.IsDisposed) {
@@ -5082,6 +6338,8 @@ function Update-AuraUiLocalizedChrome {
       $script:RetryButton.Text = "$($script:UiCopy.retry)"
       $script:RetryButton.AccessibleName = "$($script:UiCopy.retry)"
     }
+    Update-AuraUiRescueWindowCopy
+    Update-AuraUiRescueWindowTheme
     if ($null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed -and
         $script:LoadingPanel.Visible -and $null -ne $script:LoadingLabel -and
         -not $script:LoadingLabel.IsDisposed) {
@@ -5105,8 +6363,8 @@ function Update-AuraUiLocalizedChrome {
 
 function Invoke-AuraUiSetLocale {
   param([Parameter(Mandatory = $true)][string]$Locale)
-  if ($Locale -cnotin @('en', 'zh-CN', 'zh-TW')) {
-    throw 'Studio locale must be en, zh-CN, or zh-TW.'
+  if ($Locale -cnotin $StudioLocaleIds) {
+    throw 'Studio locale is invalid.'
   }
   if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true) {
     throw 'Finish or discard the current Aura Studio edit before changing language.'
@@ -5160,7 +6418,7 @@ function Invoke-AuraUiSetLocale {
 }
 
 function Invoke-AuraUiCompleteStudioIntroduction {
-  $locale = if ($script:Locale -cin @('en', 'zh-CN', 'zh-TW')) { $script:Locale } else { 'en' }
+  $locale = if ($StudioLocaleIds -ccontains $script:Locale) { $script:Locale } else { 'en' }
   $script:StudioPreferences = Write-AuraUiStudioPreferences `
     -Locale $locale -IntroductionVersion $StudioIntroductionVersion
   $script:StudioIntroductionRequested = $false
@@ -5355,7 +6613,7 @@ function Assert-AuraUiStudioEditorMessage {
           'metadata' {
             if (-not (Test-AuraUiStudioExactProperties -Message $change -Names @('kind', 'field', 'locale', 'value')) -or
                 $change.field -isnot [string] -or $change.field -cnotin @('label', 'description') -or
-                $change.locale -isnot [string] -or $change.locale -cnotin @('en', 'zh-CN', 'zh-TW') -or
+                $change.locale -isnot [string] -or $change.locale -cnotin @('en', 'zh-CN', 'zh-HKTW') -or
                 $change.value -isnot [string]) {
               throw 'Aura Studio metadata patches are invalid.'
             }
@@ -5366,8 +6624,118 @@ function Assert-AuraUiStudioEditorMessage {
             }
             break
           }
+          'greeting' {
+            # One gesture sends one complete bounded Light/Dark + Standard/Wide
+            # frame. The host validates that exact wire shape before Node sees it.
+            if (-not (Test-AuraUiStudioExactProperties -Message $change `
+                  -Names @('kind', 'operation', 'appearance', 'frame', 'value')) -or
+                $change.operation -isnot [string] -or
+                $change.operation -cnotin @('set-frame', 'reset') -or
+                $change.appearance -isnot [string] -or
+                $change.appearance -cnotin @('light', 'dark') -or
+                $change.frame -isnot [string] -or
+                $change.frame -cnotin @('standard', 'wide')) {
+              throw 'Aura Studio greeting patches have an invalid shape.'
+            }
+            if ($change.operation -ceq 'reset') {
+              if ($null -ne $change.value) {
+                throw 'Aura Studio greeting reset must carry a null value.'
+              }
+              break
+            }
+            $value = $change.value
+            $frameNames = @(
+              'font', 'color', 'fontSize', 'weight', 'italic', 'align',
+              'letterSpacing', 'lineHeight', 'maxWidthRatio', 'xRatio', 'yRatio',
+              'decoration', 'markSource', 'markScale')
+            if ($value -isnot [System.Management.Automation.PSCustomObject] -or
+                -not (Test-AuraUiStudioExactProperties -Message $value -Names $frameNames)) {
+              throw 'Aura Studio greeting frame has an invalid shape.'
+            }
+            if ($value.font -isnot [string] -or
+                $value.font -cnotin @('system-sans', 'humanist-sans', 'rounded-sans', 'editorial-serif') -or
+                $value.color -isnot [string] -or $value.color -cnotin @('primary', 'accent') -or
+                $value.align -isnot [string] -or $value.align -cnotin @('start', 'center', 'end') -or
+                $value.decoration -isnot [string] -or
+                $value.decoration -cnotin @('none', 'underline', 'hairline', 'glow') -or
+                $value.markSource -isnot [string] -or
+                $value.markSource -cnotin @('none', 'native', 'compact') -or
+                $value.italic -isnot [bool]) {
+              throw 'Aura Studio greeting frame has an invalid option.'
+            }
+            $weight = ConvertTo-AuraUiStudioInteger `
+              -Value $value.weight -Minimum 300 -Maximum 700 -Label 'Greeting weight'
+            if ($weight -notin @(300, 400, 500, 600, 650, 700)) {
+              throw 'Aura Studio greeting weight is invalid.'
+            }
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.fontSize -Minimum 24 -Maximum 72 -Label 'Greeting size')
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.letterSpacing -Minimum -0.06 -Maximum 0.12 -Label 'Greeting letter spacing')
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.lineHeight -Minimum 0.9 -Maximum 1.5 -Label 'Greeting line height')
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.maxWidthRatio -Minimum 0.35 -Maximum 0.9 -Label 'Greeting maximum width')
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.xRatio -Minimum -0.45 -Maximum 0.45 -Label 'Greeting horizontal position')
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.yRatio -Minimum -0.4 -Maximum 0.45 -Label 'Greeting vertical position')
+            [void](ConvertTo-AuraUiStudioNumber -Value $value.markScale -Minimum 0.5 -Maximum 1.5 -Label 'Greeting mark size')
+            break
+          }
           default { throw 'Aura Studio theme patch kind is not allowed.' }
         }
+      }
+      break
+    }
+    'set-greeting-phrases' {
+      # WO-21 personal greeting words. Node's validateGreetingPreferences is
+      # authoritative; these mirror its bounds so malformed page data never reaches it.
+      if ($Message.enabled -isnot [bool]) {
+        throw 'Aura Studio greeting enabled state must be a Boolean.'
+      }
+      if ($Message.source -isnot [string] -or $Message.source -cnotin @('claude', 'custom')) {
+        throw 'Aura Studio greeting source is invalid.'
+      }
+      if ($Message.displayName -isnot [string]) {
+        throw 'Aura Studio greeting name is invalid.'
+      }
+      $normalizedGreetingName = $Message.displayName.Normalize(
+        [Text.NormalizationForm]::FormC).Trim()
+      if ((Get-AuraUiUnicodeScalarLength -Value $normalizedGreetingName) -gt 40 -or
+          $normalizedGreetingName -match '[\x00-\x1F\x7F-\x9F]') {
+        throw 'Aura Studio greeting name is invalid.'
+      }
+      if ($Message.overrideMode -isnot [string] -or
+          $Message.overrideMode -cnotin @('global', 'claude', 'custom')) {
+        throw 'Aura Studio greeting theme override is invalid.'
+      }
+      foreach ($phraseListName in @('globalPhrases', 'overridePhrases')) {
+        $phraseList = $Message.$phraseListName
+        if ($phraseList -isnot [System.Array]) {
+          throw 'Aura Studio greeting phrases must be arrays.'
+        }
+        $greetingPhrases = @($phraseList)
+        if ($greetingPhrases.Count -gt 12) {
+          throw 'Aura Studio accepts at most 12 greeting phrases per list.'
+        }
+        $seenPhrases = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        foreach ($greetingPhrase in $greetingPhrases) {
+          if ($greetingPhrase -isnot [string]) {
+            throw 'Aura Studio greeting phrase is invalid.'
+          }
+          $normalizedGreetingPhrase = $greetingPhrase.Normalize(
+            [Text.NormalizationForm]::FormC).Trim()
+          # String.Replace is ordinal and case-sensitive. PowerShell's -replace
+          # is case-insensitive by default and would otherwise accept `{NAME}`
+          # here even though Node correctly permits only the exact `{name}` token.
+          $withoutNameToken = $normalizedGreetingPhrase.Replace('{name}', '')
+          if (-not $normalizedGreetingPhrase -or
+              (Get-AuraUiUnicodeScalarLength -Value $normalizedGreetingPhrase) -gt 120 -or
+              $normalizedGreetingPhrase -match '[\x00-\x1F\x7F-\x9F]' -or
+              ([regex]::Matches($normalizedGreetingPhrase, '\{name\}')).Count -gt 1 -or
+              $withoutNameToken -match '[{}]' -or
+              -not $seenPhrases.Add($normalizedGreetingPhrase)) {
+            throw 'Aura Studio greeting phrase is invalid.'
+          }
+        }
+      }
+      if ($Message.overrideMode -ceq 'custom' -and @($Message.overridePhrases).Count -eq 0) {
+        throw 'Aura Studio custom greeting override requires a phrase.'
       }
       break
     }
@@ -5422,6 +6790,7 @@ function Get-AuraUiStudioMessage {
     'set-locale' { 'type'; 'locale'; break }
     'set-enabled' { 'type'; 'enabled'; break }
     'set-image-framing' { 'type'; 'x'; 'y'; 'zoom'; break }
+    'set-avatar-framing' { 'type'; 'x'; 'y'; 'zoom'; 'background'; break }
     'set-card-preview-crop' { 'type'; 'theme'; 'x'; 'y'; 'zoom'; break }
     'create-theme-copy' { 'type'; 'theme'; break }
     'begin-theme-edit' { 'type'; 'theme'; 'reset'; break }
@@ -5437,6 +6806,12 @@ function Get-AuraUiStudioMessage {
     'save-theme-edit' { 'type'; 'session'; 'revision'; break }
     'discard-theme-edit' { 'type'; 'session'; 'revision'; break }
     'delete-user-theme' { 'type'; 'theme'; break }
+    'set-greeting-phrases' {
+      'type'; 'session'; 'revision'; 'enabled'; 'source'; 'displayName'
+      'globalPhrases'; 'overrideMode'; 'overridePhrases'
+      break
+    }
+    'reset-greeting' { 'type'; 'session'; 'revision'; break }
     'set-aura-preview' { 'type'; 'size'; 'request'; break }
     'set-aura-topmost' { 'type'; 'enabled'; break }
     default { 'type'; break }
@@ -5449,11 +6824,12 @@ function Get-AuraUiStudioMessage {
   if ($type -in @(
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
-      'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme')) {
+      'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme',
+      'set-greeting-phrases', 'reset-greeting')) {
     Assert-AuraUiStudioEditorMessage -Message $message
   }
   if ($type -ceq 'set-locale' -and
-      ($message.locale -isnot [string] -or $message.locale -cnotin @('en', 'zh-CN', 'zh-TW'))) {
+      ($message.locale -isnot [string] -or $message.locale -cnotin $StudioLocaleIds)) {
     throw 'Studio locale is invalid.'
   }
   return $message
@@ -5493,6 +6869,13 @@ function Invoke-AuraUiStudioMessage {
     }
     'set-image' { [void](Invoke-AuraUiChooseBackground -Owner $script:StudioForm); break }
     'clear-image' { Invoke-AuraUiClearBackground; break }
+    'set-avatar' { [void](Invoke-AuraUiChooseAvatar -Owner $script:StudioForm); break }
+    'clear-avatar' { Invoke-AuraUiClearAvatar; break }
+    'set-avatar-framing' {
+      Invoke-AuraUiSetAvatarFraming -X $message.x -Y $message.y -Zoom $message.zoom `
+        -Background $message.background
+      break
+    }
     'set-image-framing' {
       Invoke-AuraUiSetImageFraming -X $message.x -Y $message.y -Zoom $message.zoom
       break
@@ -5548,6 +6931,8 @@ function Invoke-AuraUiStudioMessage {
     'save-theme-edit' { [void](Invoke-AuraUiSaveThemeEdit -Request $message); break }
     'discard-theme-edit' { [void](Invoke-AuraUiDiscardThemeEdit -Request $message); break }
     'delete-user-theme' { [void](Invoke-AuraUiDeleteUserTheme -Request $message); break }
+    'set-greeting-phrases' { [void](Invoke-AuraUiSetGreetingPhrases -Request $message); break }
+    'reset-greeting' { [void](Invoke-AuraUiResetGreeting -Request $message); break }
   }
 }
 
@@ -5556,16 +6941,42 @@ $script:Config = $null
 $script:Payload = ''
 $script:ActiveLabel = ''
 $script:ActiveThemeName = $null
+$script:ActivePayloadDigest = $null
 $script:Form = $null
 $script:WebView = $null
 $script:WebReady = $false
+$script:PageReady = $false
 $script:EnvironmentTask = $null
 $script:EnsureTask = $null
 $script:ScriptTask = $null
 $script:ScriptAction = $null
 $script:ScriptCovered = $false
+$script:PendingApply = $false
+$script:PendingRestore = $false
 $script:ActiveNavigationId = $null
+$script:ActiveNavigationUri = $null
 $script:ReadyNavigationId = $null
+$script:IsRescueSession = [bool]$RescueSession
+$script:RescueActive = $false
+$script:RescueReason = 'Challenge'
+$script:RescueGeneration = [long]0
+$script:RescueBreakerState = 'Closed'
+$script:RescueAttemptCount = 0
+$script:RescueChallengeCandidate = $null
+$script:RescueVerificationPending = $false
+$script:PendingNavigationCompletion = $null
+$script:RescueLastNavigationId = $null
+$script:RescueRestartRequested = $false
+$script:RescueForm = $null
+$script:RescueAccentPanel = $null
+$script:RescueEyebrowLabel = $null
+$script:RescueTitleLabel = $null
+$script:RescueBodyLabel = $null
+$script:RescueBrowserButton = $null
+$script:RescueCleanButton = $null
+$script:RescueRetryButton = $null
+$script:HostExecutable = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+$script:CurrentScriptPath = [IO.Path]::GetFullPath($PSCommandPath)
 $script:Themes = @()
 $script:UiCopy = $null
 $script:Locale = 'en'
@@ -5578,6 +6989,9 @@ $script:StudioMessageTypes = @(
   'complete-studio-introduction',
   'set-image',
   'clear-image',
+  'set-avatar',
+  'clear-avatar',
+  'set-avatar-framing',
   'set-image-framing',
   'set-card-preview-crop',
   'set-enabled',
@@ -5598,6 +7012,8 @@ $script:StudioMessageTypes = @(
   'save-theme-edit',
   'discard-theme-edit',
   'delete-user-theme',
+  'set-greeting-phrases',
+  'reset-greeting',
   'set-aura-preview',
   'set-aura-topmost',
   'refresh-aura-mirror'
@@ -5628,6 +7044,15 @@ $script:MirrorGeneration = [long]0
 $script:MirrorPreviewRequest = 0
 $script:MirrorSemanticRetries = 0
 $script:MirrorSemanticPreviousContext = $null
+$script:GreetingProbeDue = $null
+$script:GreetingProbeTask = $null
+$script:GreetingProbeGeneration = [long]0
+$script:GreetingProbeTaskGeneration = [long]-1
+$script:GreetingProbeTaskDigest = $null
+$script:GreetingProbeRetries = 0
+$script:GreetingProbeLastSummary = $null
+$script:GreetingProbeLastStatus = $null
+$script:GreetingShuffleCheckpointSummary = $null
 $script:WebViewEnvironment = $null
 $script:TrayIcon = $null
 $script:TrayMenu = $null
@@ -5710,7 +7135,7 @@ try {
   }
 
   [void](Assert-AuraUiStudioEditorRoots -Create)
-  New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot, $StudioBackgroundRoot | Out-Null
+  New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot, $StudioBackgroundRoot, $AvatarRoot | Out-Null
   $script:Node = Get-AuraNodeRuntime
   $script:StudioPreferences = Get-AuraUiStudioPreferences
   $script:Locale = [string]$script:StudioPreferences.locale
@@ -5811,6 +7236,12 @@ public sealed class AuraIconWindow : NativeWindow, IDisposable {
     if (captionColor >= 0) {
       int color = captionColor;
       DwmSetWindowAttribute(Handle, 35, ref color, sizeof(int));
+      // DWMWA_TEXT_COLOR, painted in the caption's own color. The window keeps
+      // real title text so screen recorders and the Chromium/Electron screen
+      // pickers enumerate it (they drop windows whose GetWindowTextLength is
+      // 0), while the caption bar still reads as untitled.
+      int textColor = captionColor;
+      DwmSetWindowAttribute(Handle, 36, ref textColor, sizeof(int));
     }
     int noBorder = unchecked((int)0xFFFFFFFE);
     DwmSetWindowAttribute(Handle, 34, ref noBorder, sizeof(int));
@@ -5961,7 +7392,11 @@ public static class AuraLayered {
     }
   })
   $script:Form.add_HandleDestroyed({ $script:MainIconWindow.Detach() })
-  $script:Form.Text = ''
+  # Real caption text, not just an accessible name: screen recorders and the
+  # browser/Electron screen pickers enumerate windows with GetWindowTextLength
+  # and skip anything that returns 0, so an untitled window is invisible to
+  # OBS, Recordly, and getDisplayMedia. It also names us in Alt+Tab.
+  $script:Form.Text = 'Claude Aura'
   $script:Form.AccessibleName = 'Claude Aura'
   $script:Form.StartPosition = 'Manual'
   $script:Form.ClientSize = [Drawing.Size]::new(1180, 640)
@@ -6006,7 +7441,7 @@ public static class AuraLayered {
     }
   })
   $script:StudioForm.add_HandleDestroyed({ $script:StudioIconWindow.Detach() })
-  $script:StudioForm.Text = ''
+  $script:StudioForm.Text = "$($script:UiCopy.studioTitle)"
   $script:StudioForm.AccessibleName = "$($script:UiCopy.studioTitle)"
   $script:StudioForm.StartPosition = 'Manual'
   $script:StudioForm.ClientSize = [Drawing.Size]::new(1080, 720)
@@ -6034,6 +7469,13 @@ public static class AuraLayered {
       $eventArgs.Cancel = $true
       Restore-AuraUiStudioPreviewState
       $sender.Hide()
+      # Studio and the main Aura window are the app's two primary surfaces. If the
+      # main window is no longer open, Studio was the last one on screen, so
+      # closing it shuts the whole app down instead of leaving it idle in the tray.
+      $mainVisible = $null -ne $script:Form -and -not $script:Form.IsDisposed -and $script:Form.Visible
+      if (-not $mainVisible -and -not $script:ExitRequested) {
+        [void]$sender.BeginInvoke([Action] { Request-AuraUiExit })
+      }
     }
   })
 
@@ -6459,6 +7901,8 @@ public static class AuraLayered {
   $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_Shown({ Update-AuraUiLauncherPosition })
+  $script:Form.add_LocationChanged({ Update-AuraUiRescueWindowPosition })
+  $script:Form.add_SizeChanged({ Update-AuraUiRescueWindowPosition })
 
   $script:RetryButton.add_Click({
     if ($script:WebReady -and $null -ne $script:WebView.CoreWebView2) {
@@ -6491,14 +7935,36 @@ public static class AuraLayered {
       if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
         Show-AuraUiStudio
       }
+      Complete-AuraUiPendingNavigationVerification
       if ($null -ne $script:EnvironmentTask -and $script:EnvironmentTask.IsCompleted) {
         $task = $script:EnvironmentTask
         $script:EnvironmentTask = $null
         $environment = $task.GetAwaiter().GetResult()
         $script:WebViewEnvironment = $environment
-        $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment)
+        if ($script:IsRescueSession) {
+          # A clean session uses WebView2's private controller mode. It starts
+          # without the normal Aura cookies and discards its own session data
+          # when the controller closes; the regular profile remains untouched.
+          $controllerOptions = $environment.CreateCoreWebView2ControllerOptions()
+          $controllerOptions.ProfileName = 'ClaudeAuraRescue'
+          $controllerOptions.IsInPrivateModeEnabled = $true
+          $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment, $controllerOptions)
+        } else {
+          $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment)
+        }
         if (Test-Path -LiteralPath $StudioRoot -PathType Container) {
-          $script:StudioEnsureTask = $script:StudioWebView.EnsureCoreWebView2Async($environment)
+          if ($script:IsRescueSession) {
+            # Studio must share the temporary private profile in a clean
+            # session too; otherwise its local origin could still mutate the
+            # normal persistent WebView2 profile.
+            $studioControllerOptions = $environment.CreateCoreWebView2ControllerOptions()
+            $studioControllerOptions.ProfileName = 'ClaudeAuraRescue'
+            $studioControllerOptions.IsInPrivateModeEnabled = $true
+            $script:StudioEnsureTask = $script:StudioWebView.EnsureCoreWebView2Async(
+              $environment, $studioControllerOptions)
+          } else {
+            $script:StudioEnsureTask = $script:StudioWebView.EnsureCoreWebView2Async($environment)
+          }
         } else {
           $script:StudioInitializationFailed = $true
           Write-AuraUiLog -Message "Studio folder is missing: $StudioRoot"
@@ -6548,6 +8014,10 @@ public static class AuraLayered {
             $StudioBackgroundRoot,
             [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
           $studioCore.SetVirtualHostNameToFolderMapping(
+            'aura.avatar',
+            $AvatarRoot,
+            [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          $studioCore.SetVirtualHostNameToFolderMapping(
             'aura.editor',
             $StudioEditorPreviewRoot,
             [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
@@ -6585,11 +8055,11 @@ public static class AuraLayered {
                     $script:StudioMessageTypes -ccontains $failedMessage.type -and
                     $failedMessage.type -in @(
                       'set-locale', 'complete-studio-introduction',
-                      'set-image-framing', 'set-card-preview-crop',
+                      'set-image-framing', 'set-avatar-framing', 'set-card-preview-crop',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
-                      'delete-user-theme')) {
+                      'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                   $failedAction = [string]$failedMessage.type
                 }
               } catch {}
@@ -6602,7 +8072,7 @@ public static class AuraLayered {
                     'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                     'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                     'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
-                    'delete-user-theme')) {
+                    'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                   $script:StudioEditorState['lastAction'] = $failedAction
                   $script:StudioEditorState['actionSucceeded'] = $false
                   $script:StudioEditorState['error'] = 'request-rejected'
@@ -6641,12 +8111,62 @@ public static class AuraLayered {
         $core.Settings.IsZoomControlEnabled = $true
         Set-AuraUiPreferredColorScheme
 
+        $core.add_WebResourceResponseReceived({
+          param($sender, $eventArgs)
+          if ($null -eq $script:ActiveNavigationId -or -not $script:ActiveNavigationUri) { return }
+          try {
+            # cf-mitigated is Cloudflare's authoritative challenge marker. Read
+            # only this one response header; never inspect request headers,
+            # cookies, response bodies, challenge markup, or page text.
+            $mitigatedHeader = $eventArgs.Response.Headers.GetHeader('cf-mitigated')
+            if (Test-AuraUiCloudflareChallengeSignal `
+                -NavigationId $script:ActiveNavigationId `
+                -NavigationUri $script:ActiveNavigationUri `
+                -RequestUri $eventArgs.Request.Uri `
+                -StatusCode ([int]$eventArgs.Response.StatusCode) `
+                -MitigatedHeader $mitigatedHeader) {
+              $script:RescueChallengeCandidate = [PSCustomObject]@{
+                NavigationId = [UInt64]$script:ActiveNavigationId
+                RequestIdentity = Get-AuraUiNavigationRequestIdentity -Value $eventArgs.Request.Uri
+                StatusCode = [int]$eventArgs.Response.StatusCode
+              }
+              $script:PendingApply = $false
+              $script:PendingRestore = $false
+              Stop-AuraUiMirrorForRescue
+              # The marker is authoritative even if the document streams or
+              # never reaches DOMContentLoaded. Reveal the genuine response now;
+              # the recovery card still waits for top-level status correlation.
+              Hide-AuraUiLoading
+            }
+          } catch {
+            # Missing/unsupported headers are ordinary responses. Deliberately
+            # avoid logging the exception because browser stacks may include a
+            # sensitive request URL in their message.
+          }
+        })
         $core.add_NavigationStarting({
           param($sender, $eventArgs)
           $script:ActiveNavigationId = [UInt64]$eventArgs.NavigationId
+          $script:ActiveNavigationUri = [string]$eventArgs.Uri
+          $script:RescueChallengeCandidate = $null
+          $script:PendingNavigationCompletion = $null
+          $script:RescueVerificationPending = Test-AuraUiClaudeUri -Value $eventArgs.Uri
           $script:ReadyNavigationId = $null
           $script:PageReady = $false
-          Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
+          if ($script:RescueVerificationPending) {
+            # Suspend capture and renderer intent at navigation start. They
+            # resume only after the bounded response-header verification gate.
+            $script:PendingApply = $false
+            $script:PendingRestore = $false
+            Stop-AuraUiMirrorForRescue
+          }
+          if ($script:RescueActive) {
+            # A real challenge or an explicit retry must remain visible. Rescue
+            # never places Aura's opaque loading surface over that document.
+            Hide-AuraUiLoading
+          } else {
+            Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
+          }
         })
         $core.add_DOMContentLoaded({
           param($sender, $eventArgs)
@@ -6662,6 +8182,17 @@ public static class AuraLayered {
           $script:ReadyNavigationId = [UInt64]$eventArgs.NavigationId
           $script:PageReady = $true
           Hide-AuraUiLoading
+          if (Test-AuraUiRescueChallengeCandidate `
+              -Candidate $script:RescueChallengeCandidate `
+              -CompletedNavigationId ([UInt64]$eventArgs.NavigationId) `
+              -CurrentSource $script:WebView.Source) {
+            # DOMContentLoaded is still the fail-open signal, but a correlated
+            # access check is not a usable Claude document and cannot authorize
+            # theme or mirror work before NavigationCompleted enters Rescue.
+            $script:ReadyNavigationId = $null
+            $script:PageReady = $false
+            return
+          }
         })
         $core.add_NavigationCompleted({
           param($sender, $eventArgs)
@@ -6675,29 +8206,76 @@ public static class AuraLayered {
             # is already live. A superseded completion must never change the cover.
             return
           }
-          $script:ActiveNavigationId = $null
+          $challengeCandidate = Test-AuraUiRescueChallengeCandidate `
+              -Candidate $script:RescueChallengeCandidate `
+              -CompletedNavigationId ([UInt64]$eventArgs.NavigationId) `
+              -CurrentSource $script:WebView.Source `
+              -CompletedStatusCode ([int]$eventArgs.HttpStatusCode)
+          # WebView2 documents that its response observer is non-blocking and
+          # may run after the engine has already processed a response. A current
+          # top-level Claude 403 therefore gets the same fail-native treatment
+          # even when cf-mitigated has not reached the host callback yet.
+          $accessDeniedFallback = Test-AuraUiRescueNavigationFallback `
+            -CurrentNavigationId $script:ActiveNavigationId `
+            -CompletedNavigationId ([UInt64]$eventArgs.NavigationId) `
+            -CurrentSource $script:WebView.Source `
+            -HttpStatusCode ([int]$eventArgs.HttpStatusCode)
+          if ($challengeCandidate -or $accessDeniedFallback) {
+            $challengeNavigationId = [UInt64]$eventArgs.NavigationId
+            $rescueReason = if ($challengeCandidate) { 'Challenge' } else { 'AccessDenied' }
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            Enter-AuraUiRescueMode -NavigationId $challengeNavigationId -Reason $rescueReason
+            return
+          }
           if ($navigationDisposition -eq 'Failure') {
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            $script:RescueChallengeCandidate = $null
+            if ($script:RescueActive) {
+              $script:RescueBreakerState = 'Open'
+              $script:ReadyNavigationId = $null
+              $script:PageReady = $false
+              Hide-AuraUiLoading
+              Show-AuraUiRescueWindow
+              return
+            }
             # A genuine navigation failure is the only case that keeps the cover.
             $script:ReadyNavigationId = $null
             $script:PageReady = $false
             Show-AuraUiLoading -Message "$($script:UiCopy.loadFailed)" -Retry $true
             return
           }
-          $enabled = $true
-          if ($null -ne $script:Config.PSObject.Properties['enabled']) { $enabled = [bool]$script:Config.enabled }
           if (Test-AuraUiClaudeUri -Value $script:WebView.Source) {
-            # The claude.ai document has loaded and is usable, including right after
-            # the very first sign-in. Reveal it now and inject the theme over the live
-            # page (the in-page renderer self-heals its own styling). Hiding the cover
+            $script:RescueVerificationPending = $true
+            $script:PendingApply = $false
+            $script:PendingRestore = $false
+            Stop-AuraUiMirrorForRescue
+            # Reveal the real Claude document immediately, including right after
+            # first sign-in. Hold only renderer and mirror work for one bounded
+            # response-observer grace period. Hiding the cover
             # on this real navigation signal — rather than waiting for the async theme
             # script to confirm — is what prevents an injection race from stranding an
             # opaque cover over a working, signed-in interface.
             $script:ReadyNavigationId = [UInt64]$eventArgs.NavigationId
             $script:PageReady = $true
             Hide-AuraUiLoading
-            Show-AuraUiLauncherHint
-            if ($enabled) { Apply-AuraUiTheme }
+            $script:PendingNavigationCompletion = [PSCustomObject]@{
+              NavigationId = [UInt64]$eventArgs.NavigationId
+              StatusCode = [int]$eventArgs.HttpStatusCode
+              DueUtc = [DateTime]::UtcNow.AddMilliseconds(360)
+            }
+            return
           } else {
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            $script:RescueChallengeCandidate = $null
             $script:ReadyNavigationId = $null
             Hide-AuraUiLoading
           }
@@ -6707,8 +8285,14 @@ public static class AuraLayered {
         # conversations. Refresh the private Studio mirror after either a
         # source or history transition; Request-AuraUiMirror coalesces bursts
         # and keeps its existing editor-session/generation guards.
-        $core.add_SourceChanged({ Request-AuraUiContextMirror })
-        $core.add_HistoryChanged({ Request-AuraUiContextMirror })
+        $core.add_SourceChanged({
+          Request-AuraUiContextMirror
+          Request-AuraUiGreetingProbe
+        })
+        $core.add_HistoryChanged({
+          Request-AuraUiContextMirror
+          Request-AuraUiGreetingProbe
+        })
         $core.add_NewWindowRequested({
           param($sender, $eventArgs)
           try {
@@ -6726,11 +8310,40 @@ public static class AuraLayered {
             }
           } catch {
             $eventArgs.Handled = $true
-            Write-AuraUiLog -Message $_.Exception.ToString()
+            if ($script:RescueActive -or $script:RescueVerificationPending -or
+                $null -ne $script:RescueChallengeCandidate) {
+              Write-AuraUiLog -Message 'A popup request failed while Rescue mode was active.'
+            } else {
+              Write-AuraUiLog -Message $_.Exception.ToString()
+            }
           }
         })
         $core.add_ProcessFailed({
-          Show-AuraUiLoading -Message "$($script:UiCopy.reloadRetry)" -Retry $true
+          if ($script:RescueActive) {
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            $script:RescueBreakerState = 'Open'
+            Hide-AuraUiLoading
+            Show-AuraUiRescueWindow
+          } elseif ($null -ne $script:RescueChallengeCandidate) {
+            # NavigationCompleted may never arrive after a renderer failure.
+            # The exact-URL response marker is already authoritative, so promote
+            # it to full Rescue Mode and keep browser/clean actions available.
+            $candidateNavigationId = [UInt64]$script:RescueChallengeCandidate.NavigationId
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            Enter-AuraUiRescueMode -NavigationId $candidateNavigationId -Reason Challenge
+          } else {
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            Show-AuraUiLoading -Message "$($script:UiCopy.reloadRetry)" -Retry $true
+          }
         })
         # Keyboard accelerators live on CoreWebView2Controller, which this pinned
         # WinForms SDK (1.0.4078.44) does not surface publicly. Reach it through
@@ -6783,20 +8396,28 @@ public static class AuraLayered {
         if ($action -eq 'Apply' -and $result -notmatch '"installed"\s*:\s*true') {
           throw 'The theme script completed without confirming installation.'
         }
+        if ($action -eq 'Apply') {
+          # The injection return value is an immediate React snapshot. Probe the
+          # renderer-owned bounded state after the page has had time to settle.
+          Request-AuraUiGreetingProbe
+        } else { Stop-AuraUiGreetingProbe }
         if ($covered) { Hide-AuraUiLoading }
         Send-AuraUiStudioState
         Request-AuraUiMirror
         if ($script:PendingRestore) {
           $script:PendingRestore = $false
           $script:PendingApply = $false
+          Stop-AuraUiGreetingProbe
           $cleanup = '(() => { window.__CLAUDE_AURA_DISABLED__ = true; return window.__CLAUDE_AURA_STATE__?.cleanup?.() ?? true; })()'
           Start-AuraUiScript -Source $cleanup -Action Restore
         } elseif ($script:PendingApply) {
           $script:PendingApply = $false
+          Stop-AuraUiGreetingProbe
           Apply-AuraUiTheme
         }
       }
       Update-AuraUiMirror
+      Update-AuraUiGreetingProbe
     } catch {
       $script:EnvironmentTask = $null
       $script:EnsureTask = $null
@@ -6805,6 +8426,18 @@ public static class AuraLayered {
       $script:PendingRestore = $false
       if (-not $script:WebReady) {
         Fail-AuraUiStartup -Exception $_.Exception
+      } elseif ($null -ne $script:RescueChallengeCandidate) {
+        # A verified marker may arrive before NavigationCompleted. Keep its
+        # document visible and avoid logging an exception that could contain
+        # the private navigation URL.
+        Write-AuraUiLog -Message 'Rescue candidate stayed visible after an internal failure.'
+        Hide-AuraUiLoading
+      } elseif ($script:RescueActive -or $script:RescueVerificationPending) {
+        # Browser exception strings can include a private redirect or query URL.
+        # Keep retry/challenge failures fixed-message while this gate is active.
+        Write-AuraUiLog -Message 'Rescue mode kept the current document visible after an internal failure.'
+        Hide-AuraUiLoading
+        if ($script:RescueActive) { Show-AuraUiRescueWindow }
       } elseif ($script:PageReady) {
         # claude.ai is loaded and visible; a theme-injection hiccup must never cover
         # it with an opaque panel. Log the error and leave the interface usable.
@@ -6821,10 +8454,18 @@ public static class AuraLayered {
   $script:Form.add_Shown({
     $script:PageReady = $false
     $script:ActiveNavigationId = $null
+    $script:ActiveNavigationUri = $null
     $script:ReadyNavigationId = $null
+    $script:RescueChallengeCandidate = $null
+    $script:RescueVerificationPending = $false
+    $script:PendingNavigationCompletion = $null
     $script:PendingApply = $false
     $script:PendingRestore = $false
-    Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
+    Show-AuraUiLoading -Message $(if ($script:IsRescueSession) {
+        "$($script:UiCopy.rescueStartingCleanSession)"
+      } else {
+        "$($script:UiCopy.openingClaude)"
+      })
     try {
       $script:EnvironmentTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $WebDataRoot, $null)
       $timer.Start()
@@ -6844,6 +8485,11 @@ public static class AuraLayered {
     Restore-AuraUiStudioPreviewState
     $script:Closing = $true
     $timer.Stop()
+    if ($script:RescueForm -and -not $script:RescueForm.IsDisposed) {
+      $script:RescueForm.Close()
+      $script:RescueForm.Dispose()
+      $script:RescueForm = $null
+    }
     if ($script:LoadingAnimationTimer) {
       $script:LoadingAnimationTimer.Stop()
       $script:LoadingAnimationTimer.Dispose()
@@ -6899,6 +8545,13 @@ public static class AuraLayered {
     } catch {}
     $script:TrayIcon = $null
   }
+  if ($null -ne $script:RescueForm -and -not $script:RescueForm.IsDisposed) {
+    try {
+      $script:RescueForm.Close()
+      $script:RescueForm.Dispose()
+    } catch {}
+    $script:RescueForm = $null
+  }
   if ($null -ne $script:StudioOpenSignal) {
     try { $script:StudioOpenSignal.Dispose() } catch {}
     $script:StudioOpenSignal = $null
@@ -6952,4 +8605,11 @@ public static class AuraLayered {
     try { $mutex.ReleaseMutex() } catch {}
   }
   if ($null -ne $mutex) { $mutex.Dispose() }
+  if ($script:RescueRestartRequested) {
+    try {
+      Start-AuraUiCleanSessionProcess
+    } catch {
+      Write-AuraUiLog -Message 'Clean Aura session restart failed.'
+    }
+  }
 }

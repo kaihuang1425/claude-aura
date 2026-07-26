@@ -31,7 +31,7 @@
     "accent": "#F0B875",
     "border": "#756FC0",
     "radius": 18,
-    "borderWidth": 1
+    "borderWidth": 2
   },
   "light": {
     "semantic": {

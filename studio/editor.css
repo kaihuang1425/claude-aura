@@ -1247,7 +1247,9 @@
 .editor-stage[data-selection-branch="interface"] .stage-layer .stage-item,
 .editor-stage[data-selection-branch="widgets"] .stage-layer .stage-item,
 .editor-stage[data-selection-branch="background"] .stage-prompt,
-.editor-stage[data-selection-branch="widgets"] .stage-prompt {
+.editor-stage[data-selection-branch="widgets"] .stage-prompt,
+.editor-stage[data-selection-branch="background"] .stage-greeting,
+.editor-stage[data-selection-branch="widgets"] .stage-greeting {
   pointer-events: none;
   cursor: default;
 }
@@ -1742,6 +1744,7 @@
 
 .editor-view[data-inspector-target="interface.theme"] [data-editor-targets~="interface.theme"],
 .editor-view[data-inspector-target="interface.new-chat-area"] [data-editor-targets~="interface.new-chat-area"],
+.editor-view[data-inspector-target="interface.greeting"] [data-editor-targets~="interface.greeting"],
 .editor-view[data-inspector-target="background.canvas"] [data-editor-targets~="background.canvas"],
 .editor-view[data-inspector-target="background.layer"] [data-editor-targets~="background.layer"],
 .editor-view[data-inspector-target="widgets.app-identity"] [data-editor-targets~="widgets.app-identity"] {
@@ -2578,4 +2581,119 @@
     outline: 3px solid Highlight;
     outline-offset: 1px;
   }
+}
+
+/* WO-21 greeting panel and independently selectable stage surface. */
+.editor-toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.editor-toggle-field input {
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.editor-greeting-preview {
+  margin: 10px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--control-radius, 10px);
+  overflow: hidden;
+}
+
+.editor-greeting-preview figcaption {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.editor-greeting-preview p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  transition: none;
+}
+
+.editor-greeting-collision-warning {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #8b5b16 48%, var(--border-soft));
+  border-left: 3px solid #8b5b16;
+  border-radius: var(--control-radius, 10px);
+  background: color-mix(in srgb, #8b5b16 7%, var(--surface));
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+/* Chrome's UA sheet gives input[type=range] a 2px margin, which pushes a
+   width:100% slider past its grid cell and clips the right-hand column. */
+.editor-greeting-controls input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.editor-greeting-controls > .editor-field {
+  min-width: 0;
+}
+
+.greeting-exact-value {
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-greeting {
+  position: absolute;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  min-height: 1.1em;
+  pointer-events: auto;
+  cursor: grab;
+  user-select: none;
+  overflow-wrap: anywhere;
+}
+
+.stage-greeting:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 4px;
+}
+
+.stage-greeting[data-live-target="true"] {
+  border: 2px dashed var(--ring);
+  background: transparent;
+}
+
+.stage-greeting[data-live-target="true"] > * {
+  visibility: hidden;
+}
+
+.stage-greeting-mark {
+  flex: none;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.stage-greeting-text {
+  min-width: 0;
+}
+
+/* An invalid draft freezes the live payload; say so where the user is working. */
+.editor-live-paused {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--control-radius, 10px);
+  font-size: 13px;
+  line-height: 1.45;
 }
