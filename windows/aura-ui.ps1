@@ -12,6 +12,7 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $ThemeCli = Join-Path $Root 'scripts\theme-cli.mjs'
 $VendorRoot = Join-Path $Root 'vendor\webview2'
+$PrepaintTemplatePath = Join-Path $Root 'assets\renderer-prepaint.js'
 $DataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\data'
 $ConfigPath = Join-Path $DataRoot 'config.json'
 $UserThemesRoot = Join-Path $DataRoot 'themes'
@@ -590,6 +591,195 @@ function ConvertFrom-AuraUiPayloadSettings {
   return $settings
 }
 
+function Get-AuraUiPayloadInvocationArguments {
+  param([Parameter(Mandatory = $true)][string]$Payload)
+  # The compiled renderer ends with `})(<CSS JSON string>,<settings JSON>)`.
+  # Preserve those exact validated JSON arguments so the passive document-start
+  # prepaint cannot re-encode data URLs, custom CSS, or compact runtime keys.
+  $invocationMarker = '})('
+  $invocationIndex = $Payload.LastIndexOf($invocationMarker)
+  $settingsMarker = '",{'
+  $settingsIndex = $Payload.LastIndexOf($settingsMarker)
+  if ($invocationIndex -lt 0 -or $settingsIndex -le $invocationIndex -or
+      -not $Payload.EndsWith('})', [StringComparison]::Ordinal)) {
+    return $null
+  }
+  $cssStart = $invocationIndex + $invocationMarker.Length
+  $cssLength = $settingsIndex - $cssStart + 1
+  $settingsStart = $settingsIndex + 2
+  $settingsLength = $Payload.Length - $settingsStart - 1
+  if ($cssLength -lt 2 -or $settingsLength -lt 2) { return $null }
+  $cssJson = $Payload.Substring($cssStart, $cssLength)
+  $settingsJson = $Payload.Substring($settingsStart, $settingsLength)
+  try {
+    $css = $cssJson | ConvertFrom-Json
+  } catch {
+    return $null
+  }
+  # Windows PowerShell's ConvertFrom-Json treats compact keys case-insensitively,
+  # so the valid appearance/avatar pair `a` and `A` cannot be parsed together.
+  # The settings bytes already came from the trusted Node compiler; retain them
+  # exactly and validate only their bounded object envelope here.
+  if ($css -isnot [string] -or
+      -not $settingsJson.StartsWith('{', [StringComparison]::Ordinal) -or
+      -not $settingsJson.EndsWith('}', [StringComparison]::Ordinal)) {
+    return $null
+  }
+  return [PSCustomObject]@{
+    CssJson = $cssJson
+    SettingsJson = $settingsJson
+  }
+}
+
+function New-AuraUiDocumentPrepaintSource {
+  param([Parameter(Mandatory = $true)][string]$Payload)
+  if (-not (Get-AuraUiEnabled)) { return $null }
+  $arguments = Get-AuraUiPayloadInvocationArguments -Payload $Payload
+  if ($null -eq $arguments) { throw 'The renderer payload cannot provide passive prepaint arguments.' }
+  $template = Get-Content -LiteralPath $PrepaintTemplatePath -Raw -Encoding UTF8
+  foreach ($placeholder in @('__AURA_CSS_JSON__', '__AURA_SETTINGS_JSON__')) {
+    $first = $template.IndexOf($placeholder, [StringComparison]::Ordinal)
+    if ($first -lt 0 -or
+        $template.LastIndexOf($placeholder, [StringComparison]::Ordinal) -ne $first) {
+      throw "The passive prepaint template has an invalid $placeholder boundary."
+    }
+  }
+  $source = $template.Replace('__AURA_CSS_JSON__', [string]$arguments.CssJson)
+  $source = $source.Replace('__AURA_SETTINGS_JSON__', [string]$arguments.SettingsJson)
+  if ($source.Contains('__AURA_CSS_JSON__') -or $source.Contains('__AURA_SETTINGS_JSON__')) {
+    throw 'The passive prepaint template was not fully compiled.'
+  }
+  return $source
+}
+
+function Complete-AuraUiInitialNavigationAfterPrepaint {
+  if (-not $script:InitialNavigationPending -or
+      $script:PrepaintRegisteredGeneration -ne $script:PrepaintGeneration -or
+      -not $script:WebReady -or $null -eq $script:WebView.CoreWebView2) {
+    return
+  }
+  $script:InitialNavigationPending = $false
+  $script:PrepaintRegistrationDueUtc = $null
+  $script:WebView.CoreWebView2.Navigate('https://claude.ai/')
+}
+
+function Start-AuraUiDocumentPrepaintRegistration {
+  if ($null -eq $script:WebView -or $null -eq $script:WebView.CoreWebView2 -or
+      ($null -ne $script:PrepaintRegistrationTask -and
+        -not $script:PrepaintRegistrationTask.IsCompleted)) {
+    return
+  }
+  $core = $script:WebView.CoreWebView2
+  if ($script:PrepaintScriptId) {
+    try {
+      $core.RemoveScriptToExecuteOnDocumentCreated([string]$script:PrepaintScriptId)
+    } catch {
+      Write-AuraUiLog -Message 'Passive startup prepaint registration could not be replaced.'
+    }
+    $script:PrepaintScriptId = $null
+  }
+  $generation = [long]$script:PrepaintGeneration
+  if (-not $script:PrepaintSource) {
+    $script:PrepaintRegisteredGeneration = $generation
+    Complete-AuraUiInitialNavigationAfterPrepaint
+    return
+  }
+  try {
+    $script:PrepaintRegistrationTaskGeneration = $generation
+    $script:PrepaintRegistrationTask = $core.AddScriptToExecuteOnDocumentCreatedAsync(
+      [string]$script:PrepaintSource)
+    if ($script:InitialNavigationPending) {
+      $script:PrepaintRegistrationDueUtc = [DateTime]::UtcNow.AddMilliseconds(1500)
+    }
+  } catch {
+    $script:PrepaintRegistrationTask = $null
+    $script:PrepaintRegistrationTaskGeneration = [long]-1
+    $script:PrepaintRegisteredGeneration = $generation
+    Write-AuraUiLog -Message 'Passive startup prepaint registration was unavailable.'
+    Complete-AuraUiInitialNavigationAfterPrepaint
+  }
+}
+
+function Complete-AuraUiDocumentPrepaintRegistration {
+  if ($null -eq $script:PrepaintRegistrationTask) { return }
+  if (-not $script:PrepaintRegistrationTask.IsCompleted) {
+    if ($script:InitialNavigationPending -and $null -ne $script:PrepaintRegistrationDueUtc -and
+        [DateTime]::UtcNow -ge [DateTime]$script:PrepaintRegistrationDueUtc) {
+      # Registration is a visual optimization, never a startup dependency.
+      # Navigate after one bounded wait even if WebView2 has not acknowledged it.
+      $script:InitialNavigationPending = $false
+      $script:PrepaintRegistrationDueUtc = $null
+      Write-AuraUiLog -Message 'Passive startup prepaint registration timed out; continuing fail-open.'
+      $script:WebView.CoreWebView2.Navigate('https://claude.ai/')
+    }
+    return
+  }
+  $task = $script:PrepaintRegistrationTask
+  $taskGeneration = [long]$script:PrepaintRegistrationTaskGeneration
+  $script:PrepaintRegistrationTask = $null
+  $script:PrepaintRegistrationTaskGeneration = [long]-1
+  $registeredId = $null
+  try {
+    $registeredId = [string]$task.GetAwaiter().GetResult()
+  } catch {
+    Write-AuraUiLog -Message 'Passive startup prepaint registration failed; continuing fail-open.'
+  }
+  if ($taskGeneration -eq [long]$script:PrepaintGeneration) {
+    $script:PrepaintScriptId = $registeredId
+    $script:PrepaintRegisteredGeneration = $taskGeneration
+    Complete-AuraUiInitialNavigationAfterPrepaint
+    return
+  }
+  if ($registeredId) {
+    try {
+      $script:WebView.CoreWebView2.RemoveScriptToExecuteOnDocumentCreated($registeredId)
+    } catch {
+      Write-AuraUiLog -Message 'A superseded passive prepaint registration could not be removed.'
+    }
+  }
+  Start-AuraUiDocumentPrepaintRegistration
+}
+
+function Set-AuraUiDocumentPrepaintSource {
+  param([Parameter(Mandatory = $true)][string]$Payload)
+  $script:PrepaintGeneration = [long]$script:PrepaintGeneration + 1
+  try {
+    $script:PrepaintSource = New-AuraUiDocumentPrepaintSource -Payload $Payload
+  } catch {
+    $script:PrepaintSource = $null
+    Write-AuraUiLog -Message "Passive startup prepaint was skipped: $($_.Exception.Message)"
+  }
+  if ($null -ne $script:WebView -and $null -ne $script:WebView.CoreWebView2) {
+    Start-AuraUiDocumentPrepaintRegistration
+  }
+}
+
+function Request-AuraUiDocumentPrepaintCleanup {
+  if ($null -ne $script:PrepaintCleanupTask -and -not $script:PrepaintCleanupTask.IsCompleted) {
+    return
+  }
+  if ($null -eq $script:WebView -or $null -eq $script:WebView.CoreWebView2) { return }
+  $cleanup = '(() => { try { return window.__CLAUDE_AURA_PREPAINT__?.cleanup?.() ?? false; } catch { return false; } })()'
+  try {
+    $script:PrepaintCleanupTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($cleanup)
+  } catch {
+    Write-AuraUiLog -Message 'Passive startup prepaint cleanup was unavailable.'
+  }
+}
+
+function Complete-AuraUiDocumentPrepaintCleanup {
+  if ($null -eq $script:PrepaintCleanupTask -or -not $script:PrepaintCleanupTask.IsCompleted) {
+    return
+  }
+  $task = $script:PrepaintCleanupTask
+  $script:PrepaintCleanupTask = $null
+  try {
+    [void]$task.GetAwaiter().GetResult()
+  } catch {
+    Write-AuraUiLog -Message 'Passive startup prepaint cleanup failed.'
+  }
+}
+
 function Set-AuraUiPayloadState {
   param([Parameter(Mandatory = $true)][string]$Payload)
   $script:Payload = $Payload
@@ -637,6 +827,7 @@ function Set-AuraUiPayloadState {
   } else {
     $null
   }
+  Set-AuraUiDocumentPrepaintSource -Payload $script:Payload
   [void](Update-AuraUiLauncherStyle)
   Update-AuraUiLoadingTheme
   # An identity commit can land after the main window is already visible; refresh
@@ -1487,6 +1678,7 @@ function Enter-AuraUiRescueMode {
   $script:PageReady = $false
   $script:PendingApply = $false
   $script:PendingRestore = $false
+  Request-AuraUiDocumentPrepaintCleanup
   Stop-AuraUiMirrorForRescue
   Hide-AuraUiLoading
   Write-AuraUiLog -Message $(if ($Reason -ceq 'AccessDenied') {
@@ -6948,6 +7140,15 @@ $script:WebReady = $false
 $script:PageReady = $false
 $script:EnvironmentTask = $null
 $script:EnsureTask = $null
+$script:PrepaintSource = $null
+$script:PrepaintGeneration = [long]0
+$script:PrepaintRegisteredGeneration = [long]-1
+$script:PrepaintRegistrationTask = $null
+$script:PrepaintRegistrationTaskGeneration = [long]-1
+$script:PrepaintRegistrationDueUtc = $null
+$script:PrepaintScriptId = $null
+$script:PrepaintCleanupTask = $null
+$script:InitialNavigationPending = $false
 $script:ScriptTask = $null
 $script:ScriptAction = $null
 $script:ScriptCovered = $false
@@ -7935,6 +8136,8 @@ public static class AuraLayered {
       if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
         Show-AuraUiStudio
       }
+      Complete-AuraUiDocumentPrepaintRegistration
+      Complete-AuraUiDocumentPrepaintCleanup
       Complete-AuraUiPendingNavigationVerification
       if ($null -ne $script:EnvironmentTask -and $script:EnvironmentTask.IsCompleted) {
         $task = $script:EnvironmentTask
@@ -8132,6 +8335,7 @@ public static class AuraLayered {
               }
               $script:PendingApply = $false
               $script:PendingRestore = $false
+              Request-AuraUiDocumentPrepaintCleanup
               Stop-AuraUiMirrorForRescue
               # The marker is authoritative even if the document streams or
               # never reaches DOMContentLoaded. Reveal the genuine response now;
@@ -8383,7 +8587,9 @@ public static class AuraLayered {
           }
         } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
         $script:WebReady = $true
-        $core.Navigate('https://claude.ai/')
+        $script:InitialNavigationPending = $true
+        $script:PrepaintRegisteredGeneration = [long]-1
+        Start-AuraUiDocumentPrepaintRegistration
       }
       if ($null -ne $script:ScriptTask -and $script:ScriptTask.IsCompleted) {
         $task = $script:ScriptTask

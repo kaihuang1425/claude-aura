@@ -417,9 +417,16 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Studio must apply the WebView2 color preference before its first navigation");
   const mainCoreIndex = ui.indexOf("$core = $script:WebView.CoreWebView2");
   const mainAppearanceIndex = ui.indexOf("Set-AuraUiPreferredColorScheme", mainCoreIndex);
-  const mainNavigateIndex = ui.indexOf("$core.Navigate('https://claude.ai/')", mainCoreIndex);
-  assert(mainCoreIndex >= 0 && mainAppearanceIndex > mainCoreIndex && mainAppearanceIndex < mainNavigateIndex,
-    "Aura must apply the WebView2 color preference before claude.ai navigation");
+  const mainNavigationPendingIndex = ui.indexOf("$script:InitialNavigationPending = $true", mainCoreIndex);
+  const mainPrepaintStartIndex = ui.indexOf("Start-AuraUiDocumentPrepaintRegistration", mainNavigationPendingIndex);
+  assert(mainCoreIndex >= 0
+      && mainAppearanceIndex > mainCoreIndex
+      && mainNavigationPendingIndex > mainAppearanceIndex
+      && mainPrepaintStartIndex > mainNavigationPendingIndex,
+  "Aura must apply the WebView2 color preference before its gated claude.ai navigation");
+  assert.match(ui,
+    /function Complete-AuraUiInitialNavigationAfterPrepaint[\s\S]{0,500}?CoreWebView2\.Navigate\('https:\/\/claude\.ai\/'\)/,
+    "The gated initial navigation must still target claude.ai after passive prepaint registration");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
   assert.match(ui, /PostWebMessageAsJson\s*\(/);
   assert.match(ui, /\[switch\]\$OpenStudio/,
@@ -3724,6 +3731,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  if($null -eq $definition){throw \"Missing payload-state function $name\"}",
       "  Invoke-Expression $definition.Extent.Text",
       "}",
+      "function Set-AuraUiDocumentPrepaintSource { param([string]$Payload) }",
       "function Update-AuraUiLauncherStyle {}",
       "function Update-AuraUiLoadingTheme {}",
       "function Update-AuraUiLauncherPosition {}",

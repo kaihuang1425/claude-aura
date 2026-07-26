@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node tests/run-tests.mjs",
-    "check": "node --check scripts/injector.mjs && node --check scripts/theme-core.mjs && node --check scripts/webview-cli.mjs && node --check assets/renderer-inject.js && node tests/run-tests.mjs",
+    "check": "node --check scripts/injector.mjs && node --check scripts/theme-core.mjs && node --check scripts/webview-cli.mjs && node --check assets/renderer-prepaint.js && node --check assets/renderer-inject.js && node tests/run-tests.mjs",
     "studio:build": "node scripts/build-studio-themes.mjs",
     "locale:check": "node scripts/locale-tasks.mjs check",
     "locale:export": "node scripts/locale-tasks.mjs export",

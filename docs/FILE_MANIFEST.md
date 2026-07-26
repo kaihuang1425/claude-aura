@@ -77,6 +77,7 @@ offline-preview files and comparison screenshots are not deliverables.
 - `assets/brand/aura-mark.svg`
 - `assets/brand/claude-aura.ico`
 - `assets/renderer-inject.js`
+- `assets/renderer-prepaint.js`
 - `assets/theme-variants.css`
 - `assets/theme-art/README.md`
 
@@ -317,6 +318,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/locales.test.mjs`
 - `tests/payload.test.mjs`
 - `tests/platform.test.mjs`
+- `tests/prepaint.test.mjs`
 - `tests/run-tests.mjs`
 - `tests/studio-editor.test.mjs`
 - `tests/support/context.mjs`

@@ -85,6 +85,7 @@ test("JavaScript and platform scripts parse", async () => {
     .map((file) => `studio/locales/${file}`);
   const jsFiles = [
     "assets/renderer-inject.js",
+    "assets/renderer-prepaint.js",
     "studio/app.js",
     "studio/editor.js",
     ...studioLocaleScripts,
@@ -691,6 +692,7 @@ test("release and installers exclude unsafe composite references and binary patc
     path.join(PROJECT_ROOT, "assets", "base.css"),
     path.join(PROJECT_ROOT, "assets", "theme-variants.css"),
     path.join(PROJECT_ROOT, "assets", "renderer-inject.js"),
+    path.join(PROJECT_ROOT, "assets", "renderer-prepaint.js"),
     path.join(PROJECT_ROOT, "scripts", "theme-core.mjs"),
     ...(await fs.readdir(path.join(PROJECT_ROOT, "scripts", "theme-core")))
       .filter((file) => file.endsWith(".mjs"))

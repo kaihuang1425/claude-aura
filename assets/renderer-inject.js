@@ -1,4 +1,5 @@
 ((cssText, settings) => {
+  window.__CLAUDE_AURA_PREPAINT__?.handoff?.();
   if (settings.C === 1) {
     const cssDictionary = [
       "html.claude-aura", "[data-claude-aura-", "hsl(var(--aura-", "var(--aura-",

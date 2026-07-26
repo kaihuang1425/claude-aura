@@ -75,6 +75,7 @@ const REQUIRED_APP_SURFACE_FILES = new Set([
   "assets/brand/aura-mark.svg",
   "assets/brand/claude-aura.ico",
   "assets/renderer-inject.js",
+  "assets/renderer-prepaint.js",
   "assets/theme-variants.css",
   "macos/common.sh",
   "macos/install.sh",
