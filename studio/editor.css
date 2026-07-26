@@ -2617,6 +2617,11 @@
   margin: 0;
   overflow-wrap: anywhere;
   transition: none;
+  visibility: hidden;
+}
+
+.editor-greeting-preview p[data-greeting-preview-ready="true"] {
+  visibility: visible;
 }
 
 .editor-greeting-collision-warning {

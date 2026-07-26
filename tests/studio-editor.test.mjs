@@ -4652,6 +4652,7 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
   assert.equal(document.newChatGreetingStyle, null);
 
   const editorSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "editor.js"), "utf8");
+  const editorCssSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "editor.css"), "utf8");
   const coreSource = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "theme-core", "studio.mjs"), "utf8");
   const htmlSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8");
   assert.match(htmlSource, /id="editor-greeting-name"[^>]+maxlength="80"/,
@@ -4660,6 +4661,18 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     "Personal greeting ownership needs a control distinct from portable styling");
   assert.match(htmlSource, /id="editor-greeting-collision-warning"[^>]+role="note"/,
     "Custom artwork and greeting styling need a truthful non-blocking collision warning");
+  assert.match(htmlSource,
+    /id="editor-greeting-sample"[^>]+data-greeting-preview-ready="false"/,
+    "The static greeting fallback must stay hidden until its first fully styled render");
+  assert.match(editorCssSource,
+    /\.editor-greeting-preview p\s*\{[\s\S]{0,160}?visibility:\s*hidden[\s\S]{0,160}?\[data-greeting-preview-ready="true"\]\s*\{[\s\S]{0,80}?visibility:\s*visible/,
+    "The in-panel greeting preview can flash its unstyled fallback before hydration");
+  assert.match(editorSource,
+    /stageGreetingEl\.append\(stageGreetingText, stageGreetingMark\)/,
+    "The schematic mark must trail its text like Claude's live greeting");
+  assert.match(editorSource,
+    /greetingSample\.dataset\.greetingPreviewReady = "true"/,
+    "The in-panel greeting preview never reveals after its styled render");
   assert.match(editorSource,
     /const GREETING_DECORATION_IDS = Object\.freeze\(\["none", "underline", "hairline", "glow"\]\)/);
   assert.match(editorSource,

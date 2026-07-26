@@ -148,6 +148,9 @@ class Element {
       const width = Number.parseFloat(this.style.getPropertyValue("width")) || 24;
       const height = Number.parseFloat(this.style.getPropertyValue("height")) || 24;
       rect = { left, top, right: left + width, bottom: top + height, width, height };
+    } else if (this.getAttribute(K) === "compact"
+        && this.parentElement?.getAttribute(G) === "decoration") {
+      rect = this.parentElement.getBoundingClientRect();
     }
     let dx = 0;
     let dy = 0;
@@ -402,6 +405,7 @@ async function runtime(options = {}) {
       return {
         display: element.style.getPropertyValue("display") || "block",
         visibility: element.style.getPropertyValue("visibility") || "visible",
+        opacity: element.style.getPropertyValue("opacity") || "1",
         translate: element.style.getPropertyValue("translate") || "none",
         fontSize: inheritedFont,
         backgroundColor: "rgba(0, 0, 0, 0)",
@@ -577,9 +581,14 @@ test("plain-div greeting binds outside the composer group and swaps with exactly
   assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase);
   assert.equal(state.getGreetingProbe().visitEpoch, probe.visitEpoch);
   assert.deepEqual(
-    [state.getGreetingProbe().rect.left, state.getGreetingProbe().rect.top],
-    [679, 345],
-    "stable repair composed the canvas offset through both wrapper and replacement",
+    [
+      state.getGreetingProbe().rect.left,
+      state.getGreetingProbe().rect.top,
+      state.getGreetingProbe().rect.width,
+      state.getGreetingProbe().rect.height,
+    ],
+    [669, 325, 330, 70],
+    "the mirror rect did not include both custom text and Claude's active native mark",
   );
   app.setForced(true);
   assert.equal(state.getGreetingProbe().status, "forced-colors");

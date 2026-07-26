@@ -675,8 +675,25 @@
     const src = ps.length ? "custom" : "native", rr = (r) => r && ({
       left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height),
     });
+    const ur = (...rs) => {
+      const a = rs.filter(Boolean);
+      if (!a.length) return null;
+      const left = Math.min(...a.map((r) => r.left)), top = Math.min(...a.map((r) => r.top));
+      const right = Math.max(...a.map((r) => r.right)), bottom = Math.max(...a.map((r) => r.bottom));
+      return { left, top, right, bottom, width: right - left, height: bottom - top };
+    };
+    const vo = (e) => {
+      const r = visibleRect(e), c = r && window.getComputedStyle?.(e);
+      const o = Number.parseFloat(c?.opacity ?? c?.getPropertyValue?.("opacity") ?? "");
+      return r && (!Number.isFinite(o) || o > 0.01) ? r : null;
+    };
+    const vm = () => ur(
+      vo(bd?.k),
+      vo(dn?.querySelector?.(`[${K}="compact"]`)),
+    );
+    const vg = () => ur(ps.length ? visibleRect(rn) : visibleRect(bd?.n), vm());
     getGreetingProbe = () => {
-      const x = visibleRect(rn), n = bd?.n?.isConnected && (visibleRect(bd.n) || bd.r);
+      const x = visibleRect(rn), v = vg(), n = bd?.n?.isConnected && (visibleRect(bd.n) || bd.r);
       return {
         version: 1, digest: settings.digest, context: currentContext, status: st,
         candidateCount: cc, "source": src, nativeConnected: Boolean(bd?.n?.isConnected),
@@ -687,7 +704,7 @@
           themeId: settings.theme, phraseDigest: pd, order: [...greetingMemory.o],
           cursor: greetingMemory.c, lastIndex: greetingMemory.l < 0 ? null : greetingMemory.l,
         } : null,
-        "rect": rr(x || n),
+        "rect": rr(v || x || n),
       };
     };
     const at = (n, a) => [n, a, n.hasAttribute?.(a), n.getAttribute?.(a)];
@@ -789,7 +806,8 @@
       if (Number.isFinite(w)) n.style.setProperty("max-width", `${Math.round(Math.max(160, Math.min(r.width, w * r.width)))}px`);
     };
     const within = (n, ma, sh) => {
-      const r = visibleRect(n), m = visibleRect(ma), s = visibleRect(sh);
+      const r = n?.getBoundingClientRect ? visibleRect(n) : n;
+      const m = visibleRect(ma), s = visibleRect(sh);
       return Boolean(r && m && s
         && r.left >= m.left - 2 && r.right <= m.right + 2
         && r.top >= m.top - 2 && r.bottom <= Math.min(m.bottom, s.top) + 2);
@@ -845,8 +863,8 @@
         if (tn && tn.textContent !== ps[i]) tn.textContent = ps[i];
         if (st === "custom") {
           geometry(bd.u === bd.n ? rn : bd.n, ma);
-          if (!within(rn, ma, sh)) { fail("unmeasurable"); return false; }
           decorate();
+          if (!within(vg(), ma, sh)) { fail("unmeasurable"); return false; }
         }
         return true;
       }
@@ -891,7 +909,7 @@
         rn.removeAttribute("aria-hidden"); rn.style.removeProperty("position"); rn.style.removeProperty("visibility");
         st = "verifying";
         af(() => {
-          if (!within(rn, ma, sh)) fail("unmeasurable");
+          if (!within(vg(), ma, sh)) fail("unmeasurable");
           else st = "custom";
         });
       });
@@ -921,8 +939,9 @@
       bd.n.setAttribute(G, "native");
       if (bd.k?.isConnected) bd.k.setAttribute(K, "native");
       geometry(bd.n, ma);
-      if (!within(bd.n, ma, sh)) return fail("unmeasurable");
-      decorate(); st = "native"; watch(ma, sh, bd.n, bd.u);
+      decorate();
+      if (!within(vg(), ma, sh)) return fail("unmeasurable");
+      st = "native"; watch(ma, sh, bd.n, bd.u);
     };
   }
   /*__AURA_GREETING_END__*/

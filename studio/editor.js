@@ -1958,9 +1958,12 @@
     const stageGreetingMark = document.createElement("span");
     stageGreetingMark.className = "stage-greeting-mark";
     stageGreetingMark.textContent = "✳";
+    stageGreetingMark.setAttribute("aria-hidden", "true");
     const stageGreetingText = document.createElement("span");
     stageGreetingText.className = "stage-greeting-text";
-    stageGreetingEl.append(stageGreetingMark, stageGreetingText);
+    // Claude's native starburst trails the greeting. Keep the schematic in
+    // that order; a live capture supplies the exact native artwork.
+    stageGreetingEl.append(stageGreetingText, stageGreetingMark);
     const stageStripA = document.createElement("div");
     stageStripA.className = "stage-strip";
     const stageStripB = document.createElement("div");
@@ -3549,6 +3552,9 @@
       style.marginInline = greeting.align === "center" ? "auto"
         : greeting.align === "end" ? "auto 0" : "0 auto";
       style.opacity = native ? "0.45" : "1";
+      // The HTML carries fallback text for no-script diagnostics. Do not paint
+      // it until every greeting declaration above has landed in the same turn.
+      greetingSample.dataset.greetingPreviewReady = "true";
     };
 
     const reflectGreeting = () => {
