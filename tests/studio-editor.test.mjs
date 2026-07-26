@@ -4672,15 +4672,30 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
   assert.match(htmlSource,
     /id="editor-greeting-sample"[^>]+data-greeting-preview-ready="false"/,
     "The static greeting fallback must stay hidden until its first fully styled render");
+  assert.match(htmlSource,
+    /id="editor-greeting-completion"[^>]+data-state="updated"[\s\S]{0,260}?id="editor-greeting-update"[^>]+aria-describedby="editor-greeting-update-status"[^>]+data-editor-i18n="saveChanges"[\s\S]{0,260}?id="editor-greeting-update-status"[^>]+role="status"[^>]+aria-live="polite"/,
+    "Greeting text fields need a nearby completion action and acknowledged status");
   assert.match(editorCssSource,
     /\.editor-greeting-preview p\s*\{[\s\S]{0,160}?visibility:\s*hidden[\s\S]{0,160}?\[data-greeting-preview-ready="true"\]\s*\{[\s\S]{0,80}?visibility:\s*visible/,
     "The in-panel greeting preview can flash its unstyled fallback before hydration");
+  assert.match(editorCssSource,
+    /\.editor-greeting-update-status\[data-state="updated"\][\s\S]{0,180}?color:\s*#2b7a50[\s\S]{0,180}?content:\s*"✓"/,
+    "Acknowledged greeting edits need unmistakable positive visual feedback");
   assert.match(editorSource,
     /stageGreetingEl\.append\(stageGreetingText, stageGreetingMark\)/,
     "The schematic mark must trail its text like Claude's live greeting");
   assert.match(editorSource,
     /greetingSample\.dataset\.greetingPreviewReady = "true"/,
     "The in-panel greeting preview never reveals after its styled render");
+  assert.match(editorSource,
+    /const reflectGreetingCompletion = \(\) => \{[\s\S]{0,900}?pendingAction === "set-greeting-phrases"[\s\S]{0,420}?\["updated", "validState"\]/,
+    "Greeting completion feedback must distinguish editing, host acknowledgement, invalid input, and success");
+  assert.match(editorSource,
+    /event\.relatedTarget === saveButton \|\| event\.relatedTarget === greetingUpdateButton/,
+    "Focus exit must leave the explicit greeting update action in control of its transaction");
+  assert.match(editorSource,
+    /greetingUpdateButton\?\.addEventListener\("click", submitGreetingPhrases\)/,
+    "The explicit greeting update action must submit the personal greeting draft");
   assert.match(editorSource,
     /const GREETING_DECORATION_IDS = Object\.freeze\(\["none", "underline", "hairline", "glow"\]\)/);
   assert.match(editorSource,
@@ -4736,8 +4751,8 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /const savedGreetingPreferences = reconcileStudioGreetingShuffle\([\s\S]{0,180}?greetingPreferences:\s*savedGreetingPreferences/,
     "Save must commit the staged personal envelope while preserving a newer runtime shuffle");
   assert.match(editorSource,
-    /if \(event\.relatedTarget === saveButton\) return;/,
-    "blur toward Save must not win the race and disable the first click");
+    /if \(event\.relatedTarget === saveButton \|\| event\.relatedTarget === greetingUpdateButton\) return;/,
+    "blur toward either Save action must not win the race and disable the first click");
   assert.match(editorSource,
     /actionAfterPatch = \{ type: "save-theme-edit", \.\.\.base \};[\s\S]{0,180}?postGreetingPreferences/,
     "the first Save click must flush personal words and chain the save");

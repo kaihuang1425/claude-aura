@@ -2624,6 +2624,84 @@
   visibility: visible;
 }
 
+.editor-greeting-completion {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, var(--accent));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--raised) 72%, transparent);
+}
+
+.editor-greeting-completion[hidden] {
+  display: none;
+}
+
+.editor-greeting-completion .primary-button {
+  min-height: 36px;
+  padding: 7px 14px;
+}
+
+.editor-greeting-update-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.editor-greeting-update-mark {
+  display: inline-grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  color: inherit;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.editor-greeting-update-mark::before {
+  content: "•";
+}
+
+.editor-greeting-update-status[data-state="updated"] {
+  color: #2b7a50;
+}
+
+.editor-greeting-update-status[data-state="updated"] .editor-greeting-update-mark::before {
+  content: "✓";
+}
+
+.editor-greeting-update-status[data-state="dirty"] {
+  color: #8b5b16;
+}
+
+.editor-greeting-update-status[data-state="busy"] {
+  color: var(--accent);
+}
+
+.editor-greeting-update-status[data-state="busy"] .editor-greeting-update-mark::before {
+  content: "…";
+}
+
+.editor-greeting-update-status[data-state="invalid"] {
+  color: #a23530;
+}
+
+.editor-greeting-update-status[data-state="invalid"] .editor-greeting-update-mark::before {
+  content: "!";
+}
+
 .editor-greeting-collision-warning {
   margin: 10px 0 0;
   padding: 10px 12px;

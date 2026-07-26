@@ -588,6 +588,13 @@
             <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
           </label>
         </div>
+        <div id="editor-greeting-completion" class="editor-greeting-completion" data-state="updated" hidden>
+          <button type="button" id="editor-greeting-update" class="primary-button" aria-describedby="editor-greeting-update-status" data-editor-i18n="saveChanges">Save</button>
+          <p id="editor-greeting-update-status" class="editor-greeting-update-status" role="status" aria-live="polite" data-state="updated">
+            <span class="editor-greeting-update-mark" aria-hidden="true"></span>
+            <span id="editor-greeting-update-status-text"></span>
+          </p>
+        </div>
         <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" hidden></p>
         <div class="editor-control-grid editor-greeting-controls">
           <label class="editor-field" for="editor-greeting-font">

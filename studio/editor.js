@@ -823,6 +823,10 @@
     const greetingOverrideInput = document.getElementById("editor-greeting-override");
     const greetingOverridePhrasesInput = document.getElementById("editor-greeting-override-phrases");
     const greetingOverridePhrasesField = document.getElementById("editor-greeting-override-phrases-field");
+    const greetingCompletion = document.getElementById("editor-greeting-completion");
+    const greetingUpdateButton = document.getElementById("editor-greeting-update");
+    const greetingUpdateStatus = document.getElementById("editor-greeting-update-status");
+    const greetingUpdateStatusText = document.getElementById("editor-greeting-update-status-text");
     const greetingPhrasesStatus = document.getElementById("editor-greeting-phrases-status");
     const greetingMarkInput = document.getElementById("editor-greeting-mark");
     const greetingContextSection = editor.querySelector(".editor-greeting-context");
@@ -3518,6 +3522,26 @@
     const greetingThemeOverride = (personal = greetingDraft()) => (
       personal?.themeOverrides?.[state?.id] ?? { mode: "global", phrases: [] }
     );
+    const reflectGreetingCompletion = () => {
+      if (!greetingCompletion || !greetingUpdateStatus || !greetingUpdateStatusText) return;
+      const personal = greetingDraft();
+      const editable = Boolean(personal?.enabled && personal.source === "custom");
+      greetingCompletion.hidden = !editable;
+      greetingCompletion.inert = !editable;
+      if (!editable) return;
+      const dirty = greetingPreferenceDraftDirty || greetingPreferenceInputDirty;
+      const applying = pendingAction === "set-greeting-phrases";
+      const feedback = applying
+        ? ["busy", "editorBusy"]
+        : greetingPreferenceInputInvalid
+          ? ["invalid", "invalidState"]
+          : dirty
+            ? ["dirty", "unsavedState"]
+            : ["updated", "validState"];
+      greetingCompletion.dataset.state = feedback[0];
+      greetingUpdateStatus.dataset.state = feedback[0];
+      greetingUpdateStatusText.textContent = tr(feedback[1]);
+    };
     const greetingSampleText = () => {
       const personal = greetingDraft();
       if (!personal?.enabled || personal.source !== "custom") return tr("greetingPreviewSample");
@@ -3624,6 +3648,7 @@
         }
       }
       for (const exact of greetingExactInputs) exact.disabled = greetingState.native;
+      reflectGreetingCompletion();
     };
 
     const reflectLauncher = () => {
@@ -4193,6 +4218,13 @@
       stageOpacityInput.disabled = isBlockingAction() || blocked;
       if (replaceLauncherMarkButton) replaceLauncherMarkButton.disabled = busy || blocked;
       if (greetingResetButton) greetingResetButton.disabled = busy || blocked;
+      if (greetingUpdateButton) {
+        const personal = greetingDraft();
+        const editable = Boolean(personal?.enabled && personal.source === "custom");
+        greetingUpdateButton.disabled = busy || blocked || !editable
+          || greetingPreferenceInputInvalid || !localGreetingWork;
+      }
+      reflectGreetingCompletion();
       addLayerButton.dataset.layerStructure = "";
       for (const button of editor.querySelectorAll("[data-layer-structure]")) {
         button.disabled = busy || blocked || (button === addLayerButton && state.layers.length >= 8)
@@ -4694,7 +4726,7 @@
       // A blur caused by the Save button must not post first and disable that
       // button before its click. Save flushes this same draft and chains the
       // theme transaction after the host acknowledges it.
-      if (event.relatedTarget === saveButton) return;
+      if (event.relatedTarget === saveButton || event.relatedTarget === greetingUpdateButton) return;
       submitGreetingPhrases();
     };
     greetingNameInput?.addEventListener("focusout", submitGreetingOnFocusExit);
@@ -4710,6 +4742,7 @@
     }
     greetingOverrideInput?.addEventListener("focusout", submitGreetingOnFocusExit);
     greetingOverridePhrasesInput?.addEventListener("focusout", submitGreetingOnFocusExit);
+    greetingUpdateButton?.addEventListener("click", submitGreetingPhrases);
     // Reads the panel's own controls so the sample tracks a drag continuously, rather
     // than only after the host acknowledges the patch.
     const previewFromControls = () => {
