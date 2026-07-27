@@ -4552,6 +4552,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
         "  [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)",
         "  $shortcut=$null",
         "  Initialize-AuraShortcutPropertyStore",
+        "  Set-AuraShortcutAppUserModelId -Path $pinPath",
         "  [AuraShortcutPropertyStore]::SetAppUserModelId($otherPath,'Other.Product')",
         "  $script:ProbeLogs=[Collections.Generic.List[string]]::new()",
         "  $found=@(Get-AuraUiPinnedTaskbarShortcuts -Shell $shell -ExpectedPowerShell $expectedPowerShell -ExpectedScript $expectedScript -MainArguments $baseArguments -StudioArguments $studioArguments)",
