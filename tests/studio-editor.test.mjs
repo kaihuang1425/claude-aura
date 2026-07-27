@@ -4075,11 +4075,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "$fallback=Resolve-AuraUiLauncherModeMaterial -Raw $rawDark -StudioStyle $invalid -Dark $false",
     "if(-not [object]::ReferenceEquals($fallback,$rawDark)){throw 'Malformed palette partially changed the launcher'}",
   ].join("\n");
-  run("powershell.exe", [
-    "-NoProfile",
-    "-EncodedCommand",
-    Buffer.from(launcherModeRegression, "utf16le").toString("base64"),
-  ]);
+  if (process.platform === "win32") {
+    run("powershell.exe", [
+      "-NoProfile",
+      "-EncodedCommand",
+      Buffer.from(launcherModeRegression, "utf16le").toString("base64"),
+    ]);
+  }
 
   const identityCandidateBuilder = powershellFunction("New-AuraUiIdentityCandidate");
   assert.match(identityCandidateBuilder,
@@ -4295,11 +4297,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "$highDpiMoved=Get-AuraUiLauncherPopupLocation -Anchor $highDpiMovedAnchor -PopupSize $highDpiPopup -Bounds $highDpiBounds -Gap 24 -RequireCollisionFree",
     "if($highDpi.X -ne 0 -or $highDpi.Y -ne 480 -or $highDpiMoved.X -ne 0){throw 'DPI-scaled popup escaped its bounded collision-free placement'}",
   ].join("\n");
-  run("powershell.exe", [
-    "-NoProfile",
-    "-EncodedCommand",
-    Buffer.from(launcherPopupRegression, "utf16le").toString("base64"),
-  ]);
+  if (process.platform === "win32") {
+    run("powershell.exe", [
+      "-NoProfile",
+      "-EncodedCommand",
+      Buffer.from(launcherPopupRegression, "utf16le").toString("base64"),
+    ]);
+  }
   const launcherTipPositionUpdate = powershellFunction("Update-AuraUiLauncherTipPosition");
   assert.match(launcherTipPositionUpdate,
     /Get-AuraUiLauncherPopupLocation[\s\S]{0,180}?\$script:LauncherTip\.Size/,
@@ -6121,6 +6125,7 @@ test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", as
     assert.equal(savedConfig.theme, themeId);
     result = await invoke(mutate(result, "discard-theme-edit"));
     assert.equal(result.state.active, false);
+    const canonicalDestination = await fs.realpath(destination);
 
     await writeConfig(configPath, {
       ...savedConfig,
@@ -6173,7 +6178,7 @@ test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", as
       "Incomplete theme-delete rollback did not surface an AggregateError");
     assert.equal(incomplete.code, "STUDIO_ROLLBACK_INCOMPLETE");
     assert.match(incomplete.message, /remains recoverable at/);
-    assert.equal(incomplete.recoveryDestination, destination);
+    assert.equal(incomplete.recoveryDestination, canonicalDestination);
     assert.equal(incomplete.recoveryArtifacts.length, 1);
     assert.equal((await fs.stat(incomplete.recoveryArtifacts[0])).isDirectory(), true,
       "Incomplete rollback did not retain its recoverable tombstone");
