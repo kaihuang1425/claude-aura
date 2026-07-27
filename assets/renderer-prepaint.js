@@ -140,7 +140,9 @@
     backdrop.id = BACKDROP_ID;
     backdrop.dataset.claudeAuraOwned = owner;
     backdrop.dataset.claudeAuraPrepaint = "true";
-    backdrop.dataset.artScope = settings.q === "c" ? "content" : "full-window";
+    backdrop.dataset.artScope = settings.q === "s"
+      ? "sidebar"
+      : settings.q === "c" ? "content" : "full-window";
     backdrop.setAttribute("aria-hidden", "true");
     const addLayer = (className) => {
       const element = document.createElement("div");

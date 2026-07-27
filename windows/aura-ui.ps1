@@ -6,7 +6,8 @@ param(
   [switch]$ClearImage,
   [switch]$OpenStudio,
   [switch]$BuiltInAuthoring,
-  [switch]$RescueSession
+  [switch]$RescueSession,
+  [switch]$ExperimentalDraftHandoff
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,6 +48,8 @@ $StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
 $AvatarRoot = Join-Path $DataRoot 'avatar'
 $AvatarStatePath = Join-Path $AvatarRoot 'crop.json'
 $AvatarBakedPath = Join-Path $AvatarRoot 'current.png'
+$WindowLayoutPath = Join-Path $DataRoot 'window-layout.json'
+$WindowLayoutSchemaVersion = 1
 # The avatar renders around 32 logical pixels; 256 keeps it crisp on any DPI while
 # keeping the embedded data URL small, since the baked square ships in the payload.
 $AvatarBakeSize = 256
@@ -105,13 +108,7 @@ function Get-AuraUiCopyFile {
 function Get-AuraUiCopy {
   param([AllowEmptyString()][string]$Locale)
   $tag = if ($Locale) { $Locale.Replace('_', '-') } else { 'en' }
-  $localeKey = if ($tag -match '^zh-(?i:cn|sg|hans)(?:-|$)' -or $tag -match '^zh-(?i:hans)(?:-|$)') {
-    'zh-CN'
-  } elseif ($tag -match '^zh-(?i:hktw|tw|hk|mo|hant)(?:-|$)' -or $tag -match '^zh-(?i:hant)(?:-|$)') {
-    'zh-HKTW'
-  } else {
-    'en'
-  }
+  $localeKey = ConvertTo-AuraUiLocale -Locale $tag
   # English is the base layer, so a language file that is missing or still
   # incomplete shows English words instead of blank labels and buttons.
   $baseCopy = Get-AuraUiCopyFile -Locale 'en'
@@ -250,12 +247,46 @@ function Get-AuraUiStudioUrl {
     $source = [Uri]$script:StudioWebView.Source
     if ($source.Scheme -ceq 'https' -and $source.Host -ceq 'aura.studio' -and
         $source.AbsolutePath -ceq '/index.html' -and
-        $source.Fragment -cin @('#themes', '#background', '#create', '#settings')) {
+        $source.Fragment -cin @(
+          '#themes', '#prompt-shelf', '#background', '#create', '#settings')) {
       $view = $source.Fragment.TrimStart('#').ToLowerInvariant()
       return $url + '&view=' + [Uri]::EscapeDataString($view)
     }
   } catch {}
   return $url
+}
+
+function Test-AuraUiStudioDocumentUri {
+  param(
+    [Parameter(Mandatory = $true)][Uri]$Uri,
+    [switch]$AllowFragment
+  )
+  if ($Uri.Scheme -cne 'https' -or $Uri.Host -cne 'aura.studio' -or
+      $Uri.AbsolutePath -cne '/index.html' -or -not $Uri.IsDefaultPort -or
+      $Uri.UserInfo) {
+    return $false
+  }
+  $queryMatch = [regex]::Match(
+    $Uri.Query,
+    '^\?locale=([^&]+)(?:&view=([^&]+))?$',
+    [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+  if (-not $queryMatch.Success) { return $false }
+  try {
+    $locale = [Uri]::UnescapeDataString($queryMatch.Groups[1].Value)
+    $view = if ($queryMatch.Groups[2].Success) {
+      [Uri]::UnescapeDataString($queryMatch.Groups[2].Value)
+    } else { '' }
+  } catch {
+    return $false
+  }
+  if ($locale -cnotin $StudioLocaleIds -or
+      ($view -and $view -cnotin @(
+        'themes', 'prompt-shelf', 'background', 'create', 'settings'))) {
+    return $false
+  }
+  if (-not $AllowFragment) { return -not $Uri.Fragment }
+  return $Uri.Fragment -cin @(
+    '', '#themes', '#prompt-shelf', '#background', '#create', '#settings', '#editor')
 }
 
 function ConvertTo-AuraUiArgument {
@@ -327,6 +358,7 @@ function ConvertTo-AuraUiThemeMetadata {
 function Set-AuraUiFormWithinWorkingArea {
   param([AllowNull()][System.Windows.Forms.Form]$Form, [int]$Margin = 12)
   if ($null -eq $Form -or $Form.IsDisposed) { return }
+  if ($Form.WindowState -ne [System.Windows.Forms.FormWindowState]::Normal) { return }
   $workingArea = [System.Windows.Forms.Screen]::FromControl($Form).WorkingArea
   $maximumWidth = [Math]::Max(1, $workingArea.Width - ($Margin * 2))
   $maximumHeight = [Math]::Max(1, $workingArea.Height - ($Margin * 2))
@@ -336,6 +368,302 @@ function Set-AuraUiFormWithinWorkingArea {
   $Form.Location = [Drawing.Point]::new(
     $workingArea.Left + [Math]::Max($Margin, [Math]::Floor(($workingArea.Width - $width) / 2)),
     $workingArea.Top + [Math]::Max($Margin, [Math]::Floor(($workingArea.Height - $height) / 2)))
+}
+
+function New-AuraUiWindowLayoutState {
+  return [PSCustomObject][ordered]@{
+    schemaVersion = $WindowLayoutSchemaVersion
+    aura = [PSCustomObject][ordered]@{ compact = $null; spacious = $null }
+    studio = [PSCustomObject][ordered]@{ compact = $null; spacious = $null }
+  }
+}
+
+function ConvertTo-AuraUiWindowBoundsRecord {
+  param([AllowNull()][object]$Value)
+  if ($null -eq $Value -or
+      $Value -isnot [System.Management.Automation.PSCustomObject]) {
+    return $null
+  }
+  $names = @($Value.PSObject.Properties | ForEach-Object { $_.Name })
+  if ($names.Count -ne 5 -or
+      $names -cnotcontains 'x' -or
+      $names -cnotcontains 'y' -or
+      $names -cnotcontains 'width' -or
+      $names -cnotcontains 'height' -or
+      $names -cnotcontains 'dpi') {
+    return $null
+  }
+  foreach ($name in @('x', 'y', 'width', 'height', 'dpi')) {
+    $number = $Value.PSObject.Properties[$name].Value
+    if ($number -isnot [int] -and $number -isnot [long]) { return $null }
+  }
+  if ([long]$Value.x -lt -100000 -or [long]$Value.x -gt 100000 -or
+      [long]$Value.y -lt -100000 -or [long]$Value.y -gt 100000 -or
+      [long]$Value.width -lt 320 -or [long]$Value.width -gt 20000 -or
+      [long]$Value.height -lt 240 -or [long]$Value.height -gt 20000 -or
+      [long]$Value.dpi -lt 96 -or [long]$Value.dpi -gt 768) {
+    return $null
+  }
+  return [PSCustomObject][ordered]@{
+    x = [int]$Value.x
+    y = [int]$Value.y
+    width = [int]$Value.width
+    height = [int]$Value.height
+    dpi = [int]$Value.dpi
+  }
+}
+
+function Read-AuraUiWindowLayoutState {
+  $fallback = New-AuraUiWindowLayoutState
+  if (-not (Test-Path -LiteralPath $WindowLayoutPath -PathType Leaf)) { return $fallback }
+  try {
+    $bytes = [IO.File]::ReadAllBytes($WindowLayoutPath)
+    if ($bytes.Length -le 0 -or $bytes.Length -gt 8192) {
+      throw 'Window layout state has an invalid size.'
+    }
+    $source = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
+    $value = $source | ConvertFrom-Json
+    if ($value -isnot [System.Management.Automation.PSCustomObject]) {
+      throw 'Window layout state must be an object.'
+    }
+    $names = @($value.PSObject.Properties | ForEach-Object { $_.Name })
+    if ($names.Count -ne 3 -or
+        $names -cnotcontains 'schemaVersion' -or
+        $names -cnotcontains 'aura' -or
+        $names -cnotcontains 'studio' -or
+        ($value.schemaVersion -isnot [int] -and $value.schemaVersion -isnot [long]) -or
+        [int]$value.schemaVersion -ne $WindowLayoutSchemaVersion) {
+      throw 'Window layout state has an invalid envelope.'
+    }
+    $normalized = New-AuraUiWindowLayoutState
+    foreach ($kind in @('aura', 'studio')) {
+      $window = $value.PSObject.Properties[$kind].Value
+      if ($window -isnot [System.Management.Automation.PSCustomObject]) {
+        throw 'Window layout state has an invalid window record.'
+      }
+      $windowNames = @($window.PSObject.Properties | ForEach-Object { $_.Name })
+      if ($windowNames.Count -ne 2 -or
+          $windowNames -cnotcontains 'compact' -or
+          $windowNames -cnotcontains 'spacious') {
+        throw 'Window layout state has an invalid display-class record.'
+      }
+      foreach ($displayClass in @('compact', 'spacious')) {
+        $candidate = $window.PSObject.Properties[$displayClass].Value
+        if ($null -eq $candidate) { continue }
+        $record = ConvertTo-AuraUiWindowBoundsRecord -Value $candidate
+        if ($null -eq $record) { throw 'Window layout state contains invalid bounds.' }
+        $normalized.$kind.$displayClass = $record
+      }
+    }
+    return $normalized
+  } catch {
+    Write-AuraUiLog -Message "Window layout state was ignored: $($_.Exception.Message)"
+    return $fallback
+  }
+}
+
+function Write-AuraUiWindowLayoutState {
+  if ($null -eq $script:WindowLayoutState) { return }
+  $temporary = Join-Path $DataRoot ('.window-layout-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+  $backup = Join-Path $DataRoot ('.window-layout-{0}.bak' -f [Guid]::NewGuid().ToString('N'))
+  try {
+    [void][IO.Directory]::CreateDirectory($DataRoot)
+    $json = ($script:WindowLayoutState | ConvertTo-Json -Depth 5 -Compress) +
+      [Environment]::NewLine
+    [IO.File]::WriteAllText($temporary, $json, [Text.UTF8Encoding]::new($false))
+    if (Test-Path -LiteralPath $WindowLayoutPath -PathType Leaf) {
+      [IO.File]::Replace($temporary, $WindowLayoutPath, $backup)
+    } else {
+      [IO.File]::Move($temporary, $WindowLayoutPath)
+    }
+  } catch {
+    Write-AuraUiLog -Message "Window layout state could not be saved: $($_.Exception.Message)"
+  } finally {
+    foreach ($path in @($temporary, $backup)) {
+      if (Test-Path -LiteralPath $path -PathType Leaf) {
+        try { Remove-Item -LiteralPath $path -Force } catch {}
+      }
+    }
+  }
+}
+
+function Get-AuraUiWindowDisplayClass {
+  param(
+    [AllowNull()][System.Windows.Forms.Form]$Form,
+    [Drawing.Rectangle]$WorkingArea = [Drawing.Rectangle]::Empty,
+    [int]$Dpi = 0
+  )
+  if ($WorkingArea.IsEmpty) {
+    if ($null -eq $Form -or $Form.IsDisposed) { return 'compact' }
+    $WorkingArea = [System.Windows.Forms.Screen]::FromControl($Form).WorkingArea
+  }
+  if ($Dpi -lt 96 -or $Dpi -gt 768) {
+    $Dpi = Get-AuraUiWindowDpi -Form $Form
+  }
+  $logicalWidth = [int][Math]::Floor($WorkingArea.Width * 96.0 / $Dpi)
+  $logicalHeight = [int][Math]::Floor($WorkingArea.Height * 96.0 / $Dpi)
+  if ($logicalWidth -le 1600 -or $logicalHeight -le 900) { return 'compact' }
+  return 'spacious'
+}
+
+function Get-AuraUiWindowBoundsWithinWorkingArea {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds,
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$WorkingArea,
+    [Drawing.Size]$MinimumSize = [Drawing.Size]::Empty,
+    [int]$Margin = 12
+  )
+  $maximumWidth = [Math]::Max(1, $WorkingArea.Width - ($Margin * 2))
+  $maximumHeight = [Math]::Max(1, $WorkingArea.Height - ($Margin * 2))
+  $minimumWidth = [Math]::Min($maximumWidth, [Math]::Max(1, $MinimumSize.Width))
+  $minimumHeight = [Math]::Min($maximumHeight, [Math]::Max(1, $MinimumSize.Height))
+  $width = [Math]::Min($maximumWidth, [Math]::Max($minimumWidth, $Bounds.Width))
+  $height = [Math]::Min($maximumHeight, [Math]::Max($minimumHeight, $Bounds.Height))
+  $left = [Math]::Max(
+    $WorkingArea.Left + $Margin,
+    [Math]::Min($Bounds.Left, $WorkingArea.Right - $Margin - $width))
+  $top = [Math]::Max(
+    $WorkingArea.Top + $Margin,
+    [Math]::Min($Bounds.Top, $WorkingArea.Bottom - $Margin - $height))
+  return [Drawing.Rectangle]::new($left, $top, $width, $height)
+}
+
+function Set-AuraUiFormBoundsWithinWorkingArea {
+  param(
+    [AllowNull()][System.Windows.Forms.Form]$Form,
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds,
+    [Drawing.Rectangle]$WorkingArea = [Drawing.Rectangle]::Empty,
+    [int]$Margin = 12
+  )
+  if ($null -eq $Form -or $Form.IsDisposed -or
+      $Form.WindowState -ne [System.Windows.Forms.FormWindowState]::Normal) { return }
+  if ($WorkingArea.IsEmpty) {
+    $WorkingArea = [System.Windows.Forms.Screen]::FromRectangle($Bounds).WorkingArea
+  }
+  $Form.Bounds = Get-AuraUiWindowBoundsWithinWorkingArea `
+    -Bounds $Bounds -WorkingArea $WorkingArea -MinimumSize $Form.MinimumSize -Margin $Margin
+}
+
+function Get-AuraUiWindowStartupScreen {
+  param([AllowNull()][System.Windows.Forms.Form]$AnchorForm)
+  if ($null -ne $AnchorForm -and -not $AnchorForm.IsDisposed -and $AnchorForm.Visible) {
+    return [System.Windows.Forms.Screen]::FromControl($AnchorForm)
+  }
+  try {
+    return [System.Windows.Forms.Screen]::FromPoint([System.Windows.Forms.Cursor]::Position)
+  } catch {
+    return [System.Windows.Forms.Screen]::PrimaryScreen
+  }
+}
+
+function Initialize-AuraUiWindowLayoutForForm {
+  param(
+    [ValidateSet('aura', 'studio')][string]$Kind,
+    [Parameter(Mandatory = $true)][System.Windows.Forms.Form]$Form,
+    [AllowNull()][System.Windows.Forms.Form]$AnchorForm
+  )
+  $initializedName = if ($Kind -ceq 'aura') {
+    'AuraWindowLayoutInitialized'
+  } else {
+    'StudioWindowLayoutInitialized'
+  }
+  if ([bool](Get-Variable -Scope Script -Name $initializedName -ValueOnly)) { return }
+  $screen = Get-AuraUiWindowStartupScreen -AnchorForm $AnchorForm
+  $workingArea = $screen.WorkingArea
+  $Form.Location = [Drawing.Point]::new($workingArea.Left + 12, $workingArea.Top + 12)
+  if (-not $Form.IsHandleCreated) { [void]$Form.Handle }
+  $dpi = Get-AuraUiWindowDpi -Form $Form
+  $displayClass = Get-AuraUiWindowDisplayClass `
+    -Form $Form -WorkingArea $workingArea -Dpi $dpi
+  $record = $script:WindowLayoutState.$Kind.$displayClass
+  if ($null -ne $record) {
+    $scale = $dpi / [double]$record.dpi
+    $requested = [Drawing.Rectangle]::new(
+      [int]$record.x,
+      [int]$record.y,
+      [int][Math]::Round($record.width * $scale),
+      [int][Math]::Round($record.height * $scale))
+    Set-AuraUiFormBoundsWithinWorkingArea -Form $Form -Bounds $requested
+  } else {
+    Set-AuraUiFormWithinWorkingArea -Form $Form
+  }
+  Update-AuraUiWindowNormalSnapshot -Kind $Kind -Form $Form
+  if ($displayClass -ceq 'compact') {
+    $Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+  } else {
+    $Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+  }
+  Set-Variable -Scope Script -Name $initializedName -Value $true
+}
+
+function Update-AuraUiWindowNormalSnapshot {
+  param(
+    [ValidateSet('aura', 'studio')][string]$Kind,
+    [AllowNull()][System.Windows.Forms.Form]$Form
+  )
+  if ($null -eq $Form -or $Form.IsDisposed -or -not $Form.IsHandleCreated -or
+      $Form.WindowState -ne [System.Windows.Forms.FormWindowState]::Normal) {
+    return
+  }
+  if ($Kind -ceq 'aura' -and
+      ([int]$script:MirrorRequestedCssRequest -ne 0 -or $script:PreviewClientResizeActive)) {
+    return
+  }
+  $snapshotName = if ($Kind -ceq 'aura') {
+    'AuraNormalWindowSnapshot'
+  } else {
+    'StudioNormalWindowSnapshot'
+  }
+  Set-Variable -Scope Script -Name $snapshotName -Value ([PSCustomObject]@{
+    bounds = [Drawing.Rectangle]::new(
+      [int]$Form.Bounds.X,
+      [int]$Form.Bounds.Y,
+      [int]$Form.Bounds.Width,
+      [int]$Form.Bounds.Height)
+    dpi = [int](Get-AuraUiWindowDpi -Form $Form)
+  })
+}
+
+function Save-AuraUiWindowLayoutForForm {
+  param(
+    [ValidateSet('aura', 'studio')][string]$Kind,
+    [AllowNull()][System.Windows.Forms.Form]$Form
+  )
+  if ($null -eq $script:WindowLayoutState -or
+      $null -eq $Form -or $Form.IsDisposed -or -not $Form.IsHandleCreated) { return }
+  if ($Kind -ceq 'aura' -and
+      ([int]$script:MirrorRequestedCssRequest -ne 0 -or $script:PreviewClientResizeActive)) {
+    return
+  }
+  if ($Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Normal) {
+    Update-AuraUiWindowNormalSnapshot -Kind $Kind -Form $Form
+  }
+  $snapshotName = if ($Kind -ceq 'aura') {
+    'AuraNormalWindowSnapshot'
+  } else {
+    'StudioNormalWindowSnapshot'
+  }
+  $snapshot = Get-Variable -Scope Script -Name $snapshotName -ValueOnly
+  if ($null -eq $snapshot) {
+    $snapshot = [PSCustomObject]@{
+      bounds = $Form.RestoreBounds
+      dpi = [int](Get-AuraUiWindowDpi -Form $Form)
+    }
+  }
+  $bounds = [Drawing.Rectangle]$snapshot.bounds
+  $dpi = [int]$snapshot.dpi
+  if ($bounds.Width -lt 320 -or $bounds.Height -lt 240) { return }
+  $screen = [System.Windows.Forms.Screen]::FromRectangle($bounds)
+  $displayClass = Get-AuraUiWindowDisplayClass `
+    -Form $Form -WorkingArea $screen.WorkingArea -Dpi $dpi
+  $script:WindowLayoutState.$Kind.$displayClass = [PSCustomObject][ordered]@{
+    x = [int]$bounds.X
+    y = [int]$bounds.Y
+    width = [int]$bounds.Width
+    height = [int]$bounds.Height
+    dpi = [int]$dpi
+  }
+  Write-AuraUiWindowLayoutState
 }
 
 function New-AuraUiIcon {
@@ -1002,13 +1330,16 @@ function Complete-AuraUiPendingNavigationVerification {
     if ($script:RescueActive) { Exit-AuraUiRescueMode }
     $script:ReadyNavigationId = $navigationId
     $script:PageReady = $true
-    Hide-AuraUiLoading
-    Show-AuraUiLauncherHint
     $enabled = $true
     if ($null -ne $script:Config.PSObject.Properties['enabled']) {
       $enabled = [bool]$script:Config.enabled
     }
     if ($enabled) { Apply-AuraUiTheme }
+    # Apply marks the themed launcher layout pending before the loading cover
+    # reveals Claude. The first launcher frame therefore waits for current,
+    # validated page geometry instead of flashing at its saved position.
+    Hide-AuraUiLoading
+    Show-AuraUiLauncherHint
   } else {
     $script:ReadyNavigationId = $null
     Hide-AuraUiLoading
@@ -1723,6 +2054,7 @@ function Stop-AuraUiMirrorForRescue {
   $script:MirrorSemanticRetries = 0
   $script:MirrorSemanticPreviousContext = $null
   $script:MirrorGeometry = $null
+  Stop-AuraUiLauncherLayoutProbe
   Stop-AuraUiGreetingProbe
 }
 
@@ -2102,6 +2434,7 @@ function Apply-AuraUiTheme {
     if ($Cover) { Hide-AuraUiLoading }
     return
   }
+  Request-AuraUiLauncherLayoutProbe
   Start-AuraUiScript -Source $script:Payload -Action Apply -Cover $Cover
 }
 
@@ -2202,6 +2535,9 @@ function Set-AuraUiPreferredColorScheme {
   $darkChrome = Test-AuraUiDarkChrome -Appearance $Appearance -Enabled $Enabled
   Update-AuraUiWindowChrome -Dark $darkChrome
   Update-AuraUiLoadingTheme
+  if (Get-Command Update-AuraPromptShelfTheme -ErrorAction SilentlyContinue) {
+    Update-AuraPromptShelfTheme
+  }
 }
 
 function Update-AuraUiTrayAppearance {
@@ -3882,6 +4218,7 @@ function Update-AuraUiLauncherDpi {
   }
   Update-AuraUiLauncherSurface
   if ($script:Form -and -not $script:Form.IsDisposed -and $script:Form.Visible) {
+    Request-AuraUiLauncherLayoutProbe
     Update-AuraUiLauncherPosition
   }
   if ($script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
@@ -3940,6 +4277,437 @@ function Save-AuraUiLauncherPosition {
   } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
 }
 
+function ConvertTo-AuraUiLauncherProbeRectangle {
+  param(
+    [AllowNull()][object]$Value,
+    [Parameter(Mandatory = $true)][double]$ViewportWidth,
+    [Parameter(Mandatory = $true)][double]$ViewportHeight,
+    [Parameter(Mandatory = $true)][string]$Label
+  )
+  if ($null -eq $Value) { return $null }
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value -Names @('left', 'top', 'width', 'height'))) {
+    throw "$Label rectangle has an invalid shape."
+  }
+  try {
+    # The renderer returns only rectangles that intersect the viewport, but a
+    # partially clipped DOM node may retain a small negative origin or an edge
+    # beyond the viewport. Bound that raw extent, then store only its clipped
+    # viewport intersection for native placement.
+    $left = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.left -Minimum (-$ViewportWidth) -Maximum $ViewportWidth -Label "$Label left"
+    $top = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.top -Minimum (-$ViewportHeight) -Maximum $ViewportHeight -Label "$Label top"
+    $width = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.width -Minimum 0.01 -Maximum ($ViewportWidth * 2) -Label "$Label width"
+    $height = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.height -Minimum 0.01 -Maximum ($ViewportHeight * 2) -Label "$Label height"
+  } catch {
+    throw "$Label rectangle has invalid coordinates."
+  }
+  $right = $left + $width
+  $bottom = $top + $height
+  if ($right -le 0 -or $bottom -le 0 -or $left -ge $ViewportWidth -or $top -ge $ViewportHeight) {
+    throw "$Label rectangle does not intersect the viewport."
+  }
+  $clippedLeft = [Math]::Max(0.0, $left)
+  $clippedTop = [Math]::Max(0.0, $top)
+  $clippedRight = [Math]::Min($ViewportWidth, $right)
+  $clippedBottom = [Math]::Min($ViewportHeight, $bottom)
+  if ($clippedRight -le $clippedLeft -or $clippedBottom -le $clippedTop) {
+    throw "$Label rectangle has no usable viewport area."
+  }
+  return [PSCustomObject]@{
+    left = [double]$clippedLeft
+    top = [double]$clippedTop
+    width = [double]($clippedRight - $clippedLeft)
+    height = [double]($clippedBottom - $clippedTop)
+  }
+}
+
+function Assert-AuraUiLauncherLayoutProbe {
+  param(
+    [Parameter(Mandatory = $true)][object]$Value,
+    [Parameter(Mandatory = $true)][string]$ExpectedDigest
+  )
+  $probeNames = @(
+    'version', 'digest', 'context', 'mode', 'frame', 'viewport',
+    'main', 'prompt', 'composer', 'toolbar', 'controls', 'greeting')
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value -Names $probeNames) -or
+      $Value.digest -isnot [string] -or
+      $Value.digest -cnotmatch '^[a-f0-9]{64}$' -or
+      -not [string]::Equals([string]$Value.digest, $ExpectedDigest, [StringComparison]::Ordinal) -or
+      $Value.context -isnot [string] -or
+      $Value.context -cnotin @('new-chat', 'conversation', 'other') -or
+      $Value.mode -isnot [string] -or
+      $Value.mode -cnotin @('light', 'dark') -or
+      $Value.frame -isnot [string] -or
+      $Value.frame -cnotin @('normal', 'wide') -or
+      $Value.viewport -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value.viewport -Names @('width', 'height', 'dpr'))) {
+    throw 'Aura launcher layout probe has an invalid shape.'
+  }
+  try {
+    [void](ConvertTo-AuraUiStudioInteger `
+      -Value $Value.version -Minimum 1 -Maximum 1 -Label 'Aura launcher probe version')
+    $viewportWidth = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.viewport.width -Minimum 200 -Maximum 10000 -Label 'Aura launcher viewport width'
+    $viewportHeight = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.viewport.height -Minimum 200 -Maximum 10000 -Label 'Aura launcher viewport height'
+    $viewportDpr = ConvertTo-AuraUiStudioNumber `
+      -Value $Value.viewport.dpr -Minimum 0.1 -Maximum 16 -Label 'Aura launcher viewport DPR'
+  } catch {
+    throw 'Aura launcher layout probe has an invalid viewport.'
+  }
+
+  $main = ConvertTo-AuraUiLauncherProbeRectangle `
+    -Value $Value.main -ViewportWidth $viewportWidth -ViewportHeight $viewportHeight -Label 'Aura main'
+  $prompt = ConvertTo-AuraUiLauncherProbeRectangle `
+    -Value $Value.prompt -ViewportWidth $viewportWidth -ViewportHeight $viewportHeight -Label 'Aura prompt'
+  $composer = ConvertTo-AuraUiLauncherProbeRectangle `
+    -Value $Value.composer -ViewportWidth $viewportWidth -ViewportHeight $viewportHeight -Label 'Aura composer'
+  $toolbar = ConvertTo-AuraUiLauncherProbeRectangle `
+    -Value $Value.toolbar -ViewportWidth $viewportWidth -ViewportHeight $viewportHeight -Label 'Aura toolbar'
+
+  $controls = [Collections.Generic.List[object]]::new()
+  if ($null -ne $Value.controls) {
+    if ($Value.controls -isnot [System.Array] -or @($Value.controls).Count -gt 12) {
+      throw 'Aura launcher layout probe has invalid controls.'
+    }
+    $controlIndex = 0
+    foreach ($control in @($Value.controls)) {
+      $normalizedControl = ConvertTo-AuraUiLauncherProbeRectangle `
+        -Value $control -ViewportWidth $viewportWidth -ViewportHeight $viewportHeight `
+        -Label "Aura control $controlIndex"
+      if ($null -eq $normalizedControl) {
+        throw 'Aura launcher layout probe has an empty control rectangle.'
+      }
+      $controls.Add($normalizedControl)
+      $controlIndex++
+    }
+  }
+
+  if ($Value.greeting -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value.greeting -Names @('status', 'source', 'rect')) -or
+      $Value.greeting.status -isnot [string] -or
+      $Value.greeting.status -cnotin @('found', 'missing', 'ambiguous', 'inactive') -or
+      $Value.greeting.source -isnot [string] -or
+      $Value.greeting.source -cnotin @('native', 'custom', 'none')) {
+    throw 'Aura launcher layout probe has an invalid greeting.'
+  }
+  $greetingRect = ConvertTo-AuraUiLauncherProbeRectangle `
+    -Value $Value.greeting.rect -ViewportWidth $viewportWidth -ViewportHeight $viewportHeight `
+    -Label 'Aura greeting'
+  if (($Value.greeting.status -ceq 'found') -ne ($null -ne $greetingRect)) {
+    throw 'Aura launcher layout probe has inconsistent greeting geometry.'
+  }
+  if ($Value.greeting.status -ceq 'found' -and $Value.greeting.source -ceq 'none') {
+    throw 'Aura launcher layout probe has an inconsistent greeting source.'
+  }
+  if ($Value.greeting.status -ceq 'found' -and
+      $Value.greeting.source -cnotin @('native', 'custom')) {
+    throw 'Aura launcher layout probe has an invalid greeting source.'
+  }
+  if ($Value.context -ceq 'new-chat' -and
+      ($null -eq $main -or $null -eq $prompt -or $null -eq $composer)) {
+    throw 'Aura launcher layout probe is missing new-chat geometry.'
+  }
+  if ($Value.context -ceq 'conversation' -and
+      ($null -eq $main -or $null -eq $composer)) {
+    throw 'Aura launcher layout probe is missing conversation geometry.'
+  }
+  if ($Value.greeting.status -ceq 'found' -and $Value.context -cne 'new-chat') {
+    throw 'Aura launcher layout probe has a greeting outside new chat.'
+  }
+
+  return [PSCustomObject]@{
+    version = 1
+    digest = $ExpectedDigest
+    context = [string]$Value.context
+    mode = [string]$Value.mode
+    frame = [string]$Value.frame
+    viewport = [PSCustomObject]@{
+      width = [double]$viewportWidth
+      height = [double]$viewportHeight
+      dpr = [double]$viewportDpr
+    }
+    main = $main
+    prompt = $prompt
+    composer = $composer
+    toolbar = $toolbar
+    controls = @($controls)
+    greeting = [PSCustomObject]@{
+      status = [string]$Value.greeting.status
+      source = [string]$Value.greeting.source
+      rect = $greetingRect
+    }
+  }
+}
+
+function ConvertTo-AuraUiLauncherScreenRectangle {
+  param(
+    [AllowNull()][object]$Rectangle,
+    [Parameter(Mandatory = $true)][object]$Probe
+  )
+  if ($null -eq $Rectangle -or $null -eq $script:WebView -or $script:WebView.IsDisposed) { return $null }
+  $nativeWidth = [int]$script:WebView.ClientSize.Width
+  $nativeHeight = [int]$script:WebView.ClientSize.Height
+  $cssWidth = [double]$Probe.viewport.width
+  $cssHeight = [double]$Probe.viewport.height
+  if ($nativeWidth -le 0 -or $nativeHeight -le 0 -or $cssWidth -le 0 -or $cssHeight -le 0) { return $null }
+  try {
+    $origin = $script:WebView.PointToScreen([Drawing.Point]::Empty)
+    # Scale each axis from the measured CSS viewport to the current native
+    # WebView client. DPR is diagnostic only and is never used as authority.
+    $scaleX = [double]$nativeWidth / $cssWidth
+    $scaleY = [double]$nativeHeight / $cssHeight
+    $left = $origin.X + [int][Math]::Floor([double]$Rectangle.left * $scaleX)
+    $top = $origin.Y + [int][Math]::Floor([double]$Rectangle.top * $scaleY)
+    $right = $origin.X + [int][Math]::Ceiling(
+      ([double]$Rectangle.left + [double]$Rectangle.width) * $scaleX)
+    $bottom = $origin.Y + [int][Math]::Ceiling(
+      ([double]$Rectangle.top + [double]$Rectangle.height) * $scaleY)
+    if ($right -le $left -or $bottom -le $top) { return $null }
+    return [Drawing.Rectangle]::FromLTRB($left, $top, $right, $bottom)
+  } catch {
+    return $null
+  }
+}
+
+function Get-AuraUiLauncherCollisionFreeLocation {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Point]$Preferred,
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds,
+    [Parameter(Mandatory = $true)][int]$CircleSize,
+    [Parameter(Mandatory = $true)][int]$Halo,
+    [Parameter(Mandatory = $true)][int]$Gap,
+    [AllowNull()][object[]]$AvoidRectangles
+  )
+  if ($CircleSize -le 0 -or $Gap -lt 0 -or
+      $Bounds.Width -lt ($CircleSize + (2 * $Gap)) -or
+      $Bounds.Height -lt ($CircleSize + (2 * $Gap))) {
+    return $Preferred
+  }
+  $minimumX = $Bounds.Left + $Gap
+  $maximumX = $Bounds.Right - $Gap - $CircleSize
+  $minimumY = $Bounds.Top + $Gap
+  $maximumY = $Bounds.Bottom - $Gap - $CircleSize
+  $preferredCircleX = [int][Math]::Max(
+    $minimumX, [Math]::Min($Preferred.X + $Halo, $maximumX))
+  $preferredCircleY = [int][Math]::Max(
+    $minimumY, [Math]::Min($Preferred.Y + $Halo, $maximumY))
+
+  $expandedAvoid = [Collections.Generic.List[Drawing.Rectangle]]::new()
+  foreach ($item in @($AvoidRectangles)) {
+    if ($item -isnot [Drawing.Rectangle] -or $item.Width -le 0 -or $item.Height -le 0) { continue }
+    $expandedAvoid.Add([Drawing.Rectangle]::FromLTRB(
+      $item.Left - $Gap, $item.Top - $Gap, $item.Right + $Gap, $item.Bottom + $Gap))
+  }
+  $preferredCircle = [Drawing.Rectangle]::new(
+    $preferredCircleX, $preferredCircleY, $CircleSize, $CircleSize)
+  $preferredBlocked = $false
+  foreach ($avoid in $expandedAvoid) {
+    if ($preferredCircle.IntersectsWith($avoid)) {
+      $preferredBlocked = $true
+      break
+    }
+  }
+  if (-not $preferredBlocked) {
+    return [Drawing.Point]::new($preferredCircleX - $Halo, $preferredCircleY - $Halo)
+  }
+
+  $candidateXs = [Collections.Generic.HashSet[int]]::new()
+  $candidateYs = [Collections.Generic.HashSet[int]]::new()
+  foreach ($x in @($preferredCircleX, $minimumX, $maximumX)) { [void]$candidateXs.Add([int]$x) }
+  foreach ($y in @($preferredCircleY, $minimumY, $maximumY)) { [void]$candidateYs.Add([int]$y) }
+  foreach ($avoid in $expandedAvoid) {
+    [void]$candidateXs.Add([int][Math]::Max(
+      $minimumX, [Math]::Min($avoid.Left - $CircleSize, $maximumX)))
+    [void]$candidateXs.Add([int][Math]::Max(
+      $minimumX, [Math]::Min($avoid.Right, $maximumX)))
+    [void]$candidateYs.Add([int][Math]::Max(
+      $minimumY, [Math]::Min($avoid.Top - $CircleSize, $maximumY)))
+    [void]$candidateYs.Add([int][Math]::Max(
+      $minimumY, [Math]::Min($avoid.Bottom, $maximumY)))
+  }
+
+  $best = $null
+  $bestScore = [long]::MaxValue
+  foreach ($candidateY in $candidateYs) {
+    foreach ($candidateX in $candidateXs) {
+      $circle = [Drawing.Rectangle]::new(
+        [int]$candidateX, [int]$candidateY, $CircleSize, $CircleSize)
+      $blocked = $false
+      foreach ($avoid in $expandedAvoid) {
+        if ($circle.IntersectsWith($avoid)) {
+          $blocked = $true
+          break
+        }
+      }
+      if ($blocked) { continue }
+      $deltaX = [long]$candidateX - $preferredCircleX
+      $deltaY = [long]$candidateY - $preferredCircleY
+      $score = ($deltaX * $deltaX) + ($deltaY * $deltaY)
+      if ($null -eq $best -or $score -lt $bestScore -or
+          ($score -eq $bestScore -and
+           ([int]$candidateY -lt $best.Y -or
+            ([int]$candidateY -eq $best.Y -and [int]$candidateX -lt $best.X)))) {
+        $best = [Drawing.Point]::new([int]$candidateX, [int]$candidateY)
+        $bestScore = $score
+      }
+    }
+  }
+  if ($null -eq $best) {
+    return [Drawing.Point]::new($preferredCircleX - $Halo, $preferredCircleY - $Halo)
+  }
+  return [Drawing.Point]::new($best.X - $Halo, $best.Y - $Halo)
+}
+
+function Get-AuraUiLauncherAvoidRectangles {
+  $probe = $script:LauncherLayoutProbe
+  if ($null -eq $probe -or $null -eq $script:LauncherLayoutProbeClientSize -or
+      $null -eq $script:WebView -or $script:WebView.IsDisposed -or
+      $script:WebView.ClientSize.Width -ne $script:LauncherLayoutProbeClientSize.Width -or
+      $script:WebView.ClientSize.Height -ne $script:LauncherLayoutProbeClientSize.Height) {
+    return @()
+  }
+  $rectangles = [Collections.Generic.List[Drawing.Rectangle]]::new()
+  foreach ($candidate in @($probe.prompt, $probe.composer, $probe.toolbar)) {
+    $rectangle = ConvertTo-AuraUiLauncherScreenRectangle -Rectangle $candidate -Probe $probe
+    if ($null -ne $rectangle) { $rectangles.Add($rectangle) }
+  }
+  foreach ($candidate in @($probe.controls)) {
+    $rectangle = ConvertTo-AuraUiLauncherScreenRectangle -Rectangle $candidate -Probe $probe
+    if ($null -ne $rectangle) { $rectangles.Add($rectangle) }
+  }
+  if ($probe.greeting.status -ceq 'found') {
+    $rectangle = ConvertTo-AuraUiLauncherScreenRectangle -Rectangle $probe.greeting.rect -Probe $probe
+    if ($null -ne $rectangle) { $rectangles.Add($rectangle) }
+  }
+  return @($rectangles)
+}
+
+function Stop-AuraUiLauncherLayoutProbe {
+  $script:LauncherProbeGeneration = [long]$script:LauncherProbeGeneration + 1
+  $script:LauncherProbeDue = $null
+  $script:LauncherLayoutPending = $false
+  $script:LauncherLayoutProbe = $null
+  $script:LauncherLayoutProbeClientSize = $null
+  Update-AuraUiLauncherPosition
+}
+
+function Request-AuraUiLauncherLayoutProbe {
+  # Requests invalidate old async work and coalesce resize/navigation bursts.
+  $script:LauncherProbeGeneration = [long]$script:LauncherProbeGeneration + 1
+  # Original look has no renderer-owned geometry and may use the saved
+  # preference directly. A themed request must not reveal its first launcher
+  # frame until this payload generation returns a validated snapshot.
+  $script:LauncherLayoutPending = [bool](
+    (Get-AuraUiEnabled) -and [string]$script:ActivePayloadDigest)
+  $script:LauncherLayoutProbe = $null
+  $script:LauncherLayoutProbeClientSize = $null
+  Update-AuraUiLauncherPosition
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate -or
+      -not $script:WebReady -or $null -eq $script:WebView -or
+      $null -eq $script:WebView.CoreWebView2 -or
+      $null -eq $script:Form -or $script:Form.IsDisposed -or -not $script:Form.Visible -or
+      $script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized -or
+      -not (Get-AuraUiEnabled) -or -not $script:ActivePayloadDigest -or
+      -not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+    $script:LauncherProbeDue = $null
+    return
+  }
+  $script:LauncherProbeDue = [DateTime]::UtcNow.AddMilliseconds(140)
+}
+
+function Update-AuraUiLauncherLayoutProbe {
+  if ($null -ne $script:LauncherProbeTask) {
+    if (-not $script:LauncherProbeTask.IsCompleted) { return }
+    $task = $script:LauncherProbeTask
+    $generation = [long]$script:LauncherProbeTaskGeneration
+    $expectedDigest = [string]$script:LauncherProbeTaskDigest
+    $taskClientSize = $script:LauncherProbeTaskClientSize
+    $script:LauncherProbeTask = $null
+    $script:LauncherProbeTaskGeneration = [long]-1
+    $script:LauncherProbeTaskDigest = $null
+    $script:LauncherProbeTaskClientSize = $null
+    try {
+      $raw = $task.GetAwaiter().GetResult()
+      if ($generation -ne $script:LauncherProbeGeneration -or
+          -not $expectedDigest -or
+          -not [string]::Equals(
+            $expectedDigest, [string]$script:ActivePayloadDigest, [StringComparison]::Ordinal) -or
+          $null -eq $taskClientSize -or $null -eq $script:WebView -or $script:WebView.IsDisposed -or
+          $script:WebView.ClientSize.Width -ne $taskClientSize.Width -or
+          $script:WebView.ClientSize.Height -ne $taskClientSize.Height) {
+        return
+      }
+      if (-not $raw -or $raw -ceq 'null') {
+        $script:LauncherLayoutProbe = $null
+        $script:LauncherLayoutProbeClientSize = $null
+        Update-AuraUiLauncherPosition
+        $script:LauncherProbeDue = [DateTime]::UtcNow.AddMilliseconds(900)
+        return
+      }
+      $candidate = $raw | ConvertFrom-Json
+      $script:LauncherLayoutProbe = Assert-AuraUiLauncherLayoutProbe `
+        -Value $candidate -ExpectedDigest $expectedDigest
+      $script:LauncherLayoutProbeClientSize = [Drawing.Size]::new(
+        [int]$taskClientSize.Width, [int]$taskClientSize.Height)
+      $script:LauncherLayoutPending = $false
+      $script:LauncherProbeRejected = $false
+      Update-AuraUiLauncherPosition
+      Show-AuraUiLauncherHint
+      $script:LauncherProbeDue = [DateTime]::UtcNow.AddMilliseconds(320)
+    } catch {
+      if ($generation -eq $script:LauncherProbeGeneration -and
+          -not $script:RescueActive -and -not $script:RescueVerificationPending -and
+          $null -eq $script:RescueChallengeCandidate) {
+        $script:LauncherLayoutProbe = $null
+        $script:LauncherLayoutProbeClientSize = $null
+        if (-not $script:LauncherProbeRejected) {
+          Write-AuraUiLog -Message 'Aura launcher layout probe returned an invalid bounded result.'
+          $script:LauncherProbeRejected = $true
+        }
+        Update-AuraUiLauncherPosition
+        $script:LauncherProbeDue = [DateTime]::UtcNow.AddMilliseconds(900)
+      }
+    }
+    return
+  }
+  if ($null -eq $script:LauncherProbeDue -or [DateTime]::UtcNow -lt $script:LauncherProbeDue) { return }
+  $script:LauncherProbeDue = $null
+  if ($script:RescueActive -or $script:RescueVerificationPending -or
+      $null -ne $script:RescueChallengeCandidate -or
+      -not $script:WebReady -or $null -eq $script:WebView -or
+      $null -eq $script:WebView.CoreWebView2 -or
+      $null -eq $script:Form -or $script:Form.IsDisposed -or -not $script:Form.Visible -or
+      $script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized -or
+      -not (Get-AuraUiEnabled) -or -not $script:ActivePayloadDigest -or
+      -not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+    return
+  }
+  $probeSource = '(() => { try { const state = window.__CLAUDE_AURA_STATE__; return state && typeof state.getLayoutProbe === "function" ? state.getLayoutProbe() : null; } catch { return null; } })()'
+  try {
+    $script:LauncherProbeTaskGeneration = [long]$script:LauncherProbeGeneration
+    $script:LauncherProbeTaskDigest = [string]$script:ActivePayloadDigest
+    $script:LauncherProbeTaskClientSize = [Drawing.Size]::new(
+      [int]$script:WebView.ClientSize.Width, [int]$script:WebView.ClientSize.Height)
+    $script:LauncherProbeTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($probeSource)
+  } catch {
+    $script:LauncherProbeTaskGeneration = [long]-1
+    $script:LauncherProbeTaskDigest = $null
+    $script:LauncherProbeTaskClientSize = $null
+    if (-not $script:LauncherProbeRejected) {
+      Write-AuraUiLog -Message 'Aura launcher layout probe could not start.'
+      $script:LauncherProbeRejected = $true
+    }
+    $script:LauncherProbeDue = [DateTime]::UtcNow.AddMilliseconds(900)
+  }
+}
+
 function Update-AuraUiLauncherPosition {
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
@@ -3949,23 +4717,49 @@ function Update-AuraUiLauncherPosition {
       -not $script:Form.Visible -or $loadingVisible) {
     if ($script:Launcher.Visible) { $script:Launcher.Hide() }
     Hide-AuraUiLauncherTip
+    if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) {
+      try { $script:LauncherHint.Hide() } catch {}
+    }
     return
   }
   if ($script:LauncherDragging) { return }
-  # Anchor to the bottom-right of the Claude content area by the saved gap so the
-  # launcher floats clear of Claude's left sidebar, centre composer, and top
-  # controls, and keeps the user's dragged position across window resizes.
+  if ($script:LauncherLayoutPending) {
+    # Keep a previously solved launcher where it is while a resize or payload
+    # refresh is measured. On first startup it is still hidden, so no unprobed
+    # saved position can cover Claude's composer.
+    Hide-AuraUiLauncherTip
+    if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) {
+      try { $script:LauncherHint.Hide() } catch {}
+    }
+    return
+  }
+  # The saved gaps remain the preferred position. A live geometry probe may
+  # derive a temporary effective position, but automatic avoidance is never
+  # written back to launcher-pos.json.
   try {
+    $topLeft = $script:Form.PointToScreen([Drawing.Point]::new(0, 0))
     $bottomRight = $script:Form.PointToScreen(
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
   } catch { return }
-  $halo = (Get-AuraUiLauncherMetrics).Halo
+  $metrics = Get-AuraUiLauncherMetrics
+  $halo = $metrics.Halo
   $desired = [Drawing.Point]::new(
     $bottomRight.X - $script:Launcher.Width + $halo -
       (ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherRightGap),
     $bottomRight.Y - $script:Launcher.Height + $halo -
       (ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherBottomGap))
-  $script:Launcher.Location = Get-AuraUiLauncherClampedLocation -Location $desired
+  $preferred = Get-AuraUiLauncherClampedLocation -Location $desired
+  $avoidRectangles = @(Get-AuraUiLauncherAvoidRectangles)
+  $effective = if ($avoidRectangles.Count) {
+    Get-AuraUiLauncherCollisionFreeLocation `
+      -Preferred $preferred `
+      -Bounds ([Drawing.Rectangle]::FromLTRB(
+        $topLeft.X, $topLeft.Y, $bottomRight.X, $bottomRight.Y)) `
+      -CircleSize $metrics.Compact -Halo $halo `
+      -Gap (ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherSafeGap) `
+      -AvoidRectangles $avoidRectangles
+  } else { $preferred }
+  $script:Launcher.Location = $effective
   if (-not $script:Launcher.Visible) {
     if (($null -eq $script:LauncherStyle -or $null -eq $script:EffectiveLauncherIdentity) -and
         -not (Update-AuraUiLauncherStyle)) {
@@ -3977,8 +4771,17 @@ function Update-AuraUiLauncherPosition {
     # the layered bit and its composited frame; present a fresh one.
     if ($script:LauncherLayeredActive) { Update-AuraUiLauncherSurface }
   }
-  Update-AuraUiLauncherHintPosition
-  Update-AuraUiLauncherTipPosition
+  [void](Update-AuraUiLauncherHintPosition)
+  [void](Update-AuraUiLauncherTipPosition)
+}
+
+function Show-AuraUiLauncherMenu {
+  # Both ordinary click and right-click reveal the same host-owned actions.
+  # Keeping this path separate from the pointer gesture makes the Prompt Shelf
+  # discoverable without changing the launcher's permanent circular surface.
+  if ($null -eq $script:LauncherMenu -or $script:LauncherMenu.IsDisposed) { return }
+  Hide-AuraUiLauncherTip
+  $script:LauncherMenu.Show([System.Windows.Forms.Cursor]::Position)
 }
 
 function New-AuraUiLauncherTipBitmap {
@@ -3986,8 +4789,8 @@ function New-AuraUiLauncherTipBitmap {
     [Parameter(Mandatory = $true)][object]$Style,
     [int]$Dpi = $script:LauncherDpi
   )
-  # A stylized hover caption for the launcher: theme surface, "Aura Studio"
-  # title, and a one-line usage hint. Rendered per-pixel so the rounded card and
+  # A stylized hover caption for the launcher: theme surface, action-menu title,
+  # and a one-line usage hint. Rendered per-pixel so the rounded card and
   # its shadow composite cleanly over the page like the launcher itself.
   $bitmap = $null
   $graphics = $null
@@ -4065,26 +4868,78 @@ function Get-AuraUiLauncherPopupLocation {
     [Parameter(Mandatory = $true)][Drawing.Rectangle]$Anchor,
     [Parameter(Mandatory = $true)][Drawing.Size]$PopupSize,
     [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds,
-    [Parameter(Mandatory = $true)][int]$Gap
+    [Parameter(Mandatory = $true)][int]$Gap,
+    [AllowNull()][object[]]$AvoidRectangles,
+    [switch]$RequireCollisionFree
   )
-  # Prefer the familiar above/right-aligned placement. Flip at the top or left
-  # edge before clamping so a popup keeps moving with its button instead of
-  # appearing pinned to the window while the launcher moves underneath it.
-  $desiredX = $Anchor.Right - $PopupSize.Width
-  if ($desiredX -lt $Bounds.Left) { $desiredX = $Anchor.Left }
-  $desiredY = $Anchor.Top - $PopupSize.Height - $Gap
-  if ($desiredY -lt $Bounds.Top) { $desiredY = $Anchor.Bottom + $Gap }
+  if ($PopupSize.Width -le 0 -or $PopupSize.Height -le 0 -or $Gap -lt 0 -or
+      $Bounds.Width -le 0 -or $Bounds.Height -le 0) {
+    return $null
+  }
   $maximumX = [Math]::Max($Bounds.Left, $Bounds.Right - $PopupSize.Width)
   $maximumY = [Math]::Max($Bounds.Top, $Bounds.Bottom - $PopupSize.Height)
-  $desiredX = [Math]::Max($Bounds.Left, [Math]::Min($desiredX, $maximumX))
-  $desiredY = [Math]::Max($Bounds.Top, [Math]::Min($desiredY, $maximumY))
-  return [Drawing.Point]::new([int]$desiredX, [int]$desiredY)
+  $above = $Anchor.Top - $PopupSize.Height - $Gap
+  $below = $Anchor.Bottom + $Gap
+  $rightAligned = $Anchor.Right - $PopupSize.Width
+  $leftAligned = $Anchor.Left
+  $left = $Anchor.Left - $PopupSize.Width - $Gap
+  $right = $Anchor.Right + $Gap
+  $topAligned = $Anchor.Top
+  $bottomAligned = $Anchor.Bottom - $PopupSize.Height
+
+  # Preserve the familiar above/right-aligned first choice, then try the other
+  # sides of the launcher. Every candidate is clamped once and deduplicated so
+  # this remains deterministic at window edges.
+  $rawCandidates = @(
+    [Drawing.Point]::new([int]$rightAligned, [int]$above),
+    [Drawing.Point]::new([int]$leftAligned, [int]$above),
+    [Drawing.Point]::new([int]$rightAligned, [int]$below),
+    [Drawing.Point]::new([int]$leftAligned, [int]$below),
+    [Drawing.Point]::new([int]$left, [int]$bottomAligned),
+    [Drawing.Point]::new([int]$left, [int]$topAligned),
+    [Drawing.Point]::new([int]$right, [int]$bottomAligned),
+    [Drawing.Point]::new([int]$right, [int]$topAligned)
+  )
+  $expandedAvoid = [Collections.Generic.List[Drawing.Rectangle]]::new()
+  foreach ($item in @($AvoidRectangles)) {
+    if ($item -isnot [Drawing.Rectangle] -or $item.Width -le 0 -or $item.Height -le 0) { continue }
+    $expandedAvoid.Add([Drawing.Rectangle]::FromLTRB(
+      $item.Left - $Gap, $item.Top - $Gap, $item.Right + $Gap, $item.Bottom + $Gap))
+  }
+  $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  $fallback = $null
+  foreach ($candidate in $rawCandidates) {
+    $x = [int][Math]::Max($Bounds.Left, [Math]::Min([double]$candidate.X, $maximumX))
+    $y = [int][Math]::Max($Bounds.Top, [Math]::Min([double]$candidate.Y, $maximumY))
+    if (-not $seen.Add("$x,$y")) { continue }
+    $point = [Drawing.Point]::new($x, $y)
+    if ($null -eq $fallback) { $fallback = $point }
+    $popup = [Drawing.Rectangle]::new($point, $PopupSize)
+    if ($popup.Left -lt $Bounds.Left -or $popup.Top -lt $Bounds.Top -or
+        $popup.Right -gt $Bounds.Right -or $popup.Bottom -gt $Bounds.Bottom) {
+      continue
+    }
+    # Clamping in a small window can fold an otherwise adjacent candidate back
+    # over the launcher itself. A collision-free popup must remain separate
+    # from both its anchor and the measured Claude controls.
+    $blocked = $RequireCollisionFree -and $popup.IntersectsWith($Anchor)
+    foreach ($avoid in $expandedAvoid) {
+      if ($popup.IntersectsWith($avoid)) {
+        $blocked = $true
+        break
+      }
+    }
+    if (-not $blocked) { return $point }
+  }
+  if ($RequireCollisionFree) { return $null }
+  return $fallback
 }
 
 function Update-AuraUiLauncherTipPosition {
-  if ($null -eq $script:LauncherTip -or $script:LauncherTip.IsDisposed) { return }
-  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
-  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if ($script:LauncherLayoutPending) { Hide-AuraUiLauncherTip; return $false }
+  if ($null -eq $script:LauncherTip -or $script:LauncherTip.IsDisposed) { return $false }
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return $false }
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return $false }
   try {
     $metrics = Get-AuraUiLauncherMetrics
     $gap = ConvertTo-AuraUiLauncherPixels -Logical 6
@@ -4098,13 +4953,24 @@ function Update-AuraUiLauncherTipPosition {
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
     $bounds = [Drawing.Rectangle]::FromLTRB(
       $topLeft.X, $topLeft.Y, $bottomRight.X, $bottomRight.Y)
-    $script:LauncherTip.Location = Get-AuraUiLauncherPopupLocation `
-      -Anchor $anchor -PopupSize $script:LauncherTip.Size -Bounds $bounds -Gap $gap
-  } catch {}
+    $location = Get-AuraUiLauncherPopupLocation `
+      -Anchor $anchor -PopupSize $script:LauncherTip.Size -Bounds $bounds -Gap $gap `
+      -AvoidRectangles @(Get-AuraUiLauncherAvoidRectangles) -RequireCollisionFree
+    if ($null -eq $location) {
+      Hide-AuraUiLauncherTip
+      return $false
+    }
+    $script:LauncherTip.Location = $location
+    return $true
+  } catch {
+    Hide-AuraUiLauncherTip
+    return $false
+  }
 }
 
 function Show-AuraUiLauncherTip {
-  if ($script:LauncherTipDisabled -or $script:LauncherTipVisible -or $script:LauncherDragging) { return }
+  if ($script:LauncherLayoutPending -or $script:LauncherTipDisabled -or
+      $script:LauncherTipVisible -or $script:LauncherDragging) { return }
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible) { return }
   $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
   $bitmap = New-AuraUiLauncherTipBitmap -Style $style
@@ -4122,7 +4988,11 @@ function Show-AuraUiLauncherTip {
     $script:LauncherTip.ClientSize = [Drawing.Size]::new($bitmap.Width, $bitmap.Height)
     # Use one live attachment path for the first frame and every later launcher
     # relocation so the caption cannot be left behind by window or DPI changes.
-    Update-AuraUiLauncherTipPosition
+    if (-not (Update-AuraUiLauncherTipPosition)) {
+      $bitmap.Dispose()
+      $bitmap = $null
+      return
+    }
     [AuraLayered]::SetTipStyles($script:LauncherTip.Handle)
     # The classic launcher has no running frame animation, so present its tip
     # fully opaque instead of leaving the initial alpha-zero frame invisible.
@@ -4162,9 +5032,13 @@ function Hide-AuraUiLauncherTip {
 }
 
 function Update-AuraUiLauncherHintPosition {
-  if ($null -eq $script:LauncherHint -or $script:LauncherHint.IsDisposed) { return }
-  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed) { return }
-  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  if ($null -eq $script:LauncherHint -or $script:LauncherHint.IsDisposed) { return $false }
+  if ($script:LauncherLayoutPending -or
+      $null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible -or
+      $null -eq $script:Form -or $script:Form.IsDisposed) {
+    try { $script:LauncherHint.Hide() } catch {}
+    return $false
+  }
   try {
     $metrics = Get-AuraUiLauncherMetrics
     $gap = ConvertTo-AuraUiLauncherPixels -Logical 12
@@ -4178,16 +5052,27 @@ function Update-AuraUiLauncherHintPosition {
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
     $bounds = [Drawing.Rectangle]::FromLTRB(
       $topLeft.X, $topLeft.Y, $bottomRight.X, $bottomRight.Y)
-    $script:LauncherHint.Location = Get-AuraUiLauncherPopupLocation `
-      -Anchor $anchor -PopupSize $script:LauncherHint.Size -Bounds $bounds -Gap $gap
-  } catch {}
+    $location = Get-AuraUiLauncherPopupLocation `
+      -Anchor $anchor -PopupSize $script:LauncherHint.Size -Bounds $bounds -Gap $gap `
+      -AvoidRectangles @(Get-AuraUiLauncherAvoidRectangles) -RequireCollisionFree
+    if ($null -eq $location) {
+      $script:LauncherHint.Hide()
+      return $false
+    }
+    $script:LauncherHint.Location = $location
+    [void][AuraWindow]::ShowWindow($script:LauncherHint.Handle, 8)
+    return $true
+  } catch {
+    try { $script:LauncherHint.Hide() } catch {}
+    return $false
+  }
 }
 
 function Show-AuraUiLauncherHint {
   # A stylized launch reminder pinned near the launcher. "Got it" closes it for
   # this session; "Don't show again" persists the dismissal marker. Real WinForms
   # controls keep it keyboard- and screen-reader-accessible.
-  if ($script:LauncherHintShown) { return }
+  if ($script:LauncherLayoutPending -or $script:LauncherHintShown) { return }
   if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or -not $script:Launcher.Visible) { return }
   $marker = Join-Path $DataRoot 'launcher-hint-dismissed'
   if (Test-Path -LiteralPath $marker -PathType Leaf) { return }
@@ -4293,10 +5178,10 @@ function Show-AuraUiLauncherHint {
     $script:LauncherHint = $hint
     # Keep the card attached to the launcher through window resize, movement,
     # DPI relocation, and a user drag of the launcher itself.
-    Update-AuraUiLauncherHintPosition
     # SW_SHOWNA keeps focus in Claude; the card still accepts clicks and Escape
-    # once the user interacts with it.
-    [void][AuraWindow]::ShowWindow($hint.Handle, 8)
+    # once the user interacts with it. If none of the bounded placements avoids
+    # Claude's current controls, keep this transient card hidden.
+    [void](Update-AuraUiLauncherHintPosition)
   } catch {
     Write-AuraUiLog -Message $_.Exception.ToString()
   }
@@ -4618,6 +5503,16 @@ function Test-AuraUiStudioExactProperties {
   return $true
 }
 
+function Test-AuraUiStudioMetadataText {
+  param(
+    [AllowNull()][object]$Value,
+    [Parameter(Mandatory = $true)][int]$Maximum
+  )
+  return $Value -is [string] -and
+    $Value.Length -le $Maximum -and
+    $Value -cnotmatch '[\x00-\x08\x0B\x0C\x0E-\x1F]'
+}
+
 function Get-AuraUiUnicodeScalarLength {
   param([Parameter(Mandatory = $true)][string]$Value)
   $count = 0
@@ -4843,19 +5738,34 @@ function ConvertTo-AuraUiStudioEditorState {
         -not (Test-AuraUiStudioExactProperties -Message $State.metadata -Names @('labels', 'descriptions'))) {
       throw 'Aura Studio editor state has invalid metadata.'
     }
+    $metadataLocales = @{}
     foreach ($field in @('labels', 'descriptions')) {
       $localized = $State.metadata.$field
-      if ($localized -isnot [System.Management.Automation.PSCustomObject] -or
-          -not (Test-AuraUiStudioExactProperties -Message $localized -Names @('en', 'zh-CN', 'zh-HKTW'))) {
+      if ($localized -isnot [System.Management.Automation.PSCustomObject]) {
         throw "Aura Studio editor state has invalid localized $field."
       }
+      $locales = @($localized.PSObject.Properties | ForEach-Object { $_.Name })
+      if ($locales.Count -lt 1 -or $locales.Count -gt $StudioLocaleIds.Count -or
+          $locales -cnotcontains 'en' -or
+          @($locales | Where-Object { $_ -cnotin $StudioLocaleIds }).Count -gt 0) {
+        throw "Aura Studio editor state has invalid localized $field."
+      }
+      $metadataLocales[$field] = $locales
       $maximum = if ($field -ceq 'labels') { 80 } else { 220 }
-      foreach ($locale in @('en', 'zh-CN', 'zh-HKTW')) {
+      foreach ($locale in $locales) {
         $text = $localized.$locale
-        if ($text -isnot [string] -or -not $text.Trim() -or $text.Length -gt $maximum) {
+        # Empty selected values are valid draft state. Core validation keeps
+        # the draft invalid until every enabled locale is complete.
+        if (-not (Test-AuraUiStudioMetadataText -Value $text -Maximum $maximum)) {
           throw "Aura Studio editor state has invalid $field.$locale."
         }
       }
+    }
+    if ($metadataLocales.labels.Count -ne $metadataLocales.descriptions.Count -or
+        @($metadataLocales.labels | Where-Object {
+            $_ -cnotin $metadataLocales.descriptions
+          }).Count -gt 0) {
+      throw 'Aura Studio editor state metadata locales do not match.'
     }
     if ($State.tokens -isnot [System.Management.Automation.PSCustomObject] -or
         $null -eq $State.tokens.PSObject.Properties['light'] -or
@@ -5635,11 +6545,22 @@ function Show-AuraUiStudio {
   param([switch]$OfferIntroduction)
   if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed) { return }
   if ($OfferIntroduction) { $script:StudioIntroductionRequested = $true }
+  Initialize-AuraUiWindowLayoutForForm `
+    -Kind studio -Form $script:StudioForm -AnchorForm $script:Form
   if (-not $script:StudioForm.Visible) { $script:StudioForm.Show() }
   if ($script:StudioForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
-    $script:StudioForm.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    $script:StudioForm.WindowState = if (
+      $script:StudioLastWindowState -eq [System.Windows.Forms.FormWindowState]::Maximized
+    ) {
+      [System.Windows.Forms.FormWindowState]::Maximized
+    } else {
+      [System.Windows.Forms.FormWindowState]::Normal
+    }
   }
-  Set-AuraUiFormWithinWorkingArea -Form $script:StudioForm
+  if ($script:StudioForm.WindowState -eq [System.Windows.Forms.FormWindowState]::Normal) {
+    Set-AuraUiFormBoundsWithinWorkingArea `
+      -Form $script:StudioForm -Bounds $script:StudioForm.Bounds
+  }
   $script:StudioForm.Activate()
   $script:StudioForm.BringToFront()
   if ($OfferIntroduction) { Send-AuraUiStudioState }
@@ -5650,11 +6571,14 @@ function Show-AuraUiMain {
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
   if (-not $script:Form.Visible) { $script:Form.Show() }
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) {
-    if ('AuraWindow' -as [type] -and $script:Form.IsHandleCreated) {
-      [void][AuraWindow]::ShowWindow($script:Form.Handle, 9)
+    if ($script:AuraLastWindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+      $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
     } else {
       $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
     }
+  }
+  if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Normal) {
+    Set-AuraUiFormBoundsWithinWorkingArea -Form $script:Form -Bounds $script:Form.Bounds
   }
   $script:Form.Activate()
   $script:Form.BringToFront()
@@ -5689,6 +6613,102 @@ function Restore-AuraUiStudioFocus {
   $script:StudioForm.BringToFront()
 }
 
+function Get-AuraUiPreviewClientSize {
+  param(
+    [Parameter(Mandatory = $true)][int]$CssWidth,
+    [Parameter(Mandatory = $true)][int]$CssHeight
+  )
+  # Studio authors viewport geometry in CSS pixels. WinForms ClientSize is a
+  # native-pixel transport whose scale changes with monitor DPI and WebView
+  # zoom, so only a ratio measured from the live WebView is authoritative.
+  $scaleX = if ($script:MirrorCssScaleX -ge 0.25 -and $script:MirrorCssScaleX -le 8) {
+    [double]$script:MirrorCssScaleX
+  } else { 1.0 }
+  $scaleY = if ($script:MirrorCssScaleY -ge 0.25 -and $script:MirrorCssScaleY -le 8) {
+    [double]$script:MirrorCssScaleY
+  } else { 1.0 }
+  return [Drawing.Size]::new(
+    [int][Math]::Max(1, [Math]::Round($CssWidth * $scaleX)),
+    [int][Math]::Max(1, [Math]::Round($CssHeight * $scaleY)))
+}
+
+function Set-AuraUiPreviewLocationWithinWorkingArea {
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  $workingArea = [System.Windows.Forms.Screen]::FromControl($script:Form).WorkingArea
+  # Exact CSS preview sizes may intentionally exceed the current monitor.
+  # Keep a useful part of the native window reachable without changing size.
+  $script:Form.Location = [Drawing.Point]::new(
+    [Math]::Max($workingArea.Left, [Math]::Min($script:Form.Location.X, $workingArea.Right - 240)),
+    [Math]::Max($workingArea.Top, [Math]::Min($script:Form.Location.Y, $workingArea.Bottom - 160)))
+}
+
+function Update-AuraUiPreviewCssSizing {
+  param([Parameter(Mandatory = $true)][object]$Geometry)
+  if ($null -eq $Geometry.viewport -or
+      $null -eq $script:WebView -or $script:WebView.IsDisposed) {
+    return $false
+  }
+  $cssWidth = [double]$Geometry.viewport.width
+  $cssHeight = [double]$Geometry.viewport.height
+  if ($cssWidth -lt 200 -or $cssWidth -gt 10000 -or
+      $cssHeight -lt 200 -or $cssHeight -gt 10000) {
+    return $false
+  }
+  $nativeWidth = [double]$script:WebView.ClientSize.Width
+  $nativeHeight = [double]$script:WebView.ClientSize.Height
+  if ($nativeWidth -le 0 -or $nativeHeight -le 0) { return $false }
+  $scaleX = $nativeWidth / $cssWidth
+  $scaleY = $nativeHeight / $cssHeight
+  if ($scaleX -lt 0.25 -or $scaleX -gt 8 -or $scaleY -lt 0.25 -or $scaleY -gt 8) {
+    return $false
+  }
+  $script:MirrorCssScaleX = $scaleX
+  $script:MirrorCssScaleY = $scaleY
+
+  $requested = $script:MirrorRequestedCssSize
+  $settled = $true
+  if ($null -ne $requested -and
+      [int]$script:MirrorRequestedCssRequest -eq [int]$script:MirrorPreviewRequest) {
+    $requestedWidth = [int]$requested.Width
+    $requestedHeight = [int]$requested.Height
+    $settled = [Math]::Abs($cssWidth - $requestedWidth) -le 1 -and
+      [Math]::Abs($cssHeight - $requestedHeight) -le 1
+    if (-not $settled -and $script:MirrorSizeCorrectionAttempts -lt 3) {
+      $next = Get-AuraUiPreviewClientSize -CssWidth $requestedWidth -CssHeight $requestedHeight
+      if ($next.Width -ne $script:Form.ClientSize.Width -or
+          $next.Height -ne $script:Form.ClientSize.Height) {
+        $script:MirrorSizeCorrectionAttempts++
+        $script:PreviewClientResizeActive = $true
+        try { $script:Form.ClientSize = $next }
+        finally { $script:PreviewClientResizeActive = $false }
+        Set-AuraUiPreviewLocationWithinWorkingArea
+        return $true
+      }
+      # The measured ratio rounded back to the current native client size, so
+      # another identical attempt cannot improve this result.
+      $script:MirrorSizeCorrectionAttempts = 3
+    }
+  }
+
+  $dpr = [double]$Geometry.viewport.dpr
+  $script:MirrorSizing = [ordered]@{
+    requestedWidth = if ($null -ne $requested) { [int]$requested.Width } else { $null }
+    requestedHeight = if ($null -ne $requested) { [int]$requested.Height } else { $null }
+    actualWidth = [int][Math]::Round($cssWidth)
+    actualHeight = [int][Math]::Round($cssHeight)
+    nativeWidth = [int]$script:WebView.ClientSize.Width
+    nativeHeight = [int]$script:WebView.ClientSize.Height
+    dpr = $dpr
+    settled = [bool]$settled
+  }
+  if (-not $settled -and $script:MirrorSizeCorrectionAttempts -ge 3) {
+    Write-AuraUiLog -Message (
+      "Aura preview settled at $([int]$cssWidth)x$([int]$cssHeight) CSS px after " +
+      "the requested $([int]$requested.Width)x$([int]$requested.Height) size could not be matched.")
+  }
+  return $false
+}
+
 function Set-AuraUiPreviewSize {
   param(
     [Parameter(Mandatory = $true)][string]$Size,
@@ -5707,32 +6727,43 @@ function Set-AuraUiPreviewSize {
   }
   if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
   $script:MirrorPreviewRequest = $Request
+  $script:MirrorRequestedCssRequest = $Request
+  $script:MirrorSizeCorrectionAttempts = 0
+  $script:MirrorSizing = $null
   $previousForeground = [AuraWindow]::GetForegroundWindow()
   Show-AuraUiMainForPreview
   if ($Size -ceq 'full') {
-    $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
+    $script:MirrorRequestedCssSize = $null
+    $script:PreviewClientResizeActive = $true
+    try { $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized }
+    finally { $script:PreviewClientResizeActive = $false }
     Request-AuraUiMirror
     Restore-AuraUiStudioFocus -PreviousForeground $previousForeground
     return
   }
-  $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
-  if ($customWidth -gt 0) {
-    # Custom dimensions may exceed the working area on purpose: the Studio
-    # mirror still captures the full webview, so oversized states remain
-    # reviewable on smaller monitors. Only the location is kept on screen.
-    $script:Form.ClientSize = [Drawing.Size]::new($customWidth, $customHeight)
-    $workingArea = [System.Windows.Forms.Screen]::FromControl($script:Form).WorkingArea
-    $script:Form.Location = [Drawing.Point]::new(
-      [Math]::Max($workingArea.Left, [Math]::Min($script:Form.Location.X, $workingArea.Right - 240)),
-      [Math]::Max($workingArea.Top, [Math]::Min($script:Form.Location.Y, $workingArea.Bottom - 160)))
-  } else {
-    $script:Form.ClientSize = if ($Size -ceq 'wide') {
-      [Drawing.Size]::new(1560, 940)
+  $script:PreviewClientResizeActive = $true
+  try { $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Normal }
+  finally { $script:PreviewClientResizeActive = $false }
+  if ($customWidth -le 0) {
+    if ($Size -ceq 'wide') {
+      $customWidth = 1560
+      $customHeight = 940
     } else {
-      [Drawing.Size]::new(1180, 640)
+      $customWidth = 1180
+      $customHeight = 640
     }
-    Set-AuraUiFormWithinWorkingArea -Form $script:Form
   }
+  $script:MirrorRequestedCssSize = [Drawing.Size]::new($customWidth, $customHeight)
+  # The first estimate uses the last measured WebView/native ratio. The mirror
+  # probe verifies it and performs at most three bounded corrections.
+  $script:PreviewClientResizeActive = $true
+  try {
+    $script:Form.ClientSize = Get-AuraUiPreviewClientSize `
+      -CssWidth $customWidth -CssHeight $customHeight
+  } finally {
+    $script:PreviewClientResizeActive = $false
+  }
+  Set-AuraUiPreviewLocationWithinWorkingArea
   Request-AuraUiMirror
   Restore-AuraUiStudioFocus -PreviousForeground $previousForeground
 }
@@ -6015,6 +7046,7 @@ function Update-AuraUiGreetingProbe {
 function Start-AuraUiMirrorCapture {
   if ($script:RescueActive -or $script:RescueVerificationPending -or
       $null -ne $script:RescueChallengeCandidate) { return }
+  if ($null -eq $script:MirrorSizing) { return }
   if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) { return }
   if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
   try {
@@ -6023,6 +7055,7 @@ function Start-AuraUiMirrorCapture {
     $script:MirrorCaptureRevision = [long](Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('revision'))
     $script:MirrorCapturePreviewRequest = [int]$script:MirrorPreviewRequest
     $script:MirrorCaptureGeneration = [long]$script:MirrorGeneration
+    $script:MirrorCaptureSizing = $script:MirrorSizing
     $script:MirrorStream = [IO.MemoryStream]::new()
     $script:MirrorCaptureTask = $script:WebView.CoreWebView2.CapturePreviewAsync(
       [Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat]::Jpeg, $script:MirrorStream)
@@ -6037,6 +7070,7 @@ function Start-AuraUiMirrorCapture {
     $script:MirrorCaptureRevision = [long]-1
     $script:MirrorCapturePreviewRequest = -1
     $script:MirrorCaptureGeneration = [long]-1
+    $script:MirrorCaptureSizing = $null
   }
 }
 
@@ -6050,12 +7084,14 @@ function Update-AuraUiMirror {
     $captureRevision = $script:MirrorCaptureRevision
     $capturePreviewRequest = $script:MirrorCapturePreviewRequest
     $captureGeneration = $script:MirrorCaptureGeneration
+    $captureSizing = $script:MirrorCaptureSizing
     $script:MirrorCaptureTask = $null
     $script:MirrorStream = $null
     $script:MirrorCaptureSession = $null
     $script:MirrorCaptureRevision = [long]-1
     $script:MirrorCapturePreviewRequest = -1
     $script:MirrorCaptureGeneration = [long]-1
+    $script:MirrorCaptureSizing = $null
     try {
       [void]$task.GetAwaiter().GetResult()
       $activeSession = [string](Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session'))
@@ -6071,10 +7107,11 @@ function Update-AuraUiMirror {
         $geometry = $script:MirrorGeometry
         $width = [int]$script:WebView.ClientSize.Width
         $height = [int]$script:WebView.ClientSize.Height
-        if ($null -ne $geometry -and $geometry.innerWidth -ge 200 -and $geometry.innerHeight -ge 200) {
+        if ($null -ne $geometry -and $null -ne $geometry.viewport -and
+            $geometry.viewport.width -ge 200 -and $geometry.viewport.height -ge 200) {
           # CSS pixels, so the page-reported layout rectangles line up 1:1.
-          $width = [int]$geometry.innerWidth
-          $height = [int]$geometry.innerHeight
+          $width = [int]$geometry.viewport.width
+          $height = [int]$geometry.viewport.height
         }
         $payload = [ordered]@{
           type = 'aura-mirror'
@@ -6083,8 +7120,9 @@ function Update-AuraUiMirror {
           height = $height
           revision = $captureRevision
           request = $capturePreviewRequest
+          sizing = $captureSizing
         }
-        $mirrorViewport = if ($null -ne $geometry) { [string]$geometry.viewport } else { '' }
+        $mirrorViewport = if ($null -ne $geometry) { [string]$geometry.frame } else { '' }
         if ($mirrorViewport -in @('normal', 'wide')) {
           $rect = $null
           if ($null -ne $geometry.main) {
@@ -6142,6 +7180,12 @@ function Update-AuraUiMirror {
           }
         }
         $script:StudioWebView.CoreWebView2.PostWebMessageAsJson(($payload | ConvertTo-Json -Depth 6 -Compress))
+        if ($capturePreviewRequest -eq $script:MirrorRequestedCssRequest -and
+            $null -ne $captureSizing -and [bool]$captureSizing.settled) {
+          $script:MirrorRequestedCssSize = $null
+          $script:MirrorRequestedCssRequest = 0
+          $script:MirrorSizeCorrectionAttempts = 0
+        }
       }
     } catch {
       if ($captureGeneration -ne $script:MirrorGeneration -or
@@ -6163,10 +7207,21 @@ function Update-AuraUiMirror {
     $script:MirrorProbeTask = $null
     $script:MirrorProbeGeneration = [long]-1
     $script:MirrorGeometry = $null
+    $script:MirrorSizing = $null
     try {
       $raw = $task.GetAwaiter().GetResult()
       if ($probeGeneration -ne $script:MirrorGeneration) { return }
-      if ($raw -and $raw -cne 'null') { $script:MirrorGeometry = $raw | ConvertFrom-Json }
+      if ($raw -and $raw -cne 'null') {
+        $candidate = $raw | ConvertFrom-Json
+        $script:MirrorGeometry = Assert-AuraUiLauncherLayoutProbe `
+          -Value $candidate -ExpectedDigest ([string]$script:ActivePayloadDigest)
+      }
+      if ($null -ne $script:MirrorGeometry -and
+          (Update-AuraUiPreviewCssSizing -Geometry $script:MirrorGeometry)) {
+        # Setting the corrected native client size raises SizeChanged, which
+        # creates a new generation and schedules the confirming probe.
+        return
+      }
     } catch {
       if ($probeGeneration -ne $script:MirrorGeneration -or
           $script:RescueActive -or $script:RescueVerificationPending -or
@@ -6175,6 +7230,14 @@ function Update-AuraUiMirror {
       } else {
         Write-AuraUiLog -Message "Aura mirror layout probe failed: $($_.Exception.Message)"
       }
+    }
+    if ($null -eq $script:MirrorGeometry -or $null -eq $script:MirrorSizing) {
+      if (-not $script:RescueActive -and -not $script:RescueVerificationPending -and
+          $null -eq $script:RescueChallengeCandidate -and
+          $probeGeneration -eq $script:MirrorGeneration) {
+        $script:MirrorDue = [DateTime]::UtcNow.AddMilliseconds(900)
+      }
+      return
     }
     $semanticContext = if ($null -ne $script:MirrorGeometry) { [string]$script:MirrorGeometry.context } else { 'other' }
     $semanticUnsettled = $semanticContext -notin @('new-chat', 'conversation') -or
@@ -6195,9 +7258,12 @@ function Update-AuraUiMirror {
   if (-not $script:WebReady -or $null -eq $script:WebView -or $null -eq $script:WebView.CoreWebView2) { return }
   if ($null -eq $script:StudioForm -or $script:StudioForm.IsDisposed -or -not $script:StudioForm.Visible) { return }
   if ($script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Minimized) { return }
-  # The renderer marks the live layout; read it so the Studio stage aligns
-  # its overlays with the real sidebar, prompt block, context, and mode.
-  $probe = '(() => { try { const root = document.documentElement; const rect = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; }; const viewport = root.dataset.claudeAuraViewport; const state = window.__CLAUDE_AURA_STATE__; const gp = state && typeof state.getGreetingProbe === "function" ? state.getGreetingProbe() : null; const greetingStatus = gp?.status === "native" || gp?.status === "custom" ? "found" : gp?.status === "ambiguous" ? "ambiguous" : gp?.status === "missing" || gp?.status === "pending" || gp?.status === "verifying" || gp?.status === "unmeasurable" ? "missing" : "inactive"; const greetingSource = gp?.source === "native" || gp?.source === "custom" ? gp.source : "none"; return { context: root.dataset.claudeAuraContext || "other", mode: root.dataset.claudeAuraEffectiveMode || "light", viewport: viewport === "normal" || viewport === "wide" ? viewport : null, innerWidth: window.innerWidth, innerHeight: window.innerHeight, main: rect(document.querySelector("[data-claude-aura-main-canvas]")), prompt: rect(document.querySelector("[data-claude-aura-prompt]")), greeting: { status: greetingStatus, source: greetingSource, rect: greetingStatus === "found" ? gp.rect : null } }; } catch { return null; } })()'
+  # One renderer-owned bounded probe is shared by Studio alignment and the
+  # native launcher's collision solver. It contains geometry only: never page
+  # text, selectors, account data, or conversation content.
+  $probe = '(() => { try { const state = window.__CLAUDE_AURA_STATE__; return state && typeof state.getLayoutProbe === "function" ? state.getLayoutProbe() : null; } catch { return null; } })()'
+  $script:MirrorGeometry = $null
+  $script:MirrorSizing = $null
   try {
     $script:MirrorProbeGeneration = [long]$script:MirrorGeneration
     $script:MirrorProbeTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($probe)
@@ -6872,10 +7938,13 @@ function Invoke-AuraUiSetEnabled {
   Set-AuraUiConfig -Options $options
   $appearance = if ($Enabled) { Get-AuraUiAppearance } else { 'system' }
   Set-AuraUiPreferredColorScheme -Appearance $appearance -Enabled $Enabled
+  Set-AuraPromptShelfAvailability -Enabled $Enabled
   if ($Enabled) {
     Apply-AuraUiTheme
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
   } else {
+    Stop-AuraUiLauncherLayoutProbe
+    Update-AuraUiLauncherPosition
     $cleanup = '(() => { window.__CLAUDE_AURA_DISABLED__ = true; return window.__CLAUDE_AURA_STATE__?.cleanup?.() ?? true; })()'
     if ($script:WebReady -and (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
       Start-AuraUiScript -Source $cleanup -Action Restore
@@ -6918,6 +7987,7 @@ function Update-AuraUiLocalizedChrome {
     }
     if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
       $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
+      $script:LauncherButton.AccessibleDescription = "$($script:UiCopy.launcherTipHint)"
     }
     if ($null -ne $script:RetryButton -and -not $script:RetryButton.IsDisposed) {
       $script:RetryButton.Text = "$($script:UiCopy.retry)"
@@ -6925,6 +7995,7 @@ function Update-AuraUiLocalizedChrome {
     }
     Update-AuraUiRescueWindowCopy
     Update-AuraUiRescueWindowTheme
+    Update-AuraPromptShelfCopy
     if ($null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed -and
         $script:LoadingPanel.Visible -and $null -ne $script:LoadingLabel -and
         -not $script:LoadingLabel.IsDisposed) {
@@ -7084,7 +8155,7 @@ function Assert-AuraUiStudioEditorMessage {
           break
         }
         'backgroundScope' {
-          if ($Message.value -isnot [string] -or $Message.value -cnotin @('content', 'full-window')) {
+          if ($Message.value -isnot [string] -or $Message.value -cnotin @('sidebar', 'content', 'full-window')) {
             throw 'Aura Studio background scope is not allowed.'
           }
           break
@@ -7198,14 +8269,21 @@ function Assert-AuraUiStudioEditorMessage {
           'metadata' {
             if (-not (Test-AuraUiStudioExactProperties -Message $change -Names @('kind', 'field', 'locale', 'value')) -or
                 $change.field -isnot [string] -or $change.field -cnotin @('label', 'description') -or
-                $change.locale -isnot [string] -or $change.locale -cnotin @('en', 'zh-CN', 'zh-HKTW') -or
-                $change.value -isnot [string]) {
+                $change.locale -isnot [string] -or $change.locale -cnotin $StudioLocaleIds) {
               throw 'Aura Studio metadata patches are invalid.'
             }
             $maximum = if ($change.field -ceq 'label') { 80 } else { 220 }
-            if (-not $change.value.Trim() -or $change.value.Length -gt $maximum -or
-                $change.value -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') {
+            if (-not (Test-AuraUiStudioMetadataText -Value $change.value -Maximum $maximum)) {
               throw 'Aura Studio metadata text is invalid.'
+            }
+            break
+          }
+          'metadata-locale' {
+            if (-not (Test-AuraUiStudioExactProperties -Message $change -Names @('kind', 'locale', 'enabled')) -or
+                $change.locale -isnot [string] -or $change.locale -cnotin $StudioLocaleIds -or
+                $change.enabled -isnot [bool] -or
+                ($change.locale -ceq 'en' -and -not $change.enabled)) {
+              throw 'Aura Studio metadata locale patches are invalid.'
             }
             break
           }
@@ -7399,6 +8477,31 @@ function Get-AuraUiStudioMessage {
     'reset-greeting' { 'type'; 'session'; 'revision'; break }
     'set-aura-preview' { 'type'; 'size'; 'request'; break }
     'set-aura-topmost' { 'type'; 'enabled'; break }
+    'prompt-shelf-read' { 'type'; 'version'; 'requestId'; break }
+    'prompt-shelf-create' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'text'
+      break
+    }
+    'prompt-shelf-update' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'id'; 'text'
+      break
+    }
+    'prompt-shelf-move' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'id'; 'direction'
+      break
+    }
+    'prompt-shelf-delete' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'id'
+      break
+    }
+    'prompt-shelf-insert' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'id'
+      break
+    }
+    'prompt-shelf-confirm-checked' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'
+      break
+    }
     default { 'type'; break }
   })
   $propertyNames = @($message.PSObject.Properties | ForEach-Object { $_.Name })
@@ -7417,6 +8520,15 @@ function Get-AuraUiStudioMessage {
       ($message.locale -isnot [string] -or $message.locale -cnotin $StudioLocaleIds)) {
     throw 'Studio locale is invalid.'
   }
+  if ($type -clike 'prompt-shelf-*') {
+    if ($sourceUri.AbsolutePath -cne '/index.html') {
+      throw 'Prompt Shelf Studio message path is not allowed.'
+    }
+    if (-not (Test-AuraUiStudioDocumentUri -Uri $sourceUri -AllowFragment)) {
+      throw 'Prompt Shelf Studio message source is not allowed.'
+    }
+    Assert-AuraPromptShelfStudioRequest -Message $message
+  }
   return $message
 }
 
@@ -7432,6 +8544,34 @@ function Invoke-AuraUiStudioMessage {
       [void](Sync-AuraUiStudioEditorDraft)
       Send-AuraUiStudioState
       Request-AuraUiMirror
+      break
+    }
+    'prompt-shelf-read' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'prompt-shelf-create' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'prompt-shelf-update' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'prompt-shelf-move' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'prompt-shelf-delete' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'prompt-shelf-insert' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'prompt-shelf-confirm-checked' {
+      Invoke-AuraPromptShelfStudioRequest -Message $message
       break
     }
     'set-theme' {
@@ -7575,6 +8715,13 @@ $script:Themes = @()
 $script:UiCopy = $null
 $script:Locale = 'en'
 $script:StudioPreferences = $null
+$script:WindowLayoutState = $null
+$script:AuraWindowLayoutInitialized = $false
+$script:StudioWindowLayoutInitialized = $false
+$script:AuraLastWindowState = $null
+$script:StudioLastWindowState = $null
+$script:AuraNormalWindowSnapshot = $null
+$script:StudioNormalWindowSnapshot = $null
 $script:StudioMessageTypes = @(
   'get-state',
   'set-theme',
@@ -7610,7 +8757,14 @@ $script:StudioMessageTypes = @(
   'reset-greeting',
   'set-aura-preview',
   'set-aura-topmost',
-  'refresh-aura-mirror'
+  'refresh-aura-mirror',
+  'prompt-shelf-read',
+  'prompt-shelf-create',
+  'prompt-shelf-update',
+  'prompt-shelf-move',
+  'prompt-shelf-delete',
+  'prompt-shelf-insert',
+  'prompt-shelf-confirm-checked'
 )
 $script:StudioEditorState = [ordered]@{ active = $false }
 $script:StudioEditorTrackedSession = $null
@@ -7630,12 +8784,20 @@ $script:MirrorCaptureSession = $null
 $script:MirrorCaptureRevision = [long]-1
 $script:MirrorCapturePreviewRequest = -1
 $script:MirrorCaptureGeneration = [long]-1
+$script:MirrorCaptureSizing = $null
 $script:MirrorDue = $null
 $script:MirrorProbeTask = $null
 $script:MirrorProbeGeneration = [long]-1
 $script:MirrorGeometry = $null
+$script:MirrorSizing = $null
 $script:MirrorGeneration = [long]0
 $script:MirrorPreviewRequest = 0
+$script:MirrorRequestedCssRequest = 0
+$script:MirrorRequestedCssSize = $null
+$script:MirrorSizeCorrectionAttempts = 0
+$script:MirrorCssScaleX = 1.0
+$script:MirrorCssScaleY = 1.0
+$script:PreviewClientResizeActive = $false
 $script:MirrorSemanticRetries = 0
 $script:MirrorSemanticPreviousContext = $null
 $script:GreetingProbeDue = $null
@@ -7700,6 +8862,16 @@ $script:LauncherHaloSize = 10
 $script:LauncherSafeGap = 16
 $script:LauncherRightGap = 16
 $script:LauncherBottomGap = 16
+$script:LauncherProbeDue = $null
+$script:LauncherProbeTask = $null
+$script:LauncherProbeGeneration = [long]0
+$script:LauncherProbeTaskGeneration = [long]-1
+$script:LauncherProbeTaskDigest = $null
+$script:LauncherProbeTaskClientSize = $null
+$script:LauncherProbeRejected = $false
+$script:LauncherLayoutProbe = $null
+$script:LauncherLayoutProbeClientSize = $null
+$script:LauncherLayoutPending = $false
 $script:LauncherLayeredActive = $false
 $script:LauncherAnimTimer = $null
 $script:LauncherAnimValue = 0.0
@@ -7761,6 +8933,7 @@ try {
 
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
+  $script:WindowLayoutState = Read-AuraUiWindowLayoutState
   $script:MainIcon = New-AuraUiIcon -Size 64
   $script:StudioIcon = New-AuraUiIcon -Size 64
   $script:NotificationIcon = New-AuraUiIcon -Size 32
@@ -7920,6 +9093,8 @@ public static class AuraLayered {
 }
 '@
   }
+  . (Join-Path $PSScriptRoot 'aura-prompt-shelf.ps1')
+  . (Join-Path $PSScriptRoot 'aura-draft-handoff.ps1')
   # Opt into per-monitor-v2 sizing before EnableVisualStyles or the first Aura
   # HWND. The thread override keeps the STA UI correct even if a host-created
   # hidden PowerShell window prevented the process-wide call.
@@ -7949,6 +9124,12 @@ public static class AuraLayered {
     [System.Threading.EventResetMode]::AutoReset,
     "Local\ClaudeAura.$sid.OpenStudio",
     [ref]$studioSignalCreatedNew)
+  $draftHandoffSignalCreatedNew = $false
+  $script:DraftHandoffEnableSignal = [System.Threading.EventWaitHandle]::new(
+    $false,
+    [System.Threading.EventResetMode]::AutoReset,
+    "Local\ClaudeAura.$sid.EnableDraftHandoffV1",
+    [ref]$draftHandoffSignalCreatedNew)
   $createdNew = $false
   $mutex = [System.Threading.Mutex]::new($true, "Local\ClaudeAura.$sid.Ui", [ref]$createdNew)
   $ownsMutex = $createdNew
@@ -7958,7 +9139,9 @@ public static class AuraLayered {
     if ($script:BuiltInAuthoring) {
       throw 'Exit the running Claude Aura instance before starting built-in layout authoring.'
     }
-    if ($OpenStudio) {
+    if ($ExperimentalDraftHandoff) {
+      [void]$script:DraftHandoffEnableSignal.Set()
+    } elseif ($OpenStudio) {
       [void]$script:StudioOpenSignal.Set()
     } else {
       [void]$script:MainOpenSignal.Set()
@@ -8003,12 +9186,27 @@ public static class AuraLayered {
   $script:Form.ControlBox = $true
   $script:Form.MinimizeBox = $true
   $script:Form.MaximizeBox = $true
-  $script:Form.add_SizeChanged({ Request-AuraUiMirror })
+  $script:Form.add_SizeChanged({
+    if ($script:Form.WindowState -ne [System.Windows.Forms.FormWindowState]::Minimized) {
+      $script:AuraLastWindowState = $script:Form.WindowState
+    }
+    Update-AuraUiWindowNormalSnapshot -Kind aura -Form $script:Form
+    if (-not $script:PreviewClientResizeActive) {
+      # A human resize becomes authoritative immediately. Abandon any pending
+      # Studio target so the correction loop never fights the user's window.
+      $script:MirrorRequestedCssSize = $null
+      $script:MirrorRequestedCssRequest = 0
+      $script:MirrorSizeCorrectionAttempts = 0
+      $script:MirrorSizing = $null
+    }
+    Request-AuraUiMirror
+    Update-AuraPromptShelfVisibleBounds -HostForm $script:Form
+  })
   $script:Form.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
   $script:Form.Icon = $script:MainIcon
   $script:Form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
-  Set-AuraUiFormWithinWorkingArea -Form $script:Form
-  $script:Form.add_Shown({ Set-AuraUiFormWithinWorkingArea -Form $script:Form })
+  Initialize-AuraUiWindowLayoutForForm -Kind aura -Form $script:Form
+  $script:Form.add_ResizeEnd({ Save-AuraUiWindowLayoutForForm -Kind aura -Form $script:Form })
 
   [void](Update-AuraUiThemes)
 
@@ -8017,6 +9215,7 @@ public static class AuraLayered {
   $script:WebView.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
   $script:WebView.add_Resize({
     if ($null -ne $script:StudioForm -and $script:StudioForm.Visible) { Send-AuraUiStudioState }
+    Request-AuraUiLauncherLayoutProbe
   })
 
   $script:StudioForm = [System.Windows.Forms.Form]::new()
@@ -8052,18 +9251,28 @@ public static class AuraLayered {
   $script:StudioForm.BackColor = [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
   $script:StudioForm.Icon = $script:StudioIcon
   $script:StudioForm.ShowInTaskbar = $true
+  $script:StudioForm.add_SizeChanged({
+    if ($script:StudioForm.WindowState -ne [System.Windows.Forms.FormWindowState]::Minimized) {
+      $script:StudioLastWindowState = $script:StudioForm.WindowState
+    }
+    Update-AuraUiWindowNormalSnapshot -Kind studio -Form $script:StudioForm
+    Update-AuraPromptShelfVisibleBounds -HostForm $script:StudioForm
+  })
+  $script:StudioForm.add_ResizeEnd({
+    Save-AuraUiWindowLayoutForForm -Kind studio -Form $script:StudioForm
+  })
   $script:StudioWebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
   $script:StudioWebView.Dock = 'Fill'
   $script:StudioWebView.BackColor = [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
   $script:StudioForm.Controls.Add($script:StudioWebView)
   $script:StudioForm.add_Shown({
-    Set-AuraUiFormWithinWorkingArea -Form $script:StudioForm
     Send-AuraUiStudioState
   })
   $script:StudioForm.add_FormClosing({
     param($sender, $eventArgs)
     if (-not $script:Closing -and $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) {
       $eventArgs.Cancel = $true
+      Save-AuraUiWindowLayoutForForm -Kind studio -Form $sender
       Restore-AuraUiStudioPreviewState
       $sender.Hide()
       # Studio and the main Aura window are the app's two primary surfaces. If the
@@ -8203,23 +9412,30 @@ public static class AuraLayered {
   # inside the content. Being its own top-level window it renders above the
   # WebView without an in-content control's airspace limits, reserves no layout
   # space, never reflows or clips Claude, and keeps the main form content-only.
-  # The permanently circular button opens Studio on a click and becomes a drag
-  # surface only after the DPI-scaled movement threshold; right-click exposes
-  # appearance and Desktop actions. It never touches the claude.ai document.
+  # The permanently circular button opens its action menu on a click and
+  # becomes a drag surface only after the DPI-scaled movement threshold;
+  # right-click opens the same menu. The menu exposes Prompt Shelf, Studio,
+  # appearance, and Desktop actions without touching the claude.ai document.
   $script:LauncherMenu = [System.Windows.Forms.ContextMenuStrip]::new()
   $script:LauncherStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
+  $script:LauncherPromptShelfItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openPromptShelf)")
+  $script:LauncherPromptShelfItem.ShortcutKeyDisplayString = 'Ctrl+Shift+P'
   $script:LauncherAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
   $script:LauncherDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
   [void]$script:LauncherMenu.Items.AddRange(@(
     $script:LauncherStudioItem,
+    $script:LauncherPromptShelfItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
     $script:LauncherAppearanceItem,
     $script:LauncherDesktopItem
   ))
   $script:LauncherMenu.add_Opening({
     Hide-AuraUiLauncherTip
     Update-AuraUiTrayAppearance
+    Set-AuraPromptShelfAvailability -Enabled (Get-AuraUiEnabled)
   })
   $script:LauncherStudioItem.add_Click({ Show-AuraUiStudio -OfferIntroduction })
+  $script:LauncherPromptShelfItem.add_Click({ Show-AuraPromptShelf })
   $script:LauncherAppearanceItem.add_Click({
     try {
       Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
@@ -8279,7 +9495,8 @@ public static class AuraLayered {
   $script:LauncherButton.Cursor = [System.Windows.Forms.Cursors]::Hand
   $script:LauncherButton.TabStop = $false
   $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
-  $script:LauncherButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+  $script:LauncherButton.AccessibleDescription = "$($script:UiCopy.launcherTipHint)"
+  $script:LauncherButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::ButtonMenu
   # Owner-drawn so every validated theme can supply its own launcher material
   # and local mark while an absent or invalid launcher always falls back to Aura.
   $script:LauncherButton.add_Paint({
@@ -8359,7 +9576,7 @@ public static class AuraLayered {
     if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
       # The whole collapsed button is the drag surface: a press arms a potential
       # drag, and the DPI-scaled movement threshold below decides whether the
-      # gesture was a drag or the Studio click.
+      # gesture was a drag or an action-menu click.
       $script:LauncherDragging = $true
       $script:LauncherDragged = $false
       $script:LauncherDragStart = [System.Windows.Forms.Cursor]::Position
@@ -8392,8 +9609,7 @@ public static class AuraLayered {
     if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Right) {
       $script:LauncherDragging = $false
       $script:LauncherDragged = $false
-      Hide-AuraUiLauncherTip
-      $script:LauncherMenu.Show([System.Windows.Forms.Cursor]::Position)
+      Show-AuraUiLauncherMenu
       return
     }
     if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
@@ -8406,8 +9622,11 @@ public static class AuraLayered {
       Update-AuraUiLauncherSurface
       if ($moved) {
         Save-AuraUiLauncherPosition
+        # Persist the user's drop as the preferred position, then derive the
+        # temporary collision-free position without rewriting that preference.
+        Update-AuraUiLauncherPosition
       } elseif ($wasClickArmed) {
-        Show-AuraUiStudio -OfferIntroduction
+        Show-AuraUiLauncherMenu
       }
     }
   }
@@ -8498,12 +9717,18 @@ public static class AuraLayered {
 
   Read-AuraUiLauncherPosition
   $script:Launcher.add_LocationChanged({
-    Update-AuraUiLauncherHintPosition
-    Update-AuraUiLauncherTipPosition
+    [void](Update-AuraUiLauncherHintPosition)
+    [void](Update-AuraUiLauncherTipPosition)
+  })
+  $script:Launcher.add_LocationChanged({
+    Update-AuraPromptShelfVisibleBounds -HostForm $script:Form
   })
   $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition })
   $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition })
-  $script:Form.add_Shown({ Update-AuraUiLauncherPosition })
+  $script:Form.add_Shown({
+    Request-AuraUiLauncherLayoutProbe
+    Update-AuraUiLauncherPosition
+  })
   $script:Form.add_LocationChanged({ Update-AuraUiRescueWindowPosition })
   $script:Form.add_SizeChanged({ Update-AuraUiRescueWindowPosition })
 
@@ -8538,6 +9763,11 @@ public static class AuraLayered {
       if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
         Show-AuraUiStudio
       }
+      if ($null -ne $script:DraftHandoffEnableSignal -and
+          $script:DraftHandoffEnableSignal.WaitOne(0)) {
+        Initialize-AuraDraftHandoff -Enabled $true
+      }
+      Update-AuraDraftHandoff
       Complete-AuraUiDocumentPrepaintRegistration
       Complete-AuraUiDocumentPrepaintCleanup
       Complete-AuraUiPendingNavigationVerification
@@ -8630,7 +9860,11 @@ public static class AuraLayered {
             param($sender, $eventArgs)
             try {
               $uri = [Uri]$eventArgs.Uri
-              if ($uri.Scheme -cne 'https' -or $uri.Host -cne 'aura.studio') { $eventArgs.Cancel = $true }
+              if (-not (Test-AuraUiStudioDocumentUri -Uri $uri)) {
+                $eventArgs.Cancel = $true
+              } else {
+                [void](New-AuraPromptShelfStudioSession)
+              }
             } catch { $eventArgs.Cancel = $true }
           })
           $studioCore.add_NavigationCompleted({
@@ -8651,24 +9885,31 @@ public static class AuraLayered {
             } catch {
               Write-AuraUiLog -Message "Studio message rejected: $($_.Exception.Message)"
               $failedAction = ''
+              $promptShelfRejected = $false
               try {
                 if ($rawMessage -isnot [string] -or $rawMessage.Length -gt 16384) {
                   throw 'Rejected Studio message is not safe to inspect.'
                 }
                 $failedMessage = $rawMessage | ConvertFrom-Json
                 if ($failedMessage.type -is [string] -and
-                    $script:StudioMessageTypes -ccontains $failedMessage.type -and
-                    $failedMessage.type -in @(
+                    $script:StudioMessageTypes -ccontains $failedMessage.type) {
+                  if ([string]$failedMessage.type -clike 'prompt-shelf-*') {
+                    $promptShelfRejected = $true
+                  } elseif ($failedMessage.type -in @(
                       'set-locale', 'complete-studio-introduction',
                       'set-image-framing', 'set-avatar-framing', 'set-card-preview-crop',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
-                  $failedAction = [string]$failedMessage.type
+                    $failedAction = [string]$failedMessage.type
+                  }
                 }
               } catch {}
-              if ($failedAction) {
+              if ($promptShelfRejected) {
+                Write-AuraPromptShelfEvent -Code 'studio-request-rejected'
+                Send-AuraPromptShelfStudioChanged
+              } elseif ($failedAction) {
                 if ($failedAction -ceq 'set-locale') {
                   Send-AuraUiStudioState -Status "$($script:UiCopy.localeNotChangedMessage)" -Tone error
                 } elseif ($failedAction -ceq 'complete-studio-introduction') {
@@ -8752,6 +9993,8 @@ public static class AuraLayered {
         })
         $core.add_NavigationStarting({
           param($sender, $eventArgs)
+          Advance-AuraPromptShelfPageEpoch
+          Stop-AuraUiLauncherLayoutProbe
           $script:ActiveNavigationId = [UInt64]$eventArgs.NavigationId
           $script:ActiveNavigationUri = [string]$eventArgs.Uri
           $script:RescueChallengeCandidate = $null
@@ -8892,12 +10135,16 @@ public static class AuraLayered {
         # source or history transition; Request-AuraUiMirror coalesces bursts
         # and keeps its existing editor-session/generation guards.
         $core.add_SourceChanged({
+          Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
           Request-AuraUiGreetingProbe
+          Request-AuraUiLauncherLayoutProbe
         })
         $core.add_HistoryChanged({
+          Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
           Request-AuraUiGreetingProbe
+          Request-AuraUiLauncherLayoutProbe
         })
         $core.add_NewWindowRequested({
           param($sender, $eventArgs)
@@ -8925,6 +10172,7 @@ public static class AuraLayered {
           }
         })
         $core.add_ProcessFailed({
+          Advance-AuraPromptShelfPageEpoch
           if ($script:RescueActive) {
             $script:PendingNavigationCompletion = $null
             $script:RescueVerificationPending = $false
@@ -8972,6 +10220,7 @@ public static class AuraLayered {
                 if (-not ($hasControl -and $hasShift)) { return }
                 switch ([int]$eventArgs.VirtualKey) {
                   0x53 { $eventArgs.Handled = $true; Show-AuraUiStudio; break }
+                  0x50 { $eventArgs.Handled = $true; Show-AuraPromptShelf; break }
                   0x41 {
                     $eventArgs.Handled = $true
                     try {
@@ -8989,6 +10238,7 @@ public static class AuraLayered {
           }
         } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
         $script:WebReady = $true
+        Set-AuraPromptShelfAvailability -Enabled (Get-AuraUiEnabled)
         $script:InitialNavigationPending = $true
         $script:PrepaintRegisteredGeneration = [long]-1
         Start-AuraUiDocumentPrepaintRegistration
@@ -9008,7 +10258,12 @@ public static class AuraLayered {
           # The injection return value is an immediate React snapshot. Probe the
           # renderer-owned bounded state after the page has had time to settle.
           Request-AuraUiGreetingProbe
-        } else { Stop-AuraUiGreetingProbe }
+          Request-AuraUiLauncherLayoutProbe
+        } else {
+          Stop-AuraUiGreetingProbe
+          Stop-AuraUiLauncherLayoutProbe
+          Update-AuraUiLauncherPosition
+        }
         if ($covered) { Hide-AuraUiLoading }
         Send-AuraUiStudioState
         Request-AuraUiMirror
@@ -9024,8 +10279,10 @@ public static class AuraLayered {
           Apply-AuraUiTheme
         }
       }
+      Complete-AuraPromptShelfInsertTask
       Update-AuraUiMirror
       Update-AuraUiGreetingProbe
+      Update-AuraUiLauncherLayoutProbe
     } catch {
       $script:EnvironmentTask = $null
       $script:EnsureTask = $null
@@ -9076,11 +10333,17 @@ public static class AuraLayered {
       })
     try {
       $script:EnvironmentTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $WebDataRoot, $null)
+      Initialize-AuraDraftHandoff -Enabled ([bool]$ExperimentalDraftHandoff)
       $timer.Start()
     } catch { Fail-AuraUiStartup -Exception $_.Exception }
   })
   $script:Form.add_FormClosing({
     param($sender, $eventArgs)
+    Save-AuraUiWindowLayoutForForm -Kind aura -Form $sender
+    if ($null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed -and
+        $script:StudioForm.Visible) {
+      Save-AuraUiWindowLayoutForForm -Kind studio -Form $script:StudioForm
+    }
     if (-not $script:Closing -and -not $script:ExitRequested -and
         $eventArgs.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing -and
         $null -ne $script:StudioForm -and -not $script:StudioForm.IsDisposed -and
@@ -9118,6 +10381,8 @@ public static class AuraLayered {
     }
     if ($script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Close() }
     if ($script:StudioWebView -and -not $script:StudioWebView.IsDisposed) { $script:StudioWebView.Dispose() }
+    Dispose-AuraDraftHandoff
+    Dispose-AuraPromptShelf -Final
     if ($script:LauncherAnimTimer) { $script:LauncherAnimTimer.Stop(); $script:LauncherAnimTimer.Dispose(); $script:LauncherAnimTimer = $null }
     if ($script:LauncherTipTimer) { $script:LauncherTipTimer.Stop(); $script:LauncherTipTimer.Dispose(); $script:LauncherTipTimer = $null }
     if ($script:LauncherHint -and -not $script:LauncherHint.IsDisposed) { $script:LauncherHint.Close() }
@@ -9164,9 +10429,19 @@ public static class AuraLayered {
     } catch {}
     $script:RescueForm = $null
   }
+  if (Get-Command Dispose-AuraDraftHandoff -ErrorAction SilentlyContinue) {
+    try { Dispose-AuraDraftHandoff } catch {}
+  }
+  if (Get-Command Dispose-AuraPromptShelf -ErrorAction SilentlyContinue) {
+    try { Dispose-AuraPromptShelf -Final } catch {}
+  }
   if ($null -ne $script:StudioOpenSignal) {
     try { $script:StudioOpenSignal.Dispose() } catch {}
     $script:StudioOpenSignal = $null
+  }
+  if ($null -ne $script:DraftHandoffEnableSignal) {
+    try { $script:DraftHandoffEnableSignal.Dispose() } catch {}
+    $script:DraftHandoffEnableSignal = $null
   }
   if ($null -ne $script:MainOpenSignal) {
     try { $script:MainOpenSignal.Dispose() } catch {}

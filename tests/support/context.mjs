@@ -156,7 +156,9 @@ export function zipEntryNames(bytes) {
   return names;
 }
 
-export const UI_LOCALES = ["en", "zh-CN", "zh-HKTW"];
+export const UI_LOCALES = [
+  "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
+];
 export const STUDIO_LOCALES = [
   "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
 ];
@@ -209,6 +211,7 @@ export async function deliverableFiles(directory = PROJECT_ROOT, relativeDirecto
     "docs/THEME_KIT_SPEC.md",
     "docs/THEMING.md",
     "docs/TROUBLESHOOTING.md",
+    "docs/WINDOWS_INSTALLER.md",
     "docs/recipes/RECIPES.md",
   ]);
   // Supplied per-theme source kits are DIRECTORIES under themes/ — preserved on

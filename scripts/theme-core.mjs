@@ -8,6 +8,7 @@ export {
   THEME_REGISTRY_PATH,
   THEME_KIT_FILENAME,
   SUPPORTED_LOCALES,
+  STUDIO_METADATA_LOCALES,
   STUDIO_THEME_SCHEMA_VERSION,
   STUDIO_KIT_SCHEMA_VERSIONS,
   GREETING_FONT_CATEGORIES,
@@ -79,4 +80,5 @@ export {
   hydrateStudioDraft,
   executeStudioRequest,
   studioStyleFromTheme,
+  studioReframeCoverScale,
 } from "./theme-core/studio.mjs";

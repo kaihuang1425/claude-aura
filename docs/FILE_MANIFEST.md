@@ -288,9 +288,23 @@ the retired reconstructed preview are not deliverables.
 
 ## Compiler, commands, and verification
 
+- `installer/Build Installer.cmd`
+- `installer/ClaudeAura.iss`
+- `installer/app-transaction.ps1`
+- `installer/assets/wizard-dark.png`
+- `installer/assets/wizard-light.png`
+- `installer/assets/wizard-small-dark.png`
+- `installer/assets/wizard-small-light.png`
+- `installer/build-update.mjs`
+- `installer/install-trigger.txt`
+- `installer/locales/en.isl`
+- `installer/locales/zh-CN.isl`
+- `installer/locales/zh-HKTW.isl`
 - `scripts/asset-audit.mjs`
 - `scripts/build-aura-icon.mjs`
 - `scripts/build-brand-wordmarks.mjs`
+- `scripts/build-installer-assets.mjs`
+- `scripts/build-installer.mjs`
 - `scripts/build-launcher-assets.mjs`
 - `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
@@ -313,11 +327,14 @@ the retired reconstructed preview are not deliverables.
 - `tests/artwork.test.mjs`
 - `tests/avatar.test.mjs`
 - `tests/config.test.mjs`
+- `tests/draft-handoff.test.mjs`
 - `tests/greeting-runtime.test.mjs`
 - `tests/greeting.test.mjs`
+- `tests/installer.test.mjs`
 - `tests/locales.test.mjs`
 - `tests/payload.test.mjs`
 - `tests/platform.test.mjs`
+- `tests/prompt-shelf.test.mjs`
 - `tests/prepaint.test.mjs`
 - `tests/run-tests.mjs`
 - `tests/studio-editor.test.mjs`
@@ -329,10 +346,24 @@ the retired reconstructed preview are not deliverables.
 
 ## Windows application
 
+- `windows/aura-draft-handoff.ps1`
 - `windows/aura-ui.ps1`
+- `windows/aura-prompt-shelf.ps1`
 - `windows/common.ps1`
 - `windows/install.ps1`
+- `windows/locales/de.json`
 - `windows/locales/en.json`
+- `windows/locales/es.json`
+- `windows/locales/fr.json`
+- `windows/locales/hi.json`
+- `windows/locales/id.json`
+- `windows/locales/it.json`
+- `windows/locales/ja.json`
+- `windows/locales/ko.json`
+- `windows/locales/pl.json`
+- `windows/locales/pt-BR.json`
+- `windows/locales/tr.json`
+- `windows/locales/vi.json`
 - `windows/locales/zh-CN.json`
 - `windows/locales/zh-HKTW.json`
 - `windows/restore.ps1`
@@ -362,6 +393,7 @@ the retired reconstructed preview are not deliverables.
 - `docs/SCREENSHOT_PLAN.md`
 - `docs/THEMING.md`
 - `docs/TROUBLESHOOTING.md`
+- `docs/WINDOWS_INSTALLER.md`
 
 ## Vendored WebView2 runtime integration
 

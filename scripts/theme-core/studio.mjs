@@ -32,13 +32,13 @@ import {
   STUDIO_MAX_HISTORY,
   STUDIO_MAX_LAYERS,
   STUDIO_MAX_PATCH_CHANGES,
+  STUDIO_METADATA_LOCALES,
   STUDIO_RECIPE_CONTROL_OVERRIDES,
   STUDIO_SESSION_PATTERN,
   STUDIO_SHADOWS,
   STUDIO_SHARED_TOKENS,
   STUDIO_STATE_FILENAME,
   STUDIO_THEME_SCHEMA_VERSION,
-  SUPPORTED_LOCALES,
   THEME_ID_PATTERN,
   THEME_KIT_FILENAME,
   WINDOWS_FILESYSTEM_RETRY_DELAYS_MS,
@@ -584,6 +584,21 @@ export function studioShadowId(effects) {
     .find(([, value]) => value.shadowSoft === effects.shadowSoft && value.shadowElevated === effects.shadowElevated)?.[0] ?? "soft";
 }
 
+async function readStudioArtworkDimensions(activeDirectory, layerPath, label) {
+  const source = path.resolve(activeDirectory, layerPath);
+  if (!isPathWithin(activeDirectory, source)) throw new Error("Editor artwork escaped the active theme folder");
+  const stat = await fs.lstat(source);
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Editor artwork must be a regular file");
+  const [realActive, realSource] = await Promise.all([
+    fs.realpath(activeDirectory),
+    fs.realpath(source),
+  ]);
+  if (!isPathWithin(realActive, realSource)) {
+    throw new Error("Editor artwork escaped the active theme folder");
+  }
+  return studioWebpDimensions(await fs.readFile(realSource), label);
+}
+
 export async function studioLayerBytes(document, activeDirectory) {
   const result = [];
   for (const layer of document.artworkLayers) {
@@ -981,6 +996,10 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
   });
   const nativePrompt = document.newChatLayout === null;
   const layout = document.newChatLayout ?? { widthRatio: 0.76, offsetXRatio: 0, offsetYRatio: 0 };
+  const currentLabel = document.labels[internal.locale]?.trim()
+    || document.labels.en?.trim()
+    || internal.lastValidDocument.labels[internal.locale]?.trim()
+    || internal.lastValidDocument.labels.en;
   return {
     active: true,
     id: internal.id,
@@ -995,10 +1014,10 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       || JSON.stringify(internal.greetingCurrent) !== JSON.stringify(internal.greetingBaseline),
     canUndo: internal.undo.length > 0,
     canRedo: internal.redo.length > 0,
-    label: document.labels[internal.locale] ?? document.labels.en,
+    label: currentLabel,
     metadata: {
-      labels: Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [locale, document.labels[locale]])),
-      descriptions: Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [locale, document.descriptions[locale]])),
+      labels: cloneJson(document.labels),
+      descriptions: cloneJson(document.descriptions),
     },
     tokens: {
       light: canonicalStudioTokens(document, "light"),
@@ -1081,11 +1100,11 @@ async function upgradeStudioLegacyFrames(document, paths) {
     if (!layer.legacy) continue;
     let image = dimensions.get(layer.path);
     if (!image) {
-      const source = path.resolve(paths.active, layer.path);
-      if (!isPathWithin(paths.active, source)) throw new Error("Editor artwork escaped the active theme folder");
-      const stat = await fs.lstat(source);
-      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Editor artwork must be a regular file");
-      image = studioWebpDimensions(await fs.readFile(source), `Editor artwork ${layer.path}`);
+      image = await readStudioArtworkDimensions(
+        paths.active,
+        layer.path,
+        `Editor artwork ${layer.path}`,
+      );
       dimensions.set(layer.path, image);
     }
     const frames = Object.fromEntries(Object.entries(STUDIO_FRAME_VIEWPORTS).map(([preset, viewport]) => [
@@ -1197,11 +1216,15 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
       Object.assign(document, upgraded);
       changed = true;
     }
+    const allowIncompleteMetadata = name === "current"
+      || name.startsWith("undo ")
+      || name.startsWith("redo ");
     validateStudioThemeKitDocument(document, `editor ${name} theme`, {
       // Invalid-but-editable drafts are persisted deliberately so Studio can
       // keep the last-valid payload active while the user repairs them.
       enforceLauncherContrast: false,
       builtinLayoutCapability,
+      allowIncompleteMetadata,
     });
     if (document.id !== internal.id) throw new Error(`Editor ${name} theme id does not match the session`);
     changed = await upgradeStudioLegacyFrames(document, paths) || changed;
@@ -1219,6 +1242,7 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
     validateStudioThemeKitDocument(document, `editor ${name} theme`, {
       enforceLauncherContrast: false,
       builtinLayoutCapability,
+      allowIncompleteMetadata,
     });
   }
   internal.version = 2;
@@ -1323,9 +1347,11 @@ function studioLegacyScale(size, image, viewport, backgroundScope) {
   if (!image || !viewport || image.width <= 0 || image.height <= 0
       || viewport.width <= 0 || viewport.height <= 0) return 1;
   const container = {
-    width: backgroundScope === "content"
-      ? Math.max(1, viewport.width - STUDIO_FRAME_CONTENT_START)
-      : viewport.width,
+    width: backgroundScope === "sidebar"
+      ? Math.min(STUDIO_FRAME_CONTENT_START, viewport.width)
+      : backgroundScope === "content"
+        ? Math.max(1, viewport.width - STUDIO_FRAME_CONTENT_START)
+        : viewport.width,
     height: viewport.height,
   };
   const normalized = String(size ?? "").trim().toLowerCase();
@@ -1359,6 +1385,32 @@ function studioLegacyScale(size, image, viewport, backgroundScope) {
   // The editor may display a rounded percentage, but the stored seed should
   // remain visually continuous with the legacy CSS on the first edit.
   return Math.round(Math.min(3, Math.max(0.25, scale)) * 10000) / 10000;
+}
+
+export function studioReframeCoverScale(
+  scale,
+  image,
+  viewport,
+  fromScope,
+  toScope,
+) {
+  strictNumber(scale, "background frame scale", 0.25, 3);
+  const current = scale;
+  if (fromScope === toScope) return current;
+  const fromCover = studioLegacyScale("cover", image, viewport, fromScope);
+  const toCover = studioLegacyScale("cover", image, viewport, toScope);
+  if (!Number.isFinite(fromCover) || fromCover <= 0
+      || !Number.isFinite(toCover) || toCover <= 0) return current;
+  const minimum = 0.25;
+  const maximum = 3;
+  const rebased = current <= fromCover
+    ? fromCover === minimum
+      ? toCover
+      : minimum + ((current - minimum) * (toCover - minimum) / (fromCover - minimum))
+    : fromCover === maximum
+      ? toCover
+      : toCover + ((current - fromCover) * (maximum - toCover) / (maximum - fromCover));
+  return Math.round(Math.min(maximum, Math.max(minimum, rebased)) * 10000) / 10000;
 }
 
 export function studioFrameFromLegacy(
@@ -1520,11 +1572,12 @@ export async function materializeSourceArtwork(sourcePath, paths, convertStudioA
 }
 
 export function appendCopyLabel(labels) {
-  return {
-    en: `${labels.en} Copy`.slice(0, 80),
-    "zh-CN": `${labels["zh-CN"]}副本`.slice(0, 80),
-    "zh-HKTW": `${labels["zh-HKTW"]}副本`.slice(0, 80),
-  };
+  return Object.fromEntries(Object.entries(labels).map(([locale, label]) => {
+    const suffix = locale === "en" ? " Copy"
+      : ["zh-CN", "zh-HKTW"].includes(locale) ? "副本"
+        : "";
+    return [locale, `${label}${suffix}`.slice(0, 80)];
+  }));
 }
 
 export function copyIdBase(sourceId) {
@@ -2205,19 +2258,27 @@ export async function evaluateStudioDocument(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const launcherField = /editor theme\.theme\.launcher\.(surfaceHover|surface|foreground|accent|border|radius|borderWidth)\b/.exec(message)?.[1];
+    const metadataMatch = /editor theme\.(labels|descriptions)(?:\.([A-Za-z-]+))?/u.exec(message);
+    const metadataField = metadataMatch
+      ? metadataMatch[2]
+        ? `metadata.${metadataMatch[1]}.${metadataMatch[2]}`
+        : "metadata"
+      : null;
     return {
       bundle: null,
       feedback: {
         ...emptyStudioFeedback(),
         valid: false,
         errors: [{
-          code: launcherField
+          code: metadataField
+            ? "invalid-metadata"
+            : launcherField
             ? (message.includes("must reach 4.5:1 contrast") ? "launcher-contrast" : "invalid-launcher")
             : "invalid-theme",
-          field: launcherField ? `launcher.${launcherField}` : "theme",
+          field: metadataField ?? (launcherField ? `launcher.${launcherField}` : "theme"),
         }],
       },
-      error: launcherField ? "invalid-launcher" : "invalid-theme",
+      error: metadataField ? "invalid-metadata" : launcherField ? "invalid-launcher" : "invalid-theme",
     };
   }
 }
@@ -2685,7 +2746,11 @@ export function mutateStudioTokenDocument(document, change) {
     const id = strictEnum(change.value, new Set(Object.keys(STUDIO_SHADOWS)), "shadow");
     Object.assign(document.theme.effects, STUDIO_SHADOWS[id]);
   } else if (token === "backgroundScope") {
-    document.backgroundScope = strictEnum(change.value, new Set(["content", "full-window"]), "backgroundScope");
+    document.backgroundScope = strictEnum(
+      change.value,
+      new Set(["sidebar", "content", "full-window"]),
+      "backgroundScope",
+    );
   } else if (token.startsWith("launcher")) {
     const property = {
       launcherSurface: "surface",
@@ -2722,12 +2787,19 @@ export function mutateStudioTokenDocument(document, change) {
 
 export async function setThemeToken(context) {
   if (!["light", "dark", "shared", "mode-copy"].includes(context.mode)) throw new Error("Theme token mode is invalid");
-  return mutateStudio(context, "set-theme-token", (document) => {
+  return mutateStudio(context, "set-theme-token", async (document) => {
     if (document.newChatLayout === null && context.mode === "shared"
         && ["promptWidth", "promptX", "promptY"].includes(context.token)) {
       throw new Error("The native new-chat area must be adopted in one complete placement change");
     }
+    const previousScope = document.backgroundScope;
     mutateStudioTokenDocument(document, context);
+    await reframeStudioBackgroundLayers(
+      document,
+      context,
+      previousScope,
+      document.backgroundScope,
+    );
   });
 }
 
@@ -2775,14 +2847,30 @@ export function mutateStudioMetadataDocument(document, change) {
   };
   if (!Object.hasOwn(settingsByField, change.field)) throw new Error("Theme metadata field is invalid");
   const settings = settingsByField[change.field];
-  const locale = strictEnum(change.locale, new Set(SUPPORTED_LOCALES), "theme metadata locale");
+  const locale = strictEnum(change.locale, new Set(STUDIO_METADATA_LOCALES), "theme metadata locale");
+  if (!Object.hasOwn(document.labels, locale) || !Object.hasOwn(document.descriptions, locale)) {
+    throw new Error("Theme metadata locale is not enabled");
+  }
   if (typeof change.value !== "string") throw new Error(`Theme ${change.field} must be a string`);
   const value = change.value.trim();
-  if (!value || value.length > settings.maximum || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value)) {
-    throw new Error(`Theme ${change.field} is required and must be at most ${settings.maximum} characters`);
+  if (value.length > settings.maximum || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value)) {
+    throw new Error(`Theme ${change.field} must be at most ${settings.maximum} characters and contain no control characters`);
   }
   document[settings.key][locale] = value;
-  if (locale === "en") document.theme[settings.legacy] = value;
+  if (locale === "en" && value) document.theme[settings.legacy] = value;
+}
+
+export function mutateStudioMetadataLocaleDocument(document, change) {
+  const locale = strictEnum(change.locale, new Set(STUDIO_METADATA_LOCALES), "theme metadata locale");
+  if (typeof change.enabled !== "boolean") throw new Error("Theme metadata locale enabled must be true or false");
+  if (locale === "en" && !change.enabled) throw new Error("English theme metadata cannot be removed");
+  if (change.enabled) {
+    if (!Object.hasOwn(document.labels, locale)) document.labels[locale] = "";
+    if (!Object.hasOwn(document.descriptions, locale)) document.descriptions[locale] = "";
+    return;
+  }
+  delete document.labels[locale];
+  delete document.descriptions[locale];
 }
 
 export function assertStudioPatchChanges(changes) {
@@ -2793,6 +2881,7 @@ export function assertStudioPatchChanges(changes) {
     token: ["kind", "mode", "token", "value"],
     layer: ["kind", "index", "preset", "property", "value"],
     metadata: ["kind", "field", "locale", "value"],
+    "metadata-locale": ["kind", "locale", "enabled"],
     greeting: ["kind", "operation", "appearance", "frame", "value"],
   };
   changes.forEach((change, index) => {
@@ -2807,9 +2896,53 @@ export function assertStudioPatchChanges(changes) {
   });
 }
 
+async function reframeStudioBackgroundLayers(
+  document,
+  context,
+  previousScope,
+  nextScope,
+  {
+    explicitScales = new Set(),
+    roleOverrides = new Map(),
+  } = {},
+) {
+  if (nextScope === previousScope) return;
+  const activeRoot = studioPaths(context.editorRoot).active;
+  for (let index = 0; index < document.artworkLayers.length; index += 1) {
+    const layer = document.artworkLayers[index];
+    const finalRole = roleOverrides.get(index) ?? layer.role;
+    if (finalRole !== "background") continue;
+    const image = await readStudioArtworkDimensions(
+      activeRoot,
+      layer.path,
+      `Studio artwork layer ${index + 1}`,
+    );
+    for (const [preset, viewport] of Object.entries(STUDIO_FRAME_VIEWPORTS)) {
+      if (explicitScales.has(`${index}:${preset}`)) continue;
+      if (layer.legacy) {
+        layer.frames[preset] = studioFrameFromLegacy(
+          layer.legacy.position,
+          layer.legacy.size,
+          image,
+          viewport,
+          nextScope,
+        );
+      } else {
+        layer.frames[preset].scale = studioReframeCoverScale(
+          layer.frames[preset].scale,
+          image,
+          viewport,
+          previousScope,
+          nextScope,
+        );
+      }
+    }
+  }
+}
+
 export async function applyThemePatch(context) {
   assertStudioPatchChanges(context.changes);
-  return mutateStudio(context, "apply-theme-patch", (document) => {
+  return mutateStudio(context, "apply-theme-patch", async (document) => {
     if (document.newChatLayout === null) {
       const promptChanges = context.changes.filter((change) => change.kind === "token"
         && change.mode === "shared" && ["promptWidth", "promptX", "promptY"].includes(change.token));
@@ -2820,11 +2953,54 @@ export async function applyThemePatch(context) {
         }
       }
     }
+    const scopeChanges = context.changes.filter((change) => change.kind === "token"
+      && change.mode === "shared" && change.token === "backgroundScope");
+    if (scopeChanges.length > 1) {
+      throw new Error("A theme patch may change backgroundScope only once");
+    }
+    const previousScope = document.backgroundScope;
+    const nextScope = scopeChanges.length
+      ? strictEnum(
+        scopeChanges[0].value,
+        new Set(["sidebar", "content", "full-window"]),
+        "backgroundScope",
+      )
+      : previousScope;
+    if (nextScope !== previousScope) {
+      const explicitScales = new Set(context.changes.flatMap((change) => (
+        change.kind === "layer" && ["normal", "wide"].includes(change.preset)
+          && change.property === "scale"
+          ? [`${change.index}:${change.preset}`]
+          : []
+      )));
+      const roleOverrides = new Map();
+      for (const change of context.changes) {
+        if (change.kind !== "layer" || change.preset !== "shared" || change.property !== "role") continue;
+        const index = strictInteger(
+          change.index,
+          "layer index",
+          0,
+          document.artworkLayers.length - 1,
+        );
+        roleOverrides.set(
+          index,
+          strictEnum(change.value, STUDIO_LAYER_ROLES, "layer role"),
+        );
+      }
+      await reframeStudioBackgroundLayers(
+        document,
+        context,
+        previousScope,
+        nextScope,
+        { explicitScales, roleOverrides },
+      );
+    }
     for (const change of context.changes) {
       if (change.kind === "token") mutateStudioTokenDocument(document, change);
       else if (change.kind === "layer") mutateStudioLayerDocument(document, change);
       else if (change.kind === "greeting") mutateStudioGreetingDocument(document, change);
-      else mutateStudioMetadataDocument(document, change);
+      else if (change.kind === "metadata") mutateStudioMetadataDocument(document, change);
+      else mutateStudioMetadataLocaleDocument(document, change);
     }
   });
 }
@@ -2856,10 +3032,21 @@ export async function attachThemeLayerImage(context) {
     throw new Error(`A theme may contain at most ${STUDIO_MAX_LAYERS} artwork layers`);
   }
   const source = await validateStudioHostAsset(context.assetPath, context.editorRoot);
+  const image = studioWebpDimensions(
+    await fs.readFile(source),
+    "Studio artwork import",
+  );
   const ownedPath = await copyWebpIntoEditor(source, studioPaths(context.editorRoot));
   return mutateStudio(context, "pick-theme-layer-image", (document) => {
+    const frames = Object.fromEntries(Object.entries(STUDIO_FRAME_VIEWPORTS).map(
+      ([preset, viewport]) => [
+        preset,
+        role === "background"
+          ? studioFrameFromLegacy("center", "cover", image, viewport, document.backgroundScope)
+          : { anchor: "center", focalX: 50, focalY: 50, positionX: 0, positionY: 0, scale: 1 },
+      ],
+    ));
     if (index === -1) {
-      const frame = { anchor: "center", focalX: 50, focalY: 50, positionX: 0, positionY: 0, scale: 1 };
       document.artworkLayers.push({
         id: `layer-${studioHex()}`,
         path: ownedPath,
@@ -2871,11 +3058,12 @@ export async function attachThemeLayerImage(context) {
         opacity: 1,
         mask: "none",
         mobile: "reduce",
-        frames: { normal: cloneJson(frame), wide: cloneJson(frame) },
+        frames,
       });
     } else {
       document.artworkLayers[index].path = ownedPath;
       document.artworkLayers[index].role = role;
+      if (role === "background") document.artworkLayers[index].frames = frames;
       delete document.artworkLayers[index].legacy;
     }
   });

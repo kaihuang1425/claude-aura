@@ -145,43 +145,53 @@ separado.
 <a id="installation"></a>
 ### Instalação
 
-1. Baixe o
-   [ZIP da release mais recente](https://github.com/kaihuang1425/claude-aura/releases).
-2. No File Explorer, clique com botão direito no ZIP e selecione **Extract All**.
-3. Abra a pasta extraída e clique duas vezes em **Install Claude Aura.cmd**.
-4. Aguarde o instalador encerrar e a janela **Claude Aura** abrir.
-5. Faça login no Aura se `claude.ai` solicitar.
-6. Clique no botão flutuante do Aura para abrir o Studio, depois escolha **Themes**.
+Abra a [última versão](https://github.com/kaihuang1425/claude-aura/releases) e escolha um desses caminhos. Ambos instalam a mesma versão para a conta atual do Windows.
 
-A instalação não faz patch nem substitui o Claude Desktop.
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | Você quer o instalador guiado mais simples e o Windows abre normalmente | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` junto com seu `.sha256` e `.manifest.json` |
+| **ZIP + CMD fallback** | O Windows avisa ou bloqueia o Setup unsigned, ou você prefere scripts de origem legíveis | `claude-aura-v<version>.zip` junto com seu `.sha256` |
+
+#### Path 1 ??Unsigned Setup
+
+1. Em **Assets**, baixe o `-UNSIGNED.exe`, seu `.sha256` e seu `.manifest.json`. Não use os arquivos automáticos **Source code** do GitHub.
+2. Compare o SHA-256 do arquivo Setup com ambos os arquivos complementares. Pare e delete os downloads se qualquer valor for diferente.
+3. O Windows não consegue verificar o publisher desse instalador porque o desenvolvedor não possui certificado de assinatura de código. Se o Windows emitir aviso ou bloquear, não ignore o aviso; use o Path 2.
+4. Se abrir normalmente, siga o Setup. Ele verifica Node.js e WebView2, instala em `%LOCALAPPDATA%\ClaudeAura`, adiciona registro de **Installed apps** e atalhos, depois abre o Aura.
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. Em **Assets**, baixe `claude-aura-v<version>.zip` e o `.sha256` correspondente. Não use os arquivos automáticos **Source code** do GitHub.
+2. Compare o SHA-256 do ZIP com o arquivo complementar. Pare e delete ambos se os valores forem diferentes.
+3. Selecione **Extract all**. Na pasta `claude-aura` extraída, clique duas vezes em **Install Claude Aura.cmd**. Não execute a partir da visualização do ZIP.
+4. O instalador CMD/PowerShell legível verifica Node.js e WebView2, instala Aura, cria atalhos e o abre. Esse caminho não tem identidade de publisher Authenticode e não adiciona entrada **Installed apps**.
+
+Após qualquer caminho, faça login no Aura se `claude.ai` solicitar. Clique no botão flutuante Aura, escolha **Open Studio**, depois **Themes**.
+
+Um asset chamado `Claude-Aura-Setup-v<version>.exe` sem `-UNSIGNED` é um caminho assinado diferente e deve mostrar o publisher nomeado nas notas dessa release. Um asset terminando em `-UNSIGNED-DEV.exe` nunca é público.
+
+A instalação não aplica patch nem substitui o Claude Desktop.
 
 <details>
-<summary><strong>Comportamento do instalador, localização do app, checkouts de dev e desinstalação</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-O instalador não elevado executa checagens embutidas, depois copia os arquivos do app para:
+Ambos os caminhos rodam sem prompt de administrador, validam pré-requisitos e executam a troca protegida de app-tree do Aura. Os arquivos da aplicação são instalados em:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-Cria atalhos de **Claude Aura** e **Claude Aura Studio** na Área de Trabalho e no menu Iniciar.
-Configurações de tema e dados de login ficam em arquivos separados, então reinstalar o Aura não os substitui
-silenciosamente.
+Cria atalhos **Claude Aura**, **Claude Aura Studio** e de desinstalação no menu Start e na área de trabalho. Configurações de tema e dados de login são armazenados separadamente da aplicação, então reinstalar Aura não os substitui silenciosamente. O Native Setup adiciona uma entrada **Installed apps** e uninstaller nativo; o caminho ZIP/CMD mantém seu atalho de desinstalação baseado em script de origem.
 
-Desenvolvedores podem clonar o repositório em vez de baixar ZIP e executar o mesmo instalador a partir do checkout.
-O checkout roda a suíte de testes completa antes de instalar.
+Desenvolvedores podem clonar o repositório e construir o installer de desenvolvimento unsigned explicitamente nomeado para inspeção local. Ele é distinto do unsigned Setup público claramente marcado. Os comandos de build, compilador pinned, verification gates e checklist de release estão documentados no
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md).
 
-<a id="uninstall"></a>
-### Desinstalar
+### Uninstall
 
-Primeiro clique com botão direito no botão flutuante do Aura e escolha **Exit Claude Aura**.
-Depois abra **Start > Claude Aura > Uninstall Claude Aura**, ou dê duplo clique em
-**Uninstall Claude Aura.cmd** em uma release extraída. O desinstalador não continua enquanto o Aura estiver aberto.
+Primeiro, clique com o botão direito no botão flutuante Aura e selecione **Exit Claude Aura**.
+Para uma instalação ZIP, abra **Start > Claude Aura > Uninstall Claude Aura** ou clique duas vezes em **Uninstall Claude Aura.cmd** em uma release extraída. Para qualquer native Setup, também pode usar **Settings > Apps > Installed apps > Claude Aura > Uninstall**. A entrada `.cmd` delega ao uninstaller nativo registrado quando existe. O uninstaller recusa continuar enquanto Aura ainda estiver aberto.
 
-Por padrão, a desinstalação remove a aplicação e atalhos do Aura, mas mantém a configuração local
-de temas e o perfil de login WebView do Aura para reinstalação posterior. O desinstalador pergunta antes
-de remover também essas pastas. Essa limpeza opcional remove a sessão de login local do Aura; nunca remove
-Claude Desktop, a conta Anthropic do usuário ou dados de conta no servidor.
+Por padrão, a desinstalação remove o aplicativo Aura e atalhos, mas mantém as configurações locais do tema e o perfil de login WebView separado do Aura para reinstalação posterior. O uninstaller também pergunta antes de remover essas pastas. Essa exclusão opcional remove a sessão local de login do Aura; ela nunca remove Claude Desktop, a conta Anthropic do usuário ou os dados da conta no lado do servidor.
 
 </details>
 <p align="right">(<a href="#readme-top">voltar ao topo</a>)</p>

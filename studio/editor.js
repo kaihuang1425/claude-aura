@@ -21,6 +21,24 @@
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
   ]);
+  const THEME_METADATA_LOCALES = Object.freeze([
+    Object.freeze({ id: "en", name: "English" }),
+    Object.freeze({ id: "hi", name: "हिन्दी" }),
+    Object.freeze({ id: "es", name: "Español" }),
+    Object.freeze({ id: "fr", name: "Français" }),
+    Object.freeze({ id: "id", name: "Bahasa Indonesia" }),
+    Object.freeze({ id: "ja", name: "日本語" }),
+    Object.freeze({ id: "ko", name: "한국어" }),
+    Object.freeze({ id: "pt-BR", name: "Português (Brasil)" }),
+    Object.freeze({ id: "de", name: "Deutsch" }),
+    Object.freeze({ id: "it", name: "Italiano" }),
+    Object.freeze({ id: "vi", name: "Tiếng Việt" }),
+    Object.freeze({ id: "pl", name: "Polski" }),
+    Object.freeze({ id: "tr", name: "Türkçe" }),
+    Object.freeze({ id: "zh-CN", name: "简体中文" }),
+    Object.freeze({ id: "zh-HKTW", name: "繁體中文" }),
+  ]);
+  const THEME_METADATA_LOCALE_IDS = new Set(THEME_METADATA_LOCALES.map(({ id }) => id));
   const MODE_TOKEN_KEYS = Object.freeze([
     "canvas", "sidebar", "surface", "text", "accent", "border", "surfaceAlpha", "sidebarAlpha",
   ]);
@@ -32,6 +50,7 @@
     ...STUDIO_STYLE_COLOR_KEYS, "surfaceAlpha", "sidebarAlpha",
   ]);
   const COLOR_TOKEN_KEYS = new Set(MODE_TOKEN_KEYS.slice(0, 6));
+  const BACKGROUND_SCOPE_IDS = Object.freeze(["sidebar", "content", "full-window"]);
   const FONT_UI_IDS = Object.freeze(["system-sans", "humanist-sans", "rounded-sans"]);
   const FONT_DISPLAY_IDS = Object.freeze([...FONT_UI_IDS, "editorial-serif"]);
   const SHADOW_IDS = Object.freeze(["none", "soft", "elevated"]);
@@ -181,6 +200,15 @@
     accent: ["accent-outline", "accent-text", "focus"],
     sidebar: ["sidebar-text"],
     border: [],
+  });
+  const CONTRAST_FOCUS_TOKENS = Object.freeze({
+    "canvas-text": ["canvas", "text"],
+    "surface-text": ["surface", "text"],
+    "muted-text": ["surface", "text"],
+    "accent-outline": ["accent", "canvas"],
+    "accent-text": ["accent"],
+    "sidebar-text": ["sidebar", "text"],
+    focus: ["accent", "canvas"],
   });
   const BUILTIN_LAYOUT_TARGETS = new Set([
     "interface.new-chat-area", "interface.greeting", "background.layer",
@@ -515,7 +543,7 @@
     const greeting = normalizeGreeting(value.greeting);
     if (!greeting || !enumValue(value.fontUi, FONT_UI_IDS) || !enumValue(value.fontDisplay, FONT_DISPLAY_IDS)
         || !inRange(value.radius, 0, 32) || !inRange(value.blur, 0, 40)
-        || !enumValue(value.shadow, SHADOW_IDS) || !enumValue(value.backgroundScope, ["content", "full-window"])
+        || !enumValue(value.shadow, SHADOW_IDS) || !enumValue(value.backgroundScope, BACKGROUND_SCOPE_IDS)
         || !inRange(value.prompt.width, 0.4, 0.96) || !inRange(value.prompt.x, -0.35, 0.35)
         || typeof value.prompt.native !== "boolean"
         || !inRange(value.prompt.y, -0.3, 0.3)) return null;
@@ -625,15 +653,22 @@
   }
 
   function normalizeMetadata(value) {
-    const locales = ["en", "zh-CN", "zh-HKTW"];
     if (!exactShape(value, ["labels", "descriptions"])
-        || !exactShape(value.labels, locales) || !exactShape(value.descriptions, locales)) return null;
+        || !plainRecord(value.labels) || !plainRecord(value.descriptions)) return null;
+    const locales = Object.keys(value.labels);
+    const descriptionLocales = Object.keys(value.descriptions);
+    if (!locales.length || locales.length > THEME_METADATA_LOCALES.length
+        || !locales.includes("en") || descriptionLocales.length !== locales.length
+        || locales.some((locale) => !THEME_METADATA_LOCALE_IDS.has(locale)
+          || !Object.hasOwn(value.descriptions, locale))) return null;
     const labels = Object.create(null);
     const descriptions = Object.create(null);
     for (const locale of locales) {
-      labels[locale] = safeText(value.labels[locale], 80);
-      descriptions[locale] = safeText(value.descriptions[locale], 220);
-      if (!labels[locale] || !descriptions[locale]) return null;
+      labels[locale] = safeText(value.labels[locale], 80, { empty: true });
+      descriptions[locale] = safeText(value.descriptions[locale], 220, { empty: true });
+      if (labels[locale] === null || descriptions[locale] === null
+          || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value.labels[locale])
+          || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value.descriptions[locale])) return null;
     }
     return { labels, descriptions };
   }
@@ -768,18 +803,50 @@
     || work.stageKeyDebounce
   );
 
+  const reconcileDuplicateTokenValue = ({
+    key,
+    value,
+    inFlight,
+    confirmedValue,
+    queued,
+    deferred,
+  }) => {
+    const duplicate = inFlight
+      ? Object.is(inFlight.value, value)
+      : Object.is(confirmedValue, value);
+    if (!duplicate) return false;
+    queued.delete(key);
+    deferred?.delete(key);
+    return true;
+  };
+
+  const backgroundScopeUiActive = (page, builtInLayout) => (
+    page === "background" && !builtInLayout
+  );
+
   const inspectorRevealDelta = (rect, visibleTop, visibleBottom) => {
     if (rect.top < visibleTop) return rect.top - visibleTop;
     if (rect.bottom > visibleBottom) return rect.bottom - visibleBottom;
     return 0;
   };
 
-  function createController({ locale, send, setStatus, translate, focusThemeCard, onStudioStyleChange }) {
+  function createController({
+    locale,
+    send,
+    setStatus,
+    translate,
+    focusThemeCard,
+    getThemeCardPreview,
+    openThemeCardPreview,
+    onOrdinaryViewRestore,
+    onStudioStyleChange,
+  }) {
     const normalizedLocale = Object.hasOwn(STRINGS, locale) ? locale : "en";
     const tr = (key) => STRINGS[normalizedLocale]?.[key] ?? translate?.(key) ?? STRINGS.en?.[key] ?? key;
     const editor = document.getElementById("editor");
     const navEditor = document.getElementById("nav-editor");
-    const ordinarySections = ["themes", "background", "create", "settings"].map((id) => document.getElementById(id));
+    const ordinarySections = ["themes", "prompt-shelf", "background", "create", "settings"]
+      .map((id) => document.getElementById(id));
     const ordinaryLinks = [...document.querySelectorAll(".rail-item")].filter((link) => link !== navEditor);
     const studioShell = document.querySelector(".studio");
     const content = document.querySelector(".content");
@@ -796,17 +863,14 @@
     const layerList = document.getElementById("editor-layer-list");
     const feedbackRoot = document.getElementById("editor-feedback");
     const quickFeedback = document.getElementById("editor-quick-feedback");
-    const inspectorHead = editor.querySelector(".editor-inspector-head");
     const inspectorBody = editor.querySelector(".editor-inspector-body");
-    const inspectorContent = editor.querySelector(".editor-inspector-content");
-    const sectionProgress = document.getElementById("editor-section-progress");
     const promptContextSection = editor.querySelector(".editor-prompt-context");
     const promptContextUnavailable = editor.querySelector(".editor-prompt-unavailable");
     const confirmDialog = document.getElementById("editor-confirm-dialog");
     const confirmTitle = document.getElementById("editor-confirm-title");
     const confirmBody = document.getElementById("editor-confirm-body");
     const confirmAction = document.getElementById("editor-confirm-action");
-    const modeInputs = [...document.querySelectorAll('input[name="editor-mode"]')];
+    const modeInputs = [...document.querySelectorAll("[data-editor-mode]")];
     const scopeInputs = [...document.querySelectorAll('input[name="background-scope"]')];
     const sharedInputs = [...document.querySelectorAll("[data-editor-shared]")];
     const radiusInput = document.getElementById("editor-radius");
@@ -851,17 +915,12 @@
     const greetingNativeNote = document.getElementById("editor-greeting-native");
     const greetingCollisionWarning = document.getElementById("editor-greeting-collision-warning");
     const greetingSample = document.getElementById("editor-greeting-sample");
-    const greetingPersonalEnableInput = document.getElementById("editor-greeting-personal-enabled");
     const greetingSourceInputs = [...document.querySelectorAll('input[name="greeting-source"]')];
     const greetingNameInput = document.getElementById("editor-greeting-name");
     const greetingPhrasesInput = document.getElementById("editor-greeting-phrases");
     const greetingOverrideInput = document.getElementById("editor-greeting-override");
     const greetingOverridePhrasesInput = document.getElementById("editor-greeting-override-phrases");
     const greetingOverridePhrasesField = document.getElementById("editor-greeting-override-phrases-field");
-    const greetingCompletion = document.getElementById("editor-greeting-completion");
-    const greetingUpdateButton = document.getElementById("editor-greeting-update");
-    const greetingUpdateStatus = document.getElementById("editor-greeting-update-status");
-    const greetingUpdateStatusText = document.getElementById("editor-greeting-update-status-text");
     const greetingPhrasesStatus = document.getElementById("editor-greeting-phrases-status");
     const greetingPersonalSection = editor.querySelector(".editor-greeting-personal");
     const greetingMarkInput = document.getElementById("editor-greeting-mark");
@@ -877,9 +936,15 @@
     const addLayerRoleSelect = document.getElementById("editor-add-layer-role");
     const backButton = document.getElementById("editor-back");
     const topmostButton = document.getElementById("stage-real-topmost");
-    const metadataInputs = [...document.querySelectorAll("[data-editor-metadata]")];
+    const metadataLocalesHost = document.getElementById("editor-metadata-locales");
+    const metadataLocaleOptions = document.getElementById("editor-language-options");
+    const metadataLanguageSelection = document.getElementById("editor-language-selection");
+    const metadataInputs = () => [...editor.querySelectorAll("[data-editor-metadata]")];
+    const metadataLocaleCheckboxes = () => [...editor.querySelectorAll("[data-editor-metadata-locale]")];
+    const workflowTabs = [...document.querySelectorAll("[data-editor-page-target]")];
     const branchTabs = [...document.querySelectorAll("[data-editor-branch-target]")];
     const branchHelp = document.getElementById("editor-branch-help");
+    const selectionBar = editor.querySelector(".editor-selection-bar");
     const targetPicker = document.getElementById("editor-target-picker");
     const contextEditing = document.getElementById("editor-context-editing");
     const contextApplies = document.getElementById("editor-context-applies");
@@ -887,15 +952,15 @@
     const contextFrame = document.getElementById("editor-context-frame");
     const contextFrameRow = document.getElementById("editor-context-frame-row");
     const documentDetailsPanel = document.getElementById("editor-document-details");
-    const documentDetailsToggle = document.getElementById("editor-document-details-toggle");
+    const cardPreviewPanel = document.getElementById("editor-card-preview-panel");
+    const cardPreviewFrame = document.getElementById("editor-card-preview-frame");
+    const cardPreviewImage = document.getElementById("editor-card-preview-image");
+    const adjustCardPreviewButton = document.getElementById("editor-adjust-card-preview");
+    const reviewPanel = editor.querySelector('[data-editor-workflow-page="review"]');
     const switchSupportedPreviewButton = document.getElementById("editor-switch-supported-preview");
     const stageRoot = document.getElementById("editor-stage");
-    for (const input of metadataInputs) {
-      if (input.dataset.editorMetadata === "label" && input.dataset.editorLocale !== normalizedLocale) {
-        input.closest(".editor-field")?.classList.add("advanced-only");
-      }
-    }
     let state = null;
+    let cardPreviewState = null;
     const isBuiltInLayoutEdit = () => state?.editKind === "builtin-layout";
     const targetAllowedInCurrentEdit = (target) => (
       !isBuiltInLayoutEdit() || BUILTIN_LAYOUT_TARGETS.has(target)
@@ -904,9 +969,19 @@
     let greetingPreferenceDraftDirty = false;
     let greetingPreferenceInputDirty = false;
     let greetingPreferenceInputInvalid = false;
+    let greetingStyleIntent = null;
+    let activeGreetingControlScope = null;
+    let greetingMirrorAxesDeferred = false;
+    let metadataInputDirty = false;
+    let metadataInputInvalid = false;
+    let renderedMetadataLocaleSignature = "";
     let selectedMode = "light";
+    const syncModeInputs = () => {
+      for (const input of modeInputs) input.checked = input.value === selectedMode;
+    };
     let selectedLayerId = null;
     let renderedLayerSignature = null;
+    let inspectorPage = "interface";
     let inspectorBranch = "interface";
     let inspectorTarget = "interface.theme";
     let inspectorField = null;
@@ -938,7 +1013,8 @@
     let inFlightSession = null;
     let actionAfterPatch = null;
     const hasUnsavedEdits = () => hasUnsavedEditorWork({
-      dirty: state?.dirty || greetingPreferenceDraftDirty || greetingPreferenceInputDirty,
+      dirty: state?.dirty || greetingPreferenceDraftDirty || greetingPreferenceInputDirty
+        || metadataInputDirty,
       deferred: deferredChanges.size,
       coalesced: coalescedChanges.size,
       debounce: changeFlushTimer,
@@ -1080,15 +1156,44 @@
       const base = mutationBase();
       if (base) post({ type: "pick-theme-launcher-mark", ...base });
     };
-    const greetingFrameId = () => stageViewport === "wide" ? "wide" : "standard";
-    const activeGreetingFrame = () => state?.shared?.greeting?.frames?.[selectedMode]?.[greetingFrameId()] ?? null;
+    const greetingFrameId = (viewport = stageViewport) => viewport === "wide" ? "wide" : "standard";
+    const greetingFramePrefix = (
+      appearance = selectedMode,
+      frame = greetingFrameId(),
+    ) => `shared.greeting.frames.${appearance}.${frame}.`;
+    const greetingScopeFromFieldPath = (fieldPath) => {
+      const match = /^shared\.greeting\.frames\.(light|dark)\.(standard|wide)\./.exec(
+        String(fieldPath ?? ""),
+      );
+      return match
+        ? { appearance: match[1], frameId: match[2] }
+        : { appearance: selectedMode, frameId: greetingFrameId() };
+    };
+    const activeGreetingFrame = (
+      appearance = selectedMode,
+      frame = greetingFrameId(),
+    ) => {
+      const confirmed = state?.shared?.greeting?.frames?.[appearance]?.[frame] ?? null;
+      if (!confirmed) return null;
+      const draft = { ...confirmed };
+      const prefix = greetingFramePrefix(appearance, frame);
+      for (const field of GREETING_FRAME_KEYS) {
+        const path = `${prefix}${field}`;
+        if (stageOverrides.has(path)) draft[field] = stageOverrides.get(path);
+      }
+      return draft;
+    };
     const themeChangeKey = (change) => change.kind === "token"
       ? `token:${change.mode}:${change.token}`
       : change.kind === "layer"
         ? `layer:${change.layerId}:${change.preset}:${change.property}`
         : change.kind === "greeting"
-          ? `greeting:${change.operation}:${change.appearance}:${change.frame}`
-          : `metadata:${change.field}:${change.locale}`;
+          ? change.operation === "reset"
+            ? "greeting:reset"
+            : `greeting:set-frame:${change.appearance}:${change.frame}`
+          : change.kind === "metadata-locale"
+            ? `metadata-locale:${change.locale}`
+            : `metadata:${change.field}:${change.locale}`;
     const clearInFlightChanges = () => {
       inFlightChanges = [];
       inFlightRevision = null;
@@ -1138,40 +1243,99 @@
         if (changes.length) announce(tr("editorActionFailed"), "error");
         return;
       }
-      for (const [key, change] of deferredChanges) {
+      for (const [, change] of deferredChanges) {
+        const key = themeChangeKey(change);
         if (!coalescedChanges.has(key)) coalescedChanges.set(key, change);
       }
       deferredChanges.clear();
-      for (const change of permittedChanges) coalescedChanges.set(themeChangeKey(change), change);
+      for (const change of permittedChanges) {
+        const key = themeChangeKey(change);
+        if (change.kind === "greeting" && change.operation === "reset") {
+          for (const queuedKey of [...coalescedChanges.keys()]) {
+            if (queuedKey.startsWith("greeting:")) coalescedChanges.delete(queuedKey);
+          }
+        }
+        // Reinsert a replaced value so ordering remains the ordering of the
+        // user's latest gestures. This matters when a global greeting reset
+        // and later frame edits share one delayed transaction.
+        coalescedChanges.delete(key);
+        coalescedChanges.set(key, change);
+      }
       if (changeFlushTimer) clearTimeout(changeFlushTimer);
       if (immediate && !pendingAction) flushThemeChanges();
       else changeFlushTimer = setTimeout(flushThemeChanges, 60);
       reflectButtonStates();
     };
     const queueThemeChange = (change, options) => queueThemeChanges([change], options);
-    const queueTokenChange = (mode, token, value) => {
-      queueThemeChange({ kind: "token", mode, token, value });
-    };
-    const greetingFrameFromControls = (changedField = null, changedValue = null) => {
-      const frame = { ...activeGreetingFrame() };
-      if (!frame.font) return null;
-      for (const input of greetingInputs) {
-        const field = input.dataset.editorGreeting;
-        frame[field] = field === changedField ? changedValue
-          : input.type === "checkbox" ? input.checked
-            : input.type === "range" ? input.valueAsNumber
-              : field === "weight" ? Number(input.value)
-                : input.value;
+    const confirmedTokenValue = (change) => {
+      if (change.mode === "light" || change.mode === "dark") {
+        return state?.tokens?.[change.mode]?.[change.token];
       }
+      if (change.mode !== "shared") return undefined;
+      if (state?.shared?.inherited?.[change.token]) return undefined;
+      if (change.token.startsWith("launcher")) {
+        const suffix = change.token.slice("launcher".length);
+        const property = `${suffix[0]?.toLowerCase() ?? ""}${suffix.slice(1)}`;
+        return state?.launcher?.[property];
+      }
+      return state?.shared?.[change.token];
+    };
+    const duplicatesConfirmedTokenChange = (change) => {
+      const key = themeChangeKey(change);
+      const inFlight = inFlightChanges.find((candidate) => themeChangeKey(candidate) === key);
+      const hadQueued = coalescedChanges.has(key) || deferredChanges.has(key);
+      const duplicate = reconcileDuplicateTokenValue({
+        key,
+        value: change.value,
+        inFlight,
+        confirmedValue: confirmedTokenValue(change),
+        queued: coalescedChanges,
+        deferred: deferredChanges,
+      });
+      if (!duplicate) return false;
+      if (hadQueued && !coalescedChanges.size && changeFlushTimer) {
+        clearTimeout(changeFlushTimer);
+        changeFlushTimer = null;
+      }
+      if (hadQueued) {
+        reflectButtonStates();
+        reflectDirtyState();
+      }
+      return true;
+    };
+    const queueTokenChange = (mode, token, value) => {
+      const change = { kind: "token", mode, token, value };
+      if (!duplicatesConfirmedTokenChange(change)) queueThemeChange(change);
+    };
+    const greetingInputValue = (input, field) => input.type === "checkbox" ? input.checked
+      : input.type === "range" ? input.valueAsNumber
+        : field === "weight" ? Number(input.value)
+          : input.value;
+    const greetingFrameFromControls = (
+      changedField = null,
+      changedValue = null,
+      appearance = selectedMode,
+      frameId = greetingFrameId(),
+    ) => {
+      const frame = { ...activeGreetingFrame(appearance, frameId) };
+      if (!frame.font) return null;
+      if (changedField) frame[changedField] = changedValue;
       return frame;
     };
-    const queueGreetingFrame = (frame, { immediate = false } = {}) => {
+    const queueGreetingFrame = (
+      frame,
+      {
+        immediate = false,
+        appearance = selectedMode,
+        frameId = greetingFrameId(),
+      } = {},
+    ) => {
       if (!frame) return;
       queueThemeChange({
         kind: "greeting",
         operation: "set-frame",
-        appearance: selectedMode,
-        frame: greetingFrameId(),
+        appearance,
+        frame: frameId,
         value: frame,
       }, { immediate });
     };
@@ -1228,7 +1392,9 @@
     const stageSelectionAllowed = (selection) => {
       if (!selection) return true;
       const capability = CAPABILITY_BY_ID.get(stageSelectionTarget(selection));
-      return Boolean(capability && capability.branch === inspectorBranch);
+      if (!capability || !targetAllowedInCurrentEdit(capability.id)) return false;
+      return !CAPABILITY_BRANCHES.includes(inspectorPage)
+        || capability.branch === inspectorPage;
     };
     const setStageNodeInteractive = (node, interactive) => {
       if (!node) return;
@@ -1244,15 +1410,28 @@
       }
       if (!stageRoot) return;
       stageRoot.dataset.selectionBranch = inspectorBranch;
+      const neutralPage = !CAPABILITY_BRANCHES.includes(inspectorPage);
       const prompt = stageRoot.querySelector(".stage-prompt");
-      setStageNodeInteractive(prompt, inspectorBranch === "interface" && stageContext === "new-chat");
+      setStageNodeInteractive(
+        prompt,
+        (neutralPage || inspectorPage === "interface") && stageContext === "new-chat",
+      );
       const greeting = stageRoot.querySelector(".stage-greeting");
-      setStageNodeInteractive(greeting, inspectorBranch === "interface" && stageContext === "new-chat");
+      setStageNodeInteractive(
+        greeting,
+        (neutralPage || inspectorPage === "interface") && stageContext === "new-chat",
+      );
       for (const item of stageRoot.querySelectorAll(".stage-layer .stage-item")) {
-        setStageNodeInteractive(item, inspectorBranch === "background");
+        setStageNodeInteractive(item, neutralPage || inspectorPage === "background");
       }
       const palette = stageRoot.querySelector(".stage-layers-panel");
-      if (palette) palette.hidden = inspectorBranch !== "background";
+      if (palette) palette.hidden = inspectorPage !== "background";
+      const scopeActive = backgroundScopeUiActive(inspectorPage, isBuiltInLayoutEdit());
+      for (const node of stageRoot.querySelectorAll(
+        ".stage-scope-zones, .stage-background-selection",
+      )) {
+        node.hidden = !scopeActive;
+      }
       if (!stageSelectionAllowed(stageSelection)
           || (stageSelection && stageSelectionTarget(stageSelection) !== inspectorTarget)) {
         stageSelection = null;
@@ -1397,37 +1576,12 @@
       editor.dataset.targetAvailable = String(available);
     };
     const revealWithinInspector = (target) => {
-      if (!target || !editorControls || !inspectorHead) return;
-      const controlsRect = editorControls.getBoundingClientRect();
-      const visibleTop = Math.max(
-        controlsRect.top, inspectorHead.getBoundingClientRect().bottom,
-      ) + 12;
-      const visibleBottom = controlsRect.bottom - 12;
+      if (!target || !inspectorBody) return;
+      const bodyRect = inspectorBody.getBoundingClientRect();
+      const visibleTop = bodyRect.top + 12;
+      const visibleBottom = bodyRect.bottom - 12;
       const delta = inspectorRevealDelta(target.getBoundingClientRect(), visibleTop, visibleBottom);
-      if (delta) editorControls.scrollTop += delta;
-    };
-    const alignInspectorSection = (target) => {
-      if (!target || !editorControls || !inspectorHead) return;
-      const visibleTop = Math.max(
-        editorControls.getBoundingClientRect().top,
-        inspectorHead.getBoundingClientRect().bottom,
-      ) + 12;
-      editorControls.scrollTop += target.getBoundingClientRect().top - visibleTop;
-    };
-    let sectionProgressFrame = 0;
-    const visibleInspectorSections = () => [...(inspectorContent?.querySelectorAll(
-      ":scope > .editor-section",
-    ) ?? [])].filter((section) => {
-      if (section.hidden || section.inert) return false;
-      const branch = section.dataset.editorBranch;
-      if (branch && branch !== inspectorBranch) return false;
-      return window.getComputedStyle?.(section)?.display !== "none";
-    });
-    const inspectorSectionHeading = (section) => {
-      const labelledBy = section?.getAttribute("aria-labelledby");
-      return (labelledBy ? document.getElementById(labelledBy) : null)
-        ?? section?.querySelector(":scope > h2, :scope > h3, :scope > .editor-section-head h2, :scope > .editor-section-head h3")
-        ?? null;
+      if (delta) inspectorBody.scrollTop += delta;
     };
     const inspectorSectionTarget = (section) => {
       const targets = String(section?.dataset.editorTargets ?? "")
@@ -1435,137 +1589,76 @@
         .filter((target) => CAPABILITY_BY_ID.get(target)?.branch === inspectorBranch);
       return targets.length === 1 ? targets[0] : null;
     };
-    const updateSectionProgressCurrent = () => {
-      if (!sectionProgress || sectionProgress.hidden || !inspectorHead) return;
-      const sections = visibleInspectorSections();
-      if (!sections.length) return;
-      const readingLine = inspectorHead.getBoundingClientRect().bottom + 18;
-      const atBottom = editorControls.scrollTop + editorControls.clientHeight
-        >= editorControls.scrollHeight - 2;
-      let active = atBottom ? sections.at(-1) : sections[0];
-      if (!atBottom) {
-        for (const section of sections) {
-          if (section.getBoundingClientRect().top <= readingLine) active = section;
-          else break;
-        }
+    const workflowPageAvailable = (page) => {
+      if (!["details", ...CAPABILITY_BRANCHES, "review"].includes(page)) return false;
+      if (!isBuiltInLayoutEdit()) return true;
+      return page === "interface" || page === "review"
+        || (page === "background" && Boolean(state?.layers?.length));
+    };
+    const syncInspectorPagePresentation = ({ focusPage = false } = {}) => {
+      if (!workflowPageAvailable(inspectorPage)) inspectorPage = "interface";
+      editor.dataset.inspectorPage = inspectorPage;
+      const capabilityPage = CAPABILITY_BRANCHES.includes(inspectorPage);
+      for (const tab of workflowTabs) {
+        const page = tab.dataset.editorPageTarget;
+        const available = workflowPageAvailable(page);
+        const selected = available && page === inspectorPage;
+        tab.hidden = !available;
+        tab.disabled = !available;
+        tab.setAttribute("aria-pressed", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focusPage) tab.focus();
       }
-      const activeHeading = inspectorSectionHeading(active);
-      for (const button of sectionProgress.querySelectorAll("button")) {
-        if (button.dataset.sectionHeading === activeHeading?.id) {
-          button.setAttribute("aria-current", "step");
-        } else {
-          button.removeAttribute("aria-current");
-        }
+      if (documentDetailsPanel) {
+        const selected = inspectorPage === "details";
+        documentDetailsPanel.hidden = !selected;
+        documentDetailsPanel.inert = !selected;
+      }
+      if (reviewPanel) {
+        const selected = inspectorPage === "review";
+        reviewPanel.hidden = !selected;
+        reviewPanel.inert = !selected;
+      }
+      if (selectionBar) {
+        selectionBar.hidden = !capabilityPage;
+        selectionBar.inert = !capabilityPage;
       }
     };
-    const scheduleSectionProgressCurrent = () => {
-      if (sectionProgressFrame) return;
-      sectionProgressFrame = requestAnimationFrame(() => {
-        sectionProgressFrame = 0;
-        updateSectionProgressCurrent();
-      });
-    };
-    const syncInspectorHeadHeight = () => {
-      if (!editorControls || !inspectorHead) return;
-      const height = Math.ceil(inspectorHead.getBoundingClientRect().height);
-      if (height > 0) editorControls.style.setProperty("--editor-inspector-head-height", `${height}px`);
-    };
-    const syncSectionProgress = () => {
-      if (!sectionProgress || !inspectorBody) return;
-      syncInspectorHeadHeight();
-      const entries = visibleInspectorSections().map((section) => ({
-        section,
-        heading: inspectorSectionHeading(section),
-      })).filter((entry) => entry.heading?.id && entry.heading.textContent.trim());
-      for (const { heading } of entries) heading.tabIndex = -1;
-      sectionProgress.setAttribute(
-        "aria-label",
-        entries.map(({ heading }) => heading.textContent.trim()).join(" · "),
-      );
-      sectionProgress.hidden = entries.length < 2;
-      const signature = entries.map(({ heading }) => `${heading.id}:${heading.textContent.trim()}`).join("|");
-      if (sectionProgress.dataset.signature !== signature) {
-        sectionProgress.dataset.signature = signature;
-        sectionProgress.replaceChildren(...entries.map(({ section, heading }, index) => {
-          const button = document.createElement("button");
-          const label = heading.textContent.trim();
-          const target = inspectorSectionTarget(section);
-          button.type = "button";
-          button.dataset.sectionHeading = heading.id;
-          if (target) button.dataset.editorTarget = target;
-          button.textContent = String(index + 1).padStart(2, "0");
-          button.title = label;
-          button.setAttribute("aria-label", `${index + 1}. ${label}`);
-          button.addEventListener("click", () => {
-            if (target) {
-              setInspectorTarget(target);
-              reflectStageSelectionForTarget(target);
-              renderStage();
-            }
-            heading.focus({ preventScroll: true });
-            alignInspectorSection(heading);
-            updateSectionProgressCurrent();
-          });
-          return button;
-        }));
-      }
-      scheduleSectionProgressCurrent();
-    };
-    editorControls?.addEventListener("scroll", scheduleSectionProgressCurrent, { passive: true });
-    if (typeof ResizeObserver === "function" && inspectorHead) {
-      const inspectorHeadObserver = new ResizeObserver(() => {
-        syncInspectorHeadHeight();
-        scheduleSectionProgressCurrent();
-      });
-      inspectorHeadObserver.observe(inspectorHead);
-    } else {
-      window.addEventListener("resize", () => {
-        syncInspectorHeadHeight();
-        scheduleSectionProgressCurrent();
-      }, { passive: true });
-    }
-    const setDocumentDetailsOpen = (
-      open, { reveal = false, returnFocus = false, focusPanel = false } = {},
+    const setInspectorTarget = (
+      target,
+      {
+        focusBranch = false,
+        reveal = false,
+        resetScroll = true,
+        routePage = true,
+      } = {},
     ) => {
-      if (!documentDetailsPanel || !documentDetailsToggle) return;
-      documentDetailsPanel.hidden = !open;
-      documentDetailsToggle.setAttribute("aria-expanded", String(open));
-      if (returnFocus) documentDetailsToggle.focus();
-      if (open && (reveal || focusPanel)) requestAnimationFrame(() => {
-        const firstLocalizedName = documentDetailsPanel.querySelector(
-          `[data-editor-metadata="label"][data-editor-locale="${CSS.escape(normalizedLocale)}"]`,
-        );
-        const destination = focusPanel
-          ? firstLocalizedName ?? documentDetailsPanel
-          : documentDetailsPanel.querySelector("h3") ?? documentDetailsPanel;
-        if (focusPanel) destination.focus({ preventScroll: true });
-        if (reveal) revealWithinInspector(destination);
-      });
-    };
-    const setInspectorTarget = (target, { focusBranch = false, reveal = false } = {}) => {
       const capability = CAPABILITY_BY_ID.get(target);
       if (!capability || !targetAllowedInCurrentEdit(target)) return false;
+      const previousTarget = inspectorTarget;
+      const previousPage = inspectorPage;
       if (inspectorTargetForField(inspectorField) !== target) {
         inspectorField = defaultInspectorField(target);
       }
       inspectorTarget = target;
       inspectorBranch = capability.branch;
       targetByBranch[inspectorBranch] = target;
+      if (routePage) {
+        inspectorPage = capability.branch;
+      }
       editor.dataset.inspectorBranch = inspectorBranch;
       editor.dataset.inspectorTarget = inspectorTarget;
       if (launcherPreview) {
         launcherPreview.dataset.selected = String(inspectorTarget === "widgets.app-identity");
       }
-      for (const tab of branchTabs) {
-        const selected = tab.dataset.editorBranchTarget === inspectorBranch;
-        tab.setAttribute("aria-pressed", String(selected));
-        tab.tabIndex = selected ? 0 : -1;
-        if (selected && focusBranch) tab.focus();
-      }
+      syncInspectorPagePresentation({ focusPage: focusBranch });
       syncTargetPicker();
       refreshInspectorContext();
       syncStageSelectionMode();
-      requestAnimationFrame(syncSectionProgress);
+      if (resetScroll && inspectorBody
+          && (previousTarget !== inspectorTarget || previousPage !== inspectorPage)) {
+        inspectorBody.scrollTop = 0;
+      }
       if (reveal) requestAnimationFrame(() => {
         const firstSection = editor.querySelector(
           `[data-editor-targets~="${CSS.escape(target)}"]:not([hidden])`,
@@ -1574,6 +1667,35 @@
         const heading = firstSection.querySelector(":scope > h2, :scope > h3") ?? firstSection;
         revealWithinInspector(heading);
       });
+      return true;
+    };
+    const setInspectorPage = (
+      page,
+      { focusPage = false, resetScroll = true, reveal = false } = {},
+    ) => {
+      if (!workflowPageAvailable(page)) return false;
+      const previousPage = inspectorPage;
+      if (CAPABILITY_BRANCHES.includes(page)) {
+        let target = targetByBranch[page];
+        if (!targetAllowedInCurrentEdit(target)) {
+          target = EDITOR_CAPABILITY_REGISTRY.find(
+            (entry) => entry.branch === page && targetAllowedInCurrentEdit(entry.id),
+          )?.id ?? null;
+        }
+        if (!target || !setInspectorTarget(target, {
+          focusBranch: focusPage,
+          reveal,
+          resetScroll,
+          routePage: true,
+        })) return false;
+      } else {
+        inspectorPage = page;
+        syncInspectorPagePresentation({ focusPage });
+        syncStageSelectionMode();
+        if (resetScroll && inspectorBody && previousPage !== inspectorPage) {
+          inspectorBody.scrollTop = 0;
+        }
+      }
       return true;
     };
     const syncBuiltInLayoutPresentation = ({ entering = false } = {}) => {
@@ -1600,10 +1722,6 @@
       saveButton.textContent = builtInLayout
         ? `${tr("saveTheme")} · ${tr("builtInTheme")}`
         : tr("saveTheme");
-      if (documentDetailsToggle) {
-        documentDetailsToggle.hidden = builtInLayout;
-        documentDetailsToggle.disabled = builtInLayout;
-      }
       if (greetingPersonalSection) {
         greetingPersonalSection.hidden = builtInLayout;
         greetingPersonalSection.inert = builtInLayout;
@@ -1621,14 +1739,9 @@
       )) {
         section.inert = builtInLayout;
       }
-      for (const tab of branchTabs) {
-        const branch = tab.dataset.editorBranchTarget;
-        const unavailable = builtInLayout
-          && (branch === "widgets" || (branch === "background" && !state?.layers?.length));
-        tab.hidden = unavailable;
-        tab.disabled = unavailable;
-      }
       if (!builtInLayout) {
+        if (entering) setInspectorPage("details", { resetScroll: true });
+        else syncInspectorPagePresentation();
         syncTargetPicker();
         return;
       }
@@ -1636,7 +1749,6 @@
       for (const input of document.querySelectorAll('input[name="editor-level"]')) {
         input.checked = input.value === "advanced";
       }
-      setDocumentDetailsOpen(false);
       if (entering || !BUILTIN_LAYOUT_TARGETS.has(targetByBranch.interface)) {
         targetByBranch.interface = "interface.new-chat-area";
       }
@@ -1648,6 +1760,11 @@
         stageSelection = { kind: "prompt" };
       } else {
         syncTargetPicker();
+      }
+      if (!workflowPageAvailable(inspectorPage)) {
+        setInspectorPage("interface", { resetScroll: entering });
+      } else {
+        syncInspectorPagePresentation();
       }
       stageOpacityWrap.hidden = true;
     };
@@ -1664,21 +1781,24 @@
       }
       syncStageHud();
     };
-    branchTabs.forEach((tab) => tab.addEventListener("click", () => {
-      const branch = tab.dataset.editorBranchTarget;
-      const target = targetByBranch[branch];
-      if (!target) return;
-      setInspectorTarget(target, { reveal: true });
-      reflectStageSelectionForTarget(target);
-      renderStage();
+    workflowTabs.forEach((tab) => tab.addEventListener("click", () => {
+      const page = tab.dataset.editorPageTarget;
+      if (!setInspectorPage(page, { resetScroll: true })) return;
+      if (CAPABILITY_BRANCHES.includes(page)) {
+        const target = targetByBranch[page];
+        reflectStageSelectionForTarget(target);
+        renderStage();
+      }
     }));
-    branchTabs.forEach((tab) => tab.addEventListener("keydown", (event) => {
+    workflowTabs.forEach((tab) => tab.addEventListener("keydown", (event) => {
       const previous = event.key === "ArrowLeft" || event.key === "ArrowUp";
       const next = event.key === "ArrowRight" || event.key === "ArrowDown";
       const boundary = event.key === "Home" || event.key === "End";
       if (!previous && !next && !boundary) return;
       event.preventDefault();
-      const availableTabs = branchTabs.filter((candidate) => !candidate.hidden && !candidate.disabled);
+      const availableTabs = workflowTabs.filter(
+        (candidate) => !candidate.hidden && !candidate.disabled,
+      );
       const index = availableTabs.indexOf(tab);
       if (index < 0 || !availableTabs.length) return;
       const nextIndex = event.key === "Home" ? 0
@@ -1728,15 +1848,6 @@
     editorControls?.addEventListener("input", trackInspectorField);
     editorControls?.addEventListener("change", trackInspectorField);
     editorControls?.addEventListener("click", trackInspectorField);
-    documentDetailsToggle?.addEventListener("click", () => {
-      setDocumentDetailsOpen(documentDetailsPanel.hidden, { reveal: true, focusPanel: true });
-    });
-    documentDetailsPanel?.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setDocumentDetailsOpen(false, { returnFocus: true });
-    });
-
     const resetStudioViewport = (hash) => {
       try {
         if (window.location.hash !== hash) history.replaceState(null, "", hash);
@@ -1755,7 +1866,7 @@
       if (firstOpen) {
         resetStudioViewport("#editor");
         if (stageColumn) stageColumn.scrollTop = 0;
-        if (editorControls) editorControls.scrollTop = 0;
+        if (inspectorBody) inspectorBody.scrollTop = 0;
         requestAnimationFrame(() => {
           resetStudioViewport("#editor");
           title.focus();
@@ -1769,9 +1880,16 @@
       editor.hidden = true;
       studioShell?.removeAttribute("data-editor-active");
       syncBuiltInLayoutPresentation();
-      for (const section of ordinarySections) section.hidden = false;
       setCurrentNavigation(false);
       resetStudioViewport("#themes");
+      const ordinaryViewRestored = onOrdinaryViewRestore?.("themes") === true;
+      if (!ordinaryViewRestored) {
+        for (const section of ordinarySections) {
+          const selected = section.id === "themes";
+          section.hidden = !selected;
+          section.inert = !selected;
+        }
+      }
       firstOpen = true;
       dropStageWork();
       stageSelection = null;
@@ -1784,7 +1902,6 @@
       targetByBranch.background = "background.canvas";
       targetByBranch.widgets = "widgets.app-identity";
       setInspectorTarget("interface.theme");
-      setDocumentDetailsOpen(false);
       stageMirror = null;
       stageLiveMirror = null;
       stageMirrorCache.clear();
@@ -1903,6 +2020,20 @@
       if (measured) return measured;
       return { left: STAGE_SIDEBAR_WIDTH, width: logicalWidth - STAGE_SIDEBAR_WIDTH, height: logicalHeight };
     };
+    const backgroundScopeRect = (scope, logicalWidth, logicalHeight, mainMetrics) => {
+      if (scope === "sidebar") {
+        return { left: 0, top: 0, width: mainMetrics.left, height: logicalHeight };
+      }
+      if (scope === "content") {
+        return {
+          left: mainMetrics.left,
+          top: 0,
+          width: mainMetrics.width,
+          height: logicalHeight,
+        };
+      }
+      return { left: 0, top: 0, width: logicalWidth, height: logicalHeight };
+    };
 
     // Path strings are drawn from a small fixed vocabulary, so parsing each into
     // segments once and reusing them spares a regex + split on every read — and
@@ -1984,6 +2115,9 @@
       if (stageKeyTimer) { clearTimeout(stageKeyTimer); stageKeyTimer = null; }
       stageKeyPaths.clear();
       actionAfterPatch = null;
+      greetingStyleIntent = null;
+      activeGreetingControlScope = null;
+      greetingMirrorAxesDeferred = false;
       if (previewResizeTimer) { clearTimeout(previewResizeTimer); previewResizeTimer = null; }
     };
 
@@ -2018,32 +2152,65 @@
       }
       return null;
     };
-    const greetingStagePrefix = () => `shared.greeting.frames.${selectedMode}.${greetingFrameId()}.`;
-    const greetingStagePaths = () => ["xRatio", "yRatio", "maxWidthRatio", "fontSize"]
-      .map((field) => `${greetingStagePrefix()}${field}`);
-    const stageItemPaths = (selection) => {
+    const greetingStagePrefix = (
+      appearance = selectedMode,
+      frame = greetingFrameId(),
+    ) => greetingFramePrefix(appearance, frame);
+    const greetingStagePaths = (
+      appearance = selectedMode,
+      frame = greetingFrameId(),
+    ) => ["xRatio", "yRatio", "maxWidthRatio", "fontSize"]
+      .map((field) => `${greetingStagePrefix(appearance, frame)}${field}`);
+    const stageItemPaths = (
+      selection,
+      {
+        appearance = selectedMode,
+        frame = greetingFrameId(),
+        viewport = stageViewport,
+      } = {},
+    ) => {
       if (!selection) return [];
       if (selection.kind === "prompt") return [...STAGE_PROMPT_PATHS];
-      if (selection.kind === "greeting") return greetingStagePaths();
+      if (selection.kind === "greeting") return greetingStagePaths(appearance, frame);
       const index = layerIndexForId(selection.id);
-      return index < 0 ? [] : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${stageViewport}.${property}`);
+      return index < 0 ? [] : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${viewport}.${property}`);
     };
     const commitStagePaths = (paths) => {
-      if (paths.some((path) => path.startsWith(greetingStagePrefix()))) {
-        const frame = { ...activeGreetingFrame() };
-        let changed = false;
-        for (const path of greetingStagePaths()) {
-          if (!stageOverrides.has(path)) continue;
-          const field = path.slice(greetingStagePrefix().length);
-          const value = stageOverrides.get(path);
-          if (Math.abs(Number(frame[field]) - Number(value)) < 0.00005) {
-            stageOverrides.delete(path);
-            continue;
-          }
-          frame[field] = value;
-          changed = true;
+      const greetingScopes = new Map();
+      for (const path of paths) {
+        const match = /^shared\.greeting\.frames\.(light|dark)\.(standard|wide)\.(xRatio|yRatio|maxWidthRatio|fontSize)$/.exec(path);
+        if (!match) continue;
+        const key = `${match[1]}:${match[2]}`;
+        if (!greetingScopes.has(key)) {
+          greetingScopes.set(key, { appearance: match[1], frameId: match[2], paths: [] });
         }
-        if (changed) queueGreetingFrame(frame, { immediate: true });
+        greetingScopes.get(key).paths.push(path);
+      }
+      if (greetingScopes.size) {
+        for (const { appearance, frameId, paths: scopedPaths } of greetingScopes.values()) {
+          const confirmed = state?.shared?.greeting?.frames?.[appearance]?.[frameId];
+          const frame = activeGreetingFrame(appearance, frameId);
+          if (!confirmed || !frame) continue;
+          let changed = false;
+          const prefix = greetingStagePrefix(appearance, frameId);
+          for (const path of scopedPaths) {
+            if (!stageOverrides.has(path)) continue;
+            const field = path.slice(prefix.length);
+            const value = stageOverrides.get(path);
+            if (Math.abs(Number(confirmed[field]) - Number(value)) < 0.00005) {
+              stageOverrides.delete(path);
+              continue;
+            }
+            changed = true;
+          }
+          if (changed) {
+            queueGreetingFrame(frame, {
+              immediate: true,
+              appearance,
+              frameId,
+            });
+          }
+        }
         return;
       }
       const messages = [];
@@ -2103,6 +2270,20 @@
     stageBackgroundSelection.className = "stage-background-selection";
     stageBackgroundSelection.setAttribute("aria-hidden", "true");
     stageBackgroundSelection.hidden = true;
+    const stageScopeZones = document.createElement("div");
+    stageScopeZones.className = "stage-scope-zones";
+    stageScopeZones.setAttribute("aria-hidden", "true");
+    const stageScopeZone = (scope, key) => {
+      const node = document.createElement("span");
+      node.className = "stage-scope-zone";
+      node.dataset.stageScopeZone = scope;
+      node.dataset.editorI18n = key;
+      node.textContent = tr(key);
+      return node;
+    };
+    const stageSidebarScopeZone = stageScopeZone("sidebar", "groupSidebar");
+    const stageContentScopeZone = stageScopeZone("content", "contentCanvas");
+    stageScopeZones.append(stageSidebarScopeZone, stageContentScopeZone);
     const stageSidebarEl = document.createElement("div");
     stageSidebarEl.className = "stage-sidebar";
     const stageContentHost = document.createElement("div");
@@ -2267,7 +2448,7 @@
     stageComposerEl.className = "stage-composer";
     stageCanvas.append(
       stageBackdropImg, stageArt, stageSidebarEl, stageContentHost, stageZonesHost,
-      stageBackgroundSelection,
+      stageScopeZones, stageBackgroundSelection,
     );
     stageFrame.append(stageCanvas, stageHud, stageEmptyNote, stageLayersPanel);
     stageRoot.appendChild(stageFrame);
@@ -2309,7 +2490,6 @@
       if (greetingContextUnavailable) greetingContextUnavailable.hidden = newChat;
       refreshInspectorContext();
       syncStageSelectionMode();
-      syncSectionProgress();
     };
 
     const renderStageLayersPanel = () => {
@@ -2607,24 +2787,34 @@
       const shadow = STAGE_SHADOWS[stageValue("shared.shadow")] ?? "none";
       stageCanvas.style.background = tokenValue("canvas") ?? "#808080";
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
-      stageArt.style.left = scope === "content" ? `${mainMetrics.left}px` : "0";
-      const backgroundSelected = inspectorTarget === "background.canvas";
+      const scopeRect = backgroundScopeRect(scope, logicalWidth, logicalHeight, mainMetrics);
+      stageArt.style.left = `${scopeRect.left}px`;
+      stageArt.style.right = `${Math.max(0, logicalWidth - scopeRect.left - scopeRect.width)}px`;
+      const backgroundSelected = backgroundScopeUiActive(inspectorPage, isBuiltInLayoutEdit());
       stageBackgroundSelection.hidden = !backgroundSelected;
       if (backgroundSelected) {
-        const contentOnly = scope === "content";
-        stageBackgroundSelection.dataset.scope = contentOnly ? "content" : "full-window";
-        stageBackgroundSelection.style.left = `${contentOnly ? mainMetrics.left : 0}px`;
-        stageBackgroundSelection.style.top = "0";
-        stageBackgroundSelection.style.width = `${contentOnly ? mainMetrics.width : logicalWidth}px`;
-        stageBackgroundSelection.style.height = `${logicalHeight}px`;
+        stageBackgroundSelection.dataset.scope = scope;
+        stageBackgroundSelection.style.left = `${scopeRect.left}px`;
+        stageBackgroundSelection.style.top = `${scopeRect.top}px`;
+        stageBackgroundSelection.style.width = `${scopeRect.width}px`;
+        stageBackgroundSelection.style.height = `${scopeRect.height}px`;
       }
+      stageScopeZones.hidden = !backgroundSelected;
+      stageSidebarScopeZone.style.left = "0";
+      stageSidebarScopeZone.style.top = "0";
+      stageSidebarScopeZone.style.width = `${mainMetrics.left}px`;
+      stageSidebarScopeZone.style.height = `${logicalHeight}px`;
+      stageContentScopeZone.style.left = `${mainMetrics.left}px`;
+      stageContentScopeZone.style.top = "0";
+      stageContentScopeZone.style.width = `${mainMetrics.width}px`;
+      stageContentScopeZone.style.height = `${logicalHeight}px`;
       const sidebarColor = tokenValue("sidebar") ?? "#808080";
       const sidebarAlpha = Number(tokenValue("sidebarAlpha")) || 1;
       stageSidebarEl.style.width = `${mainMetrics.left}px`;
-      stageSidebarEl.style.background = scope === "full-window"
+      stageSidebarEl.style.background = scope !== "content"
         ? `color-mix(in srgb, ${sidebarColor} ${Math.round(sidebarAlpha * 100)}%, transparent)`
         : sidebarColor;
-      stageSidebarEl.style.backdropFilter = scope === "full-window" && blur ? `blur(${Math.min(blur, 32)}px)` : "";
+      stageSidebarEl.style.backdropFilter = scope !== "content" && blur ? `blur(${Math.min(blur, 32)}px)` : "";
       stageSidebarEl.style.borderRight = `1px solid ${tokenValue("border") ?? "transparent"}`;
       for (const [id, entry] of stageLayerNodes) {
         const index = layerIndexForId(id);
@@ -2683,23 +2873,25 @@
           ?? STAGE_FONT_STACKS["system-sans"];
         stagePromptChip.style.color = tokenValue("accent") ?? "currentColor";
         const greeting = activeGreetingFrame();
+        const confirmedGreeting = state?.shared?.greeting?.frames?.[selectedMode]?.[greetingFrameId()];
         const liveGreeting = captureActive && stageMirror?.geometry?.greeting?.status === "found"
           ? stageMirror.geometry.greeting.rect : null;
-        if (greeting && (!captureActive || liveGreeting)) {
+        if (greeting) {
           const boxWidth = mainMetrics.width * Number(stageValue(`${greetingStagePrefix()}maxWidthRatio`));
           const centre = mainMetrics.left + (mainMetrics.width / 2)
             + (mainMetrics.width * Number(stageValue(`${greetingStagePrefix()}xRatio`)));
           const gap = Math.max(24, greeting.fontSize * 0.9);
           stageGreetingEl.hidden = false;
           stageGreetingEl.dataset.liveTarget = liveGreeting ? "true" : "";
-          if (liveGreeting) {
-            const deltaX = (Number(stageValue(`${greetingStagePrefix()}xRatio`)) - greeting.xRatio)
+          if (liveGreeting && confirmedGreeting) {
+            const deltaX = (Number(stageValue(`${greetingStagePrefix()}xRatio`)) - confirmedGreeting.xRatio)
               * mainMetrics.width;
-            const deltaY = (Number(stageValue(`${greetingStagePrefix()}yRatio`)) - greeting.yRatio)
+            const deltaY = (Number(stageValue(`${greetingStagePrefix()}yRatio`)) - confirmedGreeting.yRatio)
               * mainMetrics.height;
             const deltaWidth = (Number(stageValue(`${greetingStagePrefix()}maxWidthRatio`))
-              - greeting.maxWidthRatio) * mainMetrics.width;
-            const fontRatio = Number(stageValue(`${greetingStagePrefix()}fontSize`)) / greeting.fontSize;
+              - confirmedGreeting.maxWidthRatio) * mainMetrics.width;
+            const fontRatio = Number(stageValue(`${greetingStagePrefix()}fontSize`))
+              / confirmedGreeting.fontSize;
             stageGreetingEl.style.left = `${liveGreeting.left + deltaX - (deltaWidth / 2)}px`;
             stageGreetingEl.style.top = `${liveGreeting.top + deltaY}px`;
             stageGreetingEl.style.width = `${Math.max(48, liveGreeting.width + deltaWidth)}px`;
@@ -2767,10 +2959,14 @@
       syncStageHud();
     };
 
+    const clearSettledStageOverrides = () => {
+      if (!stageDrag && !coalescedChanges.size && !deferredChanges.size && !pendingAction
+          && !inFlightChanges.length && !stageKeyTimer && !stageKeyPaths.size) stageOverrides.clear();
+    };
+
     const renderStage = () => {
       if (!state || stageDrag) return;
-      if (!coalescedChanges.size && !deferredChanges.size && !pendingAction
-          && !stageKeyTimer && !stageKeyPaths.size) stageOverrides.clear();
+      clearSettledStageOverrides();
       ensureStageStructure();
       applyStageLayout();
       renderStageMatrix();
@@ -2829,6 +3025,33 @@
         : { kind: "layer", id: node.dataset.stageItem };
       return stageSelectionAllowed(selection) ? selection : null;
     };
+    const backgroundScopeLabelKey = (scope) => scope === "sidebar"
+      ? "groupSidebar"
+      : scope === "content" ? "contentCanvas" : "fullWindow";
+    const syncBackgroundScopeControls = (scope) => {
+      for (const input of scopeInputs) input.checked = input.value === scope;
+      const help = document.getElementById("background-scope-help");
+      if (help) {
+        help.textContent = tr(scope === "sidebar"
+          ? "sidebarZone"
+          : scope === "content" ? "contentScopeHelp" : "fullScopeHelp");
+      }
+      const guide = document.querySelector(".asset-guide-frame");
+      if (guide) guide.dataset.scope = scope;
+    };
+    const setBackgroundScope = (scope) => {
+      if (!BACKGROUND_SCOPE_IDS.includes(scope)
+          || !backgroundScopeUiActive(inspectorPage, isBuiltInLayoutEdit())
+          || !state || isBlockingAction()) return false;
+      const changed = stageValue("shared.backgroundScope") !== scope;
+      inspectorField = "shared.backgroundScope";
+      setStageOverride("shared.backgroundScope", scope);
+      syncBackgroundScopeControls(scope);
+      applyStageLayout();
+      if (changed) queueTokenChange("shared", "backgroundScope", scope);
+      announce(`${tr("backgroundScope")}: ${tr(backgroundScopeLabelKey(scope))}`);
+      return true;
+    };
     const selectStageBranchSurface = () => {
       if (inspectorBranch === "widgets") {
         announce(tr("appIdentityHelp"));
@@ -2853,7 +3076,7 @@
 
     const stageInputFor = (path) => {
       const cached = stageInputCache.get(path);
-      if (cached && cached.isConnected) return cached;
+      if (cached && cached.isConnected && cached.dataset.editorField === path) return cached;
       const input = editor.querySelector(`input[data-editor-field="${CSS.escape(path)}"]`);
       if (input) stageInputCache.set(path, input);
       else stageInputCache.delete(path);
@@ -2905,10 +3128,25 @@
       if (!selection || !stageSelectionAllowed(selection)) return;
       const [logicalWidth, logicalHeight] = stageLogicalSize();
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
+      const scopeRect = backgroundScopeRect(
+        stageValue("shared.backgroundScope"),
+        logicalWidth,
+        logicalHeight,
+        mainMetrics,
+      );
+      if (selection.kind === "layer" && scopeRect.width <= 0) return;
       const scale = stageFrame.clientWidth > 0 ? stageFrame.clientWidth / logicalWidth : 1;
       if (selection.kind === "layer") stageLayerNodes.get(selection.id)?.wrap.classList.add("is-active");
+      const gestureAppearance = selectedMode;
+      const gestureFrame = greetingFrameId();
+      const gestureViewport = stageViewport;
+      const gesturePaths = stageItemPaths(selection, {
+        appearance: gestureAppearance,
+        frame: gestureFrame,
+        viewport: gestureViewport,
+      });
       const start = {};
-      for (const path of stageItemPaths(selection)) start[path] = Number(stageValue(path)) || 0;
+      for (const path of gesturePaths) start[path] = Number(stageValue(path)) || 0;
       const targetRect = (selection.kind === "layer"
         ? stageLayerNodes.get(selection.id)?.item
         : selection.kind === "greeting" ? stageGreetingEl : stagePromptEl)?.getBoundingClientRect();
@@ -2939,12 +3177,14 @@
         startY: event.clientY,
         scale,
         logicalHeight,
-        artWidth: stageValue("shared.backgroundScope") === "content"
-          ? logicalWidth - mainMetrics.left
-          : logicalWidth,
+        artWidth: scopeRect.width,
         mainWidth: mainMetrics.width,
         mainHeight: mainMetrics.height,
         start,
+        paths: gesturePaths,
+        appearance: gestureAppearance,
+        frame: gestureFrame,
+        viewport: gestureViewport,
         rectSize: Math.max(60, (targetRect?.width ?? 0) + (targetRect?.height ?? 0)),
       };
       try { stageRoot.setPointerCapture(event.pointerId); } catch { /* synthetic pointers have no capture */ }
@@ -2959,7 +3199,7 @@
       if (drag.kind === "layer-move") {
         const index = layerIndexForId(drag.selection.id);
         if (index < 0) return;
-        const prefix = `layers[${index}].frames.${stageViewport}.`;
+        const prefix = `layers[${index}].frames.${drag.viewport}.`;
         let nextX = clampNumber(drag.start[`${prefix}positionX`] + (dx / drag.artWidth * 100), -100, 100);
         let nextY = clampNumber(drag.start[`${prefix}positionY`] + (dy / drag.logicalHeight * 100), -100, 100);
         if (!event.altKey) {
@@ -2972,7 +3212,7 @@
       } else if (drag.kind === "scale") {
         const index = layerIndexForId(drag.selection.id);
         if (index < 0) return;
-        const prefix = `layers[${index}].frames.${stageViewport}.`;
+        const prefix = `layers[${index}].frames.${drag.viewport}.`;
         const factor = 1 + (((drag.signX * (event.clientX - drag.startX)) + (drag.signY * (event.clientY - drag.startY))) / drag.rectSize);
         setStageOverride(`${prefix}scale`, clampNumber(drag.start[`${prefix}scale`] * factor, 0.25, 3));
       } else if (drag.kind === "prompt-move") {
@@ -2992,7 +3232,7 @@
         setStageOverride("shared.prompt.width",
           clampNumber(drag.start["shared.prompt.width"] + (drag.signX * dx * 2 / drag.mainWidth), 0.4, 0.96));
       } else if (drag.kind === "greeting-move") {
-        const prefix = greetingStagePrefix();
+        const prefix = greetingStagePrefix(drag.appearance, drag.frame);
         let nextX = clampNumber(drag.start[`${prefix}xRatio`] + (dx / drag.mainWidth), -0.45, 0.45);
         let nextY = clampNumber(drag.start[`${prefix}yRatio`] + (dy / drag.mainHeight), -0.4, 0.45);
         if (!event.altKey) {
@@ -3003,7 +3243,7 @@
         setStageOverride(`${prefix}xRatio`, nextX);
         setStageOverride(`${prefix}yRatio`, nextY);
       } else if (drag.kind === "greeting-size") {
-        const prefix = greetingStagePrefix();
+        const prefix = greetingStagePrefix(drag.appearance, drag.frame);
         const delta = ((drag.signX * dx) + (drag.signY * dy)) / 16;
         setStageOverride(`${prefix}fontSize`,
           clampNumber(drag.start[`${prefix}fontSize`] + delta, 24, 72));
@@ -3017,7 +3257,7 @@
       if (!stageDrag || !event) return;
       computeStageDragOverrides(stageDrag, event);
       applyStageLayout();
-      reflectStageInputs(stageItemPaths(stageDrag.selection));
+      reflectStageInputs(stageDrag.paths);
       refreshInspectorContext();
     };
 
@@ -3041,7 +3281,8 @@
       for (const active of stageArt.querySelectorAll(".is-active")) active.classList.remove("is-active");
       const drag = stageDrag;
       stageDrag = null;
-      commitStagePaths(stageItemPaths(drag.selection));
+      commitStagePaths(drag.paths);
+      applyDeferredGreetingMirrorAxes({ render: false });
       renderStage();
       refreshInspectorContext();
     };
@@ -3280,7 +3521,7 @@
       if (input.value === "simple") {
         for (const details of tokenGroups.querySelectorAll(".quick-essential")) details.open = true;
       }
-      setInspectorTarget(inspectorTarget);
+      setInspectorTarget(inspectorTarget, { routePage: false, resetScroll: false });
       renderStage();
     }));
     for (const [id, size] of [["stage-real-full", "full"]]) {
@@ -3307,8 +3548,33 @@
       }
       return { ...value };
     };
+    const normalizeMirrorSizing = (value, width, height) => {
+      if (!exactShape(value, [
+        "requestedWidth", "requestedHeight", "actualWidth", "actualHeight",
+        "nativeWidth", "nativeHeight", "dpr", "settled",
+      ])) return null;
+      const requested = value.requestedWidth === null && value.requestedHeight === null
+        ? null
+        : [value.requestedWidth, value.requestedHeight];
+      if (requested && (!integer(requested[0], 200, 6000) || !integer(requested[1], 200, 6000))) return null;
+      if ((value.requestedWidth === null) !== (value.requestedHeight === null)
+          || !integer(value.actualWidth, 200, 6000) || !integer(value.actualHeight, 200, 6000)
+          || value.actualWidth !== width || value.actualHeight !== height
+          || !integer(value.nativeWidth, 1, 30000) || !integer(value.nativeHeight, 1, 30000)
+          || !inRange(value.dpr, 0.25, 8) || typeof value.settled !== "boolean") return null;
+      return {
+        requestedWidth: value.requestedWidth,
+        requestedHeight: value.requestedHeight,
+        actualWidth: value.actualWidth,
+        actualHeight: value.actualHeight,
+        nativeWidth: value.nativeWidth,
+        nativeHeight: value.nativeHeight,
+        dpr: value.dpr,
+        settled: value.settled,
+      };
+    };
     const normalizeMirror = (value) => {
-      if (!exactShape(value, ["type", "image", "width", "height", "revision", "request"], ["geometry"])
+      if (!exactShape(value, ["type", "image", "width", "height", "revision", "request", "sizing"], ["geometry"])
           || value.type !== "aura-mirror" || !integer(value.revision, 0, Number.MAX_SAFE_INTEGER)
           || !integer(value.request, 0, 2_147_483_647)) return null;
       if (typeof value.image !== "string" || !value.image.startsWith(MIRROR_PREFIX)
@@ -3319,6 +3585,8 @@
       const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
       if ((encoded.length / 4 * 3) - padding > MIRROR_MAX_RAW_BYTES) return null;
       if (!integer(value.width, 200, 6000) || !integer(value.height, 200, 6000)) return null;
+      const sizing = normalizeMirrorSizing(value.sizing, value.width, value.height);
+      if (!sizing) return null;
       let geometry = null;
       if (value.geometry !== undefined && value.geometry !== null) {
         if (!exactShape(value.geometry, ["context", "mode", "viewport", "main", "prompt", "greeting"])
@@ -3346,7 +3614,7 @@
       }
       return {
         image: value.image, width: value.width, height: value.height,
-        revision: value.revision, request: value.request, geometry,
+        revision: value.revision, request: value.request, sizing, geometry,
       };
     };
     const mirrorBasis = (revision, mode, viewport, width, height) => (
@@ -3393,14 +3661,50 @@
         : null;
       updateMirrorCaption();
     };
+    const followLiveMirrorAxes = (
+      mirror,
+      {
+        force = false,
+        first = false,
+        previousContext = null,
+        previousMode = null,
+      } = {},
+    ) => {
+      if (!hasUsableMirrorGeometry(mirror)) return;
+      stageViewport = mirror.geometry.viewport;
+      reflectStageViewport();
+      const realContext = mirror.geometry.context;
+      if ((realContext === "new-chat" || realContext === "conversation")
+          && !stageContextTouched
+          && (force || first || realContext !== previousContext)) {
+        stageContext = realContext;
+      }
+      const realMode = mirror.geometry.mode;
+      if (realMode && !appearanceTouched && realMode !== selectedMode
+          && (force || first || realMode !== previousMode)) {
+        selectedMode = realMode;
+        syncModeInputs();
+        reflectTokens();
+      }
+      reflectGreeting();
+    };
+    const applyDeferredGreetingMirrorAxes = ({ render = true } = {}) => {
+      if (!greetingMirrorAxesDeferred || !hasUsableMirrorGeometry(stageLiveMirror)) return;
+      greetingMirrorAxesDeferred = false;
+      followLiveMirrorAxes(stageLiveMirror, { force: true });
+      selectStageMirror();
+      if (render) renderStage();
+    };
     const receiveMirror = (raw) => {
       const mirror = normalizeMirror(raw);
       if (!mirror || mirror.revision !== state?.revision) return false;
       if (previewExpectedRequest !== null && mirror.request !== previewExpectedRequest) return false;
       if (previewSizeEditing) {
         if (previewExpectedRequest === null && !previewSizeIntent) return false;
-        if (previewSizeIntent
-            && (mirror.width !== previewSizeIntent[0] || mirror.height !== previewSizeIntent[1])) return false;
+        if (previewSizeIntent && (
+          mirror.sizing.requestedWidth !== previewSizeIntent[0]
+          || mirror.sizing.requestedHeight !== previewSizeIntent[1]
+        )) return false;
         previewSizeEditing = false;
         previewSizeIntent = null;
         previewExpectedRequest = null;
@@ -3422,22 +3726,10 @@
           renderStage();
           return true;
         }
-        stageViewport = mirror.geometry.viewport;
-        reflectStageViewport();
-        reflectGreeting();
-        const realContext = mirror.geometry?.context;
-        if ((realContext === "new-chat" || realContext === "conversation")
-            && !stageContextTouched && (first || realContext !== previousContext)) {
-          stageContext = realContext;
-        }
-        const realMode = mirror.geometry?.mode;
-        if (realMode && !appearanceTouched && realMode !== selectedMode
-            && (first || realMode !== previousMode)) {
-          selectedMode = realMode;
-          for (const input of modeInputs) input.checked = input.value === selectedMode;
-          reflectTokens();
-          reflectGreeting();
-        }
+        const greetingGestureActive = Boolean(activeGreetingControlScope)
+          || stageDrag?.selection?.kind === "greeting";
+        if (greetingGestureActive) greetingMirrorAxesDeferred = true;
+        else followLiveMirrorAxes(mirror, { first, previousContext, previousMode });
         selectStageMirror();
         if (first && stageMirror) announce(tr("stageBackdropReady"));
         renderStage();
@@ -3504,7 +3796,7 @@
             selectedMode = mode;
             stageContextTouched = true;
             stageContext = context;
-            for (const input of modeInputs) input.checked = input.value === selectedMode;
+            syncModeInputs();
             selectStageMirror();
             reflectTokens();
             renderStage();
@@ -3577,8 +3869,12 @@
       const cellScale = cellWidth / logicalWidth;
       const frameHeight = `${Math.round(logicalHeight * cellScale)}px`;
       const scope = state.shared.backgroundScope;
-      const artLeft = scope === "content" ? `${STAGE_SIDEBAR_WIDTH}px` : "0";
       const mainWidth = logicalWidth - STAGE_SIDEBAR_WIDTH;
+      const scopeRect = backgroundScopeRect(scope, logicalWidth, logicalHeight, {
+        left: STAGE_SIDEBAR_WIDTH,
+        width: mainWidth,
+        height: logicalHeight,
+      });
       for (const entry of matrixCells) {
         const { mode, context, cell } = entry;
         const tokens = state.tokens[mode];
@@ -3593,10 +3889,11 @@
         entry.canvas.style.height = `${logicalHeight}px`;
         entry.canvas.style.transform = `scale(${cellScale})`;
         entry.canvas.style.background = tokens.canvas;
-        entry.art.style.left = artLeft;
+        entry.art.style.left = `${scopeRect.left}px`;
+        entry.art.style.right = `${Math.max(0, logicalWidth - scopeRect.left - scopeRect.width)}px`;
         reconcileMatrixLayers(entry);
         entry.sidebar.style.width = `${STAGE_SIDEBAR_WIDTH}px`;
-        entry.sidebar.style.background = scope === "full-window"
+        entry.sidebar.style.background = scope !== "content"
           ? `color-mix(in srgb, ${tokens.sidebar} ${Math.round(tokens.sidebarAlpha * 100)}%, transparent)`
           : tokens.sidebar;
         const block = entry.block;
@@ -3705,6 +4002,7 @@
               text.removeAttribute("aria-invalid");
               setStageOverride(picker.dataset.editorField, picker.value.toUpperCase());
               applyStageLayout();
+              queueTokenChange(selectedMode, token, picker.value.toUpperCase());
             });
             picker.addEventListener("change", () => queueTokenChange(selectedMode, token, picker.value.toUpperCase()));
             text.addEventListener("change", () => {
@@ -3740,6 +4038,7 @@
               output.value = `${range.value}%`;
               setStageOverride(range.dataset.editorField, Number(range.value) / 100);
               applyStageLayout();
+              queueTokenChange(selectedMode, token, Number(range.value) / 100);
             });
             range.addEventListener("change", () => queueTokenChange(selectedMode, token, Number(range.value) / 100));
             row.append(label, range, output);
@@ -3807,10 +4106,7 @@
       setInheritedRadiusPresentation(values.inherited.radius && !stageOverrides.has("shared.radius"));
       document.getElementById("editor-radius-output").value = `${Math.round(radius)} px`;
       document.getElementById("editor-blur-output").value = `${Math.round(blur)} px`;
-      for (const input of scopeInputs) input.checked = input.value === backgroundScope;
-      document.getElementById("background-scope-help").textContent = tr(
-        backgroundScope === "full-window" ? "fullScopeHelp" : "contentScopeHelp");
-      document.querySelector(".asset-guide-frame").dataset.scope = backgroundScope;
+      syncBackgroundScopeControls(backgroundScope);
       for (const input of promptInputs) {
         const key = input.dataset.editorPrompt;
         const value = Number(stageValue(`shared.prompt.${key}`) ?? values.prompt[key]);
@@ -3838,25 +4134,31 @@
     const greetingThemeOverride = (personal = greetingDraft()) => (
       personal?.themeOverrides?.[state?.id] ?? { mode: "global", phrases: [] }
     );
-    const reflectGreetingCompletion = () => {
-      if (!greetingCompletion || !greetingUpdateStatus || !greetingUpdateStatusText) return;
-      const personal = greetingDraft();
-      const editable = Boolean(personal?.enabled && personal.source === "custom");
-      greetingCompletion.hidden = !editable;
-      greetingCompletion.inert = !editable;
-      if (!editable) return;
-      const dirty = greetingPreferenceDraftDirty || greetingPreferenceInputDirty;
-      const applying = pendingAction === "set-greeting-phrases";
-      const feedback = applying
-        ? ["busy", "editorBusy"]
-        : greetingPreferenceInputInvalid
-          ? ["invalid", "invalidState"]
-          : dirty
-            ? ["dirty", "unsavedState"]
-            : ["updated", "validState"];
-      greetingCompletion.dataset.state = feedback[0];
-      greetingUpdateStatus.dataset.state = feedback[0];
-      greetingUpdateStatusText.textContent = tr(feedback[1]);
+    const greetingHasLocalFrameDraft = () => [...stageOverrides.keys()].some(
+      (path) => path.startsWith("shared.greeting.frames."),
+    );
+    const greetingUsesNativeLayout = () => greetingStyleIntent === null
+      ? Boolean(state?.shared?.greeting?.native && !greetingHasLocalFrameDraft())
+      : !greetingStyleIntent;
+    const syncGreetingWordControls = (personal = greetingDraft()) => {
+      if (!personal) return;
+      const custom = personal.enabled && personal.source === "custom";
+      const locked = isBuiltInLayoutEdit() || isBlockingAction();
+      for (const input of greetingSourceInputs) input.disabled = locked;
+      if (greetingNameInput) greetingNameInput.disabled = locked || !custom;
+      if (greetingPhrasesInput) greetingPhrasesInput.disabled = locked || !custom;
+      if (greetingOverrideInput) greetingOverrideInput.disabled = locked || !custom;
+      if (greetingOverridePhrasesInput) {
+        greetingOverridePhrasesInput.disabled = locked || !custom
+          || greetingThemeOverride(personal).mode !== "custom";
+      }
+    };
+    const syncGreetingFrameControls = () => {
+      const locked = isBuiltInLayoutEdit() || isBlockingAction() || greetingStyleIntent !== null;
+      const native = greetingUsesNativeLayout();
+      if (greetingEnableInput) greetingEnableInput.disabled = locked;
+      for (const input of greetingInputs) input.disabled = locked || native;
+      for (const exact of greetingExactInputs) exact.disabled = locked || native;
     };
     const greetingSampleText = () => {
       const personal = greetingDraft();
@@ -3902,10 +4204,11 @@
       const greetingState = state.shared.greeting;
       const greeting = activeGreetingFrame();
       if (!greeting) return;
-      if (greetingEnableInput) greetingEnableInput.checked = !greetingState.native;
-      if (greetingNativeNote) greetingNativeNote.hidden = !greetingState.native;
+      const greetingNative = greetingUsesNativeLayout();
+      if (greetingEnableInput) greetingEnableInput.checked = !greetingNative;
+      if (greetingNativeNote) greetingNativeNote.hidden = !greetingNative;
       if (greetingCollisionWarning) {
-        greetingCollisionWarning.hidden = greetingState.native
+        greetingCollisionWarning.hidden = greetingNative
           || (!state.isNew && state.source !== "user")
           || state.layers.length === 0;
       }
@@ -3914,14 +4217,13 @@
         compactOption.disabled = !greetingState.compactMarkAvailable;
         compactOption.hidden = !greetingState.compactMarkAvailable;
       }
-      reflectGreetingPreview(greeting, greetingState.native);
+      reflectGreetingPreview(greeting, greetingNative);
       const personal = greetingDraft();
       if (!personal) return;
-      if (greetingPersonalEnableInput) greetingPersonalEnableInput.checked = personal.enabled;
-      const personalSource = personal.source;
+      const personalSource = personal.enabled && personal.source === "custom"
+        ? "custom"
+        : "claude";
       for (const input of greetingSourceInputs) input.checked = input.value === personalSource;
-      for (const input of greetingSourceInputs) input.disabled = !personal.enabled;
-      const custom = personal.enabled && personalSource === "custom";
       const override = greetingThemeOverride(personal);
       if (greetingNameInput && !greetingPreferenceInputDirty
           && document.activeElement !== greetingNameInput) {
@@ -3936,17 +4238,11 @@
           && document.activeElement !== greetingOverridePhrasesInput) {
         greetingOverridePhrasesInput.value = override.phrases.join("\n");
       }
-      if (greetingNameInput) greetingNameInput.disabled = !custom;
-      if (greetingPhrasesInput) greetingPhrasesInput.disabled = !custom;
-      if (greetingOverrideInput) greetingOverrideInput.disabled = !custom;
       if (greetingOverridePhrasesField) greetingOverridePhrasesField.hidden = override.mode !== "custom";
-      if (greetingOverridePhrasesInput) {
-        greetingOverridePhrasesInput.disabled = !custom || override.mode !== "custom";
-      }
+      syncGreetingWordControls(personal);
       for (const input of greetingInputs) {
         const field = input.dataset.editorGreeting;
         input.dataset.editorField = `${greetingStagePrefix()}${field}`;
-        input.disabled = greetingState.native;
         if (input.type === "checkbox") {
           input.checked = Boolean(greeting[field]);
         } else if (input.type === "range") {
@@ -3963,8 +4259,7 @@
           input.value = String(greeting[field]);
         }
       }
-      for (const exact of greetingExactInputs) exact.disabled = greetingState.native;
-      reflectGreetingCompletion();
+      syncGreetingFrameControls();
     };
 
     const reflectLauncher = () => {
@@ -4002,14 +4297,243 @@
       }
     };
 
-    const reflectMetadata = () => {
+    const metadataLocaleEnabled = (locale) => {
+      const override = `metadata.locale.${locale}`;
+      if (stageOverrides.has(override)) return Boolean(stageOverrides.get(override));
+      return Boolean(state?.metadata?.labels && Object.hasOwn(state.metadata.labels, locale));
+    };
+    const selectedMetadataLocales = () => THEME_METADATA_LOCALES
+      .filter(({ id }) => metadataLocaleEnabled(id));
+    const clearMetadataOverrides = () => {
+      for (const key of [...stageOverrides.keys()]) {
+        if (key.startsWith("metadata.")) stageOverrides.delete(key);
+      }
+      renderedMetadataLocaleSignature = "";
+    };
+    const metadataControlId = (kind, locale) =>
+      `editor-${kind}-${locale.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`;
+    const reconcileMetadataOverrides = () => {
       if (!state) return;
-      for (const input of metadataInputs) {
-        const collection = input.dataset.editorMetadata === "label" ? "labels" : "descriptions";
-        const path = `metadata.${collection}.${input.dataset.editorLocale}`;
-        input.value = String(stageValue(path) ?? "");
+      for (const { id: locale } of THEME_METADATA_LOCALES) {
+        const enabledPath = `metadata.locale.${locale}`;
+        if (stageOverrides.has(enabledPath)
+            && stageOverrides.get(enabledPath) === Object.hasOwn(state.metadata.labels, locale)) {
+          stageOverrides.delete(enabledPath);
+        }
+        for (const collection of ["labels", "descriptions"]) {
+          const path = `metadata.${collection}.${locale}`;
+          if (stageOverrides.has(path)
+              && Object.hasOwn(state.metadata[collection], locale)
+              && String(stageOverrides.get(path)) === String(state.metadata[collection][locale])) {
+            stageOverrides.delete(path);
+          }
+        }
       }
     };
+    const renderMetadataLocales = ({ focusLocale = null } = {}) => {
+      if (!state) return;
+      reconcileMetadataOverrides();
+      const selected = selectedMetadataLocales();
+      const signature = selected.map(({ id }) => id).join("|");
+      for (const checkbox of metadataLocaleCheckboxes()) {
+        checkbox.checked = selected.some(({ id }) => id === checkbox.value);
+        checkbox.disabled = checkbox.value === "en" || isBuiltInLayoutEdit() || isBlockingAction();
+      }
+      if (metadataLanguageSelection) {
+        metadataLanguageSelection.textContent = selected
+          .map(({ id, name }) => `${name} · ${id}`).join(", ");
+      }
+      if (!metadataLocalesHost || signature === renderedMetadataLocaleSignature) return;
+      renderedMetadataLocaleSignature = signature;
+      const cards = selected.map(({ id: locale, name }) => {
+        const card = document.createElement("section");
+        card.className = "editor-locale-card";
+        card.dataset.editorMetadataCard = locale;
+
+        const heading = document.createElement("div");
+        heading.className = "editor-locale-card-head";
+        const identity = document.createElement("div");
+        identity.className = "editor-locale-identity";
+        const title = document.createElement("strong");
+        title.textContent = name;
+        title.lang = locale;
+        const code = document.createElement("code");
+        code.textContent = locale;
+        identity.append(title, code);
+        heading.appendChild(identity);
+        if (locale === "en") {
+          const required = document.createElement("span");
+          required.className = "editor-locale-required";
+          required.textContent = tr("themeLanguageRequired");
+          heading.appendChild(required);
+        }
+
+        const fields = document.createElement("div");
+        fields.className = "editor-locale-card-fields";
+        const nameId = metadataControlId("label", locale);
+        const nameField = document.createElement("label");
+        nameField.className = "editor-field";
+        nameField.htmlFor = nameId;
+        const nameLabel = document.createElement("span");
+        nameLabel.className = "editor-metadata-label";
+        nameLabel.textContent = tr("themeFieldName");
+        const nameInput = document.createElement("input");
+        nameInput.id = nameId;
+        nameInput.type = "text";
+        nameInput.maxLength = 80;
+        nameInput.autocomplete = "off";
+        nameInput.required = true;
+        nameInput.lang = locale;
+        nameInput.dataset.editorMetadata = "label";
+        nameInput.dataset.editorLocale = locale;
+        nameInput.dataset.editorField = `metadata.labels.${locale}`;
+        nameInput.value = String(stageValue(`metadata.labels.${locale}`) ?? "");
+        if (!nameInput.value.trim()) nameInput.setAttribute("aria-invalid", "true");
+        nameField.append(nameLabel, nameInput);
+
+        const descriptionId = metadataControlId("description", locale);
+        const descriptionField = document.createElement("label");
+        descriptionField.className = "editor-field";
+        descriptionField.htmlFor = descriptionId;
+        const descriptionLabel = document.createElement("span");
+        descriptionLabel.className = "editor-metadata-label";
+        descriptionLabel.textContent = tr("themeFieldDescription");
+        const descriptionInput = document.createElement("textarea");
+        descriptionInput.id = descriptionId;
+        descriptionInput.rows = 3;
+        descriptionInput.maxLength = 220;
+        descriptionInput.required = true;
+        descriptionInput.lang = locale;
+        descriptionInput.dataset.editorMetadata = "description";
+        descriptionInput.dataset.editorLocale = locale;
+        descriptionInput.dataset.editorField = `metadata.descriptions.${locale}`;
+        descriptionInput.value = String(stageValue(`metadata.descriptions.${locale}`) ?? "");
+        if (!descriptionInput.value.trim()) descriptionInput.setAttribute("aria-invalid", "true");
+        descriptionField.append(descriptionLabel, descriptionInput);
+
+        fields.append(nameField, descriptionField);
+        card.append(heading, fields);
+        return card;
+      });
+      metadataLocalesHost.replaceChildren(...cards);
+      metadataInputInvalid = metadataInputs().some((input) => !input.value.trim());
+      if (focusLocale) {
+        requestAnimationFrame(() => metadataLocalesHost
+          .querySelector(`[data-editor-metadata-card="${CSS.escape(focusLocale)}"] input`)?.focus());
+      }
+    };
+    const reflectMetadata = () => {
+      if (!state) return;
+      renderMetadataLocales();
+      for (const input of metadataInputs()) {
+        if (metadataInputInvalid && input.getAttribute("aria-invalid") === "true"
+            && document.activeElement === input) continue;
+        const collection = input.dataset.editorMetadata === "label" ? "labels" : "descriptions";
+        const path = `metadata.${collection}.${input.dataset.editorLocale}`;
+        const value = String(stageValue(path) ?? "");
+        if (input.value !== value) input.value = value;
+        input.toggleAttribute("aria-invalid", !value.trim());
+      }
+      metadataInputInvalid = metadataInputs().some((input) => !input.value.trim());
+    };
+
+    const normalizeCardPreviewCrop = (value) => (
+      exactShape(value, ["x", "y", "zoom"])
+        && inRange(value.x, 0, 100)
+        && inRange(value.y, 0, 100)
+        && inRange(value.zoom, 1, 6)
+        ? Object.freeze({ x: value.x, y: value.y, zoom: value.zoom })
+        : null
+    );
+
+    const normalizeCardPreview = (value, expectedThemeId) => {
+      if (!exactShape(value, ["themeId", "imageUrl", "crop", "defaultCrop", "label"])
+          || value.themeId !== expectedThemeId
+          || !ID_PATTERN.test(value.themeId)) return null;
+      const allowedUrls = new Set([
+        `https://aura.previews/${value.themeId}.png`,
+        `https://aura.assets/${value.themeId}/card-preview.webp`,
+        `https://aura.user-themes/${value.themeId}/card-preview.webp`,
+      ]);
+      if (typeof value.imageUrl !== "string" || !allowedUrls.has(value.imageUrl)) return null;
+      const crop = normalizeCardPreviewCrop(value.crop);
+      const defaultCrop = normalizeCardPreviewCrop(value.defaultCrop);
+      const label = safeText(value.label, 120);
+      if (!crop || !defaultCrop || !label) return null;
+      return Object.freeze({
+        themeId: value.themeId,
+        imageUrl: value.imageUrl,
+        crop,
+        defaultCrop,
+        label,
+      });
+    };
+
+    const layoutCardPreview = () => {
+      if (!cardPreviewState || !cardPreviewFrame || !cardPreviewImage) return;
+      const frameWidth = cardPreviewFrame.clientWidth;
+      const frameHeight = cardPreviewFrame.clientHeight;
+      if (!frameWidth || !frameHeight || !cardPreviewImage.naturalWidth
+          || !cardPreviewImage.naturalHeight) return;
+      const scale = Math.max(
+        frameWidth / cardPreviewImage.naturalWidth,
+        frameHeight / cardPreviewImage.naturalHeight,
+      ) * cardPreviewState.crop.zoom;
+      const width = cardPreviewImage.naturalWidth * scale;
+      const height = cardPreviewImage.naturalHeight * scale;
+      const overflowX = Math.max(0, width - frameWidth);
+      const overflowY = Math.max(0, height - frameHeight);
+      cardPreviewImage.style.width = `${width}px`;
+      cardPreviewImage.style.height = `${height}px`;
+      cardPreviewImage.style.left = `${-overflowX * cardPreviewState.crop.x / 100}px`;
+      cardPreviewImage.style.top = `${-overflowY * cardPreviewState.crop.y / 100}px`;
+    };
+
+    const reflectCardPreview = () => {
+      if (!cardPreviewPanel || !cardPreviewImage || !adjustCardPreviewButton) return;
+      let preview = null;
+      if (state && !isBuiltInLayoutEdit() && typeof getThemeCardPreview === "function") {
+        try {
+          preview = normalizeCardPreview(getThemeCardPreview(state.id), state.id);
+        } catch {
+          preview = null;
+        }
+      }
+      cardPreviewState = preview;
+      cardPreviewPanel.hidden = !preview;
+      cardPreviewPanel.inert = !preview;
+      if (!preview) {
+        cardPreviewImage.removeAttribute("src");
+        cardPreviewImage.style.removeProperty("width");
+        cardPreviewImage.style.removeProperty("height");
+        cardPreviewImage.style.removeProperty("left");
+        cardPreviewImage.style.removeProperty("top");
+        adjustCardPreviewButton.removeAttribute("aria-label");
+        return;
+      }
+      adjustCardPreviewButton.setAttribute("aria-label", format(tr("adjustPreviewFor"), preview.label));
+      if (cardPreviewImage.src !== preview.imageUrl) cardPreviewImage.src = preview.imageUrl;
+      requestAnimationFrame(layoutCardPreview);
+    };
+
+    cardPreviewImage?.addEventListener("load", layoutCardPreview);
+    const cardPreviewResizeObserver = typeof ResizeObserver === "function" && cardPreviewFrame
+      ? new ResizeObserver(layoutCardPreview)
+      : null;
+    cardPreviewResizeObserver?.observe(cardPreviewFrame);
+    adjustCardPreviewButton?.addEventListener("click", () => {
+      if (!state || !cardPreviewState || typeof openThemeCardPreview !== "function") {
+        announce(tr("previewUnavailable"), "error");
+        return;
+      }
+      try {
+        if (!openThemeCardPreview(state.id, adjustCardPreviewButton)) {
+          announce(tr("previewUnavailable"), "error");
+        }
+      } catch {
+        announce(tr("previewUnavailable"), "error");
+      }
+    });
 
     const option = (value, label) => {
       const node = document.createElement("option");
@@ -4351,7 +4875,20 @@
       const direct = field === "greetingPreferences"
         ? greetingPhrasesInput
         : editor.querySelector(`[data-editor-field="${CSS.escape(field)}"]`);
-      if (field.startsWith("budget.") || direct?.closest(".advanced-only")) {
+      const metadataField = field.startsWith("metadata.")
+        || field.startsWith("labels.")
+        || field.startsWith("descriptions.");
+      if (metadataField) {
+        setInspectorPage("details", { resetScroll: true });
+        return direct ?? documentDetailsPanel?.querySelector(
+          `[data-editor-metadata="label"][data-editor-locale="${CSS.escape(normalizedLocale)}"]`,
+        );
+      }
+      if (field.startsWith("budget.") && !field.startsWith("budget.layer")) {
+        setInspectorPage("review", { resetScroll: true });
+        return feedbackRoot;
+      }
+      if (direct?.closest(".advanced-only")) {
         editor.dataset.level = "advanced";
         for (const input of document.querySelectorAll('input[name="editor-level"]')) {
           input.checked = input.value === "advanced";
@@ -4364,8 +4901,6 @@
             : field.startsWith("shared.prompt.") ? "interface.new-chat-area"
               : "interface.theme";
       setInspectorTarget(target);
-      if (field.startsWith("metadata.") || field.startsWith("labels.")
-          || field.startsWith("descriptions.")) setDocumentDetailsOpen(true);
       return direct;
     };
 
@@ -4385,11 +4920,12 @@
       const contrast = /^(light|dark)\.(.+)$/.exec(field);
       if (contrast) {
         selectedMode = contrast[1];
-        for (const input of modeInputs) input.checked = input.value === selectedMode;
+        syncModeInputs();
         reflectTokens();
-        const token = contrast[2].includes("sidebar") ? "sidebar"
-          : contrast[2].includes("surface") ? "surface"
-            : contrast[2].includes("accent") || contrast[2] === "focus" ? "accent" : "text";
+        const candidates = CONTRAST_FOCUS_TOKENS[contrast[2]] ?? ["text"];
+        const activeToken = new RegExp(`^tokens\\.${selectedMode}\\.([a-zA-Z]+)$`)
+          .exec(inspectorField ?? "")?.[1] ?? null;
+        const token = candidates.includes(activeToken) ? activeToken : candidates[0];
         const target = tokenGroups.querySelector(`[data-editor-token="${token}"]`);
         if (target?.closest(".advanced-only")) {
           editor.dataset.level = "advanced";
@@ -4470,9 +5006,10 @@
       }
       feedbackRoot.appendChild(list);
       const quickText = document.createElement("span");
+      const livePausedSummary = tr("livePausedNotice").replace(/\s*[:\uFF1A]\s*\{0\}\s*$/u, "");
       quickText.textContent = state.feedback.valid
         ? tr("quickFeedbackValid")
-        : format(tr("quickFeedbackInvalid"), validationMessageFor(state.feedback.errors[0]));
+        : livePausedSummary;
       quickFeedback.dataset.pass = String(state.feedback.valid);
       quickFeedback.appendChild(quickText);
       if (state.feedback.errors.length) {
@@ -4490,7 +5027,6 @@
         jump.addEventListener("click", () => focusError(first.field));
         errorSummary.append(message, jump);
       }
-      syncSectionProgress();
     };
 
     const reflectButtonStates = () => {
@@ -4502,12 +5038,17 @@
       const builtInLayout = isBuiltInLayoutEdit();
       const localGreetingWork = !builtInLayout
         && (greetingPreferenceDraftDirty || greetingPreferenceInputDirty);
-      undoButton.disabled = busy || blocked || (!state.canUndo && !localGreetingWork);
-      redoButton.disabled = busy || blocked || localGreetingWork || !state.canRedo;
-      resetButton.disabled = busy || blocked || (!state.dirty && !localGreetingWork);
+      const localMetadataWork = !builtInLayout && metadataInputDirty;
+      const localEditorWork = localGreetingWork || localMetadataWork;
+      for (const checkbox of metadataLocaleCheckboxes()) {
+        checkbox.disabled = checkbox.value === "en" || builtInLayout || isBlockingAction();
+      }
+      undoButton.disabled = busy || blocked || (!state.canUndo && !localEditorWork);
+      redoButton.disabled = busy || blocked || localEditorWork || !state.canRedo;
+      resetButton.disabled = busy || blocked || (!state.dirty && !localEditorWork);
       saveButton.disabled = busy
         || (state.feedback.valid && (blocked
-          || (!state.dirty && !localGreetingWork && !state.isNew)));
+          || (!state.dirty && !localEditorWork && !state.isNew)));
       // Leaving must always be possible while edits are still settling; only a
       // blocking structural action (which briefly replaces state) holds it.
       cancelButton.disabled = isBlockingAction();
@@ -4518,13 +5059,8 @@
         replaceLauncherMarkButton.disabled = builtInLayout || busy || blocked;
       }
       if (greetingResetButton) greetingResetButton.disabled = builtInLayout || busy || blocked;
-      if (greetingUpdateButton) {
-        const personal = greetingDraft();
-        const editable = Boolean(personal?.enabled && personal.source === "custom");
-        greetingUpdateButton.disabled = builtInLayout || busy || blocked || !editable
-          || greetingPreferenceInputInvalid || !localGreetingWork;
-      }
-      reflectGreetingCompletion();
+      syncGreetingWordControls();
+      syncGreetingFrameControls();
       addLayerButton.dataset.layerStructure = "";
       for (const button of editor.querySelectorAll("[data-layer-structure]")) {
         button.disabled = builtInLayout || busy || blocked
@@ -4538,14 +5074,15 @@
       title.textContent = format(tr("editorTitleFor"), state.label);
       summary.textContent = tr("editorSummary");
       reflectDirtyState();
-      validPill.textContent = state.feedback.valid ? tr("validState") : tr("invalidState");
+      validPill.textContent = state.feedback.valid ? tr("validState") : tr("feedbackInvalid");
       validPill.dataset.state = state.feedback.valid ? "valid" : "invalid";
-      for (const input of modeInputs) input.checked = input.value === selectedMode;
+      syncModeInputs();
       reflectTokens();
       reflectShared();
       reflectGreeting();
       reflectLauncher();
       reflectMetadata();
+      reflectCardPreview();
       renderLayers(focusKey);
       syncBuiltInLayoutPresentation();
       renderFeedback();
@@ -4584,6 +5121,7 @@
       }
       if (!inFlightSession || inFlightRevision === null
           || normalized.session !== inFlightSession) {
+        if (inFlightChanges.some((change) => change.kind === "greeting")) greetingStyleIntent = null;
         dropStageWork();
         setPending(null);
         announce(tr("editorActionFailed"), "error");
@@ -4594,6 +5132,7 @@
         // one-revision advance can acknowledge this patch rather than repeat
         // a previous patch result.
         if (normalized.revision !== inFlightRevision + 1) return "waiting";
+        if (inFlightChanges.some((change) => change.kind === "greeting")) greetingStyleIntent = null;
         clearInFlightChanges();
         setPending(null);
         announce(tr("editorReady"));
@@ -4620,6 +5159,7 @@
         // A same-revision rejection may be permanent. Keep the local values
         // visible, stop automatic traffic, and retry only after a fresh edit.
         deferInFlightChanges();
+        greetingStyleIntent = null;
         actionAfterPatch = null;
         setPending(null);
         announce(tr("editorActionFailed"), "error");
@@ -4627,6 +5167,7 @@
       }
       if (normalized.revision !== inFlightRevision + 1) return "waiting";
       // Contrast/budget failures are persisted edits, not transport failures.
+      if (inFlightChanges.some((change) => change.kind === "greeting")) greetingStyleIntent = null;
       clearInFlightChanges();
       actionAfterPatch = null;
       setPending(null);
@@ -4655,6 +5196,9 @@
         greetingPreferenceDraftDirty = false;
         greetingPreferenceInputDirty = false;
         greetingPreferenceInputInvalid = false;
+        metadataInputDirty = false;
+        metadataInputInvalid = false;
+        for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
         onStudioStyleChange?.(null, null, null, null);
         if (wasEditing || action) hideEditor(action);
         return true;
@@ -4677,6 +5221,17 @@
       }
       returnTheme = normalized.isNew ? normalized.sourceId : normalized.id;
       const greetingAcknowledged = ["set-greeting-phrases", "reset-greeting"].includes(pendingAction)
+        && normalized.lastAction === pendingAction
+        && normalized.actionSucceeded !== false;
+      const priorLayerIds = new Set(state?.layers?.map((layer) => layer.id) ?? []);
+      const pickedLayerId = pendingAction === "pick-theme-layer-image"
+        && normalized.lastAction === pendingAction
+        && normalized.actionSucceeded !== false
+        ? normalized.layers.find((layer) => !priorLayerIds.has(layer.id))?.id ?? null
+        : null;
+      const metadataResetAcknowledged = pendingAction === "begin-theme-edit"
+        && normalized.lastAction === pendingAction;
+      const metadataHistoryAcknowledged = ["undo-theme-edit", "redo-theme-edit"].includes(pendingAction)
         && normalized.lastAction === pendingAction;
       if (entering
           || (!greetingPreferenceDraftDirty && !greetingPreferenceInputDirty)
@@ -4690,7 +5245,14 @@
         greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
         if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
       }
+      if (entering || metadataResetAcknowledged || metadataHistoryAcknowledged) {
+        clearMetadataOverrides();
+        metadataInputDirty = false;
+        metadataInputInvalid = false;
+        for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
+      }
       state = normalized;
+      if (pickedLayerId) selectedLayerId = pickedLayerId;
       syncBuiltInLayoutPresentation({ entering });
       selectStageMirror();
       onStudioStyleChange?.(
@@ -4701,6 +5263,7 @@
       );
       const settlement = settlePendingAction(normalized);
       if (settlement === "waiting" && !pendingAction) setPending(null);
+      clearSettledStageOverrides();
       showEditor();
       reflect(entering ? null : focusKey);
       if (entering) announce(tr("editorReady"));
@@ -4715,6 +5278,7 @@
         send({ type: "set-appearance", appearance: input.value });
       }
       selectedMode = input.value;
+      syncModeInputs();
       selectStageMirror();
       reflectTokens();
       reflectGreeting();
@@ -4732,26 +5296,81 @@
       queueTokenChange("mode-copy", "tokens", "dark");
     });
 
-    metadataInputs.forEach((input) => input.addEventListener("change", () => {
+    const syncMetadataInputState = () => {
+      metadataInputInvalid = metadataInputs().some((input) => !input.value.trim());
+      // Metadata changes use the same persisted draft/history transaction as
+      // every other theme value. Queue/in-flight state already represents
+      // local work; this flag is validation only, not a second draft model.
+      metadataInputDirty = false;
+      reflectDirtyState();
+      reflectButtonStates();
+    };
+    metadataLocalesHost?.addEventListener("input", (event) => {
+      const input = event.target.closest?.("[data-editor-metadata]");
+      if (!input || !metadataLocalesHost.contains(input)) return;
       const data = input.dataset;
       const value = input.value.trim();
-      if (!value) {
-        input.setAttribute("aria-invalid", "true");
-        announce(tr("editorActionFailed"), "error");
+      input.toggleAttribute("aria-invalid", !value);
+      const collection = data.editorMetadata === "label" ? "labels" : "descriptions";
+      const path = `metadata.${collection}.${data.editorLocale}`;
+      if (String(stageValue(path) ?? "") !== value) {
+        setStageOverride(path, value);
+        queueThemeChange({
+          kind: "metadata",
+          field: data.editorMetadata,
+          locale: data.editorLocale,
+          value,
+        });
+      }
+      syncMetadataInputState();
+    });
+    metadataLocalesHost?.addEventListener("change", (event) => {
+      const input = event.target.closest?.("[data-editor-metadata]");
+      if (!input || !metadataLocalesHost.contains(input)) return;
+      input.value = input.value.trim();
+    });
+    metadataLocaleOptions?.addEventListener("change", (event) => {
+      const checkbox = event.target.closest?.("[data-editor-metadata-locale]");
+      if (!checkbox || !metadataLocaleOptions.contains(checkbox)
+          || !THEME_METADATA_LOCALE_IDS.has(checkbox.value)) return;
+      const locale = checkbox.value;
+      if (locale === "en" && !checkbox.checked) {
+        checkbox.checked = true;
         return;
       }
-      input.removeAttribute("aria-invalid");
-      input.value = value;
-      const collection = data.editorMetadata === "label" ? "labels" : "descriptions";
-      setStageOverride(`metadata.${collection}.${data.editorLocale}`, value);
-      const field = data.editorMetadata;
-      queueThemeChange({
-        kind: "metadata",
-        field,
-        locale: data.editorLocale,
-        value,
-      });
-    }));
+      const enabled = checkbox.checked;
+      const restoring = [];
+      setStageOverride(`metadata.locale.${locale}`, enabled);
+      if (enabled) {
+        const label = Object.hasOwn(state?.metadata?.labels ?? {}, locale)
+          ? state.metadata.labels[locale] : "";
+        const description = Object.hasOwn(state?.metadata?.descriptions ?? {}, locale)
+          ? state.metadata.descriptions[locale] : "";
+        setStageOverride(`metadata.labels.${locale}`, label);
+        setStageOverride(`metadata.descriptions.${locale}`, description);
+        if (label || description) {
+          restoring.push(
+            { kind: "metadata", field: "label", locale, value: label },
+            { kind: "metadata", field: "description", locale, value: description },
+          );
+        }
+      } else {
+        stageOverrides.delete(`metadata.labels.${locale}`);
+        stageOverrides.delete(`metadata.descriptions.${locale}`);
+        for (const field of ["label", "description"]) {
+          const key = `metadata:${field}:${locale}`;
+          coalescedChanges.delete(key);
+          deferredChanges.delete(key);
+        }
+      }
+      renderedMetadataLocaleSignature = "";
+      renderMetadataLocales({ focusLocale: enabled ? locale : null });
+      syncMetadataInputState();
+      queueThemeChanges([
+        { kind: "metadata-locale", locale, enabled },
+        ...restoring,
+      ], { immediate: true });
+    });
 
     sharedInputs.forEach((input) => {
       const key = input.dataset.editorShared;
@@ -4763,6 +5382,7 @@
           if (key === "radius") setInheritedRadiusPresentation(false);
           setStageOverride(input.dataset.editorField, input.valueAsNumber);
           applyStageLayout();
+          queueTokenChange("shared", key, input.valueAsNumber);
         }
       });
       input.addEventListener("change", () => {
@@ -4822,9 +5442,7 @@
     replaceLauncherMarkButton?.addEventListener("click", requestLauncherMark);
     scopeInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
-      setStageOverride("shared.backgroundScope", input.value);
-      applyStageLayout();
-      queueTokenChange("shared", "backgroundScope", input.value);
+      setBackgroundScope(input.value);
     }));
     promptInputs.forEach((input) => {
       input.addEventListener("input", () => {
@@ -4869,9 +5487,17 @@
         commitStagePaths(STAGE_PROMPT_PATHS);
       });
     });
+    const clearGreetingFrameOverrides = () => {
+      for (const path of [...stageOverrides.keys()]) {
+        if (path.startsWith("shared.greeting.frames.")) stageOverrides.delete(path);
+      }
+    };
     greetingEnableInput?.addEventListener("change", () => {
+      if (isBlockingAction() || greetingStyleIntent !== null) return;
+      greetingStyleIntent = greetingEnableInput.checked;
       if (greetingEnableInput.checked) queueGreetingFrame(greetingFrameFromControls(), { immediate: true });
       else {
+        clearGreetingFrameOverrides();
         queueThemeChange({
           kind: "greeting",
           operation: "reset",
@@ -4880,10 +5506,15 @@
           value: null,
         }, { immediate: true });
       }
+      reflectGreeting();
+      reflectButtonStates();
     });
     greetingResetButton?.addEventListener("click", () => {
       const base = mutationBase();
-      if (base) post({ type: "reset-greeting", ...base });
+      if (base) {
+        clearGreetingFrameOverrides();
+        post({ type: "reset-greeting", ...base });
+      }
     });
     const showGreetingInputError = () => {
       if (!greetingPhrasesStatus) return;
@@ -4893,8 +5524,8 @@
     const updateGreetingPreferenceDraft = () => {
       if (!state) return null;
       const current = structuredClone(greetingDraft() ?? state.greetingPreferences);
-      const enabled = greetingPersonalEnableInput?.checked ?? current.enabled;
       const source = greetingSourceInputs.find((input) => input.checked)?.value ?? current.source;
+      const enabled = source === "custom";
       const overrideMode = greetingOverrideInput?.value ?? greetingThemeOverride(current).mode;
       if (typeof enabled !== "boolean"
           || !["claude", "custom"].includes(source)
@@ -4982,27 +5613,6 @@
         overridePhrases: override.phrases,
       });
     };
-    const submitGreetingPhrases = () => {
-      const base = mutationBase();
-      if (!base || !state) return;
-      const personal = updateGreetingPreferenceDraft();
-      if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
-        showGreetingInputError();
-        reflectButtonStates();
-        return;
-      }
-      if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
-      if (!greetingPreferenceDraftDirty) {
-        reflectButtonStates();
-        return;
-      }
-      postGreetingPreferences(personal, base);
-    };
-    greetingPersonalEnableInput?.addEventListener("change", () => {
-      updateGreetingPreferenceDraft();
-      reflectGreeting();
-      reflectButtonStates();
-    });
     for (const input of greetingSourceInputs) {
       input.addEventListener("change", () => {
         if (!input.checked) return;
@@ -5016,64 +5626,68 @@
       if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
         showGreetingInputError();
       }
-      reflectGreetingPreview(activeGreetingFrame(), state?.shared?.greeting?.native);
+      reflectGreetingPreview(activeGreetingFrame(), !greetingEnableInput?.checked);
       reflectButtonStates();
     };
     greetingNameInput?.addEventListener("input", previewGreetingWords);
     greetingPhrasesInput?.addEventListener("input", previewGreetingWords);
     greetingOverridePhrasesInput?.addEventListener("input", previewGreetingWords);
-    const submitGreetingOnFocusExit = (event) => {
-      // A blur caused by the Save button must not post first and disable that
-      // button before its click. Save flushes this same draft and chains the
-      // theme transaction after the host acknowledges it.
-      if (event.relatedTarget === saveButton || event.relatedTarget === greetingUpdateButton) return;
-      submitGreetingPhrases();
-    };
-    greetingNameInput?.addEventListener("focusout", submitGreetingOnFocusExit);
-    greetingPhrasesInput?.addEventListener("focusout", submitGreetingOnFocusExit);
     greetingOverrideInput?.addEventListener("change", () => {
       updateGreetingPreferenceDraft();
       reflectGreeting();
       reflectButtonStates();
     });
-    greetingPersonalEnableInput?.addEventListener("focusout", submitGreetingOnFocusExit);
-    for (const input of greetingSourceInputs) {
-      input.addEventListener("focusout", submitGreetingOnFocusExit);
-    }
-    greetingOverrideInput?.addEventListener("focusout", submitGreetingOnFocusExit);
-    greetingOverridePhrasesInput?.addEventListener("focusout", submitGreetingOnFocusExit);
-    greetingUpdateButton?.addEventListener("click", submitGreetingPhrases);
-    // Reads the panel's own controls so the sample tracks a drag continuously, rather
-    // than only after the host acknowledges the patch.
-    const previewFromControls = () => {
+    // The panel and stage read one scoped local draft, so a host reflection or
+    // responsive-axis change cannot repaint part of an active gesture.
+    const previewFromControls = (
+      { appearance = selectedMode, frameId = greetingFrameId() } = {},
+    ) => {
       if (!state) return;
       reflectGreetingPreview(
-        greetingFrameFromControls(),
+        greetingFrameFromControls(null, null, appearance, frameId),
         !greetingEnableInput?.checked,
       );
     };
     greetingInputs.forEach((input) => {
       const field = input.dataset.editorGreeting;
       const output = input.type === "range" ? document.getElementById(`${input.id}-output`) : null;
+      let gestureScope = null;
       input.addEventListener("input", () => {
+        if (isBlockingAction()) return;
+        gestureScope ??= greetingScopeFromFieldPath(input.dataset.editorField);
+        activeGreetingControlScope ??= gestureScope;
+        const value = greetingInputValue(input, field);
+        setStageOverride(`${greetingStagePrefix(gestureScope.appearance, gestureScope.frameId)}${field}`, value);
         if (output) output.value = greetingOutputText(field, input.valueAsNumber);
         const exact = greetingExactInputs.find((candidate) =>
           candidate.dataset.editorGreetingExact === field);
         if (exact) exact.value = input.value;
-        previewFromControls();
+        previewFromControls(gestureScope);
+        applyStageLayout();
       });
       input.addEventListener("change", () => {
-        const value = input.type === "checkbox" ? input.checked
-          : input.type === "range" ? input.valueAsNumber
-            : field === "weight" ? Number(input.value)
-              : input.value;
+        if (isBlockingAction()) return;
+        gestureScope ??= greetingScopeFromFieldPath(input.dataset.editorField);
+        const { appearance, frameId } = gestureScope;
+        gestureScope = null;
+        const value = greetingInputValue(input, field);
+        const path = `${greetingStagePrefix(appearance, frameId)}${field}`;
+        setStageOverride(path, value);
         if (field === "markSource" && value === "compact"
             && !state?.shared?.greeting?.compactMarkAvailable) {
+          stageOverrides.delete(path);
           reflectGreeting();
           announce(tr("editorActionFailed"), "error");
+          activeGreetingControlScope = null;
+          applyDeferredGreetingMirrorAxes();
           return;
         }
-        queueGreetingFrame(greetingFrameFromControls(field, value));
+        queueGreetingFrame(
+          greetingFrameFromControls(field, value, appearance, frameId),
+          { appearance, frameId },
+        );
+        activeGreetingControlScope = null;
+        applyDeferredGreetingMirrorAxes();
       });
     });
     greetingExactInputs.forEach((exact) => {
@@ -5081,24 +5695,41 @@
       const range = greetingInputs.find((candidate) =>
         candidate.dataset.editorGreeting === field && candidate.type === "range");
       if (!range) return;
+      let gestureScope = null;
       const update = () => {
+        if (isBlockingAction()) return null;
         if (!Number.isFinite(exact.valueAsNumber)) return null;
+        gestureScope ??= greetingScopeFromFieldPath(exact.dataset.editorField);
+        activeGreetingControlScope ??= gestureScope;
         const value = Math.min(Number(exact.max), Math.max(Number(exact.min), exact.valueAsNumber));
         exact.value = String(value);
         range.value = String(value);
+        setStageOverride(`${greetingStagePrefix(gestureScope.appearance, gestureScope.frameId)}${field}`, value);
         const output = document.getElementById(`${range.id}-output`);
         if (output) output.value = greetingOutputText(field, value);
-        previewFromControls();
+        previewFromControls(gestureScope);
+        applyStageLayout();
         return value;
       };
       exact.addEventListener("input", update);
       exact.addEventListener("change", () => {
         const value = update();
         if (value === null) {
+          gestureScope = null;
+          activeGreetingControlScope = null;
+          applyDeferredGreetingMirrorAxes();
           exact.value = range.value;
           return;
         }
-        queueGreetingFrame(greetingFrameFromControls(field, value));
+        gestureScope ??= greetingScopeFromFieldPath(exact.dataset.editorField);
+        const { appearance, frameId } = gestureScope;
+        gestureScope = null;
+        queueGreetingFrame(
+          greetingFrameFromControls(field, value, appearance, frameId),
+          { appearance, frameId },
+        );
+        activeGreetingControlScope = null;
+        applyDeferredGreetingMirrorAxes();
       });
     });
 
@@ -5132,11 +5763,22 @@
         ? updateGreetingPreferenceDraft()
         : greetingDraft();
       const builtInLayout = isBuiltInLayoutEdit();
+      if (!builtInLayout && metadataInputInvalid) {
+        const firstInvalidMetadata = metadataInputs().find((input) => !input.value.trim());
+        setInspectorPage("details", { resetScroll: true });
+        if (firstInvalidMetadata) {
+          firstInvalidMetadata.setAttribute("aria-invalid", "true");
+          requestAnimationFrame(() => focusBelowInspector(firstInvalidMetadata));
+        }
+        announce(tr("validationMetadataFix"), "error");
+        return;
+      }
       if (!state?.feedback.valid || (!builtInLayout
           && (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)))) {
         if (!builtInLayout && (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal))) {
           showGreetingInputError();
         }
+        setInspectorPage("review", { resetScroll: true });
         quickFeedback.hidden = true;
         errorSummary.hidden = false;
         focusBelowInspector(errorSummary);
@@ -5289,6 +5931,9 @@
       receive,
       receiveMirror,
       requestDelete,
+      refreshCardPreview: () => {
+        if (state) reflectCardPreview();
+      },
       translate: tr,
       isActive: () => Boolean(state),
       normalizeEditorState,
@@ -5302,6 +5947,8 @@
     normalizeEditorState,
     normalizeStudioStyle,
     normalizeCapabilityRegistry,
+    reconcileDuplicateTokenValue,
+    backgroundScopeUiActive,
     capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
   });
 })();

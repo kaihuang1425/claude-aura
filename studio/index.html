@@ -21,11 +21,12 @@
       </span>
       <span><strong>Claude Aura</strong><small data-i18n="railSubtitle">Studio</small></span>
     </div>
-    <a class="rail-item is-current" href="#themes" aria-current="page" data-i18n="navThemes">Themes</a>
+    <a class="rail-item is-current" href="#themes" data-studio-view="themes" aria-current="page" data-i18n="navThemes">Themes</a>
     <a class="rail-item" id="nav-editor" href="#editor" data-editor-i18n="navEditor" hidden>Theme editor</a>
-    <a class="rail-item" href="#background" data-i18n="navBackground">Personal wallpaper</a>
-    <a class="rail-item" href="#create" data-i18n="navCreate">Create a theme</a>
-    <a class="rail-item" href="#settings" data-i18n="navSettings">Settings</a>
+    <a class="rail-item" href="#prompt-shelf" data-studio-view="prompt-shelf" data-i18n="navPromptShelf">Prompt Shelf</a>
+    <a class="rail-item" href="#background" data-studio-view="background" data-i18n="navBackground">Personal wallpaper</a>
+    <a class="rail-item" href="#create" data-studio-view="create" data-i18n="navCreate">Create a theme</a>
+    <a class="rail-item" href="#settings" data-studio-view="settings" data-i18n="navSettings">Settings</a>
     <div class="rail-foot">
       <button type="button" id="open-aura" class="ghost-button" data-i18n="auraWindow">Back to Claude Aura</button>
       <button type="button" id="open-desktop" class="ghost-button" data-i18n="desktopApp">Desktop app</button>
@@ -33,9 +34,9 @@
   </nav>
 
   <main class="content">
-    <section id="themes" aria-labelledby="themes-title">
+    <section id="themes" class="studio-page is-current-page" data-studio-page="themes" aria-labelledby="themes-title">
       <p class="kicker" data-i18n="themesKicker">Appearance</p>
-      <h1 id="themes-title" data-i18n="themesTitle">Choose a look</h1>
+      <h1 id="themes-title" tabindex="-1" data-i18n="themesTitle">Choose a look</h1>
       <p class="lede" data-i18n="themesLede">Selection applies to Claude Aura and Studio immediately and is saved on this device.</p>
 
       <div id="built-in-authoring-banner" class="built-in-authoring-banner" role="status" hidden>
@@ -85,9 +86,103 @@
       </div>
     </section>
 
-    <section id="background" aria-labelledby="background-title">
+    <section id="prompt-shelf" class="studio-page prompt-shelf-page" data-studio-page="prompt-shelf" aria-labelledby="prompt-shelf-title" aria-busy="false" hidden inert>
+      <header class="prompt-shelf-page-head">
+        <div>
+          <p class="kicker" data-i18n="promptShelfKicker">Local prompt library</p>
+          <h2 id="prompt-shelf-title" tabindex="-1" data-i18n="promptShelfTitle">Prompt Shelf</h2>
+          <p class="lede" data-i18n="promptShelfLede">Organize drafts here, then insert one at the current Claude composer caret. Aura never sends it for you.</p>
+        </div>
+        <button type="button" id="prompt-shelf-new" class="primary-button" data-i18n="promptShelfNew">New draft</button>
+      </header>
+
+      <div class="prompt-shelf-toolbar">
+        <label class="prompt-shelf-search" for="prompt-shelf-search">
+          <span data-i18n="promptShelfSearchLabel">Search saved drafts</span>
+          <input id="prompt-shelf-search" type="search" autocomplete="off" spellcheck="false"
+            data-i18n-placeholder="promptShelfSearchPlaceholder" placeholder="Search prompt text">
+        </label>
+      </div>
+
+      <div class="prompt-shelf-workspace">
+        <aside class="prompt-shelf-index" aria-labelledby="prompt-shelf-saved-title">
+          <header class="prompt-shelf-panel-head">
+            <h3 id="prompt-shelf-saved-title" data-i18n="promptShelfSavedTitle">Saved drafts</h3>
+            <span class="prompt-shelf-count">
+              <span id="prompt-shelf-count-label" class="sr-only" data-i18n="promptShelfCountLabel">Draft count</span>
+              <output id="prompt-shelf-count" aria-labelledby="prompt-shelf-count-label">0</output>
+            </span>
+          </header>
+
+          <ol id="prompt-shelf-list" class="prompt-shelf-list" aria-labelledby="prompt-shelf-saved-title"></ol>
+
+          <div id="prompt-shelf-empty" class="prompt-shelf-empty-state" role="status">
+            <strong data-i18n="promptShelfEmptyTitle">Your shelf is ready</strong>
+            <p data-i18n="promptShelfEmptyBody">Create a draft to keep it encrypted on this Windows account.</p>
+          </div>
+
+          <div id="prompt-shelf-no-results" class="prompt-shelf-empty-state" role="status" hidden>
+            <strong data-i18n="promptShelfNoResultsTitle">No matching drafts</strong>
+            <p data-i18n="promptShelfNoResultsBody">Try a different search.</p>
+          </div>
+        </aside>
+
+        <div class="prompt-shelf-editor" aria-labelledby="prompt-shelf-editor-title">
+          <header class="prompt-shelf-panel-head prompt-shelf-editor-head">
+            <div>
+              <p class="prompt-shelf-editor-kicker" data-i18n="promptShelfEditorKicker">Draft workspace</p>
+              <h3 id="prompt-shelf-editor-title" data-i18n="promptShelfEditorNewTitle">New draft</h3>
+            </div>
+            <output id="prompt-shelf-character-count" class="prompt-shelf-character-count" data-i18n-aria-label="promptShelfCharacterCountLabel" aria-label="Prompt character count" aria-live="polite">0 / 8,000</output>
+          </header>
+
+          <label class="prompt-shelf-text-label" for="prompt-shelf-text" data-i18n="promptShelfTextLabel">Prompt</label>
+          <textarea id="prompt-shelf-text" rows="12" maxlength="8000" spellcheck="true" aria-describedby="prompt-shelf-character-count prompt-shelf-status"></textarea>
+
+          <div class="prompt-shelf-editor-actions">
+            <div class="prompt-shelf-edit-actions">
+              <button type="button" id="prompt-shelf-save" class="primary-button" data-i18n="promptShelfSave">Save draft</button>
+              <button type="button" id="prompt-shelf-cancel" class="ghost-button" data-i18n="promptShelfCancel">Cancel edit</button>
+            </div>
+            <div class="prompt-shelf-order-actions">
+              <button type="button" id="prompt-shelf-move-up" class="ghost-button" data-i18n="promptShelfMoveUp" disabled>Move up</button>
+              <button type="button" id="prompt-shelf-move-down" class="ghost-button" data-i18n="promptShelfMoveDown" disabled>Move down</button>
+              <button type="button" id="prompt-shelf-delete" class="ghost-button" data-i18n="promptShelfDelete" disabled>Delete</button>
+            </div>
+          </div>
+
+          <div class="prompt-shelf-insert-row">
+            <p id="prompt-shelf-insert-help" class="help" data-i18n="promptShelfInsertHelp">Inserts at the current Claude composer caret. Nothing is sent.</p>
+            <button type="button" id="prompt-shelf-insert" class="primary-button" data-i18n="promptShelfInsert" aria-describedby="prompt-shelf-insert-help" disabled>Insert in Aura</button>
+          </div>
+          <div class="prompt-shelf-status-row">
+            <output id="prompt-shelf-status" class="prompt-shelf-status" role="status" aria-live="polite" aria-atomic="true"></output>
+            <button type="button" id="prompt-shelf-refresh" class="ghost-button"
+              data-i18n="promptShelfRefresh" hidden>Refresh</button>
+            <button type="button" id="prompt-shelf-retry-action" class="ghost-button"
+              data-i18n="promptShelfRetryAction" hidden>Check again</button>
+            <button type="button" id="prompt-shelf-confirm-checked" class="ghost-button"
+              data-i18n="promptShelfConfirmChecked" hidden>I've checked the composer</button>
+          </div>
+        </div>
+      </div>
+
+      <template id="prompt-shelf-item-template">
+        <li class="prompt-shelf-item">
+          <button type="button" class="prompt-shelf-item-button">
+            <span class="prompt-shelf-item-order" aria-hidden="true">01</span>
+            <span class="prompt-shelf-item-copy">
+              <strong class="prompt-shelf-item-title"></strong>
+              <span class="prompt-shelf-item-preview"></span>
+            </span>
+          </button>
+        </li>
+      </template>
+    </section>
+
+    <section id="background" class="studio-page" data-studio-page="background" aria-labelledby="background-title" hidden inert>
       <p class="kicker" data-i18n="backgroundKicker">Your window</p>
-      <h2 id="background-title" data-i18n="backgroundTitle">Personal wallpaper</h2>
+      <h2 id="background-title" tabindex="-1" data-i18n="backgroundTitle">Personal wallpaper</h2>
       <p class="lede" data-i18n="backgroundLede">Add one private image behind every theme. Wallpaper is personal to this device and is separate from artwork saved inside a theme.</p>
       <div class="actions-row">
         <button type="button" id="pick-image" class="primary-button" data-i18n="chooseImage">Choose an image…</button>
@@ -106,9 +201,9 @@
       <p class="help" data-i18n="avatarHelp">PNG, JPEG, or GIF up to 16 MB. You choose the square crop after picking the image.</p>
     </section>
 
-    <section id="create" aria-labelledby="create-title">
+    <section id="create" class="studio-page" data-studio-page="create" aria-labelledby="create-title" hidden inert>
       <p class="kicker" data-i18n="createKicker">Visual theme builder</p>
-      <h2 id="create-title" data-i18n="createTitle">Create a theme</h2>
+      <h2 id="create-title" tabindex="-1" data-i18n="createTitle">Create a theme</h2>
       <p class="lede" data-i18n="createLede">Start with Default in the visual editor, then choose colors, style, and artwork. No code or theme folder is required.</p>
       <div class="actions-row">
         <button type="button" id="start-theme" class="primary-button" data-i18n="startTheme">Customize Default</button>
@@ -126,9 +221,9 @@
       <p class="help" data-i18n="createHelp">Your custom themes stay in Aura's user data folder and never modify Claude or the desktop app.</p>
     </section>
 
-    <section id="settings" aria-labelledby="settings-title">
+    <section id="settings" class="studio-page" data-studio-page="settings" aria-labelledby="settings-title" hidden inert>
       <p class="kicker" data-i18n="settingsKicker">Aura preferences</p>
-      <h2 id="settings-title" data-i18n="settingsTitle">Settings</h2>
+      <h2 id="settings-title" tabindex="-1" data-i18n="settingsTitle">Settings</h2>
       <p class="lede" data-i18n="settingsLede">Choose how Aura speaks to you. These settings are saved on this device.</p>
 
       <div class="settings-grid">
@@ -233,8 +328,8 @@
             <fieldset class="stage-choice segmented-control editor-mode" aria-describedby="editor-mode-help">
               <legend data-editor-i18n="editAppearance">Theme mode</legend>
               <div class="editor-mode-row">
-                <label><input type="radio" name="editor-mode" value="light" checked> <span data-editor-i18n="lightMode">Light</span></label>
-                <label><input type="radio" name="editor-mode" value="dark"> <span data-editor-i18n="darkMode">Dark</span></label>
+                <label><input type="radio" name="editor-mode" data-editor-mode value="light" checked> <span data-editor-i18n="lightMode">Light</span></label>
+                <label><input type="radio" name="editor-mode" data-editor-mode value="dark"> <span data-editor-i18n="darkMode">Dark</span></label>
               </div>
             </fieldset>
             <fieldset class="stage-choice segmented-control">
@@ -288,7 +383,12 @@
 
       <div class="editor-inspector-head">
         <div class="editor-inspector-title-row">
-          <button type="button" id="editor-back" class="ghost-button editor-back" data-editor-i18n="backToThemes">Back to themes</button>
+          <button type="button" id="editor-back" class="ghost-button editor-back">
+            <svg class="editor-back-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+              <path d="M16.25 10H3.75M8.5 5.25 3.75 10l4.75 4.75"></path>
+            </svg>
+            <span data-editor-i18n="backToThemes">Back to themes</span>
+          </button>
           <div class="editor-inspector-title-copy">
             <h2 data-editor-i18n="inspectorTitle">Edit theme</h2>
             <p id="editor-built-in-authoring" class="editor-authoring-pill" role="status" hidden>
@@ -296,15 +396,13 @@
               <span aria-hidden="true">·</span>
               <span data-editor-i18n="branchInterfaceDetail">Surfaces &amp; layout</span>
             </p>
-            <div class="editor-state" aria-live="polite">
-              <span id="editor-dirty" class="editor-state-pill"></span>
-              <span id="editor-valid" class="editor-state-pill"></span>
-            </div>
+          </div>
+          <div class="editor-state" aria-live="polite">
+            <span id="editor-dirty" class="editor-state-pill"></span>
+            <span id="editor-valid" class="editor-state-pill"></span>
           </div>
           <div class="editor-inspector-head-actions">
-            <button type="button" id="editor-document-details-toggle" class="ghost-button" aria-expanded="false" aria-controls="editor-document-details" data-editor-i18n="documentDetails">Document details</button>
             <button type="button" id="editor-cancel" class="ghost-button" data-editor-i18n="cancelEditing">Cancel</button>
-            <button type="button" id="editor-save" class="primary-button" aria-describedby="editor-quick-feedback editor-error-summary" data-editor-i18n="saveTheme">Save theme</button>
           </div>
         </div>
         <div class="editor-command-row">
@@ -320,7 +418,17 @@
           </div>
         </div>
         <div class="editor-inspector-nav" role="toolbar" aria-orientation="horizontal" data-editor-i18n-aria-label="inspectorSections" aria-label="Theme editor tools">
-          <button type="button" class="editor-inspector-tab" data-editor-branch-target="interface" aria-pressed="true">
+          <button type="button" id="editor-document-details-toggle" class="editor-inspector-tab" data-editor-page-target="details" aria-pressed="false" aria-controls="editor-document-details">
+            <span class="editor-branch-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M6 3.75h9l3 3v13.5H6zM15 3.75v3h3M8.75 11h6.5M8.75 14.5h6.5"></path>
+              </svg>
+            </span>
+            <span class="editor-branch-copy">
+              <strong data-editor-i18n="documentDetails">Document details</strong>
+            </span>
+          </button>
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="interface" data-editor-page-target="interface" aria-pressed="true">
             <span class="editor-branch-glyph" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M3.75 5.25h16.5v13.5H3.75zM3.75 9h16.5M8 9v9.75"></path>
@@ -328,10 +436,9 @@
             </span>
             <span class="editor-branch-copy">
               <strong data-editor-i18n="branchInterface">Interface</strong>
-              <small data-editor-i18n="branchInterfaceDetail">Surfaces &amp; layout</small>
             </span>
           </button>
-          <button type="button" class="editor-inspector-tab" data-editor-branch-target="background" aria-pressed="false" tabindex="-1">
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="background" data-editor-page-target="background" aria-pressed="false" tabindex="-1">
             <span class="editor-branch-glyph" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path d="M6 3.75h14.25V18H6zM3.75 7v13.25H17M8.75 14.75l3-3 2.1 2.1 2.4-2.35 2 2"></path>
@@ -339,10 +446,9 @@
             </span>
             <span class="editor-branch-copy">
               <strong data-editor-i18n="branchBackground">Background</strong>
-              <small data-editor-i18n="branchBackgroundDetail">Canvas &amp; images</small>
             </span>
           </button>
-          <button type="button" class="editor-inspector-tab" data-editor-branch-target="widgets" aria-pressed="false" tabindex="-1">
+          <button type="button" class="editor-inspector-tab" data-editor-branch-target="widgets" data-editor-page-target="widgets" aria-pressed="false" tabindex="-1">
             <span class="editor-branch-glyph" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <rect x="4" y="4" width="6" height="6" rx="1"></rect>
@@ -353,7 +459,16 @@
             </span>
             <span class="editor-branch-copy">
               <strong data-editor-i18n="branchWidgets">Widgets</strong>
-              <small data-editor-i18n="branchWidgetsDetail">Aura controls</small>
+            </span>
+          </button>
+          <button type="button" id="editor-review-toggle" class="editor-inspector-tab" data-editor-page-target="review" aria-pressed="false" tabindex="-1">
+            <span class="editor-branch-glyph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M5 4.75h14v14.5H5zM8.5 9.25l1.75 1.75 4-4M8.5 15h7"></path>
+              </svg>
+            </span>
+            <span class="editor-branch-copy">
+              <strong data-editor-i18n="reviewStates">Review states</strong>
             </span>
           </button>
         </div>
@@ -370,45 +485,126 @@
             <span id="editor-context-frame-row"><b data-editor-i18n="editTargetContext">Edit target</b><output id="editor-context-frame"></output></span>
           </div>
         </div>
+        <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
       </div>
 
       <div class="editor-inspector-body">
-      <nav id="editor-section-progress" class="editor-section-progress" aria-label="Theme editor sections" hidden></nav>
       <div class="editor-inspector-content">
-      <section id="editor-document-details" class="editor-document-details-panel" role="region" aria-labelledby="editor-document-details-title" hidden>
+      <section id="editor-document-details" class="editor-document-details-panel" data-editor-workflow-page="details" role="region" aria-labelledby="editor-document-details-title" hidden>
         <h3 id="editor-document-details-title" data-editor-i18n="documentDetails">Document details</h3>
-        <p class="help" data-editor-i18n="themeIdentityHelp">Name the theme for each language you want to support.</p>
-        <div class="editor-control-grid editor-metadata-grid">
-          <label class="editor-field" for="editor-label-en">
-            <span data-editor-i18n="themeNameEn">English name</span>
-            <input id="editor-label-en" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="en" data-editor-field="metadata.labels.en">
-          </label>
-          <label class="editor-field" for="editor-label-zh-cn">
-            <span data-editor-i18n="themeNameZhCn">Simplified Chinese name</span>
-            <input id="editor-label-zh-cn" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-CN" data-editor-field="metadata.labels.zh-CN">
-          </label>
-          <label class="editor-field" for="editor-label-zh-HKTW">
-            <span data-editor-i18n="themeNameZhTw">Traditional Chinese name</span>
-            <input id="editor-label-zh-HKTW" type="text" maxlength="80" autocomplete="off" data-editor-metadata="label" data-editor-locale="zh-HKTW" data-editor-field="metadata.labels.zh-HKTW">
-          </label>
+        <div class="editor-general-overview">
+          <section class="editor-mode-support" aria-labelledby="editor-support-title">
+            <div>
+              <h4 id="editor-support-title" data-editor-i18n="editAppearance">Theme mode</h4>
+              <p id="editor-support-help" class="help" data-editor-i18n="modeHelp">Light and Dark can use different colors and images.</p>
+            </div>
+            <fieldset class="stage-choice segmented-control editor-mode-support-control" aria-describedby="editor-support-help">
+              <legend class="sr-only" data-editor-i18n="editAppearance">Theme mode</legend>
+              <label><input type="radio" name="editor-details-mode" data-editor-mode value="light" checked> <span data-editor-i18n="lightMode">Light</span></label>
+              <label><input type="radio" name="editor-details-mode" data-editor-mode value="dark"> <span data-editor-i18n="darkMode">Dark</span></label>
+            </fieldset>
+          </section>
+          <section id="editor-card-preview-panel" class="editor-card-preview-panel" aria-labelledby="editor-card-preview-title" hidden>
+            <div>
+              <h4 id="editor-card-preview-title" data-i18n="cardCropTitle">Adjust card preview</h4>
+              <p id="editor-card-preview-help" class="help" data-i18n="cardCropHelp">Drag the image to choose what appears on the theme card.</p>
+            </div>
+            <div id="editor-card-preview-frame" class="editor-card-preview-frame" aria-hidden="true">
+              <img id="editor-card-preview-image" alt="" draggable="false">
+            </div>
+            <button type="button" id="editor-adjust-card-preview" class="ghost-button" data-i18n="adjustPreview">Adjust card preview</button>
+          </section>
         </div>
-        <div class="editor-control-grid editor-metadata-grid advanced-only">
-          <label class="editor-field" for="editor-description-en">
-            <span data-editor-i18n="themeDescriptionEn">English description</span>
-            <textarea id="editor-description-en" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="en" data-editor-field="metadata.descriptions.en"></textarea>
-          </label>
-          <label class="editor-field" for="editor-description-zh-cn">
-            <span data-editor-i18n="themeDescriptionZhCn">Simplified Chinese description</span>
-            <textarea id="editor-description-zh-cn" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-CN" data-editor-field="metadata.descriptions.zh-CN"></textarea>
-          </label>
-          <label class="editor-field" for="editor-description-zh-HKTW">
-            <span data-editor-i18n="themeDescriptionZhTw">Traditional Chinese description</span>
-            <textarea id="editor-description-zh-HKTW" rows="3" maxlength="220" data-editor-metadata="description" data-editor-locale="zh-HKTW" data-editor-field="metadata.descriptions.zh-HKTW"></textarea>
-          </label>
-        </div>
+        <details id="editor-language-picker" class="editor-language-picker">
+          <summary>
+            <span class="editor-language-summary-copy">
+              <strong data-editor-i18n="themeLanguages">Theme languages</strong>
+              <small data-editor-i18n="themeLanguagesHelp">Choose which languages get their own name and description. Other languages use English.</small>
+            </span>
+            <output id="editor-language-selection" aria-live="polite" data-editor-i18n-aria-label="themeLanguages" aria-label="Theme languages">English · en</output>
+          </summary>
+          <fieldset id="editor-language-options" class="editor-language-options">
+            <legend class="sr-only" data-editor-i18n="themeLanguages">Theme languages</legend>
+            <label>
+              <input type="checkbox" value="en" data-editor-metadata-locale="en" checked disabled>
+              <span lang="en">English</span>
+              <code>en</code>
+              <small data-editor-i18n="themeLanguageRequired">Required</small>
+            </label>
+            <label>
+              <input type="checkbox" value="hi" data-editor-metadata-locale="hi">
+              <span lang="hi">हिन्दी</span>
+              <code>hi</code>
+            </label>
+            <label>
+              <input type="checkbox" value="es" data-editor-metadata-locale="es">
+              <span lang="es">Español</span>
+              <code>es</code>
+            </label>
+            <label>
+              <input type="checkbox" value="fr" data-editor-metadata-locale="fr">
+              <span lang="fr">Français</span>
+              <code>fr</code>
+            </label>
+            <label>
+              <input type="checkbox" value="id" data-editor-metadata-locale="id">
+              <span lang="id">Bahasa Indonesia</span>
+              <code>id</code>
+            </label>
+            <label>
+              <input type="checkbox" value="ja" data-editor-metadata-locale="ja">
+              <span lang="ja">日本語</span>
+              <code>ja</code>
+            </label>
+            <label>
+              <input type="checkbox" value="ko" data-editor-metadata-locale="ko">
+              <span lang="ko">한국어</span>
+              <code>ko</code>
+            </label>
+            <label>
+              <input type="checkbox" value="pt-BR" data-editor-metadata-locale="pt-BR">
+              <span lang="pt-BR">Português (Brasil)</span>
+              <code>pt-BR</code>
+            </label>
+            <label>
+              <input type="checkbox" value="de" data-editor-metadata-locale="de">
+              <span lang="de">Deutsch</span>
+              <code>de</code>
+            </label>
+            <label>
+              <input type="checkbox" value="it" data-editor-metadata-locale="it">
+              <span lang="it">Italiano</span>
+              <code>it</code>
+            </label>
+            <label>
+              <input type="checkbox" value="vi" data-editor-metadata-locale="vi">
+              <span lang="vi">Tiếng Việt</span>
+              <code>vi</code>
+            </label>
+            <label>
+              <input type="checkbox" value="pl" data-editor-metadata-locale="pl">
+              <span lang="pl">Polski</span>
+              <code>pl</code>
+            </label>
+            <label>
+              <input type="checkbox" value="tr" data-editor-metadata-locale="tr">
+              <span lang="tr">Türkçe</span>
+              <code>tr</code>
+            </label>
+            <label>
+              <input type="checkbox" value="zh-CN" data-editor-metadata-locale="zh-CN">
+              <span lang="zh-CN">简体中文</span>
+              <code>zh-CN</code>
+            </label>
+            <label>
+              <input type="checkbox" value="zh-HKTW" data-editor-metadata-locale="zh-HKTW">
+              <span lang="zh-HKTW">繁體中文</span>
+              <code>zh-HKTW</code>
+            </label>
+          </fieldset>
+        </details>
+        <div id="editor-metadata-locales" class="editor-locale-cards"></div>
       </section>
-      <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
-      <div id="editor-quick-feedback" class="editor-quick-feedback" role="status" aria-live="polite"></div>
       <p id="editor-advanced-notice" class="editor-advanced-notice" data-editor-i18n="advancedValuesNotice">This target has additional values in Advanced.</p>
 
       <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.theme" aria-labelledby="editor-colors-title">
@@ -497,17 +693,18 @@
         </div>
       </section>
 
-      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas" aria-labelledby="editor-background-title">
+      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="editor-background-title">
         <h2 id="editor-background-title" data-editor-i18n="themeBackground">Theme background</h2>
         <fieldset class="editor-inline-fieldset">
           <legend data-editor-i18n="backgroundScope">Background scope</legend>
+          <label><input type="radio" name="background-scope" value="sidebar" data-editor-focus="shared-backgroundScope-sidebar" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="groupSidebar">Sidebar</span></label>
           <label><input type="radio" name="background-scope" value="content" data-editor-focus="shared-backgroundScope-content" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="contentCanvas">Main area only</span></label>
           <label><input type="radio" name="background-scope" value="full-window" data-editor-focus="shared-backgroundScope-full" data-editor-field="shared.backgroundScope"> <span data-editor-i18n="fullWindow">Entire window</span></label>
         </fieldset>
         <p id="background-scope-help" class="help"></p>
       </section>
 
-      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.layer" aria-labelledby="editor-layers-title">
+      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="editor-layers-title">
         <div class="editor-section-head">
           <div>
             <h2 id="editor-layers-title" data-editor-i18n="artworkLayers">Images</h2>
@@ -566,7 +763,6 @@
           <input type="checkbox" id="editor-greeting-enabled" data-editor-focus="greeting-enabled" data-editor-field="shared.greeting.enabled">
           <span data-editor-i18n="greetingEnable">Style the greeting</span>
         </label>
-        <button type="button" id="editor-greeting-reset" class="ghost-button" data-editor-i18n="greetingResetClaude">Reset to Claude</button>
         <p id="editor-greeting-native" class="editor-inherited-note" data-editor-i18n="greetingNativeHelp" hidden>Using Claude's original greeting style. Turn on styling to customize its appearance.</p>
         <p id="editor-greeting-collision-warning" class="editor-greeting-collision-warning" role="note" data-editor-i18n="greetingArtworkCollisionWarning" hidden>This custom theme also has artwork. Review the greeting in Aura at each size; Studio will not guess whether the artwork leaves enough room.</p>
         <figure class="editor-greeting-preview">
@@ -577,10 +773,6 @@
         <div class="editor-greeting-personal">
           <h3 data-editor-i18n="greetingWords">Greeting words</h3>
           <p class="help" data-editor-i18n="greetingWordsHelp">Saved only on this device, never inside the theme. Use one shared list or choose theme-specific words; Aura picks one line for each new chat.</p>
-          <label class="editor-toggle-field" for="editor-greeting-personal-enabled">
-            <input type="checkbox" id="editor-greeting-personal-enabled" data-editor-focus="greeting-personal-enabled">
-            <span data-editor-i18n="greetingPersonalEnable">Use personalized greeting words</span>
-          </label>
           <div class="editor-greeting-source" role="group" aria-labelledby="editor-greeting-source-label">
             <span id="editor-greeting-source-label" class="sr-only" data-editor-i18n="greetingWords">Greeting words</span>
             <label><input type="radio" name="greeting-source" value="claude" data-editor-focus="greeting-source-claude"> <span data-editor-i18n="greetingSourceClaude">Use Claude's greeting</span></label>
@@ -611,15 +803,9 @@
               <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
             </label>
           </div>
-          <div id="editor-greeting-completion" class="editor-greeting-completion" data-state="updated" hidden>
-            <button type="button" id="editor-greeting-update" class="primary-button" aria-describedby="editor-greeting-update-status" data-editor-i18n="saveChanges">Save</button>
-            <p id="editor-greeting-update-status" class="editor-greeting-update-status" role="status" aria-live="polite" data-state="updated">
-              <span class="editor-greeting-update-mark" aria-hidden="true"></span>
-              <span id="editor-greeting-update-status-text"></span>
-            </p>
-          </div>
           <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" hidden></p>
         </div>
+        <button type="button" id="editor-greeting-reset" class="ghost-button" data-editor-i18n="greetingResetClaude">Reset to Claude</button>
         <div class="editor-control-grid editor-greeting-controls">
           <label class="editor-field" for="editor-greeting-font">
             <span data-editor-i18n="greetingFont">Font</span>
@@ -733,9 +919,11 @@
         </div>
       </section>
 
-      <section class="editor-section editor-feedback advanced-only" data-editor-global aria-labelledby="editor-feedback-title">
+      <section class="editor-section editor-feedback" data-editor-global data-editor-workflow-page="review" aria-labelledby="editor-feedback-title">
         <h2 id="editor-feedback-title" data-editor-i18n="validationAndBudgets">Validation and budgets</h2>
+        <div id="editor-error-summary" class="editor-error-summary" role="status" aria-live="polite" tabindex="-1" hidden></div>
         <div id="editor-feedback" tabindex="-1"></div>
+        <button type="button" id="editor-save" class="primary-button" aria-describedby="editor-quick-feedback editor-error-summary" data-editor-i18n="saveTheme">Save theme</button>
       </section>
 
       </div>
@@ -750,6 +938,19 @@
     <output id="status" aria-live="polite">Ready.</output>
   </footer>
 </div>
+
+<dialog id="prompt-shelf-delete-dialog" class="prompt-shelf-delete-dialog" aria-labelledby="prompt-shelf-delete-title" aria-describedby="prompt-shelf-delete-body">
+  <form method="dialog">
+    <p class="kicker" data-i18n="promptShelfDeleteKicker">Remove local draft</p>
+    <h2 id="prompt-shelf-delete-title" data-i18n="promptShelfDeleteTitle">Delete this draft?</h2>
+    <p id="prompt-shelf-delete-body" class="lede" data-i18n="promptShelfDeleteBody">This removes the draft from this Windows account. It cannot be undone.</p>
+    <div class="dialog-actions">
+      <span class="dialog-actions-spacer" aria-hidden="true"></span>
+      <button type="submit" id="prompt-shelf-delete-cancel" value="cancel" class="ghost-button" data-i18n="promptShelfDeleteCancel">Keep draft</button>
+      <button type="button" id="prompt-shelf-delete-confirm" class="primary-button" data-i18n="promptShelfDeleteConfirm">Delete draft</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="welcome-dialog" class="welcome-dialog" aria-labelledby="welcome-title" aria-describedby="welcome-body">
   <form method="dialog">
@@ -859,7 +1060,7 @@
           </li>
         </ol>
 
-        <p class="welcome-launcher-note" data-i18n="welcomeLauncherNote">Click the Aura button to open Studio, drag it to move it, or right-click for quick actions.</p>
+        <p class="welcome-launcher-note" data-i18n="welcomeLauncherNote">Click the Aura button to open Prompt Shelf, Studio, and other actions. Drag it to move it.</p>
         <div class="dialog-actions welcome-actions">
           <output id="welcome-status" class="welcome-status" role="status" aria-live="polite"></output>
           <button type="button" id="welcome-later" class="ghost-button" data-i18n="welcomeLater">Skip</button>

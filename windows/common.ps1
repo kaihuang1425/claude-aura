@@ -49,6 +49,7 @@ public static class AuraShortcutPropertyStore
     }
 
     private const ushort VariantEmpty = 0;
+    private const ushort VariantBasicString = 8;
     private const ushort VariantUnicodeString = 31;
     private const int StorageRead = 0;
     private const int StorageReadWrite = 2;
@@ -71,12 +72,19 @@ public static class AuraShortcutPropertyStore
         try
         {
             if (value.ValueType == VariantEmpty) return null;
-            if (value.ValueType != VariantUnicodeString)
+            if (value.ValueType == VariantBasicString)
+            {
+                return Marshal.PtrToStringBSTR(value.PointerValue);
+            }
+            if (value.ValueType == VariantUnicodeString)
+            {
+                return Marshal.PtrToStringUni(value.PointerValue);
+            }
+            else
             {
                 throw new InvalidOperationException(
                     "The shortcut contains an unsupported AppUserModelID property type.");
             }
-            return Marshal.PtrToStringUni(value.PointerValue);
         }
         finally
         {

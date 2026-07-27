@@ -554,6 +554,7 @@
         prompt: null,
         shell,
         editor,
+        controls,
         toolbar: commonToolbar(controls, editor, shell),
       };
     }
@@ -571,7 +572,46 @@
       prompt: context === "new-chat" ? group : null,
       shell,
       editor,
+      controls,
       toolbar: commonToolbar(controls, editor, shell),
+    };
+  };
+
+  const lr = (e) => {
+    const r = e?.getBoundingClientRect ? visibleRect(e) : e;
+    const w = window.innerWidth, h = window.innerHeight;
+    if (!r || ![r.left, r.top, r.width, r.height, w, h].every(Number.isFinite)
+        || r.width <= 0 || r.height <= 0 || r.left >= w || r.top >= h
+        || r.left + r.width <= 0 || r.top + r.height <= 0) return null;
+    const l = Math.max(0, r.left), t = Math.max(0, r.top);
+    return {
+      left: l, top: t,
+      width: Math.min(w, r.left + r.width) - l,
+      height: Math.min(h, r.top + r.height) - t,
+    };
+  };
+  const lp = () => {
+    const f = discoverComposer(), a = f.controls ?? [], c = a.length <= 12 ? a.map(lr) : null;
+    const g = getGreetingProbe(), r = lr(g["rect"]);
+    let s = ["native", "custom"].includes(g["status"]) && r ? "found"
+      : g["status"] === "ambiguous" ? "ambiguous"
+        : ["native", "custom", "missing", "pending", "verifying", "unmeasurable"].includes(g["status"])
+          ? "missing" : "inactive";
+    const d = Number(window.devicePixelRatio);
+    return {
+      "version": 1, "digest": settings.digest, "context": f.context, "mode": mode(),
+      "frame": viewport() === "w" ? "wide" : "normal",
+      "viewport": {
+        "width": Number.isFinite(window.innerWidth) && window.innerWidth > 0 ? window.innerWidth : 0,
+        "height": Number.isFinite(window.innerHeight) && window.innerHeight > 0 ? window.innerHeight : 0,
+        "dpr": Number.isFinite(d) && d > 0 ? d : 1,
+      },
+      "main": lr(f.main), "prompt": lr(f.prompt), "composer": lr(f.shell), "toolbar": lr(f.toolbar),
+      "controls": f.shell && c?.every(Boolean) ? c : null,
+      "greeting": {
+        "status": s, "source": ["native", "custom"].includes(g["source"]) ? g["source"] : "none",
+        "rect": s === "found" ? r : null,
+      },
     };
   };
 
@@ -831,19 +871,11 @@
       if (!c || !r) return;
       const v = (p) => Number.parseFloat(c.getPropertyValue?.(`--aura-greeting-${p}`));
       const x = v("x"), y = v("y"), w = v("max-ratio");
-      if (Number.isFinite(x) || Number.isFinite(y)) n.style.setProperty(
-        "translate",
-        `${Math.round((Number.isFinite(x) ? Math.max(-0.4, Math.min(0.4, x)) * r.width : 0))}px `
-          + `${Math.round((Number.isFinite(y) ? Math.max(-0.4, Math.min(0.4, y)) * r.height : 0))}px`,
-      );
       if (Number.isFinite(w)) n.style.setProperty("max-width", `${Math.round(Math.max(160, Math.min(r.width, w * r.width)))}px`);
-    };
-    const within = (n, ma, sh) => {
-      const r = n?.getBoundingClientRect ? visibleRect(n) : n;
-      const m = visibleRect(ma), s = visibleRect(sh);
-      return Boolean(r && m && s
-        && r.left >= m.left - 2 && r.right <= m.right + 2
-        && r.top >= m.top - 2 && r.bottom <= Math.min(m.bottom, s.top) + 2);
+      n.style.removeProperty("translate");
+      const d = [x * r.width || 0, y * r.height || 0];
+      if (d[0] || d[1]) n.style.setProperty("translate", `${d[0]}px ${d[1]}px`);
+      return d;
     };
     const box = (n, l, t, w, h) => {
       n.style["css" + "Text"] += `;position:fixed!important;left:${Math.round(l)}px!important;`
@@ -890,6 +922,21 @@
       anchored(m, placed, dn, s, s);
       return 1;
     };
+    const fit=(n,ma,sh) => {
+      const d=g.s?geometry(n,ma):[0,0];
+      if (!d || !decorate(n)) return 0;
+      const r=vg(),m=visibleRect(ma),s=visibleRect(sh);
+      if (!r || !m || !s) return 0;
+      const x=Math.max(m.left-r.left-2,Math.min(m.right-r.right+2,0));
+      const y=Math.max(m.top-r.top-2,Math.min(Math.min(m.bottom,s.top)-r.bottom+2,0));
+      if (x || y) {
+        n.style.setProperty("translate", `${d[0] + x}px ${d[1] + y}px`);
+        decorate(n);
+      }
+      const q = vg();
+      return q && q.left >= m.left - 2 && q.right <= m.right + 2
+        && q.top >= m.top - 2 && q.bottom <= Math.min(m.bottom, s.top) + 2;
+    };
     let custom = () => 0;
     /*__AURA_GREETING_PHRASES_START__*/
     const pick = () => {
@@ -915,9 +962,7 @@
       if (/^(pending|verifying|custom)$/.test(st) && rn?.isConnected) {
         if (tn && tn.textContent !== ps[i]) tn.textContent = ps[i];
         if (st === "custom") {
-          geometry(rn, ma);
-          if (!decorate(rn)) { fail(U); return 0; }
-          if (!within(vg(), ma, sh)) { fail(U); return 0; }
+          if (!fit(rn, ma, sh)) { fail(U); return 0; }
         }
         return 1;
       }
@@ -958,10 +1003,10 @@
         bd.u.setAttribute(H, "true"); bd.u.setAttribute("aria-hidden", "true");
         bd.u.style.setProperty("display", "none");
         rn.removeAttribute("aria-hidden"); rn.style.removeProperty("position"); rn.style.removeProperty("visibility");
-        if (!decorate(rn)) { fail(U); return; }
+        if (!fit(rn, ma, sh)) { fail(U); return; }
         st = "verifying";
         af(() => {
-          if (!within(vg(), ma, sh)) fail(U);
+          if (!fit(rn, ma, sh)) fail(U);
           else st = "custom";
         });
       });
@@ -993,9 +1038,7 @@
       if (!g.s) { unwatch(); return (st = "inactive"); }
       bd.n.setAttribute(G, "native");
       for (const k of bd.ks) k.setAttribute(K, "native");
-      geometry(bd.u, ma);
-      if (!decorate(bd.u)) return fail(U);
-      if (!within(vg(), ma, sh)) return fail(U);
+      if (!fit(bd.u, ma, sh)) return fail(U);
       st = "native"; watch(ma, sh, bd.n, bd.u, ...bd.ks);
     };
   }
@@ -1060,39 +1103,35 @@
     media?.removeEventListener?.("change", onModeChange);
     forcedColors?.removeEventListener?.("change", onModeChange);
   };
+  const rd = () => ({
+    "claudeAuraVariant": settings.variant || settings.theme,
+    "claudeAuraArtMobile": settings.artMobile || "reduce",
+    "claudeAuraAppearance": appearance,
+    "claudeAuraEffectiveMode": mode(),
+    "claudeAuraContext": currentContext,
+    "claudeAuraDigest": settings.digest,
+  });
+  const rs = () => ({
+    "--aura-image": imageCssValue,
+    "--aura-image-opacity": imageOpacityValue,
+    "--aura-image-position": settings.imagePosition || "center",
+    "--aura-image-scale": imageScaleValue,
+    "--aura-theme-art": artCssValue,
+    "--aura-art-position": settings.artPosition || "right center",
+    "--aura-art-size": settings.artSize || "min(58vw, 860px) auto",
+  });
 
   const ensure = () => {
     if (!document.documentElement || window.__CLAUDE_AURA_DISABLED__) return;
     const html = document.documentElement;
-    const rootIdentityChanged = html.dataset.claudeAuraDigest !== settings.digest
-      || html.dataset.claudeAuraTheme !== settings.theme
-      || html.dataset.claudeAuraVariant !== (settings.variant || settings.theme)
-      || html.dataset.claudeAuraArtMobile !== (settings.artMobile || "reduce")
-      || html.dataset.claudeAuraAppearance !== appearance
-      || html.dataset.claudeAuraEffectiveMode !== mode()
-      || html.dataset.claudeAuraContext !== currentContext
-      || !html.classList.contains("claude-aura")
-      || html.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
-      || html.classList.contains("claude-aura-animated-image") !== Boolean(settings.imageAnimated);
-    if (rootIdentityChanged) rootDirty = true;
+    if (rootNeedsRepair()) rootDirty = true;
     if (rootDirty) {
       html.classList.add("claude-aura");
       html.classList.toggle("claude-aura-reduce-motion", Boolean(settings.reduceMotion));
       html.classList.toggle("claude-aura-animated-image", Boolean(settings.imageAnimated));
       html.dataset.claudeAuraTheme = settings.theme;
-      html.dataset.claudeAuraVariant = settings.variant || settings.theme;
-      html.dataset.claudeAuraArtMobile = settings.artMobile || "reduce";
-      html.dataset.claudeAuraAppearance = appearance;
-      html.dataset.claudeAuraEffectiveMode = mode();
-      html.dataset.claudeAuraContext = currentContext;
-      html.dataset.claudeAuraDigest = settings.digest;
-      html.style.setProperty("--aura-image", imageCssValue);
-      html.style.setProperty("--aura-image-opacity", imageOpacityValue);
-      html.style.setProperty("--aura-image-position", settings.imagePosition || "center");
-      html.style.setProperty("--aura-image-scale", imageScaleValue);
-      html.style.setProperty("--aura-theme-art", artCssValue);
-      html.style.setProperty("--aura-art-position", settings.artPosition || "right center");
-      html.style.setProperty("--aura-art-size", settings.artSize || "min(58vw, 860px) auto");
+      for (const [k, v] of Object.entries(rd())) html.dataset[k] = v;
+      for (const [k, v] of Object.entries(rs())) html.style.setProperty(k, v);
       rootDirty = false;
     }
 
@@ -1171,7 +1210,9 @@
       }
       addLayerDiv("claude-aura-grain");
       addLayerDiv("claude-aura-vignette");
-      backdrop.dataset.artScope = settings.q === "c" ? "content" : "full-window";
+      backdrop.dataset.artScope = settings.q === "s"
+        ? "sidebar"
+        : settings.q === "c" ? "content" : "full-window";
       document.body.prepend(backdrop);
     }
     syncSemanticLayout();
@@ -1194,23 +1235,14 @@
     document.getElementById(BACKDROP_ID)?.remove();
     const html = document.documentElement;
     html?.classList.remove("claude-aura", "claude-aura-reduce-motion", "claude-aura-animated-image");
-    html?.style.removeProperty("--aura-image");
-    html?.style.removeProperty("--aura-image-opacity");
-    html?.style.removeProperty("--aura-image-position");
-    html?.style.removeProperty("--aura-image-scale");
-    html?.style.removeProperty("--aura-theme-art");
-    html?.style.removeProperty("--aura-art-position");
-    html?.style.removeProperty("--aura-art-size");
-    html?.style.removeProperty("--aura-main-start");
+    for (const p of [
+      "image", "image-opacity", "image-position", "image-scale",
+      "theme-art", "art-position", "art-size", "main-start",
+    ]) html?.style.removeProperty(`--aura-${p}`);
     if (html?.dataset) {
-      delete html.dataset.claudeAuraTheme;
-      delete html.dataset.claudeAuraVariant;
-      delete html.dataset.claudeAuraArtMobile;
-      delete html.dataset.claudeAuraAppearance;
-      delete html.dataset.claudeAuraEffectiveMode;
-      delete html.dataset.claudeAuraContext;
-      delete html.dataset.claudeAuraViewport;
-      delete html.dataset.claudeAuraDigest;
+      for (const p of [
+        "Theme", "Variant", "ArtMobile", "Appearance", "EffectiveMode", "Context", "Viewport", "Digest",
+      ]) delete html.dataset[`claudeAura${p}`];
     }
     delete window[STATE_KEY];
     return true;
@@ -1252,23 +1284,12 @@
   let observedBody = null;
   let observedStyle = null;
   let observedBackdrop = null;
-  const rootNeedsRepair = () => root.dataset.claudeAuraDigest !== settings.digest
+  const rootNeedsRepair = () => !root.classList.contains("claude-aura")
     || root.dataset.claudeAuraTheme !== settings.theme
-    || root.dataset.claudeAuraVariant !== (settings.variant || settings.theme)
-    || root.dataset.claudeAuraArtMobile !== (settings.artMobile || "reduce")
-    || root.dataset.claudeAuraAppearance !== appearance
-    || root.dataset.claudeAuraEffectiveMode !== mode()
-    || root.dataset.claudeAuraContext !== currentContext
-    || !root.classList.contains("claude-aura")
     || root.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
     || root.classList.contains("claude-aura-animated-image") !== Boolean(settings.imageAnimated)
-    || root.style.getPropertyValue("--aura-image") !== imageCssValue
-    || root.style.getPropertyValue("--aura-image-opacity") !== imageOpacityValue
-    || root.style.getPropertyValue("--aura-image-position") !== (settings.imagePosition || "center")
-    || root.style.getPropertyValue("--aura-image-scale") !== imageScaleValue
-    || root.style.getPropertyValue("--aura-theme-art") !== artCssValue
-    || root.style.getPropertyValue("--aura-art-position") !== (settings.artPosition || "right center")
-    || root.style.getPropertyValue("--aura-art-size") !== (settings.artSize || "min(58vw, 860px) auto");
+    || Object.entries(rd()).some(([k, v]) => root.dataset[k] !== v)
+    || Object.entries(rs()).some(([k, v]) => root.style.getPropertyValue(k) !== v);
   const observer = new MutationObserver((records) => {
     const style = document.getElementById(STYLE_ID);
     const backdrop = document.getElementById(BACKDROP_ID);
@@ -1326,6 +1347,8 @@
     scheduled,
     stopModeListener: stopMode,
     stopContextListeners: stopContext,
+    "getLayoutProbe": lp,
+    "discoverComposer": discoverComposer,
     clearBrandWordmark: clearBrand,
     clearAvatarOverlay: clearAvatar,
     cg: (endVisit = true) => clearGreeting?.(endVisit),

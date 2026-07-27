@@ -141,45 +141,55 @@ WebView2 çoğu güncel Windows bilgisayarda bulunur. Aura tarayıcı penceresin
 Evergreen WebView2 Runtime’ı kurun veya onarın ve yeniden deneyin.
 Claude Desktop isteğe bağlıdır ve ayrı bir uygulama olarak kalır.
 
-### Kurulum
+### Yükleme
 
-1. [en son sürüm ZIP’i](https://github.com/kaihuang1425/claude-aura/releases) indirin.
-2. File Explorer’da ZIP’e sağ tıklayıp **Extract All** seçeneğini seçin.
-3. Çıkarılan klasörü açın ve **Install Claude Aura.cmd** dosyasına çift tıklayın.
-4. Kurucunun kapanmasını ve **Claude Aura** penceresinin açılmasını bekleyin.
-5. `claude.ai` isterse Aura içinde oturum açın.
-6. Studio’yu açmak için kayan Aura düğmesine tıklayın, ardından **Themes**’i seçin.
+[Son sürümü](https://github.com/kaihuang1425/claude-aura/releases) açın ve bu yollardan birini seçin. Her ikisi de mevcut Windows hesabı için aynı sürümü yükler.
 
-Kurulum, Claude Desktop’ı yama yapmaz veya değiştirmez.
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | Daha basit, yönlendirmeli kurucu isterseniz ve Windows onu normal şekilde açıyorsa | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` ile `.sha256` ve `.manifest.json` |
+| **ZIP + CMD fallback** | Windows, unsigned Setup için uyarı verip engelliyorsa veya okunabilir kaynak betikler tercih ediyorsanız | `claude-aura-v<version>.zip` ile onun `.sha256` dosyası |
+
+#### Path 1 ??Unsigned Setup
+
+1. **Assets** altında `-UNSIGNED.exe`, `.sha256` ve `.manifest.json` dosyalarını indirin. GitHub’in otomatik ürettiği **Source code** arşivlerini kullanmayın.
+2. Setup dosyasının SHA-256 değerini iki yardımcı dosyayla karşılaştırın. Herhangi bir değer farklıysa indirmeyi durdurun ve dosyaları silin.
+3. Windows bu yükleyicinin publisher'ını doğrulayamaz çünkü geliştiricinin code-signing sertifikası yoktur. Windows uyarı verirse veya engellerse, uyarıyı atlamayın; Path 2 kullanın.
+4. Normal açılıyorsa Setup’ı takip edin. Node.js ve WebView2'yi kontrol eder, `%LOCALAPPDATA%\ClaudeAura` altında kurar, **Installed apps** kaydı ve kısayollar ekler, ardından Aura'yı açar.
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. **Assets** altında `claude-aura-v<version>.zip` ve eşleşen `.sha256`yi indirin. GitHub’in otomatik ürettiği **Source code** arşivlerini kullanmayın.
+2. ZIP'in SHA-256 değerini karşılık gelen dosyayla karşılaştırın. Değerler farklıysa durun ve her iki dosyayı da silin.
+3. **Extract all** seçeneğini seçin. Çıkarılan `claude-aura` klasöründe **Install Claude Aura.cmd** dosyasına çift tıklayın. ZIP önizlemesinden çalıştırmayın.
+4. Okunabilir CMD/PowerShell kurucusu Node.js ve WebView2'yi kontrol eder, Aura'yı kurar, kısayolları oluşturur ve açar. Bu yol bir Authenticode publisher kimliği içermez ve **Installed apps** girdisi eklemez.
+
+Herhangi bir yoldan sonra, `claude.ai` isterse Aura içinde oturum açın. Floating Aura düğmesine tıklayın, **Open Studio**'yu seçin, ardından **Themes**'i seçin.
+
+`-UNSIGNED` içermeyen bir `Claude-Aura-Setup-v<version>.exe` farklı, imzalı bir yoldur ve bu release notlarında adı geçen publisher'ı göstermelidir. `-UNSIGNED-DEV.exe` ile biten bir asset asla kamuya açık değildir.
+
+Kurulum Claude Desktop'ı patch etmez veya değiştirmez.
 
 <details>
-<summary><strong>Kurulum davranışı, uygulama konumu, geliştirici çıkışı ve kaldırma</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-Yetkilendirme gerektirmeyen kurucu önce dahili doğrulama kontrollerini çalıştırır, sonra uygulama
-dosyalarını şu konuma kopyalar:
+Her iki yol da yönetici istemi olmadan çalışır, önkoşulları doğrular ve Aura'nın korunmuş app-tree swap işlemini gerçekleştirir. Uygulama dosyaları aşağıya kurulmaktadır:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-Masaüstüne ve Başlat menüsüne **Claude Aura** ve **Claude Aura Studio** kısayolları oluşturur.
-Tema ayarları ve oturum açma verileri uygulamadan ayrı saklandığı için Aura yeniden yüklense
-deneyimli biçimde bunları sessizce değiştirmez.
+Start menüsünde ve masaüstünde **Claude Aura**, **Claude Aura Studio** ve kaldırma kısayollarını oluşturur. Tema ayarları ve oturum açma verileri uygulamadan ayrı saklandığından Aura'yı yeniden yüklemek bunları sessizce değiştirmez. Native Setup bir **Installed apps** girdisi ve native uninstaller ekler; ZIP/CMD yolu ise kaynak betik kaldırma kısayolunu korur.
 
-Geliştiriciler, ZIP indirmek yerine depoyu klonlayıp kurucuyu checkout’tan
-çalıştırabilir. Checkout, kurulumdan önce repository’nin tamamını test eder.
+Geliştiriciler repository'yi klonlayıp yerel inceleme için açıkça adlandırılmış unsigned development installer derleyebilir. Bu, açıkça işaretlenmiş genel unsigned Setup'tan farklıdır. Build komutları, pinned compiler, doğrulama kapıları ve yayın kontrol listesi
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md)'da belgelenmiştir.
 
-### Kaldırma
+### Uninstall
 
-Önce kayan Aura düğmesine sağ tıklayıp **Exit Claude Aura** seçin.
-Ardından **Start > Claude Aura > Uninstall Claude Aura** öğesini açın veya çıkarılan sürümde
-**Uninstall Claude Aura.cmd** dosyasına çift tıklayın. Kaldırıcı, Aura açıkken devam etmez.
+Önce floating Aura düğmesine sağ tıklayıp **Exit Claude Aura** seçin.
+ZIP kurulumunda, **Start > Claude Aura > Uninstall Claude Aura** açın veya çıkarılmış bir release'de **Uninstall Claude Aura.cmd**'ye çift tıklayın. Herhangi bir native Setup için ayrıca **Settings > Apps > Installed apps > Claude Aura > Uninstall** da kullanılabilir. `.cmd` girdisi, mevcutsa kayıtlı native uninstaller'a devredilir. Uninstaller, Aura hâlâ açıksa devam etmez.
 
-Varsayılan olarak kaldırma, uygulamayı ve kısayolları siler; ancak yerel tema ayarlarını
-ve Aura’nın ayrı WebView oturum açma profilini sonraki yeniden yükleme için bırakır. Kaldırıcı,
-isterseniz bu klasörleri silmeden önce de onay ister. Bu zorunlu silme seçeneği Aura’nın
-yerel oturum açma oturumunu siler; ancak Claude Desktop’ı, kullanıcının Anthropic hesabını
-veya sunucu tarafındaki hesap verilerini asla silmez.
+Varsayılan olarak, uninstall Aura uygulamasını ve kısayolları kaldırır ama daha sonra yeniden yükleme için yerel tema ayarlarını ve Aura'nın ayrı WebView oturum açma profilini korur. Uninstaller, bu klasörleri silmeden önce de onay ister. Bu isteğe bağlı silme işlemi Aura'nın yerel oturum açma oturumunu kaldırır; Claude Desktop'ı, kullanıcının Anthropic hesabını veya sunucu tarafındaki hesap verisini asla kaldırmaz.
 
 </details>
 

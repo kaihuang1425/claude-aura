@@ -1,7 +1,8 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
   [switch]$RemoveData,
-  [switch]$Interactive
+  [switch]$Interactive,
+  [switch]$NativeBackend
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,36 @@ $installRoot = [IO.Path]::GetFullPath((Join-Path $productRoot 'app'))
 $dataRoot = [IO.Path]::GetFullPath((Join-Path $productRoot 'data'))
 $webViewRoot = [IO.Path]::GetFullPath((Join-Path $productRoot 'webview'))
 $separator = [IO.Path]::DirectorySeparatorChar
+$nativeUninstallKey =
+  'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{49DD4496-1ABF-5202-B127-3D7E919318C5}_is1'
+$nativeBackendVersion = $null
+if ($NativeBackend) {
+  $backendRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+  $expectedMaintenanceRoot = [IO.Path]::GetFullPath((Join-Path $productRoot 'installer'))
+  $backendName = Split-Path $backendRoot -Leaf
+  $backendMatch = [regex]::Match(
+    $backendName,
+    '^backend-(?<version>\d+\.\d+\.\d+(?:\.\d+)?)$',
+    [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+  $scriptPath = [IO.Path]::GetFullPath($PSCommandPath)
+  if (-not $backendMatch.Success -or
+      -not [string]::Equals((Split-Path $backendRoot -Parent),
+        $expectedMaintenanceRoot, [StringComparison]::OrdinalIgnoreCase) -or
+      -not [string]::Equals((Split-Path $scriptPath -Parent),
+        $backendRoot, [StringComparison]::OrdinalIgnoreCase) -or
+      (Split-Path $scriptPath -Leaf) -cne 'uninstall.ps1' -or
+      -not (Test-Path -LiteralPath $backendRoot -PathType Container) -or
+      -not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
+    throw 'Claude Aura refused a native uninstall request outside its registered maintenance backend.'
+  }
+  foreach ($candidate in @($backendRoot, $scriptPath)) {
+    $item = Get-Item -LiteralPath $candidate -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Claude Aura refused a redirected native uninstall backend.'
+    }
+  }
+  $nativeBackendVersion = $backendMatch.Groups['version'].Value
+}
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 function Assert-AuraOwnedPath([string]$Path) {
@@ -80,6 +111,50 @@ function Test-AuraOwnedShortcutTarget {
     if ($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)) {
       try { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut) } catch {}
     }
+  }
+}
+
+function Get-AuraRegisteredNativeUninstaller {
+  if (-not (Test-Path -LiteralPath $nativeUninstallKey)) { return $null }
+  $registration = Get-ItemProperty -LiteralPath $nativeUninstallKey -ErrorAction Stop
+  $command = [string]$registration.UninstallString
+  $match = [regex]::Match($command, '^\s*"(?<path>[^"]+)"\s*$')
+  if (-not $match.Success) {
+    throw 'Claude Aura found an invalid native uninstaller registration. Reinstall Claude Aura to repair it.'
+  }
+  $candidate = [IO.Path]::GetFullPath($match.Groups['path'].Value)
+  $expectedParent = [IO.Path]::GetFullPath((Join-Path $productRoot 'installer'))
+  if (-not [string]::Equals((Split-Path $candidate -Parent), $expectedParent,
+      [StringComparison]::OrdinalIgnoreCase) -or
+      (Split-Path $candidate -Leaf) -cnotmatch '^(?i:unins\d{3}\.exe)$' -or
+      -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+    throw 'Claude Aura found an invalid native uninstaller path. Reinstall Claude Aura to repair it.'
+  }
+  $item = Get-Item -LiteralPath $candidate -Force
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'Claude Aura refused a redirected native uninstaller.'
+  }
+  return $candidate
+}
+
+if ($NativeBackend) {
+  $registeredUninstaller = Get-AuraRegisteredNativeUninstaller
+  if (-not $registeredUninstaller) {
+    throw 'Claude Aura refused an unregistered native uninstall backend.'
+  }
+  $registration = Get-ItemProperty -LiteralPath $nativeUninstallKey -ErrorAction Stop
+  if ($registration.DisplayVersion -isnot [string] -or
+      -not [string]::Equals([string]$registration.DisplayVersion,
+        [string]$nativeBackendVersion, [StringComparison]::Ordinal)) {
+    throw 'Claude Aura refused a native uninstall backend from a different installed version.'
+  }
+}
+
+if (-not $NativeBackend -and -not $WhatIfPreference) {
+  $nativeUninstaller = Get-AuraRegisteredNativeUninstaller
+  if ($nativeUninstaller) {
+    $nativeProcess = Start-Process -FilePath $nativeUninstaller -Wait -PassThru
+    exit $nativeProcess.ExitCode
   }
 }
 

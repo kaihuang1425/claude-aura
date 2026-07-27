@@ -351,6 +351,8 @@ test("every theme provides complete semantic roles and a distinct component prof
   assert.match(ruleBody(primarySelector), /--aura-text-on-accent/);
   assert.match(ruleBody(primarySelector), /--aura-role-fg:\s*var\(--aura-text-on-accent\)/);
   assert.match(ruleBody(primarySelector), /--aura-role-fg-2:\s*var\(--aura-text-on-accent\)/);
+  assert.match(ruleBody(primarySelector), /margin-block-end:\s*8px\s*!important/,
+    "The sticky New chat action must stay separated from the first conversation row");
   assert.match(ruleBody(rowSelector), /--aura-role-fg:\s*var\(--aura-sidebar-text-primary\)/);
   assert.match(ruleBody(rowSelector), /--aura-role-fg-2:\s*var\(--aura-sidebar-text-muted\)/);
   assert.match(ruleBody(footerSelector), /--aura-role-fg:\s*var\(--aura-sidebar-text-primary\)/);

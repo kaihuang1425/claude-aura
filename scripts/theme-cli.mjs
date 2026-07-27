@@ -228,13 +228,13 @@ function help() {
   console.log(`Claude Aura theme tool
 
 Commands:
-  list [--json] [--locale en|zh-CN|zh-HKTW] [--user-themes <path>]
+  list [--json] [--locale <tag>] [--user-themes <path>]
   scaffold <id>
   qa <id>
-  init --config <path> [--locale en|zh-CN|zh-HKTW] [--user-themes <path>] [--payload]
-  show --config <path> [--json] [--locale en|zh-CN|zh-HKTW] [--user-themes <path>]
+  init --config <path> [--locale <tag>] [--user-themes <path>] [--payload]
+  show --config <path> [--json] [--locale <tag>] [--user-themes <path>]
   validate <kit-folder>
-  validate [--config <path>] [--theme <name>] [--locale en|zh-CN|zh-HKTW]
+  validate [--config <path>] [--theme <name>] [--locale <tag>]
       [--user-themes <path>]
   studio --config <path> --user-themes <path> --editor-root <path>
       --locale <tag> --request-base64 <base64url-json> [--asset <absolute-host-owned-image-path>]

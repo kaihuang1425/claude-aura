@@ -446,12 +446,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 37, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 44, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 37, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
         },
         "dark": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 43, "weight": 600, "italic": true, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 43, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
         }
       },
       "artwork": null,

@@ -129,39 +129,53 @@ Claude Desktop là tuỳ chọn và vẫn là một ứng dụng riêng biệt.
 
 ### Cài đặt
 
-1. Tải về
-   [phiên bản release mới nhất](https://github.com/kaihuang1425/claude-aura/releases).
-2. Trong File Explorer, chuột phải vào file ZIP và chọn **Extract All**.
-3. Mở thư mục đã giải nén rồi nhấp đúp **Install Claude Aura.cmd**.
-4. Chờ trình cài đặt đóng và cửa sổ **Claude Aura** mở ra.
-5. Đăng nhập trong Aura nếu `claude.ai` yêu cầu.
-6. Nhấp nút Aura nổi để mở Studio, sau đó chọn **Themes**.
+Mở [phiên bản mới nhất](https://github.com/kaihuang1425/claude-aura/releases) và chọn một trong hai đường dẫn này. Cả hai sẽ cài cùng một phiên bản cho tài khoản Windows hiện tại.
 
-Việc cài đặt không vá hay thay thế Claude Desktop.
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | Bạn muốn trình cài đặt hướng dẫn đơn giản hơn và Windows mở nó bình thường | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` cùng với `.sha256` và `.manifest.json` của nó |
+| **ZIP + CMD fallback** | Windows cảnh báo hoặc chặn Setup không ký, hoặc bạn ưu tiên các script nguồn dễ đọc | `claude-aura-v<version>.zip` cùng với `.sha256` của nó |
+
+#### Path 1 ??Unsigned Setup
+
+1. Trong **Assets**, tải `-UNSIGNED.exe`, `.sha256` và `.manifest.json` của nó. Không dùng các kho lưu trữ **Source code** tự động của GitHub.
+2. So sánh SHA-256 của file Setup với cả hai file đi kèm. Dừng lại và xóa các tệp tải xuống nếu bất kỳ giá trị nào khác nhau.
+3. Windows không thể xác minh publisher của trình cài đặt này vì nhà phát triển không có chứng chỉ ký mã. Nếu Windows cảnh báo hoặc chặn, đừng bỏ qua cảnh báo; hãy dùng Path 2.
+4. Nếu mở bình thường, hãy làm theo Setup. Nó kiểm tra Node.js và WebView2, cài vào dưới `%LOCALAPPDATA%\ClaudeAura`, thêm mục đăng ký **Installed apps** và các shortcut, sau đó mở Aura.
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. Trong **Assets**, tải `claude-aura-v<version>.zip` và `.sha256` tương ứng. Không dùng các archive **Source code** tự động của GitHub.
+2. So sánh SHA-256 của ZIP với tệp đi kèm. Nếu khác, dừng lại và xóa cả hai tệp.
+3. Chọn **Extract all**. Trong thư mục `claude-aura` đã giải nén, nhấp đúp **Install Claude Aura.cmd**. Không chạy từ bản xem trước ZIP.
+4. Trình cài đặt CMD/PowerShell có thể đọc được sẽ kiểm tra Node.js và WebView2, cài Aura, tạo shortcut và mở nó. Đường dẫn này không có danh tính publisher Authenticode và không thêm mục **Installed apps**.
+
+Sau bất kỳ đường dẫn nào, đăng nhập vào Aura nếu `claude.ai` yêu cầu. Nhấp nút Aura nổi, chọn **Open Studio**, rồi chọn **Themes**.
+
+Tài sản tên `Claude-Aura-Setup-v<version>.exe` không có `-UNSIGNED` là một đường dẫn ký khác và phải hiển thị publisher được nêu trong ghi chú phát hành đó. Tài sản kết thúc bằng `-UNSIGNED-DEV.exe` không bao giờ là công khai.
+
+Cài đặt không cập nhật (patch) hoặc thay thế Claude Desktop.
 
 <details>
-<summary><strong>Hành vi trình cài đặt, vị trí ứng dụng, checkout của nhà phát triển và gỡ cài đặt</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-Trình cài đặt không tăng quyền thực thi quy trình kiểm tra nội bộ, sau đó sao chép
-application files vào:
+Cả hai đường dẫn chạy không có lời nhắc quản trị viên, xác minh yêu cầu tiên quyết và thực hiện phép hoán đổi app-tree có kiểm soát của Aura. Tệp ứng dụng được cài vào:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-Nó tạo phím tắt **Claude Aura** và **Claude Aura Studio** trên Desktop và Start menu.
-Cài đặt theme và dữ liệu đăng nhập được lưu riêng khỏi ứng dụng, nên cài lại Aura không tự
-thay thế chúng một cách im lặng.
+Nó tạo các shortcut **Claude Aura**, **Claude Aura Studio** và gỡ cài đặt trong menu Start và trên Desktop. Cài đặt theme và dữ liệu đăng nhập được lưu riêng khỏi ứng dụng, vì vậy cài lại Aura sẽ không thay thế im lặng chúng. Native Setup thêm mục **Installed apps** và trình gỡ cài đặt native; đường dẫn ZIP/CMD giữ lại shortcut gỡ cài đặt từ script nguồn của nó.
 
-Nhà phát triển có thể clone repository thay vì tải ZIP và chạy cùng trình cài đặt từ checkout.
-Checkout chạy toàn bộ bộ test của repository trước khi cài đặt.
+Các nhà phát triển có thể clone repository và xây dựng installer phát triển unsigned có tên rõ ràng để kiểm tra cục bộ. Nó khác với unsigned Setup công khai đã được đánh dấu rõ ràng. Các lệnh build, compiler pinned, verification gates và checklist release đã được ghi trong
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md).
 
-### Gỡ cài đặt
+### Uninstall
 
 Đầu tiên nhấp chuột phải vào nút Aura nổi và chọn **Exit Claude Aura**.
-Sau đó mở **Start > Claude Aura > Uninstall Claude Aura**, hoặc nhấp đúp **Uninstall Claude Aura.cmd** trong bản release đã giải nén. Trình gỡ cài đặt sẽ không tiếp tục khi Aura vẫn đang mở.
+Đối với cài đặt ZIP, mở **Start > Claude Aura > Uninstall Claude Aura** hoặc nhấp đúp **Uninstall Claude Aura.cmd** trong một bản release đã giải nén. Với cả hai native Setup, bạn cũng có thể dùng **Settings > Apps > Installed apps > Claude Aura > Uninstall**. Mục `.cmd` ủy quyền cho trình gỡ cài đặt native đã đăng ký khi có. Trình gỡ cài đặt từ chối tiếp tục khi Aura vẫn mở.
 
-Mặc định, gỡ cài đặt loại bỏ ứng dụng và phím tắt Aura nhưng giữ lại thiết lập theme cục bộ và hồ sơ đăng nhập WebView riêng của Aura cho lần cài lại sau này. Trình gỡ cài đặt sẽ hỏi trước khi xóa luôn các thư mục đó. Lựa chọn xóa sẽ loại bỏ phiên đăng nhập cục bộ của Aura; nó không bao giờ xóa Claude Desktop, tài khoản Anthropic của người dùng, hay dữ liệu tài khoản phía server của Anthropic.
+Mặc định, uninstall xóa ứng dụng Aura và các shortcut nhưng giữ lại cài đặt theme địa phương và hồ sơ đăng nhập WebView riêng của Aura cho lần cài đặt lại sau này. Trình gỡ cài đặt cũng yêu cầu xác nhận trước khi xóa cả các thư mục đó. Việc xóa tùy chọn này sẽ xóa phiên đăng nhập cục bộ của Aura; nó không bao giờ xóa Claude Desktop, tài khoản Anthropic của người dùng, hoặc dữ liệu tài khoản phía máy chủ.
 
 </details>
 

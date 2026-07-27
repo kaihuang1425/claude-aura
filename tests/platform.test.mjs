@@ -121,6 +121,198 @@ test("JavaScript and platform scripts parse", async () => {
   }
 });
 
+test("Windows Studio bridge validates selectable metadata locales without rejecting incomplete drafts", async () => {
+  const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
+  const powershellFunction = (name) => {
+    const start = ui.indexOf(`function ${name} {`);
+    assert(start >= 0, `aura-ui.ps1 is missing ${name}`);
+    const end = ui.indexOf("\nfunction ", start + 1);
+    return ui.slice(start, end < 0 ? ui.length : end);
+  };
+
+  const metadataText = powershellFunction("Test-AuraUiStudioMetadataText");
+  assert.match(metadataText,
+    /\$Value -is \[string\][\s\S]*?\$Value\.Length -le \$Maximum[\s\S]*?\$Value -cnotmatch '\[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\]'/,
+    "Metadata text must remain bounded and reject control characters while allowing an empty draft value");
+  assert(!metadataText.includes(".Trim()"),
+    "The host text gate must not reject a selected locale merely because its draft value is blank");
+
+  const stateValidation = powershellFunction("ConvertTo-AuraUiStudioEditorState");
+  assert.match(stateValidation,
+    /\$locales -cnotcontains 'en'[\s\S]*?\$_ -cnotin \$StudioLocaleIds/,
+    "Editor state metadata must require English and use the canonical 15-locale allowlist");
+  assert.match(stateValidation,
+    /\$metadataLocales\.labels\.Count -ne \$metadataLocales\.descriptions\.Count[\s\S]*?\$_ -cnotin \$metadataLocales\.descriptions/,
+    "Editor state labels and descriptions must expose an identical selected locale subset");
+  assert.match(stateValidation,
+    /Test-AuraUiStudioMetadataText -Value \$text -Maximum \$maximum/,
+    "Editor state metadata must validate every selected locale with the shared bounded-text gate");
+
+  const messageValidation = powershellFunction("Assert-AuraUiStudioEditorMessage");
+  assert.match(messageValidation,
+    /'metadata' \{[\s\S]*?\$change\.locale -cnotin \$StudioLocaleIds[\s\S]*?Test-AuraUiStudioMetadataText -Value \$change\.value -Maximum \$maximum/,
+    "Metadata value patches must accept every canonical Studio locale and retain incomplete bounded text");
+  assert.match(messageValidation,
+    /'metadata-locale' \{[\s\S]*?@\('kind', 'locale', 'enabled'\)[\s\S]*?\$change\.locale -cnotin \$StudioLocaleIds[\s\S]*?\$change\.enabled -isnot \[bool\][\s\S]*?\$change\.locale -ceq 'en' -and -not \$change\.enabled/,
+    "Metadata-locale patches must have an exact shape, canonical locale, Boolean state, and immutable English fallback");
+});
+
+test("Windows launcher avoids live page controls without mutating the saved position", async () => {
+  const uiPath = path.join(PROJECT_ROOT, "windows", "aura-ui.ps1");
+  const ui = await fs.readFile(uiPath, "utf8");
+  const powershellFunction = (name) => {
+    const start = ui.indexOf(`function ${name} {`);
+    assert(start >= 0, `aura-ui.ps1 is missing ${name}`);
+    const end = ui.indexOf("\nfunction ", start + 1);
+    return ui.slice(start, end < 0 ? ui.length : end);
+  };
+
+  const positionUpdate = powershellFunction("Update-AuraUiLauncherPosition");
+  const avoidCollector = powershellFunction("Get-AuraUiLauncherAvoidRectangles");
+  const probeValidation = powershellFunction("Assert-AuraUiLauncherLayoutProbe");
+  const probeRequest = powershellFunction("Request-AuraUiLauncherLayoutProbe");
+  const probeUpdate = powershellFunction("Update-AuraUiLauncherLayoutProbe");
+  const probeStop = powershellFunction("Stop-AuraUiLauncherLayoutProbe");
+  const popupPlacement = powershellFunction("Get-AuraUiLauncherPopupLocation");
+  const tipPositionUpdate = powershellFunction("Update-AuraUiLauncherTipPosition");
+  const hintPositionUpdate = powershellFunction("Update-AuraUiLauncherHintPosition");
+  const tipShow = powershellFunction("Show-AuraUiLauncherTip");
+  const mirrorUpdate = powershellFunction("Update-AuraUiMirror");
+  const automaticPlacement = [
+    positionUpdate,
+    avoidCollector,
+    probeRequest,
+    probeUpdate,
+    probeStop,
+  ].join("\n");
+
+  assert.doesNotMatch(automaticPlacement, /Save-AuraUiLauncherPosition/,
+    "Automatic collision avoidance must never overwrite the user's saved launcher gaps");
+  assert.match(positionUpdate,
+    /Get-AuraUiLauncherClampedLocation[\s\S]*?Get-AuraUiLauncherAvoidRectangles[\s\S]*?Get-AuraUiLauncherCollisionFreeLocation/,
+    "Launcher placement must solve from the clamped saved preference and bounded live obstacles");
+  assert.match(probeValidation,
+    /\$Value\.controls -isnot \[System\.Array\][\s\S]*?@\(\$Value\.controls\)\.Count -gt 12/,
+    "The host must reject non-array or over-budget control collections");
+  assert.match(probeValidation,
+    /foreach \(\$control in @\(\$Value\.controls\)\)[\s\S]*?ConvertTo-AuraUiLauncherProbeRectangle[\s\S]*?-Label "Aura control \$controlIndex"/,
+    "Every accepted control rectangle must pass the bounded rectangle validator");
+  assert.match(probeUpdate,
+    /\$generation -ne \$script:LauncherProbeGeneration/,
+    "A completed launcher probe must be rejected after its request generation becomes stale");
+  assert.match(probeUpdate,
+    /\[string\]::Equals\([\s\S]*?\$expectedDigest,[\s\S]*?\$script:ActivePayloadDigest,[\s\S]*?\[StringComparison\]::Ordinal\)/,
+    "A completed launcher probe must still belong to the active renderer payload");
+  assert.match(probeUpdate,
+    /\$script:WebView\.ClientSize\.Width -ne \$taskClientSize\.Width[\s\S]*?\$script:WebView\.ClientSize\.Height -ne \$taskClientSize\.Height/,
+    "A completed launcher probe must be rejected after the native WebView client size changes");
+  const pendingAssignmentIndex = probeRequest.indexOf("$script:LauncherLayoutPending =");
+  const probeClearIndex = probeRequest.indexOf("$script:LauncherLayoutProbe = $null");
+  assert(pendingAssignmentIndex >= 0 && probeClearIndex > pendingAssignmentIndex,
+    "A fresh launcher request must establish pending state before discarding the previous page geometry");
+  assert.match(probeRequest,
+    /\$script:LauncherLayoutPending\s*=\s*\[bool\]\([\s\S]*?Get-AuraUiEnabled[\s\S]*?\$script:ActivePayloadDigest[\s\S]*?\)/,
+    "Pending startup gating must apply to an enabled themed payload while Original look remains available");
+  assert.match(probeStop, /\$script:LauncherLayoutPending\s*=\s*\$false/,
+    "Stopping the themed launcher probe must retire its pending state");
+  assert.match(probeUpdate,
+    /Assert-AuraUiLauncherLayoutProbe[\s\S]*?\$script:LauncherLayoutProbeClientSize\s*=\s*\[Drawing\.Size\]::new\([\s\S]*?\$script:LauncherLayoutPending\s*=\s*\$false/,
+    "Only a validated current probe and client-size snapshot may leave pending state");
+  const pendingPlacementIndex = positionUpdate.indexOf("if ($script:LauncherLayoutPending)");
+  const pendingReturnIndex = positionUpdate.indexOf("\n    return", pendingPlacementIndex);
+  const launcherShowIndex = positionUpdate.indexOf("$script:Launcher.Show($script:Form)");
+  assert(pendingPlacementIndex >= 0 && pendingReturnIndex > pendingPlacementIndex
+      && launcherShowIndex > pendingReturnIndex,
+  "The first themed startup must reject pending geometry before the launcher can become visible");
+  assert.match(tipShow,
+    /if \([\s\S]{0,160}?\$script:LauncherLayoutPending[\s\S]{0,160}?\)\s*\{\s*return\s*\}/,
+    "A help tip must not appear while its page-avoidance geometry is pending");
+  assert.match(popupPlacement,
+    /\[AllowNull\(\)\]\[object\[\]\]\$AvoidRectangles[\s\S]*?\[switch\]\$RequireCollisionFree/,
+    "Popup placement must accept the same live avoid rectangles and a fail-closed collision mode");
+  for (const [name, updater] of [
+    ["tip", tipPositionUpdate],
+    ["hint", hintPositionUpdate],
+  ]) {
+    assert.match(updater,
+      /Get-AuraUiLauncherPopupLocation[\s\S]*?-AvoidRectangles\s+@\(Get-AuraUiLauncherAvoidRectangles\)[\s\S]*?-RequireCollisionFree/,
+      `The launcher ${name} must place against the same live composer and toolbar geometry as its anchor`);
+    assert.match(updater, /if \(\$null -eq \$location\)[\s\S]{0,220}?(?:Hide|ShowWindow)[\s\S]{0,140}?return/,
+      `The launcher ${name} must stay hidden when no collision-free popup placement exists`);
+  }
+  for (const launcherLifecycle of [probeRequest, probeUpdate, probeStop]) {
+    assert.doesNotMatch(launcherLifecycle, /\$script:Mirror(?:Probe|Geometry|Capture|Generation|Due)/,
+      "Launcher probe lifecycle must not borrow Studio mirror state");
+  }
+  assert.doesNotMatch(mirrorUpdate, /\$script:Launcher(?:Probe|LayoutProbe)/,
+    "Studio mirror lifecycle must not borrow launcher probe state");
+
+  if (process.platform === "win32") {
+    const regression = [
+      "$ErrorActionPreference='Stop'",
+      "Add-Type -AssemblyName System.Drawing",
+      `$uiPath='${uiPath.replaceAll("'", "''")}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for launcher collision regression'}",
+      "$names=@('ConvertTo-AuraUiLauncherScreenRectangle','Get-AuraUiLauncherCollisionFreeLocation','Get-AuraUiLauncherPopupLocation')",
+      "foreach($name in $names){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing launcher geometry function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "function Assert-Point {",
+      "  param([Drawing.Point]$Actual,[int]$X,[int]$Y,[string]$Label)",
+      "  if($Actual.X -ne $X -or $Actual.Y -ne $Y){throw \"$Label was $($Actual.X),$($Actual.Y); expected $X,$Y\"}",
+      "}",
+      "$bounds=[Drawing.Rectangle]::new(0,0,1000,700)",
+      "$preferred=[Drawing.Point]::new(900,620)",
+      "$clear=Get-AuraUiLauncherCollisionFreeLocation -Preferred $preferred -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @()",
+      "Assert-Point -Actual $clear -X 900 -Y 620 -Label 'Clear preferred placement'",
+      "$composer=[Drawing.Rectangle]::new(720,540,260,150)",
+      "$composerAvoided=Get-AuraUiLauncherCollisionFreeLocation -Preferred $preferred -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @($composer)",
+      "Assert-Point -Actual $composerAvoided -X 900 -Y 468 -Label 'Composer avoidance'",
+      "$toolbar=[Drawing.Rectangle]::new(850,560,130,100)",
+      "$control=[Drawing.Rectangle]::new(720,480,200,100)",
+      "$overlapAvoided=Get-AuraUiLauncherCollisionFreeLocation -Preferred $preferred -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @($toolbar,$control)",
+      "Assert-Point -Actual $overlapAvoided -X 778 -Y 620 -Label 'Overlapping toolbar and control avoidance'",
+      "$highDpi=Get-AuraUiLauncherCollisionFreeLocation -Preferred ([Drawing.Point]::new(1800,1240)) -Bounds ([Drawing.Rectangle]::new(0,0,2000,1400)) -CircleSize 96 -Halo 16 -Gap 32 -AvoidRectangles @([Drawing.Rectangle]::new(1440,1080,520,300))",
+      "Assert-Point -Actual $highDpi -X 1800 -Y 936 -Label 'DPI-scaled composer avoidance'",
+      "$edgeClamped=Get-AuraUiLauncherCollisionFreeLocation -Preferred ([Drawing.Point]::new(-200,900)) -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @()",
+      "Assert-Point -Actual $edgeClamped -X 8 -Y 628 -Label 'Visible-circle edge clamp'",
+      "$restored=Get-AuraUiLauncherCollisionFreeLocation -Preferred $preferred -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @()",
+      "Assert-Point -Actual $restored -X 900 -Y 620 -Label 'Preferred placement after obstruction removal'",
+      "$noSolution=Get-AuraUiLauncherCollisionFreeLocation -Preferred ([Drawing.Point]::new(20,20)) -Bounds ([Drawing.Rectangle]::new(0,0,100,100)) -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @([Drawing.Rectangle]::new(0,0,100,100))",
+      "Assert-Point -Actual $noSolution -X 20 -Y 20 -Label 'No-solution preferred fallback'",
+      "$script:WebView=[PSCustomObject]@{IsDisposed=$false;ClientSize=[Drawing.Size]::new(1500,1000)}",
+      "$script:WebView | Add-Member -MemberType ScriptMethod -Name PointToScreen -Value { param($point) [Drawing.Point]::new(100 + $point.X,200 + $point.Y) }",
+      "$probe=[PSCustomObject]@{viewport=[PSCustomObject]@{width=1000.0;height=500.0;dpr=3.0}}",
+      "$cssRectangle=[PSCustomObject]@{left=800.0;top=400.0;width=100.0;height=50.0}",
+      "$scaled=ConvertTo-AuraUiLauncherScreenRectangle -Rectangle $cssRectangle -Probe $probe",
+      "if($scaled.Left -ne 1300 -or $scaled.Top -ne 1000 -or $scaled.Width -ne 150 -or $scaled.Height -ne 100){throw 'CSS-to-screen conversion used DPR instead of measured per-axis client scale'}",
+      "$popupBounds=[Drawing.Rectangle]::new(0,0,1000,700)",
+      "$popupAnchor=[Drawing.Rectangle]::new(800,300,48,48)",
+      "$popupSize=[Drawing.Size]::new(300,100)",
+      "$composerObstacle=[Drawing.Rectangle]::new(500,160,400,150)",
+      "$remoteToolbar=[Drawing.Rectangle]::new(40,40,120,60)",
+      "$safePopup=Get-AuraUiLauncherPopupLocation -Anchor $popupAnchor -PopupSize $popupSize -Bounds $popupBounds -Gap 12 -AvoidRectangles @($composerObstacle,$remoteToolbar) -RequireCollisionFree",
+      "if($null -eq $safePopup){throw 'Popup avoidance hid a help card even though a safe candidate existed'}",
+      "$safePopupBounds=[Drawing.Rectangle]::new($safePopup,$popupSize)",
+      "if($safePopupBounds.IntersectsWith($popupAnchor) -or $safePopupBounds.IntersectsWith($composerObstacle) -or $safePopupBounds.IntersectsWith($remoteToolbar)){throw 'Popup avoidance returned a help card over its launcher or live page controls'}",
+      "$blockingToolbar=[Drawing.Rectangle]::new(500,340,400,140)",
+      "$blockedPopup=Get-AuraUiLauncherPopupLocation -Anchor $popupAnchor -PopupSize $popupSize -Bounds $popupBounds -Gap 12 -AvoidRectangles @($composerObstacle,$blockingToolbar) -RequireCollisionFree",
+      "if($null -ne $blockedPopup){throw 'Popup avoidance covered controls instead of failing closed when every candidate was blocked'}",
+      "$anchorBlocked=Get-AuraUiLauncherPopupLocation -Anchor ([Drawing.Rectangle]::new(176,126,48,48)) -PopupSize ([Drawing.Size]::new(360,260)) -Bounds ([Drawing.Rectangle]::new(0,0,400,300)) -Gap 12 -AvoidRectangles @() -RequireCollisionFree",
+      "if($null -ne $anchorBlocked){throw 'Clamped popup covered its launcher anchor instead of failing closed'}",
+    ].join("\n");
+    run("powershell.exe", [
+      "-NoProfile",
+      "-EncodedCommand",
+      Buffer.from(regression, "utf16le").toString("base64"),
+    ]);
+  }
+});
+
 test("Aura identity assets are deterministic and the icon contains every required Windows frame", async () => {
   const expectedSizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
   const sourcePath = path.join(PROJECT_ROOT, "assets", "brand", "aura-mark.svg");
@@ -278,6 +470,9 @@ test("Windows window clamp fits a synthetic 1280x720 working area", async () => 
   assert.match(functionSource, /\$maximumHeight\s*=\s*\[Math\]::Max\(1,\s*\$workingArea\.Height\s*-\s*\(\$Margin\s*\*\s*2\)\)/);
   assert.match(functionSource, /\$width\s*=\s*\[Math\]::Min\(\$Form\.Width,\s*\$maximumWidth\)/);
   assert.match(functionSource, /\$height\s*=\s*\[Math\]::Min\(\$Form\.Height,\s*\$maximumHeight\)/);
+  assert.match(functionSource,
+    /if \(\$Form\.WindowState -ne \[System\.Windows\.Forms\.FormWindowState\]::Normal\) \{ return \}/,
+    "Working-area repair must not corrupt maximized or minimized restore bounds");
 
   const clientSizeMatch = ui.match(/\$script:Form\.ClientSize\s*=\s*\[Drawing\.Size\]::new\((\d+),\s*(\d+)\)/);
   const minimumSizeMatch = ui.match(/\$script:Form\.MinimumSize\s*=\s*\[Drawing\.Size\]::new\((\d+),\s*(\d+)\)/);
@@ -338,9 +533,148 @@ test("Windows window clamp fits a synthetic 1280x720 working area", async () => 
       "  $form.Size=[Drawing.Size]::new(1600,900)",
       "  Test-AuraUiFormWithinWorkingArea -Form $form -Margin 12 -SyntheticWorkingArea $area",
       "  if($form.Bounds -ne [Drawing.Rectangle]::new(12,12,1256,696)){throw \"Oversized window clamped to unexpected bounds: $($form.Bounds)\"}",
+      "  foreach($state in @([Windows.Forms.FormWindowState]::Maximized,[Windows.Forms.FormWindowState]::Minimized)){",
+      "    $form.WindowState=$state",
+      "    $before=$form.Bounds",
+      "    Test-AuraUiFormWithinWorkingArea -Form $form -Margin 12 -SyntheticWorkingArea $area",
+      "    if($form.WindowState -ne $state -or $form.Bounds -ne $before){throw \"Clamp changed $state window geometry\"}",
+      "  }",
       "} finally { $form.Dispose() }",
     ].join("\n");
     run("powershell.exe", ["-NoProfile", "-STA", "-EncodedCommand", Buffer.from(powershell, "utf16le").toString("base64")]);
+  }
+});
+
+test("Windows startup layout separates compact maximize from spacious saved bounds", async () => {
+  const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
+  const functionSource = (name, nextName) => {
+    const start = ui.indexOf(`function ${name} {`);
+    const end = ui.indexOf(`function ${nextName} {`, start);
+    assert(start >= 0 && end > start, `Could not isolate ${name}`);
+    return ui.slice(start, end);
+  };
+  const displayClass = functionSource(
+    "Get-AuraUiWindowDisplayClass",
+    "Get-AuraUiWindowBoundsWithinWorkingArea",
+  );
+  const boundsClamp = functionSource(
+    "Get-AuraUiWindowBoundsWithinWorkingArea",
+    "Set-AuraUiFormBoundsWithinWorkingArea",
+  );
+  const boundsSetter = functionSource(
+    "Set-AuraUiFormBoundsWithinWorkingArea",
+    "Get-AuraUiWindowStartupScreen",
+  );
+  const initialize = functionSource(
+    "Initialize-AuraUiWindowLayoutForForm",
+    "Update-AuraUiWindowNormalSnapshot",
+  );
+  const normalSnapshot = functionSource(
+    "Update-AuraUiWindowNormalSnapshot",
+    "Save-AuraUiWindowLayoutForForm",
+  );
+  const save = functionSource("Save-AuraUiWindowLayoutForForm", "New-AuraUiIcon");
+  const writer = functionSource(
+    "Write-AuraUiWindowLayoutState",
+    "Get-AuraUiWindowDisplayClass",
+  );
+  const showStudio = functionSource("Show-AuraUiStudio", "Show-AuraUiMain");
+  const showMain = functionSource("Show-AuraUiMain", "Show-AuraUiMainForPreview");
+
+  assert.match(ui,
+    /\$WindowLayoutPath\s*=\s*Join-Path \$DataRoot 'window-layout\.json'/,
+    "Window geometry must stay in a separate device-local state file");
+  assert.match(displayClass,
+    /\$logicalWidth[\s\S]*?\$WorkingArea\.Width \* 96\.0 \/ \$Dpi[\s\S]*?\$logicalHeight[\s\S]*?\$WorkingArea\.Height \* 96\.0 \/ \$Dpi/,
+    "Compact detection must use DPI-normalized working area, not raw resolution");
+  assert.match(initialize,
+    /\$record\s*=\s*\$script:WindowLayoutState\.\$Kind\.\$displayClass[\s\S]*?Update-AuraUiWindowNormalSnapshot -Kind \$Kind -Form \$Form[\s\S]*?if \(\$displayClass -ceq 'compact'\)[\s\S]*?FormWindowState\]::Maximized[\s\S]*?else\s*\{[\s\S]*?FormWindowState\]::Normal/,
+    "Compact startup must maximize after seeding restore bounds; spacious startup must remain normal");
+  assert.match(normalSnapshot,
+    /bounds\s*=\s*\[Drawing\.Rectangle\]::new\([\s\S]*?\$Form\.Bounds\.X[\s\S]*?dpi\s*=\s*\[int\]\(Get-AuraUiWindowDpi -Form \$Form\)/,
+    "Normal bounds and their monitor DPI must be captured as one paired snapshot");
+  assert.match(save,
+    /WindowState -eq \[System\.Windows\.Forms\.FormWindowState\]::Normal[\s\S]*?Update-AuraUiWindowNormalSnapshot[\s\S]*?\$bounds\s*=\s*\[Drawing\.Rectangle\]\$snapshot\.bounds[\s\S]*?\$dpi\s*=\s*\[int\]\$snapshot\.dpi/,
+    "Maximized or minimized geometry must persist paired normal bounds and DPI");
+  assert.match(save,
+    /MirrorRequestedCssRequest -ne 0[\s\S]*?PreviewClientResizeActive/,
+    "Studio preview sizing must not overwrite the human Aura window preference");
+  assert.match(writer,
+    /WriteAllText\(\$temporary[\s\S]*?\[IO\.File\]::Replace\(\$temporary, \$WindowLayoutPath, \$backup\)[\s\S]*?\[IO\.File\]::Move\(\$temporary, \$WindowLayoutPath\)/,
+    "Window layout persistence must use the repository's atomic replace pattern");
+  assert.match(writer,
+    /try\s*\{\s*\[void\]\[IO\.Directory\]::CreateDirectory\(\$DataRoot\)/,
+    "A transient data-directory failure must stay inside the fail-open persistence boundary");
+  assert.match(ui,
+    /\$script:Form\.add_ResizeEnd\(\{\s*Save-AuraUiWindowLayoutForForm -Kind aura/,
+    "Aura must save settled normal bounds after a human move or resize");
+  assert.match(ui,
+    /\$script:StudioForm\.add_ResizeEnd\(\{[\s\S]{0,120}?Save-AuraUiWindowLayoutForForm -Kind studio/,
+    "Studio must save its own settled normal bounds independently");
+  assert.match(showStudio,
+    /StudioLastWindowState -eq \[System\.Windows\.Forms\.FormWindowState\]::Maximized[\s\S]*?FormWindowState\]::Maximized[\s\S]*?FormWindowState\]::Normal/,
+    "Reopening minimized Studio must preserve its last non-minimized state");
+  assert.doesNotMatch(showStudio,
+    /if \(\$script:StudioForm\.WindowState -eq [^{]+\{\s*\$script:StudioForm\.WindowState = \[System\.Windows\.Forms\.FormWindowState\]::Normal\s*\}/,
+    "Studio must not always normalize a window that was minimized from maximized");
+  assert.match(showMain,
+    /AuraLastWindowState -eq \[System\.Windows\.Forms\.FormWindowState\]::Maximized/,
+    "Aura foreground signaling must preserve a minimized-from-maximized state");
+
+  if (process.platform === "win32") {
+    const powershell = [
+      "$ErrorActionPreference='Stop'",
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "Add-Type -AssemblyName System.Drawing",
+      displayClass,
+      boundsClamp,
+      boundsSetter,
+      initialize,
+      normalSnapshot,
+      save,
+      "$compact=Get-AuraUiWindowDisplayClass -WorkingArea ([Drawing.Rectangle]::new(0,0,1920,1040)) -Dpi 144",
+      "if($compact -cne 'compact'){throw \"Scaled laptop area classified as $compact\"}",
+      "$spacious=Get-AuraUiWindowDisplayClass -WorkingArea ([Drawing.Rectangle]::new(0,0,3840,2080)) -Dpi 192",
+      "if($spacious -cne 'spacious'){throw \"Scaled large display classified as $spacious\"}",
+      "$negative=Get-AuraUiWindowBoundsWithinWorkingArea -Bounds ([Drawing.Rectangle]::new(-2000,-100,1800,1000)) -WorkingArea ([Drawing.Rectangle]::new(-1600,40,1600,860)) -MinimumSize ([Drawing.Size]::new(920,620)) -Margin 12",
+      "if($negative -ne [Drawing.Rectangle]::new(-1588,52,1576,836)){throw \"Negative-origin clamp returned $negative\"}",
+      "$script:MirrorRequestedCssRequest=0; $script:PreviewClientResizeActive=$false; $script:AuraNormalWindowSnapshot=$null",
+      "function Get-AuraUiWindowDpi { param($Form) return $script:SimulatedDpi }",
+      "$form=[Windows.Forms.Form]::new(); $form.StartPosition='Manual'; $form.Bounds=[Drawing.Rectangle]::new(-1400,80,1100,700); [void]$form.Handle",
+      "$script:SimulatedDpi=144; Update-AuraUiWindowNormalSnapshot -Kind aura -Form $form",
+      "$form.WindowState=[Windows.Forms.FormWindowState]::Maximized; $script:SimulatedDpi=192; Update-AuraUiWindowNormalSnapshot -Kind aura -Form $form",
+      "if($script:AuraNormalWindowSnapshot.bounds -ne [Drawing.Rectangle]::new(-1400,80,1100,700) -or $script:AuraNormalWindowSnapshot.dpi -ne 144){throw 'Maximized cross-DPI state replaced the paired normal snapshot'}",
+      "$form.Dispose()",
+      "function Get-AuraUiWindowStartupScreen { param([AllowNull()][System.Windows.Forms.Form]$AnchorForm) return [Windows.Forms.Screen]::PrimaryScreen }",
+      "function Get-AuraUiWindowDisplayClass { param([AllowNull()][System.Windows.Forms.Form]$Form,[Drawing.Rectangle]$WorkingArea=[Drawing.Rectangle]::Empty,[int]$Dpi=0) return $script:SimulatedDisplayClass }",
+      "function Write-AuraUiWindowLayoutState { $script:LayoutWriteCount++ }",
+      "$working=[Windows.Forms.Screen]::PrimaryScreen.WorkingArea",
+      "$compactRecord=[PSCustomObject]@{x=$working.Left+40;y=$working.Top+40;width=700;height=460;dpi=96}",
+      "$script:WindowLayoutState=[PSCustomObject]@{schemaVersion=1;aura=[PSCustomObject]@{compact=$compactRecord;spacious=$null};studio=[PSCustomObject]@{compact=$null;spacious=$null}}",
+      "$script:AuraWindowLayoutInitialized=$false; $script:AuraNormalWindowSnapshot=$null; $script:SimulatedDpi=144; $script:SimulatedDisplayClass='compact'; $script:LayoutWriteCount=0",
+      "$compactForm=[Windows.Forms.Form]::new(); $compactForm.StartPosition='Manual'; $compactForm.MinimumSize=[Drawing.Size]::new(320,240)",
+      "Initialize-AuraUiWindowLayoutForForm -Kind aura -Form $compactForm",
+      "if($compactForm.WindowState -ne [Windows.Forms.FormWindowState]::Maximized){throw 'Compact startup did not maximize'}",
+      "if($null -eq $script:AuraNormalWindowSnapshot -or $script:AuraNormalWindowSnapshot.dpi -ne 144 -or $compactForm.RestoreBounds -ne $script:AuraNormalWindowSnapshot.bounds){throw 'Compact startup did not seed paired restore bounds before maximizing'}",
+      "Save-AuraUiWindowLayoutForForm -Kind aura -Form $compactForm",
+      "if($script:LayoutWriteCount -ne 1 -or $script:WindowLayoutState.aura.compact.dpi -ne 144 -or $script:WindowLayoutState.aura.compact.x -ne $script:AuraNormalWindowSnapshot.bounds.X){throw 'Maximized save did not persist the paired compact snapshot'}",
+      "$compactForm.Dispose()",
+      "$spaciousRecord=[PSCustomObject]@{x=$working.Left+60;y=$working.Top+60;width=600;height=400;dpi=144}",
+      "$script:WindowLayoutState.studio.spacious=$spaciousRecord; $script:StudioWindowLayoutInitialized=$false; $script:StudioNormalWindowSnapshot=$null; $script:SimulatedDpi=192; $script:SimulatedDisplayClass='spacious'; $script:LayoutWriteCount=0",
+      "$studioForm=[Windows.Forms.Form]::new(); $studioForm.StartPosition='Manual'; $studioForm.MinimumSize=[Drawing.Size]::new(320,240)",
+      "$expected=Get-AuraUiWindowBoundsWithinWorkingArea -Bounds ([Drawing.Rectangle]::new($spaciousRecord.x,$spaciousRecord.y,800,533)) -WorkingArea $working -MinimumSize $studioForm.MinimumSize -Margin 12",
+      "Initialize-AuraUiWindowLayoutForForm -Kind studio -Form $studioForm",
+      "if($studioForm.WindowState -ne [Windows.Forms.FormWindowState]::Normal -or $studioForm.Bounds -ne $expected){throw \"Spacious startup did not restore scaled saved bounds: $($studioForm.Bounds) expected $expected\"}",
+      "Save-AuraUiWindowLayoutForForm -Kind studio -Form $studioForm",
+      "if($script:LayoutWriteCount -ne 1 -or $script:WindowLayoutState.studio.spacious.dpi -ne 192 -or $script:WindowLayoutState.studio.spacious.width -ne $expected.Width){throw 'Spacious save did not persist independent paired bounds'}",
+      "$studioForm.Dispose()",
+    ].join("\n");
+    run("powershell.exe", [
+      "-NoProfile",
+      "-STA",
+      "-EncodedCommand",
+      Buffer.from(powershell, "utf16le").toString("base64"),
+    ]);
   }
 });
 
@@ -505,6 +839,7 @@ test("release and installers exclude unsafe composite references and binary patc
     "THEME_KIT_SPEC.md",
     "THEMING.md",
     "TROUBLESHOOTING.md",
+    "WINDOWS_INSTALLER.md",
   ]) {
     assert(windowsInstall.includes(`'${documentationName}'`) && macInstall.includes(documentationName),
       `Installers do not explicitly copy public documentation ${documentationName}`);
@@ -567,7 +902,13 @@ test("release and installers exclude unsafe composite references and binary patc
   try {
     await fs.writeFile(privatePath, '{"secret":"must-not-ship"}\n', "utf8");
     const release = JSON.parse(run(process.execPath, ["scripts/build-release.mjs"]));
-    const names = zipEntryNames(await fs.readFile(release.outputPath));
+    const releaseBytes = await fs.readFile(release.outputPath);
+    const names = zipEntryNames(releaseBytes);
+    const expectedChecksum = `${crypto.createHash("sha256").update(releaseBytes).digest("hex")}  ${path.basename(release.outputPath)}\n`;
+    assert.equal(await fs.readFile(`${release.outputPath}.sha256`, "utf8"), expectedChecksum,
+      "The public CMD ZIP must ship with a checksum of its final bytes");
+    assert(!names.some((name) => /\.exe$/iu.test(name) || /UNSIGNED-DEV/iu.test(name)),
+      "The public CMD ZIP must not contain a Setup executable or unsigned-development artifact");
     assert(names.includes("claude-aura/package.json"), "Release allowlist omitted package.json");
     for (const rootFile of [
       "CONTRIBUTING.md",
@@ -596,6 +937,7 @@ test("release and installers exclude unsafe composite references and binary patc
       "claude-aura/docs/THEME_KIT_SPEC.md",
       "claude-aura/docs/THEMING.md",
       "claude-aura/docs/TROUBLESHOOTING.md",
+      "claude-aura/docs/WINDOWS_INSTALLER.md",
       "claude-aura/docs/recipes/RECIPES.md",
     ].sort(), "Release documentation differs from the public allowlist");
     for (const themeDescriptor of [
@@ -622,9 +964,11 @@ test("release and installers exclude unsafe composite references and binary patc
       "studio/index.html",
       "tests/run-tests.mjs",
       "vendor/webview2/Microsoft.Web.WebView2.Core.dll",
+      "windows/aura-draft-handoff.ps1",
       "windows/aura-ui.ps1",
       "windows/install.ps1",
       "windows/uninstall.ps1",
+      "windows/verify.ps1",
     ]) {
       assert(names.includes(`claude-aura/${appSurface}`),
         `Release omitted required app surface ${appSurface}`);

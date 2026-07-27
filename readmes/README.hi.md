@@ -131,36 +131,52 @@ WebView2 अधिकांश वर्तमान Windows कंप्यू�
 <a id="installation"></a>
 ### इंस्टॉलेशन
 
-1. डाउनलोड करें
-   [latest release ZIP](https://github.com/kaihuang1425/claude-aura/releases).
-2. File Explorer में ZIP पर right-click करें और **Extract All** चुनें।
-3. निकाले गए फ़ोल्डर को खोलें और **Install Claude Aura.cmd** पर दो बार क्लिक करें।
-4. इंस्टॉलर बंद होने और **Claude Aura** विंडो खुलने तक प्रतीक्षा करें।
-5. यदि `claude.ai` पूछे तो ऑरा के अंदर sign in करें।
-6. फ्लोटिंग Aura बटन क्लिक करके Studio खोलें, फिर **Themes** चुनें।
+[नवीनतम रिलीज़](https://github.com/kaihuang1425/claude-aura/releases) खोलें और इनमें से किसी एक मार्ग का चयन करें। दोनों वर्तमान Windows अकाउंट के लिए वही संस्करण इंस्टॉल करते हैं।
 
-इंस्टॉलेशन Claude Desktop को patch या replace नहीं करता।
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | यदि आप सरल गाइडेड इंस्टॉलर चाहते हैं और Windows इसे सामान्य रूप से खोलता है | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` के साथ उसकी `.sha256` और `.manifest.json` |
+| **ZIP + CMD fallback** | यदि Windows unsigned Setup पर चेतावनी देता है या ब्लॉक करता है, या आप पढ़ने योग्य स्रोत स्क्रिप्ट चाहते हैं | `claude-aura-v<version>.zip` के साथ उसकी `.sha256` |
+
+#### Path 1 ??Unsigned Setup
+
+1. **Assets** के तहत `-UNSIGNED.exe`, उसकी `.sha256`, और उसकी `.manifest.json` डाउनलोड करें। GitHub के स्वचालित **Source code** आर्काइव का उपयोग न करें।
+2. Setup फ़ाइल के SHA-256 की दोनों companion files से तुलना करें। यदि कोई मान अलग हो तो डाउनलोड हटाकर तुरंत रोक दें।
+3. इस इंस्टॉलर का publisher Windows सत्यापित नहीं कर सकता क्योंकि डेवलपर के पास code-signing certificate नहीं है। यदि Windows चेतावनी देता है या ब्लॉक करता है, तो warning को bypass न करें; Path 2 का उपयोग करें।
+4. यदि यह सामान्य रूप से खुलता है तो Setup का पालन करें। यह Node.js और WebView2 की जांच करता है, `%LOCALAPPDATA%\ClaudeAura` में इंस्टॉल करता है, **Installed apps** पंजीकरण और शॉर्टकट जोड़ता है, फिर Aura खोलता है。
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. **Assets** के तहत `claude-aura-v<version>.zip` और उसकी matching `.sha256` डाउनलोड करें। GitHub के स्वचालित **Source code** आर्काइव का उपयोग न करें।
+2. ZIP के SHA-256 की companion file से तुलना करें। यदि मान अलग हों तो दोनों फाइलें हटाकर तुरंत रोक दें।
+3. **Extract all** चुनें। निकाले गए `claude-aura` फोल्डर में, **Install Claude Aura.cmd** पर डबल क्लिक करें। इसे ZIP preview के अंदर से रन न करें।
+4. पठनीय CMD/PowerShell इंस्टॉलर Node.js और WebView2 की जांच करता है, Aura इंस्टॉल करता है, शॉर्टकट बनाता है और इसे खोलता है। इस पथ में कोई Authenticode publisher identity नहीं होती और यह **Installed apps** entry नहीं जोड़ता।
+
+किसी भी पथ के बाद, यदि `claude.ai` पूछता है तो Aura के अंदर sign in करें। floating Aura बटन पर क्लिक करें, **Open Studio** चुनें, फिर **Themes** चुनें।
+
+`Claude-Aura-Setup-v<version>.exe` नाम वाली किसी asset बिना `-UNSIGNED` के अलग signed path है और इसमें उस release की notes में नामित publisher दिखना चाहिए। `-UNSIGNED-DEV.exe` पर समाप्त होने वाला कोई asset सार्वजनिक नहीं होता।
+
+इंस्टॉलेशन Claude Desktop को patch नहीं करता या replace नहीं करता।
 
 <details>
-<summary><strong>Installer behavior, application location, developer checkouts, and uninstall</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-नो-एडमिन installer पहले अपनी built-in validation checks चलाता है, फिर application files को यहाँ कॉपी करता है:
+दोनों paths बिना administrator prompt के चलते हैं, पूर्व-आवश्यकताओं को validate करते हैं, और Aura का guarded app-tree swap करते हैं। Application files install होती हैं:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-यह desktop और Start मेन्यू में **Claude Aura** तथा **Claude Aura Studio** शॉर्टकट बनाता है। थीम सेटिंग्स और sign-in डेटा application से अलग रखा जाता है, इसलिए Aura पुनः इंस्टॉल करने पर वे चुपचाप बदलते नहीं हैं।
+यह Start menu और Desktop में **Claude Aura**, **Claude Aura Studio**, और uninstall shortcuts बनाता है। Theme settings और sign-in डेटा application से अलग store होते हैं, इसलिए Aura को reinstall करने पर ये silently replace नहीं होते। Native Setup एक **Installed apps** entry और native uninstaller जोड़ता है; ZIP/CMD path अपना source-script uninstall shortcut ही रखता है।
 
-डेवलपर्स ZIP डाउनलोड करने के बजाय repository क्लोन करके भी यही installer चला सकते हैं। Checkout से पहले पूरी repository test suite रन होती है, फिर installation होती है।
+Developers repository को क्लोन कर सकते हैं और लोकल inspection के लिए स्पष्ट नाम वाला unsigned development installer बना सकते हैं। यह स्पष्ट रूप से public unsigned Setup से अलग है। Build commands, pinned compiler, verification gates, और release checklist का दस्तावेज़ [Windows installer guide](../docs/WINDOWS_INSTALLER.md) में है।
 
-<a id="uninstall"></a>
-### अनइंस्टॉल
+### Uninstall
 
-पहले फ्लोटिंग Aura बटन पर right-click करें और **Exit Claude Aura** चुनें। फिर
-**Start > Claude Aura > Uninstall Claude Aura** खोलें, या रिलीज़ में निकाले फोल्डर में मौजूद **Uninstall Claude Aura.cmd** पर दो बार क्लिक करें। अनइंस्टॉलर तब तक आगे नहीं बढ़ता जब तक ऑरा अभी भी खुला हो।
+सबसे पहले floating Aura button पर right-click करके **Exit Claude Aura** चुनें।
+ZIP install के लिए, **Start > Claude Aura > Uninstall Claude Aura** खोलें या extracted release में **Uninstall Claude Aura.cmd** पर double-click करें। किसी भी native Setup के लिए, आप **Settings > Apps > Installed apps > Claude Aura > Uninstall** भी उपयोग कर सकते हैं। `.cmd` entry मौजूद होने पर registered native uninstaller को delegate करता है। Uninstaller तब तक जारी नहीं होता जब तक Aura अभी open है।
 
-डिफ़ॉल्ट रूप से अनइंस्टॉल Aura ऐप और शॉर्टकट हटाता है, लेकिन स्थानीय थीम सेटिंग्स और ऑरा की अलग WebView साइन-इन प्रोफ़ाइल को बाद के reinstall के लिए छोड़ देता है। अनइंस्टॉलर उन फ़ोल्डरों को हटाने से पहले पूछता भी है। वह विकल्प चुनने पर केवल ऑरा की local sign-in session हटती है; यह कभी भी Claude Desktop, उपयोगकर्ता का Anthropic खाता, या server-side खाता डेटा नहीं हटाता।
+By default, uninstall Aura application और shortcuts हटाता है लेकिन बाद की reinstall के लिए local theme settings और Aura का अलग WebView sign-in profile रखता है। Uninstaller उन folders को हटाने से पहले भी पूछता है। वह optional erase Aura की local sign-in session हटाता है; यह कभी भी Claude Desktop, उपयोगकर्ता के Anthropic account या server-side account data नहीं हटाता।
 
 </details>
 <p align="right">(<a href="#readme-top">शीर्ष पर वापस</a>)</p>

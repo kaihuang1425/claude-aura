@@ -12,6 +12,9 @@
     "undo-theme-edit", "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
     "set-aura-preview", "set-aura-topmost", "refresh-aura-mirror",
+    "prompt-shelf-read", "prompt-shelf-create", "prompt-shelf-update",
+    "prompt-shelf-move", "prompt-shelf-delete", "prompt-shelf-insert",
+    "prompt-shelf-confirm-checked",
   ]);
   const studioPageMessageTypes = new Set(STUDIO_PAGE_MESSAGE_TYPES);
 
@@ -38,20 +41,29 @@
   const supportedLocales = new Set([
     "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
   ]);
+  const ordinaryStudioViews = Object.freeze([
+    "themes", "prompt-shelf", "background", "create", "settings",
+  ]);
+  const ordinaryStudioViewSet = new Set(ordinaryStudioViews);
   const rawLocale = params.get("locale") || navigator.language || "en";
   const requestedView = params.get("view");
-  const requestedViewHash = ["themes", "background", "create", "settings"].includes(requestedView)
+  const requestedViewHash = ordinaryStudioViewSet.has(requestedView)
     ? `#${requestedView}`
     : "";
   const resolvedLocale = normalizeLocale(rawLocale);
   const locale = supportedLocales.has(resolvedLocale) ? resolvedLocale : "en";
   const t = (key) => STRINGS[locale]?.[key] ?? STRINGS.en?.[key] ?? key;
-  document.documentElement.lang = locale;
+  document.documentElement.lang = locale === "zh-HKTW"
+    ? "zh-Hant-TW"
+    : locale === "zh-CN" ? "zh-Hans-CN" : locale;
   for (const node of document.querySelectorAll("[data-i18n]")) {
     node.textContent = t(node.dataset.i18n);
   }
   for (const node of document.querySelectorAll("[data-i18n-aria-label]")) {
     node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  }
+  for (const node of document.querySelectorAll("[data-i18n-placeholder]")) {
+    node.setAttribute("placeholder", t(node.dataset.i18nPlaceholder));
   }
 
   const themes = window.CLAUDE_AURA_THEMES ?? {};
@@ -99,6 +111,37 @@
   const cropBackgroundColor = document.getElementById("crop-background-color");
   const cropBackgroundChoices = [...document.querySelectorAll('input[name="crop-background-choice"]')];
   const cropCancelButtons = [...cropDialog.querySelectorAll('[value="cancel"]')];
+  const promptShelfSection = document.getElementById("prompt-shelf");
+  const promptShelfSearch = document.getElementById("prompt-shelf-search");
+  const promptShelfNew = document.getElementById("prompt-shelf-new");
+  const promptShelfCount = document.getElementById("prompt-shelf-count");
+  const promptShelfList = document.getElementById("prompt-shelf-list");
+  const promptShelfEmpty = document.getElementById("prompt-shelf-empty");
+  const promptShelfNoResults = document.getElementById("prompt-shelf-no-results");
+  const promptShelfEditorTitle = document.getElementById("prompt-shelf-editor-title");
+  const promptShelfCharacterCount = document.getElementById("prompt-shelf-character-count");
+  const promptShelfText = document.getElementById("prompt-shelf-text");
+  const promptShelfSave = document.getElementById("prompt-shelf-save");
+  const promptShelfCancel = document.getElementById("prompt-shelf-cancel");
+  const promptShelfMoveUp = document.getElementById("prompt-shelf-move-up");
+  const promptShelfMoveDown = document.getElementById("prompt-shelf-move-down");
+  const promptShelfDelete = document.getElementById("prompt-shelf-delete");
+  const promptShelfInsert = document.getElementById("prompt-shelf-insert");
+  const promptShelfInsertHelp = document.getElementById("prompt-shelf-insert-help");
+  const promptShelfStatus = document.getElementById("prompt-shelf-status");
+  const promptShelfRefresh = document.getElementById("prompt-shelf-refresh");
+  const promptShelfRetryAction = document.getElementById("prompt-shelf-retry-action");
+  const promptShelfConfirmChecked = document.getElementById("prompt-shelf-confirm-checked");
+  const promptShelfItemTemplate = document.getElementById("prompt-shelf-item-template");
+  const promptShelfDeleteDialog = document.getElementById("prompt-shelf-delete-dialog");
+  const promptShelfDeleteConfirm = document.getElementById("prompt-shelf-delete-confirm");
+  const promptShelfDeleteCancel = document.getElementById("prompt-shelf-delete-cancel");
+  const ordinaryStudioPages = new Map(ordinaryStudioViews.map((view) => [
+    view,
+    document.querySelector(`[data-studio-page="${view}"]`),
+  ]));
+  const ordinaryStudioRailLinks = [...document.querySelectorAll("[data-studio-view]")]
+    .filter((link) => ordinaryStudioViewSet.has(link.dataset.studioView));
   const cropInputs = {
     x: document.getElementById("crop-x"),
     y: document.getElementById("crop-y"),
@@ -197,11 +240,40 @@
   })();
   let manualWelcomeResumePending = resumeManualWelcome;
   let editorController = null;
+  let activeStudioView = null;
+  let activateStudioView = () => false;
+  const studioViewScrollPositions = new Map();
   let editorStudioStyle = null;
   let editorStudioThemeId = null;
   let editorLauncherStyle = null;
   let editorLauncherMarkUrl = null;
   let requestedThemeMarkUrl = "";
+  const promptShelfUuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+  const promptShelfIdPattern = /^[a-f0-9]{32}$/;
+  const promptShelfBridgeVersion = 1;
+  const promptShelf = {
+    session: null,
+    revision: 0,
+    commandEpoch: 0,
+    items: [],
+    selectedId: null,
+    baseline: "",
+    loaded: false,
+    persistenceAvailable: true,
+    insertionAvailable: false,
+    insertState: "idle",
+    pending: null,
+    pendingTimer: null,
+    readRequests: new Set(),
+    readTimer: null,
+    readFailed: false,
+    readRetrying: false,
+    conflict: false,
+    focusAfterRefresh: null,
+    statusKey: "promptShelfStatusLoading",
+    statusTone: "busy",
+  };
+  let renderPromptShelf = () => {};
 
   const effectiveStudioMode = () => (!state.enabled || state.appearance === "system")
     ? (studioColorScheme?.matches ? "dark" : "light")
@@ -530,6 +602,8 @@
       adjustAvatar.disabled = state.hasAvatar && !state.avatarPreviewUrl;
     }
     for (const themeId of cardFrames.keys()) layoutCardCrop(themeId);
+    editorController?.refreshCardPreview?.();
+    renderPromptShelf();
   };
 
   // ── HOST BRIDGE (WO-05 / WO-07 wire the other side in aura-ui.ps1) ──────
@@ -541,9 +615,11 @@
     "name", "label", "description", "labels", "descriptions", "swatches", "preview", "launcher", "studioPreview",
     "studioPreviewFrame", "studioStyle", "source", "sourceRecipe",
   ]);
-  // Theme metadata remains localized only in the three frozen product locales.
-  // Studio UI languages outside that set use the canonical host label/description.
-  const hostThemeLocales = new Set(["en", "zh-CN", "zh-HKTW"]);
+  // Theme metadata can opt into any Studio interface locale. English remains
+  // the required fallback when a theme has not supplied the active locale.
+  const hostThemeLocales = new Set([
+    "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
+  ]);
   const hostThemePreviewKeys = new Set(["chrome", "background", "surface", "accent", "text"]);
   const hostThemeLauncherKeys = new Set([
     "asset", "surface", "surfaceHover", "foreground", "accent", "border", "radius", "borderWidth",
@@ -578,6 +654,14 @@
     const labels = hostLocalizedText(value.labels, 120);
     const descriptions = hostLocalizedText(value.descriptions, 500);
     if (labels === null || descriptions === null) return null;
+    if ((labels === undefined) !== (descriptions === undefined)) return null;
+    if (labels !== undefined) {
+      const labelLocales = Object.keys(labels);
+      const descriptionLocales = Object.keys(descriptions);
+      if (!Object.hasOwn(labels, "en")
+          || labelLocales.length !== descriptionLocales.length
+          || labelLocales.some((locale) => !Object.hasOwn(descriptions, locale))) return null;
+    }
 
     let swatches;
     if (value.swatches !== undefined) {
@@ -891,8 +975,12 @@
     for (const incomingTheme of incoming) {
       const existing = Object.hasOwn(themes, incomingTheme.name) ? themes[incomingTheme.name] : null;
       if (existing) {
-        const labels = { ...(existing.labels ?? {}), ...(incomingTheme.labels ?? {}) };
-        const descriptions = { ...(existing.descriptions ?? {}), ...(incomingTheme.descriptions ?? {}) };
+        const labels = incomingTheme.labels === undefined
+          ? existing.labels
+          : { ...incomingTheme.labels };
+        const descriptions = incomingTheme.descriptions === undefined
+          ? existing.descriptions
+          : { ...incomingTheme.descriptions };
         const preview = { ...(existing.preview ?? {}), ...(incomingTheme.preview ?? {}) };
         const bundledPreview = bundledThemeIds.has(incomingTheme.name) && incomingTheme.studioPreview == null
           ? existing.studioPreview
@@ -926,6 +1014,497 @@
     bridge.postMessage(message);
     return true;
   };
+
+  const promptShelfFormat = (key, ...values) => values.reduce(
+    (copy, value, index) => copy.replaceAll(`{${index}}`, String(value)),
+    t(key),
+  );
+  const promptShelfIntlLocale = () => {
+    if (state.locale === "zh-HKTW") return "zh-Hant-TW";
+    if (state.locale === "zh-CN") return "zh-Hans-CN";
+    return state.locale || "en";
+  };
+  const promptShelfFormatNumber = (value) => (
+    Number(value).toLocaleString(promptShelfIntlLocale())
+  );
+  const promptShelfFold = (value) => (
+    String(value).toLocaleLowerCase(promptShelfIntlLocale())
+  );
+  const newPromptShelfRequestId = () => {
+    const randomUuid = window.crypto?.randomUUID?.();
+    if (typeof randomUuid === "string" && promptShelfUuidPattern.test(randomUuid.toLowerCase())) {
+      return randomUuid.toLowerCase();
+    }
+    if (typeof window.crypto?.getRandomValues !== "function") return null;
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+  const promptShelfTextIsValid = (value) => (
+    typeof value === "string"
+    && value.trim().length > 0
+    && value.length <= 8000
+    && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value)
+  );
+  const promptShelfHasExactKeys = (value, keys) => {
+    const names = Object.keys(value);
+    return names.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+  };
+  const selectedPromptShelfItem = () => (
+    promptShelf.items.find((item) => item.id === promptShelf.selectedId) ?? null
+  );
+  const promptShelfIsDirty = () => promptShelfText.value !== promptShelf.baseline;
+  const setPromptShelfStatus = (key, tone = "ok") => {
+    promptShelf.statusKey = key;
+    promptShelf.statusTone = tone;
+    renderPromptShelf();
+  };
+  const announcePromptShelfStatus = (key, tone = "ok") => {
+    promptShelf.statusKey = key;
+    promptShelf.statusTone = tone;
+    promptShelfStatus.textContent = t(key);
+    promptShelfStatus.dataset.tone = tone;
+  };
+  const clearPromptShelfPending = () => {
+    window.clearTimeout(promptShelf.pendingTimer);
+    promptShelf.pendingTimer = null;
+    promptShelf.pending = null;
+  };
+  const clearPromptShelfReads = () => {
+    window.clearTimeout(promptShelf.readTimer);
+    promptShelf.readTimer = null;
+    promptShelf.readRequests.clear();
+  };
+  const promptShelfDisplay = (text) => {
+    const lines = text.split(/\r?\n/);
+    const firstNonEmpty = lines.findIndex((line) => line.trim());
+    const title = firstNonEmpty >= 0
+      ? lines[firstNonEmpty].trim().replace(/\s+/g, " ")
+      : text.trim().replace(/\s+/g, " ");
+    const preview = lines.slice(firstNonEmpty + 1).join(" ").trim().replace(/\s+/g, " ");
+    return { title, preview };
+  };
+
+  renderPromptShelf = () => {
+    const selected = selectedPromptShelfItem();
+    const pending = Boolean(promptShelf.pending);
+    const dirty = promptShelfIsDirty();
+    const textValid = promptShelfTextIsValid(promptShelfText.value);
+    const searching = Boolean(promptShelfSearch.value.trim());
+    const insertionReady = Boolean(
+      selected
+      && state.enabled
+      && promptShelf.insertionAvailable
+      && promptShelf.insertState === "idle"
+      && !dirty
+      && !pending);
+
+    promptShelfSection.setAttribute(
+      "aria-busy",
+      String(pending || promptShelf.readRequests.size > 0),
+    );
+    promptShelfText.readOnly = pending;
+    promptShelfCount.textContent = promptShelfFormatNumber(promptShelf.items.length);
+    promptShelfNew.disabled = !promptShelf.loaded || pending
+      || !promptShelf.persistenceAvailable || promptShelf.items.length >= 50;
+    promptShelfSave.disabled = !promptShelf.loaded || promptShelf.conflict || pending
+      || !promptShelf.persistenceAvailable || !textValid || !dirty;
+    promptShelfSave.textContent = selected ? t("promptShelfSaveChanges") : t("promptShelfSave");
+    promptShelfCancel.disabled = !promptShelf.loaded || pending || (!dirty && !selected);
+    promptShelfMoveUp.disabled = !promptShelf.loaded || pending || searching
+      || !promptShelf.persistenceAvailable || !selected
+      || promptShelf.items.indexOf(selected) <= 0;
+    promptShelfMoveDown.disabled = !promptShelf.loaded || pending || searching
+      || !promptShelf.persistenceAvailable || !selected
+      || promptShelf.items.indexOf(selected) >= promptShelf.items.length - 1;
+    promptShelfDelete.disabled = !promptShelf.loaded || pending
+      || !promptShelf.persistenceAvailable || !selected;
+    promptShelfInsert.disabled = !insertionReady;
+    promptShelfRefresh.hidden = !promptShelf.readFailed && !promptShelf.readRetrying;
+    const insertionPending = promptShelf.pending?.action === "insert";
+    promptShelfRetryAction.hidden = !promptShelf.pending?.recoveryVisible || insertionPending;
+    promptShelfRetryAction.setAttribute(
+      "aria-disabled",
+      String(Boolean(
+        insertionPending
+        || (promptShelf.pending?.recoveryVisible && !promptShelf.pending?.stalled),
+      )),
+    );
+    promptShelfConfirmChecked.hidden = promptShelf.insertState !== "uncertain";
+    promptShelfConfirmChecked.disabled = pending || promptShelf.insertState !== "uncertain";
+    let insertHelpKey = "promptShelfInsertHelp";
+    if (!state.enabled) insertHelpKey = "promptShelfInsertUnavailable";
+    else if (!promptShelf.insertionAvailable) insertHelpKey = "promptShelfStatusInsertUnavailable";
+    else if (promptShelf.insertState === "uncertain") {
+      insertHelpKey = "promptShelfStatusInsertUncertain";
+    } else if (promptShelf.insertState === "busy") {
+      insertHelpKey = "promptShelfStatusInsertBusy";
+    } else if (dirty) {
+      insertHelpKey = "promptShelfStatusFinishEditing";
+    }
+    promptShelfInsertHelp.textContent = t(insertHelpKey);
+
+    promptShelfEditorTitle.textContent = selected
+      ? promptShelfFormat("promptShelfEditorSelectedTitle",
+        promptShelf.items.indexOf(selected) + 1)
+      : t("promptShelfEditorNewTitle");
+    const characterCount = promptShelfFormatNumber(promptShelfText.value.length);
+    const characterLimit = promptShelfFormatNumber(8000);
+    promptShelfCharacterCount.textContent = `${characterCount} / ${characterLimit}`;
+    promptShelfCharacterCount.setAttribute(
+      "aria-label",
+      promptShelfFormat("promptShelfCharacterCountLabel", characterCount, characterLimit),
+    );
+    promptShelfStatus.textContent = t(promptShelf.statusKey);
+    promptShelfStatus.dataset.tone = promptShelf.statusTone;
+
+    const query = promptShelfFold(promptShelfSearch.value.trim());
+    const filtered = promptShelf.items.filter((item) => (
+      !query || promptShelfFold(item.text).includes(query)
+    ));
+    promptShelfList.replaceChildren();
+    for (const item of filtered) {
+      const itemIndex = promptShelf.items.indexOf(item);
+      const node = promptShelfItemTemplate.content.firstElementChild.cloneNode(true);
+      const button = node.querySelector(".prompt-shelf-item-button");
+      const display = promptShelfDisplay(item.text);
+      node.classList.toggle("is-selected", item.id === promptShelf.selectedId);
+      button.dataset.promptShelfId = item.id;
+      button.setAttribute("aria-current", item.id === promptShelf.selectedId ? "true" : "false");
+      node.querySelector(".prompt-shelf-item-order").textContent = String(itemIndex + 1).padStart(2, "0");
+      node.querySelector(".prompt-shelf-item-title").textContent = display.title;
+      const preview = node.querySelector(".prompt-shelf-item-preview");
+      preview.textContent = display.preview;
+      preview.hidden = !display.preview;
+      promptShelfList.append(node);
+    }
+    promptShelfEmpty.hidden = promptShelf.items.length > 0;
+    promptShelfNoResults.hidden = promptShelf.items.length === 0 || filtered.length > 0;
+  };
+
+  const requestPromptShelfState = () => {
+    if (!bridge || promptShelf.readRequests.size > 0) return false;
+    const requestId = newPromptShelfRequestId();
+    if (!requestId) {
+      setPromptShelfStatus("promptShelfStatusActionFailed", "error");
+      return false;
+    }
+    promptShelf.readRequests.add(requestId);
+    promptShelf.readFailed = false;
+    promptShelf.statusKey = "promptShelfStatusLoading";
+    promptShelf.statusTone = "busy";
+    if (!send({ type: "prompt-shelf-read", version: promptShelfBridgeVersion, requestId })) {
+      promptShelf.readRequests.delete(requestId);
+      promptShelf.readFailed = true;
+      setPromptShelfStatus("promptShelfStatusDisconnected", "error");
+      return false;
+    }
+    promptShelf.readTimer = window.setTimeout(() => {
+      if (!promptShelf.readRequests.delete(requestId)) return;
+      promptShelf.readTimer = null;
+      promptShelf.readFailed = true;
+      setPromptShelfStatus("statusWelcomeRetry", "error");
+    }, 5000);
+    renderPromptShelf();
+    return true;
+  };
+
+  const sendPromptShelfAction = (type, action, fields = {}) => {
+    if (promptShelf.pending || !promptShelfUuidPattern.test(promptShelf.session ?? "")) return false;
+    const requestId = newPromptShelfRequestId();
+    if (!requestId) {
+      setPromptShelfStatus("promptShelfStatusActionFailed", "error");
+      return false;
+    }
+    const message = {
+      type,
+      version: promptShelfBridgeVersion,
+      requestId,
+      session: promptShelf.session,
+      revision: promptShelf.revision,
+      commandEpoch: promptShelf.commandEpoch,
+      ...fields,
+    };
+    if (!send(message)) {
+      setPromptShelfStatus("promptShelfStatusDisconnected", "error");
+      return false;
+    }
+    promptShelf.pending = {
+      requestId,
+      type,
+      action,
+      message: Object.freeze({ ...message }),
+      stalled: false,
+      recoveryVisible: false,
+    };
+    setPromptShelfStatus(
+      action === "insert" ? "promptShelfStatusInserting" : "promptShelfStatusSaving",
+      "busy",
+    );
+    promptShelf.pendingTimer = window.setTimeout(() => {
+      if (promptShelf.pending?.requestId !== requestId) return;
+      promptShelf.pending.stalled = true;
+      promptShelf.pending.recoveryVisible = action !== "insert";
+      setPromptShelfStatus(
+        action === "insert" ? "promptShelfStatusInsertDelayed" : "promptShelfStatusUnknown",
+        action === "insert" ? "busy" : "error",
+      );
+    }, 10000);
+    renderPromptShelf();
+    return true;
+  };
+
+  const selectPromptShelfItem = (id, { focusEditor = false } = {}) => {
+    const item = promptShelf.items.find((candidate) => candidate.id === id);
+    if (!item || promptShelf.pending) return false;
+    if (promptShelfIsDirty()) {
+      if (promptShelf.selectedId === id) {
+        if (focusEditor) promptShelfText.focus();
+        return true;
+      }
+      announcePromptShelfStatus("promptShelfStatusFinishEditing", "error");
+      return false;
+    }
+    promptShelf.selectedId = item.id;
+    promptShelf.baseline = item.text;
+    promptShelfText.value = item.text;
+    promptShelf.conflict = false;
+    setPromptShelfStatus("promptShelfStatusReady");
+    if (focusEditor) promptShelfText.focus();
+    return true;
+  };
+
+  const beginNewPromptShelfDraft = ({ focusEditor = true } = {}) => {
+    if (promptShelf.pending) return false;
+    if (promptShelfIsDirty()) {
+      setPromptShelfStatus("promptShelfStatusFinishEditing", "error");
+      return false;
+    }
+    promptShelf.selectedId = null;
+    promptShelf.baseline = "";
+    promptShelfText.value = "";
+    promptShelf.conflict = false;
+    setPromptShelfStatus("promptShelfStatusReady");
+    if (focusEditor) promptShelfText.focus();
+    return true;
+  };
+
+  const receivePromptShelfState = (data) => {
+    if (!data || typeof data !== "object" || Array.isArray(data)
+        || !promptShelfHasExactKeys(data, [
+          "type", "version", "requestId", "session", "revision", "commandEpoch",
+          "persistenceAvailable", "insertionAvailable", "insertState", "items",
+        ])
+        || data.version !== promptShelfBridgeVersion
+        || !promptShelf.readRequests.has(data.requestId)
+        || !promptShelfUuidPattern.test(data.session)
+        || !Number.isSafeInteger(data.revision) || data.revision < 0
+        || !Number.isSafeInteger(data.commandEpoch) || data.commandEpoch < 0
+        || typeof data.persistenceAvailable !== "boolean"
+        || typeof data.insertionAvailable !== "boolean"
+        || !["idle", "busy", "uncertain"].includes(data.insertState)
+        || !Array.isArray(data.items) || data.items.length > 50) return false;
+    const ids = new Set();
+    const items = [];
+    for (const item of data.items) {
+      if (!item || typeof item !== "object" || Array.isArray(item)
+          || Object.keys(item).length !== 2
+          || !promptShelfIdPattern.test(item.id)
+          || ids.has(item.id)
+          || !promptShelfTextIsValid(item.text)) return false;
+      ids.add(item.id);
+      items.push(Object.freeze({ id: item.id, text: item.text }));
+    }
+
+    clearPromptShelfReads();
+    const priorDraft = promptShelfText.value;
+    const wasDirty = promptShelfIsDirty();
+    const priorSelectedId = promptShelf.selectedId;
+    const priorRevision = promptShelf.revision;
+    const hadLoaded = promptShelf.loaded;
+    const incomingConflict = hadLoaded && wasDirty && data.revision !== priorRevision;
+    promptShelf.session = data.session;
+    promptShelf.revision = data.revision;
+    promptShelf.commandEpoch = data.commandEpoch;
+    promptShelf.items = items;
+    promptShelf.loaded = true;
+    promptShelf.readFailed = false;
+    promptShelf.readRetrying = false;
+    promptShelf.conflict = promptShelf.conflict || incomingConflict;
+    promptShelf.persistenceAvailable = data.persistenceAvailable;
+    promptShelf.insertionAvailable = data.insertionAvailable;
+    promptShelf.insertState = data.insertState;
+
+    const selected = items.find((item) => item.id === priorSelectedId) ?? null;
+    if (selected) {
+      promptShelf.selectedId = selected.id;
+      promptShelf.baseline = selected.text;
+      promptShelfText.value = wasDirty ? priorDraft : selected.text;
+    } else if (wasDirty) {
+      promptShelf.selectedId = null;
+      promptShelf.baseline = "";
+      promptShelfText.value = priorDraft;
+    } else {
+      promptShelf.selectedId = null;
+      promptShelf.baseline = "";
+      promptShelfText.value = "";
+    }
+    if (!data.persistenceAvailable) {
+      promptShelf.statusKey = "promptShelfStatusStorageUnavailable";
+      promptShelf.statusTone = "error";
+    } else if (promptShelf.conflict) {
+      promptShelf.statusKey = "promptShelfStatusStale";
+      promptShelf.statusTone = "error";
+    } else if (data.insertState === "uncertain") {
+      promptShelf.statusKey = "promptShelfStatusInsertUncertain";
+      promptShelf.statusTone = "error";
+    } else if (data.insertState === "busy") {
+      promptShelf.statusKey = "promptShelfStatusInsertBusy";
+      promptShelf.statusTone = "busy";
+    } else if (promptShelf.statusKey === "promptShelfStatusLoading") {
+      promptShelf.statusKey = "promptShelfStatusReady";
+      promptShelf.statusTone = "ok";
+    } else if ([
+      "promptShelfStatusInsertBusy",
+      "promptShelfStatusInsertDelayed",
+      "promptShelfStatusInsertUncertain",
+    ].includes(promptShelf.statusKey) && !promptShelf.pending) {
+      promptShelf.statusKey = "promptShelfStatusReady";
+      promptShelf.statusTone = "ok";
+    }
+    renderPromptShelf();
+    const focusTarget = promptShelf.focusAfterRefresh;
+    promptShelf.focusAfterRefresh = null;
+    if (focusTarget && window.location.hash === "#prompt-shelf") {
+      requestAnimationFrame(() => {
+        if (focusTarget.kind === "new") promptShelfNew.focus();
+        else if (focusTarget.kind === "editor") promptShelfText.focus();
+        else if (focusTarget.kind === "confirm" && !promptShelfConfirmChecked.hidden) {
+          promptShelfConfirmChecked.focus();
+        } else if (focusTarget.kind === "item" && promptShelfIdPattern.test(focusTarget.id ?? "")) {
+          const itemTarget = promptShelfList.querySelector(
+            `[data-prompt-shelf-id="${focusTarget.id}"]`,
+          );
+          if (itemTarget) itemTarget.focus();
+          else if (promptShelfIsDirty() || promptShelfNew.disabled) promptShelfText.focus();
+          else promptShelfNew.focus();
+        }
+      });
+    }
+    return true;
+  };
+
+  const receivePromptShelfResult = (data) => {
+    if (!data || typeof data !== "object" || Array.isArray(data)
+        || !promptShelfHasExactKeys(data, [
+          "type", "version", "requestId", "session", "action",
+          "ok", "code", "revision", "commandEpoch", "itemId",
+        ])
+        || data.version !== promptShelfBridgeVersion
+        || !promptShelf.pending
+        || data.requestId !== promptShelf.pending.requestId
+        || data.session !== promptShelf.session
+        || data.action !== promptShelf.pending.action
+        || typeof data.ok !== "boolean"
+        || typeof data.code !== "string"
+        || !Number.isSafeInteger(data.revision) || data.revision < 0
+        || !Number.isSafeInteger(data.commandEpoch) || data.commandEpoch < 0
+        || typeof data.itemId !== "string"
+        || (data.itemId && !promptShelfIdPattern.test(data.itemId))) return false;
+
+    if (data.code === "delayed" && data.action === "insert") {
+      promptShelf.insertState = "busy";
+      setPromptShelfStatus("promptShelfStatusInsertDelayed", "busy");
+      return true;
+    }
+
+    const action = promptShelf.pending.action;
+    clearPromptShelfPending();
+    promptShelf.revision = data.revision;
+    promptShelf.commandEpoch = data.commandEpoch;
+    if (data.ok) {
+      if (action === "create" && data.itemId) promptShelf.selectedId = data.itemId;
+      if (action === "create" || action === "update") {
+        promptShelf.baseline = promptShelfText.value;
+        promptShelf.conflict = false;
+      }
+      if (action === "delete" && data.itemId === promptShelf.selectedId) {
+        promptShelf.selectedId = null;
+        promptShelf.baseline = "";
+        promptShelfText.value = "";
+      }
+      if (action === "confirm") promptShelf.insertState = "idle";
+      const successKeys = {
+        create: "promptShelfStatusCreated",
+        update: "promptShelfStatusUpdated",
+        move: "promptShelfStatusMoved",
+        delete: "promptShelfStatusDeleted",
+        insert: "promptShelfStatusInserted",
+        confirm: "promptShelfStatusChecked",
+      };
+      setPromptShelfStatus(successKeys[action] ?? "promptShelfStatusReady");
+    } else {
+      const errorKeys = {
+        stale: "promptShelfStatusStale",
+        "request-conflict": "promptShelfStatusUnknown",
+        "not-found": "promptShelfStatusNotFound",
+        "invalid-text": "promptShelfStatusInvalidText",
+        capacity: "promptShelfStatusFull",
+        "storage-unavailable": "promptShelfStatusStorageUnavailable",
+        "write-failed": "promptShelfStatusActionFailed",
+        "runtime-unavailable": "promptShelfStatusInsertUnavailable",
+        busy: "promptShelfStatusInsertBusy",
+        "not-inserted": "promptShelfStatusInsertFailed",
+        uncertain: "promptShelfStatusInsertUncertain",
+      };
+      if (data.code === "uncertain") promptShelf.insertState = "uncertain";
+      if (data.code === "stale" && promptShelfIsDirty()) promptShelf.conflict = true;
+      setPromptShelfStatus(errorKeys[data.code] ?? "promptShelfStatusActionFailed", "error");
+    }
+    promptShelf.focusAfterRefresh = action === "delete" && data.ok
+      ? { kind: "new" }
+      : action === "create" || action === "update"
+        ? { kind: "editor" }
+        : action === "insert" && data.code === "uncertain"
+          ? { kind: "confirm" }
+          : data.itemId
+            ? { kind: "item", id: data.itemId }
+            : { kind: "editor" };
+    requestPromptShelfState();
+    return true;
+  };
+
+  const getThemeCardPreview = (themeId) => {
+    if (typeof themeId !== "string" || themeId.length > 40 || !hostThemeIdPattern.test(themeId)
+        || !Object.hasOwn(themes, themeId)) return null;
+    const theme = themes[themeId];
+    const imageUrl = theme && theme.name === themeId
+      ? studioPreviewUrl(theme.studioPreview, theme)
+      : null;
+    if (!imageUrl) return null;
+    const localizedLabel = localized(theme.labels, theme.label);
+    const label = hostText(localizedLabel, 120) ?? hostText(theme.label, 120) ?? themeId;
+    const defaultCrop = Object.freeze({ ...defaultCropForTheme(themeId) });
+    const crop = Object.freeze({ ...cropForTheme(themeId) });
+    return Object.freeze({ themeId, imageUrl, crop, defaultCrop, label });
+  };
+  // This callback is handed to the editor before openCropEditor is initialized.
+  // createController stores it and only invokes it in response to a later user action.
+  const openThemeCardPreview = (themeId, opener) => {
+    const preview = getThemeCardPreview(themeId);
+    if (!preview || cropDialog.open) return false;
+    openCropEditor({
+      kind: "card",
+      theme: preview.themeId,
+      imageUrl: preview.imageUrl,
+      crop: preview.crop,
+      defaultCrop: preview.defaultCrop,
+    }, opener);
+    return true;
+  };
   window.CLAUDE_AURA_STUDIO_MESSAGE_TYPES = STUDIO_PAGE_MESSAGE_TYPES;
   editorController = window.CLAUDE_AURA_EDITOR?.createController({
     locale,
@@ -933,6 +1512,13 @@
     setStatus,
     translate: t,
     focusThemeCard,
+    getThemeCardPreview,
+    openThemeCardPreview,
+    onOrdinaryViewRestore: (view) => activateStudioView(view, {
+      updateHistory: false,
+      focusPage: false,
+      restoreScroll: false,
+    }),
     onStudioStyleChange: (style, themeId, launcherStyle, launcherUrl) => {
       editorStudioStyle = style;
       editorStudioThemeId = style ? themeId : null;
@@ -1039,12 +1625,38 @@
   if (bridge) {
     bridge.addEventListener("message", (event) => {
       const data = event.data ?? {};
+      if (data.type === "prompt-shelf-state") {
+        receivePromptShelfState(data);
+        return;
+      }
+      if (data.type === "prompt-shelf-result") {
+        receivePromptShelfResult(data);
+        return;
+      }
+      if (data.type === "prompt-shelf-changed") {
+        if (promptShelfHasExactKeys(data, [
+          "type", "version", "session", "revision", "commandEpoch",
+        ])
+            && data.version === promptShelfBridgeVersion
+            && data.session === promptShelf.session
+            && Number.isSafeInteger(data.revision) && data.revision >= 0
+            && Number.isSafeInteger(data.commandEpoch) && data.commandEpoch >= 0
+            && !promptShelf.pending) {
+          // A body-free invalidation supersedes any in-flight snapshot. Drop
+          // its correlation and ask explicitly for one current replacement.
+          clearPromptShelfReads();
+          requestPromptShelfState();
+        }
+        return;
+      }
       if (data.type === "aura-mirror") {
         if (editorController?.isActive?.()) editorController.receiveMirror?.(data);
         return;
       }
       if (data.type === "state") {
         state.connected = true;
+        const promptShelfRuntimeChanged = typeof data.enabled === "boolean"
+          && state.enabled !== data.enabled;
         const builtInAuthoringChanged = state.builtInAuthoring !== (data.builtInAuthoring === true);
         state.builtInAuthoring = data.builtInAuthoring === true;
         if (studioRoot) {
@@ -1134,6 +1746,10 @@
           setCropError(t("saveFailed"));
         }
         reflect();
+        if (promptShelfRuntimeChanged && promptShelf.loaded
+            && !promptShelf.pending && promptShelf.readRequests.size === 0) {
+          requestPromptShelfState();
+        }
         // Picking an avatar opens the framing editor at once, so the crop is
         // positioned before it settles — mirroring the theme-card preview flow.
         if (data.action === "set-avatar" && data.actionSucceeded && data.tone !== "error"
@@ -1160,6 +1776,156 @@
   } else {
     setStatus(t("statusDemo"), "busy");
   }
+
+  promptShelfSearch.addEventListener("input", renderPromptShelf);
+  promptShelfText.addEventListener("input", renderPromptShelf);
+  promptShelfNew.addEventListener("click", () => beginNewPromptShelfDraft());
+  promptShelfList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-prompt-shelf-id]");
+    if (button) selectPromptShelfItem(button.dataset.promptShelfId, { focusEditor: true });
+  });
+  promptShelfList.addEventListener("keydown", (event) => {
+    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    const buttons = [...promptShelfList.querySelectorAll("[data-prompt-shelf-id]")];
+    if (!buttons.length) return;
+    const current = buttons.indexOf(event.target.closest("[data-prompt-shelf-id]"));
+    let next = current;
+    if (event.key === "ArrowUp") next = Math.max(0, current - 1);
+    if (event.key === "ArrowDown") next = Math.min(buttons.length - 1, current + 1);
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = buttons.length - 1;
+    const button = buttons[next];
+    if (!button) return;
+    event.preventDefault();
+    const id = button.dataset.promptShelfId;
+    if (selectPromptShelfItem(id)) {
+      promptShelfList.querySelector(`[data-prompt-shelf-id="${id}"]`)?.focus();
+    }
+  });
+  promptShelfSave.addEventListener("click", () => {
+    const text = promptShelfText.value;
+    if (!promptShelfTextIsValid(text)) {
+      setPromptShelfStatus(
+        text.trim() ? "promptShelfStatusInvalidText" : "promptShelfStatusBlank",
+        "error",
+      );
+      return;
+    }
+    const selected = selectedPromptShelfItem();
+    if (selected) {
+      sendPromptShelfAction(
+        "prompt-shelf-update",
+        "update",
+        { id: selected.id, text },
+      );
+    } else {
+      sendPromptShelfAction("prompt-shelf-create", "create", { text });
+    }
+  });
+  promptShelfCancel.addEventListener("click", () => {
+    const selected = selectedPromptShelfItem();
+    promptShelf.baseline = selected?.text ?? "";
+    promptShelfText.value = selected?.text ?? "";
+    promptShelf.conflict = false;
+    setPromptShelfStatus("promptShelfStatusReady");
+    promptShelfText.focus();
+  });
+  promptShelfMoveUp.addEventListener("click", () => {
+    const selected = selectedPromptShelfItem();
+    if (selected) {
+      sendPromptShelfAction(
+        "prompt-shelf-move",
+        "move",
+        { id: selected.id, direction: "up" },
+      );
+    }
+  });
+  promptShelfMoveDown.addEventListener("click", () => {
+    const selected = selectedPromptShelfItem();
+    if (selected) {
+      sendPromptShelfAction(
+        "prompt-shelf-move",
+        "move",
+        { id: selected.id, direction: "down" },
+      );
+    }
+  });
+  promptShelfDelete.addEventListener("click", () => {
+    const selected = selectedPromptShelfItem();
+    if (!selected || promptShelf.pending) return;
+    promptShelfDeleteDialog.dataset.itemId = selected.id;
+    promptShelfDeleteDialog.showModal();
+    requestAnimationFrame(() => promptShelfDeleteCancel.focus());
+  });
+  promptShelfDeleteConfirm.addEventListener("click", () => {
+    const id = promptShelfDeleteDialog.dataset.itemId;
+    if (!promptShelfIdPattern.test(id ?? "")) return;
+    promptShelfDeleteDialog.close("delete");
+    sendPromptShelfAction("prompt-shelf-delete", "delete", { id });
+  });
+  promptShelfDeleteDialog.addEventListener("close", () => {
+    delete promptShelfDeleteDialog.dataset.itemId;
+    if (promptShelfDeleteDialog.returnValue !== "delete" && !promptShelfDelete.disabled) {
+      promptShelfDelete.focus();
+    }
+  });
+  promptShelfInsert.addEventListener("click", () => {
+    const selected = selectedPromptShelfItem();
+    if (selected) {
+      sendPromptShelfAction("prompt-shelf-insert", "insert", { id: selected.id });
+    }
+  });
+  promptShelfConfirmChecked.addEventListener("click", () => {
+    sendPromptShelfAction("prompt-shelf-confirm-checked", "confirm");
+  });
+  promptShelfRefresh.addEventListener("click", () => {
+    promptShelf.readRetrying = true;
+    const selected = selectedPromptShelfItem();
+    promptShelf.focusAfterRefresh = selected
+      ? { kind: "item", id: selected.id }
+      : { kind: "new" };
+    requestPromptShelfState();
+  });
+  promptShelfRetryAction.addEventListener("click", () => {
+    const pending = promptShelf.pending;
+    if (!pending?.stalled || !pending.message || pending.action === "insert") return;
+    if (!send(pending.message)) {
+      setPromptShelfStatus("promptShelfStatusDisconnected", "error");
+      return;
+    }
+    pending.stalled = false;
+    pending.recoveryVisible = true;
+    setPromptShelfStatus(
+      pending.action === "insert" ? "promptShelfStatusInserting" : "promptShelfStatusSaving",
+      "busy",
+    );
+    window.clearTimeout(promptShelf.pendingTimer);
+    promptShelf.pendingTimer = window.setTimeout(() => {
+      if (promptShelf.pending?.requestId !== pending.requestId) return;
+      promptShelf.pending.stalled = true;
+      promptShelf.pending.recoveryVisible = true;
+      setPromptShelfStatus("promptShelfStatusUnknown", "error");
+    }, 10000);
+  });
+  const ensurePromptShelfState = () => {
+    if (bridge && !promptShelf.loaded && !promptShelf.pending
+        && promptShelf.readRequests.size === 0) {
+      requestPromptShelfState();
+    }
+  };
+  promptShelfSection.addEventListener("focusin", ensurePromptShelfState);
+  document.querySelector('.rail-item[href="#prompt-shelf"]')?.addEventListener("click", () => {
+    if (promptShelf.loaded && !promptShelf.pending && promptShelf.readRequests.size === 0) {
+      requestPromptShelfState();
+    } else {
+      ensurePromptShelfState();
+    }
+  });
+  const promptShelfRequestedAtLaunch = requestedViewHash === "#prompt-shelf"
+    || window.location.hash === "#prompt-shelf";
+  if (!bridge) setPromptShelfStatus("promptShelfStatusDisconnected", "error");
+  else if (promptShelfRequestedAtLaunch) requestPromptShelfState();
+
   const handleStudioColorSchemeChange = () => {
     if (!state.enabled || state.appearance === "system") applyStudioStyle();
   };
@@ -1286,15 +2052,9 @@
   };
 
   adjustThemePreview.addEventListener("click", () => {
-    const theme = themes[state.theme];
-    const imageUrl = theme ? studioPreviewUrl(theme.studioPreview, theme) : null;
-    openCropEditor({
-      kind: "card",
-      theme: state.theme,
-      imageUrl,
-      crop: cropForTheme(state.theme),
-      defaultCrop: defaultCropForTheme(state.theme),
-    }, adjustThemePreview);
+    if (!openThemeCardPreview(state.theme, adjustThemePreview)) {
+      setStatus(t("previewUnavailable"), "error");
+    }
   });
   adjustBackground.addEventListener("click", () => {
     openCropEditor({
@@ -1412,42 +2172,120 @@
     if (pendingCropSave) event.preventDefault();
   });
 
-  const railLinks = [...document.querySelectorAll(".rail-item")];
-  const activateRailLink = (link, { updateHistory = false, smooth = true } = {}) => {
-    const target = link?.hash ? document.querySelector(link.hash) : null;
-    if (!link || !target || !content || link.hidden) return false;
-    const contentBounds = content.getBoundingClientRect();
-    const targetTop = content.scrollTop + target.getBoundingClientRect().top - contentBounds.top;
+  const studioViewFromHash = (hash) => {
+    const view = typeof hash === "string" && hash.startsWith("#") ? hash.slice(1) : "";
+    return ordinaryStudioViewSet.has(view) ? view : "themes";
+  };
+  const reflectStudioViewNavigation = (view) => {
+    for (const link of ordinaryStudioRailLinks) {
+      const selected = link.dataset.studioView === view;
+      link.classList.toggle("is-current", selected);
+      if (selected) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    }
+  };
+  activateStudioView = (
+    view,
+    {
+      updateHistory = false,
+      focusPage = false,
+      restoreScroll = true,
+    } = {},
+  ) => {
+    const nextView = ordinaryStudioViewSet.has(view) ? view : "themes";
+    const nextPage = ordinaryStudioPages.get(nextView);
+    if (!nextPage || !content || editorController?.isActive?.()) return false;
+    if (activeStudioView && activeStudioView !== nextView) {
+      studioViewScrollPositions.set(activeStudioView, content.scrollTop);
+    }
+    for (const [pageView, page] of ordinaryStudioPages) {
+      if (!page) continue;
+      const selected = pageView === nextView;
+      page.hidden = !selected;
+      page.inert = !selected;
+      page.classList.toggle("is-current-page", selected);
+    }
+    activeStudioView = nextView;
+    studioRoot.dataset.studioView = nextView;
+    reflectStudioViewNavigation(nextView);
     if (updateHistory) {
-      try { history.replaceState(null, "", link.hash); } catch {}
+      try {
+        const canonicalUrl = new URL(window.location.href);
+        canonicalUrl.searchParams.delete("view");
+        canonicalUrl.hash = nextView;
+        history.replaceState(
+          null,
+          "",
+          `${canonicalUrl.pathname}${canonicalUrl.search}${canonicalUrl.hash}`,
+        );
+      } catch {}
     }
-    // Fragment navigation can move WebView's hidden root scroller as well as
-    // this pane. Keep the native shell fixed and move only Studio content.
+    // A fragment can displace WebView's hidden root scroller. Keep the native
+    // shell fixed and restore only the selected Studio page inside .content.
     window.scrollTo(0, 0);
-    content.scrollTo({
-      top: Math.max(0, targetTop),
-      left: 0,
-      behavior: smooth && !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
-        ? "smooth"
-        : "auto",
-    });
-    for (const other of railLinks) {
-      other.classList.remove("is-current");
-      other.removeAttribute("aria-current");
+    const scrollTop = restoreScroll && !focusPage
+      ? studioViewScrollPositions.get(nextView) ?? 0
+      : 0;
+    content.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
+    if (nextView === "prompt-shelf") ensurePromptShelfState();
+    if (focusPage) {
+      requestAnimationFrame(() => {
+        const heading = nextPage.querySelector("h1[tabindex='-1'], h2[tabindex='-1']");
+        if (!heading) return;
+        try { heading.focus({ preventScroll: true }); } catch { heading.focus(); }
+      });
     }
-    link.classList.add("is-current");
-    link.setAttribute("aria-current", "page");
     return true;
   };
-  for (const link of railLinks) {
+  const focusAdjacentStudioView = (event, link) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+    const previous = event.key === "ArrowUp";
+    const next = event.key === "ArrowDown";
+    const boundary = event.key === "Home" || event.key === "End";
+    if (!previous && !next && !boundary) return false;
+    const availableLinks = ordinaryStudioRailLinks.filter((candidate) => !candidate.hidden);
+    const index = availableLinks.indexOf(link);
+    if (index < 0 || !availableLinks.length) return false;
+    event.preventDefault();
+    const nextIndex = event.key === "Home" ? 0
+      : event.key === "End" ? availableLinks.length - 1
+        : (index + (previous ? -1 : 1) + availableLinks.length) % availableLinks.length;
+    availableLinks[nextIndex].focus();
+    return true;
+  };
+  for (const link of ordinaryStudioRailLinks) {
     link.addEventListener("click", (event) => {
-      if (activateRailLink(link, { updateHistory: true })) event.preventDefault();
+      if (activateStudioView(link.dataset.studioView, {
+        updateHistory: true,
+        focusPage: true,
+        restoreScroll: false,
+      })) event.preventDefault();
+    });
+    link.addEventListener("keydown", (event) => {
+      if (focusAdjacentStudioView(event, link)) return;
+      if (event.key !== " " && event.key !== "Spacebar") return;
+      event.preventDefault();
+      link.click();
     });
   }
+  window.addEventListener("hashchange", () => {
+    if (editorController?.isActive?.() || window.location.hash === "#editor") return;
+    const view = studioViewFromHash(window.location.hash);
+    const validHash = window.location.hash === `#${view}`;
+    activateStudioView(view, {
+      updateHistory: Boolean(window.location.hash) && !validHash,
+      focusPage: false,
+      restoreScroll: true,
+    });
+  });
   const initialDestination = requestedViewHash || window.location.hash;
-  const initialRailLink = railLinks.find((link) => link.hash === initialDestination && !link.hidden)
-    ?? railLinks.find((link) => link.hash === "#themes");
-  activateRailLink(initialRailLink, { updateHistory: Boolean(requestedViewHash), smooth: false });
+  const initialView = studioViewFromHash(initialDestination);
+  activateStudioView(initialView, {
+    updateHistory: Boolean(requestedViewHash)
+      || (Boolean(window.location.hash) && window.location.hash !== `#${initialView}`),
+    focusPage: false,
+    restoreScroll: false,
+  });
 
   setStatus(t("statusReady"));
   reflect();

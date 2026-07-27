@@ -131,38 +131,53 @@ Claude Desktop은 선택 사항이며 별도 애플리케이션입니다.
 <a id="installation"></a>
 ### 설치
 
-1. [최신 릴리스 ZIP](https://github.com/kaihuang1425/claude-aura/releases)을 다운로드합니다.
-2. 파일 탐색기에서 ZIP을 오른쪽 클릭하고 **Extract All**을 선택합니다.
-3. 압축 해제한 폴더를 열고 **Install Claude Aura.cmd**를 두 번 클릭합니다.
-4. 설치 프로그램이 닫히고 **Claude Aura** 창이 열릴 때까지 기다립니다.
-5. `claude.ai`에서 요청하면 Aura에서 로그인합니다.
-6. 떠있는 Aura 버튼을 클릭해 Studio를 열고 **Themes**를 선택합니다.
+[최신 릴리스](https://github.com/kaihuang1425/claude-aura/releases)를 열고 다음 경로 중 하나를 선택하세요. 두 경로 모두 현재 Windows 계정에 동일한 버전을 설치합니다.
 
-설치는 Claude Desktop을 패치하거나 교체하지 않습니다.
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | 더 단순한 안내형 설치 프로그램이 필요하고 Windows가 이를 정상적으로 열 때 | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` 와 해당 `.sha256`, `.manifest.json` |
+| **ZIP + CMD fallback** | Windows가 unsigned Setup에 경고를 표시하거나 차단할 때, 또는 가독성 있는 소스 스크립트를 선호할 때 | `claude-aura-v<version>.zip` 와 해당 `.sha256` |
+
+#### Path 1 ??Unsigned Setup
+
+1. **Assets**에서 `-UNSIGNED.exe`와 `.sha256`, `.manifest.json`을 다운로드하세요. GitHub가 자동으로 생성한 **Source code** 아카이브는 사용하지 마세요.
+2. Setup 파일의 SHA-256을 companion 파일 두 개와 비교합니다. 값이 다르면 다운로드를 중단하고 두 파일을 모두 삭제하세요.
+3. 이 설치 프로그램의 publisher는 개발자가 코드 서명 인증서를 가지고 있지 않아 Windows가 확인할 수 없습니다. Windows에서 경고가 표시되거나 차단하면 경고를 우회하지 말고 Path 2를 사용하세요.
+4. 정상적으로 열리면 Setup을 따르세요. Node.js와 WebView2를 확인하고 `%LOCALAPPDATA%\ClaudeAura` 아래에 설치한 뒤 **Installed apps** 등록과 바로가기를 추가하고 Aura를 실행합니다.
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. **Assets**에서 `claude-aura-v<version>.zip`와 일치하는 `.sha256`를 다운로드하세요. GitHub가 자동으로 생성한 **Source code** 아카이브는 사용하지 마세요.
+2. ZIP의 SHA-256을 companion 파일과 비교합니다. 값이 다르면 중단하고 두 파일을 모두 삭제하세요.
+3. **Extract all**을 선택하세요. 추출된 `claude-aura` 폴더에서 **Install Claude Aura.cmd**를 더블 클릭합니다. ZIP 미리보기에서 실행하지 마세요.
+4. 읽을 수 있는 CMD/PowerShell 설치기는 Node.js와 WebView2를 확인하고 Aura를 설치한 다음 바로가기를 만들고 열어줍니다. 이 경로에는 Authenticode publisher identity가 없으며 **Installed apps** 항목을 추가하지 않습니다.
+
+어느 경로를 사용하든 `claude.ai`가 요청할 경우 Aura에 로그인하세요. 떠 있는 Aura 버튼을 클릭한 다음 **Open Studio**를 선택하고 **Themes**를 선택하세요.
+
+`-UNSIGNED`가 없는 `Claude-Aura-Setup-v<version>.exe`는 별도의 signed path이며, 해당 릴리스 노트에 명시된 publisher가 표시되어야 합니다. `-UNSIGNED-DEV.exe`로 끝나는 asset은 공개되지 않습니다.
+
+설치는 Claude Desktop을 패치하거나 대체하지 않습니다.
 
 <details>
-<summary><strong>설치 동작, 앱 위치, 개발자 체크아웃, 제거</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-일반(비승격) 설치는 내장 유효성 검사를 실행한 뒤, 애플리케이션 파일을 다음 위치로 복사합니다:
+두 경로 모두 관리자 프롬프트 없이 실행되고, 필수 구성 요소를 검증한 뒤 Aura의 가드된 앱 트리 교체를 수행합니다. 앱 파일은 다음 위치에 설치됩니다.
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-데스크톱과 시작 메뉴에 **Claude Aura** 및 **Claude Aura Studio** 바로가기를 생성합니다. 테마 설정과 로그인 데이터는 앱과 분리되어 저장되어 Aura 재설치 시 자동으로 교체되지 않습니다.
+Start 메뉴와 데스크톱에 **Claude Aura**, **Claude Aura Studio**, 그리고 제거 바로가기를 만듭니다. 테마 설정과 로그인 데이터는 앱과 분리 저장되므로 Aura를 재설치해도 조용히 바뀌지 않습니다. 네이티브 Setup은 **Installed apps** 항목과 네이티브 제거자를 추가합니다; ZIP/CMD 경로는 소스 스크립트 제거 바로가기를 유지합니다.
 
-개발자는 ZIP 대신 저장소를 클론하고 동일한 설치 프로그램을 체크아웃에서 실행할 수 있습니다. 체크아웃은 설치 전 전체 저장소 테스트를 실행합니다.
+개발자는 저장소를 클론하고 로컬 검사용으로 명시적으로 이름 지정된 unsigned 개발자 설치 프로그램을 빌드할 수 있습니다. 이는 공개되지 않은 unsigned Setup와 구분됩니다. 빌드 명령, pinned 컴파일러, 검증 게이트 및 릴리스 체크리스트는
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md)에 문서화되어 있습니다.
 
-<a id="uninstall"></a>
-### 제거
+### Uninstall
 
-먼저 떠 있는 Aura 버튼에서 오른쪽 클릭 후 **Exit Claude Aura**를 선택합니다.
-다음으로 **Start > Claude Aura > Uninstall Claude Aura**를 열거나, 추출된 릴리스의
-**Uninstall Claude Aura.cmd**를 두 번 클릭합니다. Aura가 열려 있는 동안 제거는 진행되지 않습니다.
+먼저 떠 있는 Aura 버튼을 오른쪽 클릭하고 **Exit Claude Aura**를 선택하세요.
+ZIP 설치에서는 **Start > Claude Aura > Uninstall Claude Aura**를 열거나 추출된 릴리스의 **Uninstall Claude Aura.cmd**를 더블 클릭합니다. 두 native Setup 모두에 대해 **Settings > Apps > Installed apps > Claude Aura > Uninstall**도 사용할 수 있습니다. `.cmd` 항목은 존재할 때 등록된 native uninstaller로 위임합니다. Uninstaller는 Aura가 아직 열려 있는 동안 계속되지 않습니다.
 
-기본적으로 제거는 Aura 앱과 바로가지만 삭제하고, 로컬 테마 설정과 별도 WebView 로그인 프로필은
-향후 재설치용으로 유지합니다. 제거 동작은 해당 폴더 삭제 여부를 추가로 묻습니다. 선택 삭제는 Aura 로컬 로그인 세션만 제거하며, Claude Desktop, 사용자 Anthropic 계정,
-서버측 계정 데이터는 절대 삭제하지 않습니다.
+기본적으로 uninstall은 Aura 앱과 바로가기를 삭제하지만, 향후 재설치를 위해 로컬 테마 설정과 Aura의 별도 WebView 로그인 프로필은 유지합니다. Uninstaller는 이러한 폴더를 삭제하기 전에도 확인을 요청합니다. 이 선택적 삭제는 Aura의 로컬 로그인 세션을 제거합니다. Claude Desktop, 사용자 Anthropic 계정 또는 서버 측 계정 데이터를 삭제하지 않습니다.
 
 </details>
 <p align="right">(<a href="#readme-top">맨 위로</a>)</p>

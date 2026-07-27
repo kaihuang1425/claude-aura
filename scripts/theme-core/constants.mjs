@@ -7,13 +7,21 @@ export const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.
 export const THEMES_DIR = path.join(PROJECT_ROOT, "themes");
 export const THEME_REGISTRY_PATH = path.join(THEMES_DIR, "registry.json");
 export const THEME_KIT_FILENAME = "theme.json";
+// Built-in and legacy schema-v1 theme metadata stays deliberately small and
+// release-authored in these three locales.
 export const SUPPORTED_LOCALES = Object.freeze(["en", "zh-CN", "zh-HKTW"]);
-export const STUDIO_THEME_SCHEMA_VERSION = 3;
-// Studio-authored kit documents. v2 predates the WO-21 greeting surface; v3 adds
-// the optional newChatGreetingStyle. Both load through the Studio path and are
-// normalized up to the current version in memory. Legacy hand-authored kits stay
-// schemaVersion 1 and load through the registry-entry path.
-export const STUDIO_KIT_SCHEMA_VERSIONS = new Set([2, 3]);
+// Studio-authored themes may opt into any interface locale. Presence in both
+// localized maps is the portable support declaration; English is the required
+// runtime fallback.
+export const STUDIO_METADATA_LOCALES = Object.freeze([
+  "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
+]);
+export const STUDIO_THEME_SCHEMA_VERSION = 4;
+// Studio-authored kit documents. v2 predates the WO-21 greeting surface; v3
+// adds the optional newChatGreetingStyle; v4 makes localized metadata sparse
+// and user-selected. Older Studio documents normalize to v4 in memory. Legacy
+// hand-authored kits stay schemaVersion 1 and load through the registry path.
+export const STUDIO_KIT_SCHEMA_VERSIONS = new Set([2, 3, 4]);
 // WO-21 new-chat greeting style allowlists. The portable theme carries only
 // presentation; personal phrases and names stay host-owned and never enter here.
 export const GREETING_FONT_CATEGORIES = new Set([

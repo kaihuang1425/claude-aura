@@ -934,7 +934,9 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
     "artUnavailable",
     "avatarUnavailable",
   ]) delete runtimeSettings[diagnosticKey];
-  runtimeSettings.q = runtimeSettings.backgroundScope === "full-window" ? "f" : "c";
+  runtimeSettings.q = runtimeSettings.backgroundScope === "sidebar"
+    ? "s"
+    : runtimeSettings.backgroundScope === "content" ? "c" : "f";
   delete runtimeSettings.backgroundScope;
   // WO-21: ship the compiled greeting as compact `g` — `p` = effective phrase list
   // (host-owned custom wording), `s` = 1 flags theme-owned styling (delivered as CSS).

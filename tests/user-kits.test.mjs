@@ -1,7 +1,12 @@
 // user-kits tests. Extracted from the former monolithic tests/run-tests.mjs.
 import { test, runIfMain } from "./support/harness.mjs";
 import { deflateSync } from "node:zlib";
-import { STUDIO_MAX_HISTORY, STUDIO_MAX_PATCH_CHANGES } from "../scripts/theme-core.mjs";
+import {
+  STUDIO_MAX_HISTORY,
+  STUDIO_MAX_PATCH_CHANGES,
+  STUDIO_METADATA_LOCALES,
+  studioReframeCoverScale,
+} from "../scripts/theme-core.mjs";
 import { expandRendererCss } from "../scripts/theme-core/compile.mjs";
 import {
   atomicWriteText,
@@ -11,8 +16,11 @@ import {
   materializeSourceArtwork,
   persistStudioInternal,
   renameStudioPath,
+  studioFrameFromLegacy,
   studioPaths,
+  studioWebpDimensions,
 } from "../scripts/theme-core/studio.mjs";
+import { STUDIO_FRAME_VIEWPORTS } from "../scripts/theme-core/constants.mjs";
 import {
   validateLauncherPngBytes,
   validateStudioThemeKitDocument,
@@ -231,6 +239,49 @@ async function assertLauncherMarkHistoryAndGarbageCollection() {
   }
 }
 
+test("background cover framing follows an explicit scope without losing the user's crop", () => {
+  const image = { width: 800, height: 1200 };
+  const viewport = { width: 1180, height: 720 };
+  const contentCover = studioFrameFromLegacy("center", "cover", image, viewport, "content").scale;
+  const fullCover = studioFrameFromLegacy("center", "cover", image, viewport, "full-window").scale;
+  assert.equal(studioReframeCoverScale(
+    contentCover,
+    image,
+    viewport,
+    "content",
+    "full-window",
+  ), fullCover, "Changing scope did not rebase a cover-cropped background");
+  const zoomed = Math.round(contentCover * 1.2 * 10000) / 10000;
+  const rebasedZoom = studioReframeCoverScale(zoomed, image, viewport, "content", "full-window");
+  assert(Math.abs(
+    (rebasedZoom - fullCover) / (3 - fullCover)
+      - (zoomed - contentCover) / (3 - contentCover),
+  ) < 0.0001, "Changing scope lost the user's available crop zoom");
+  assert.equal(studioReframeCoverScale(
+    rebasedZoom,
+    image,
+    viewport,
+    "full-window",
+    "content",
+  ), zoomed, "Returning to the prior scope did not restore the prior crop");
+  const nearLimit = 2.8;
+  const rebasedNearLimit = studioReframeCoverScale(
+    nearLimit,
+    image,
+    viewport,
+    "content",
+    "full-window",
+  );
+  assert(rebasedNearLimit < 3, "Reframing clipped a recoverable crop at the scale ceiling");
+  assert.equal(studioReframeCoverScale(
+    rebasedNearLimit,
+    image,
+    viewport,
+    "full-window",
+    "content",
+  ), nearLimit, "A near-limit crop did not survive a scope round trip");
+});
+
 test("user theme kits append, apply, persist, warn on collisions, and uninstall by one folder", async () => {
   await assertStoredLauncherMarksRejectEscapingJunctions();
   await assertLauncherMarkHistoryAndGarbageCollection();
@@ -240,6 +291,17 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
   const userThemesDir = path.join(temporary, "user-themes");
   const themeId = "constructor";
   try {
+    assert.deepEqual(STUDIO_METADATA_LOCALES, [
+      "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
+    ], "The portable Studio metadata locale allowlist drifted from the interface locale set");
+    for (const [input, expected] of [
+      ["en-GB", "en"], ["hi-IN", "hi"], ["es-MX", "es"], ["fr-CA", "fr"],
+      ["id-ID", "id"], ["ja-JP", "ja"], ["ko-KR", "ko"], ["pt-PT", "pt-BR"],
+      ["de-CH", "de"], ["it-IT", "it"], ["vi-VN", "vi"], ["pl-PL", "pl"],
+      ["tr-TR", "tr"], ["zh-Hans-CN", "zh-CN"], ["zh-Hant-HK", "zh-HKTW"],
+    ]) {
+      assert.equal(normalizeLocale(input), expected, `${input} did not normalize to ${expected}`);
+    }
     await fs.mkdir(authoringRoot, { recursive: true });
     run(process.execPath, [cliPath, "scaffold", themeId], { cwd: authoringRoot });
     const sourceKit = path.join(authoringRoot, "themes", themeId);
@@ -814,9 +876,14 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
         `${idolThemeId} duplication lost its trusted source recipe reference`);
       assert.deepEqual(activeStudioDocument.controlOverrides, [],
         `${idolThemeId} duplication marked untouched controls as overridden`);
-      const legacyLayerIndex = activeStudioDocument.artworkLayers.findIndex((layer) => layer.legacy);
-      assert(legacyLayerIndex >= 0, `${idolThemeId} duplication lost its legacy layer framing`);
+      const legacyLayerIndex = activeStudioDocument.artworkLayers.findIndex(
+        (layer) => layer.legacy && layer.role === "background",
+      );
+      assert(legacyLayerIndex >= 0, `${idolThemeId} duplication lost its legacy background framing`);
       const legacyLayer = activeStudioDocument.artworkLayers[legacyLayerIndex];
+      const legacyImageDimensions = studioWebpDimensions(await fs.readFile(
+        path.join(activeStudioDirectory, legacyLayer.path),
+      ));
       const idolCompiled = await compileTheme({
         config: { ...DEFAULT_CONFIG, theme: activeStudioDocument.id },
         themeKitDirectory: activeStudioDirectory,
@@ -840,6 +907,29 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       assert.equal(idolRuntime.artLayers[legacyLayerIndex].s, legacyLayer.legacy.size);
       assert.equal(Object.hasOwn(idolRuntime.artLayers[legacyLayerIndex], "n"), false,
         "An untouched legacy layer emitted a Studio frame tuple");
+
+      studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
+        mode: "shared", token: "backgroundScope", value: "content",
+      }));
+      const legacyFramesInContent = Object.fromEntries(
+        Object.entries(STUDIO_FRAME_VIEWPORTS).map(([preset, viewport]) => [
+          preset,
+          studioFrameFromLegacy(
+            legacyLayer.legacy.position,
+            legacyLayer.legacy.size,
+            legacyImageDimensions,
+            viewport,
+            "content",
+          ),
+        ]),
+      );
+      assert.deepEqual(studioResult.state.layers[legacyLayerIndex].frames, legacyFramesInContent,
+        `${idolThemeId} did not immediately reframe its legacy background for Main area only`);
+      idolRuntime = readPayloadSettings(studioResult.payload);
+      assert.equal(idolRuntime.artLayers[legacyLayerIndex].p, legacyLayer.legacy.position);
+      assert.equal(idolRuntime.artLayers[legacyLayerIndex].s, legacyLayer.legacy.size);
+      assert.equal(Object.hasOwn(idolRuntime.artLayers[legacyLayerIndex], "n"), false,
+        "A scope-only legacy reframe prematurely replaced its portable position and size");
 
       studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
         mode: "shared", token: "radius", value: sourceCompiled.theme.shape.card === 31 ? 30 : 31,
@@ -887,6 +977,10 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       assert.equal(Object.hasOwn(idolRuntime.artLayers[legacyLayerIndex], "s"), false);
       assert.equal(idolRuntime.artLayers[legacyLayerIndex].n[2], 60,
         "The first explicit framing edit did not replace legacy position/size with a frame tuple");
+      assert.equal(
+        idolRuntime.artLayers[legacyLayerIndex].n[4],
+        Math.round(legacyFramesInContent.normal.scale * 100) / 100,
+        "The first explicit framing edit discarded the scale from the selected background scope");
       studioResult = await studioRequest(mutationRequest(studioResult, "discard-theme-edit"));
       assert.equal(studioResult.state.active, false);
     }
@@ -894,6 +988,59 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     studioResult = await studioRequest({ type: "create-theme-copy", theme: "default" });
     const studioThemeId = studioResult.state.id;
     const studioDestination = path.join(studioUserThemesDir, studioThemeId);
+    const studioSchemaSource = JSON.parse(await fs.readFile(
+      path.join(studioEditorRoot, "active", "theme.json"), "utf8",
+    ));
+    const englishOnlyStudioDocument = structuredClone(studioSchemaSource);
+    englishOnlyStudioDocument.labels = { en: studioSchemaSource.labels.en };
+    englishOnlyStudioDocument.descriptions = { en: studioSchemaSource.descriptions.en };
+    assert.deepEqual(
+      Object.keys(validateStudioThemeKitDocument(
+        englishOnlyStudioDocument,
+        "English-only Studio theme",
+      ).labels),
+      ["en"],
+      "Studio schema v4 did not accept English as its only selected metadata locale",
+    );
+    const everyLocaleStudioDocument = structuredClone(studioSchemaSource);
+    everyLocaleStudioDocument.labels = Object.fromEntries(
+      STUDIO_METADATA_LOCALES.map((locale) => [locale, `Theme ${locale}`]),
+    );
+    everyLocaleStudioDocument.descriptions = Object.fromEntries(
+      STUDIO_METADATA_LOCALES.map((locale) => [locale, `Description ${locale}`]),
+    );
+    assert.deepEqual(
+      Object.keys(validateStudioThemeKitDocument(
+        everyLocaleStudioDocument,
+        "All-locale Studio theme",
+      ).labels),
+      STUDIO_METADATA_LOCALES,
+      "Studio schema v4 did not accept the complete fifteen-locale selection",
+    );
+    const mismatchedLocaleDocument = structuredClone(englishOnlyStudioDocument);
+    mismatchedLocaleDocument.labels.ja = "Japanese label";
+    assert.throws(
+      () => validateStudioThemeKitDocument(mismatchedLocaleDocument, "Mismatched Studio theme"),
+      /labels and descriptions must support the same locales/,
+      "Studio schema v4 accepted mismatched localized metadata keysets",
+    );
+    const missingEnglishDocument = structuredClone(englishOnlyStudioDocument);
+    missingEnglishDocument.labels = { ja: "Japanese label" };
+    missingEnglishDocument.descriptions = { ja: "Japanese description" };
+    assert.throws(
+      () => validateStudioThemeKitDocument(missingEnglishDocument, "No-English Studio theme"),
+      /must include English/,
+      "Studio schema v4 accepted a theme without its English fallback",
+    );
+    const legacyStudioDocument = structuredClone(studioSchemaSource);
+    legacyStudioDocument.schemaVersion = 3;
+    const upgradedLegacyStudioDocument = validateStudioThemeKitDocument(
+      legacyStudioDocument,
+      "Legacy Studio theme",
+    );
+    assert.equal(upgradedLegacyStudioDocument.schemaVersion, STUDIO_THEME_SCHEMA_VERSION);
+    assert.deepEqual(Object.keys(upgradedLegacyStudioDocument.labels), Object.keys(legacyStudioDocument.labels),
+      "Studio schema v3 migration changed its localized metadata selection");
     assert.equal(studioThemeId, "default-copy");
     assert.deepEqual({
       active: studioResult.state.active,
@@ -1044,6 +1191,20 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     assert.equal(studioResult.state.shared.backgroundScope, "content",
       "Redo did not restore the persisted background-scope edit");
     assert(studioResult.state.revision > contentRevision);
+    studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
+      mode: "shared", token: "backgroundScope", value: "sidebar",
+    }));
+    assert.equal(studioResult.state.shared.backgroundScope, "sidebar",
+      "The editor did not accept the panel-only background scope");
+    studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
+    assert.equal(studioResult.state.shared.backgroundScope, "content",
+      "Undo did not restore Main area only after a panel-only edit");
+    studioResult = await studioRequest(mutationRequest(studioResult, "redo-theme-edit"));
+    assert.equal(studioResult.state.shared.backgroundScope, "sidebar",
+      "Redo did not restore the panel-only background scope");
+    studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
+      mode: "shared", token: "backgroundScope", value: "content",
+    }));
 
     for (const [token, value] of [["promptWidth", 0.64], ["promptX", 0.1], ["promptY", -0.08]]) {
       studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
@@ -1448,6 +1609,7 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     studioResult = hydratedLauncherMark;
 
     const sourceWebp = path.join(PROJECT_ROOT, "assets", "theme-art", "anime-twilight", "card-preview.webp");
+    const sourceImageDimensions = studioWebpDimensions(await fs.readFile(sourceWebp));
     const revisionBeforeUnsafeAsset = studioResult.state.revision;
     await assert.rejects(studioRequest(mutationRequest(studioResult, "pick-theme-layer-image", {
       index: -1, role: "decoration", appearance: "light", context: "new-chat",
@@ -1477,8 +1639,102 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       assert.equal(studioResult.state.layers[index].context, "conversation",
         "New Studio artwork did not keep the page selected when it was added");
       assert(studioResult.state.layers[index].bytes > 0 && studioResult.state.layers[index].bytes < 400_000);
+      if (layerRoles[index] === "background") {
+        for (const [preset, viewport] of Object.entries(STUDIO_FRAME_VIEWPORTS)) {
+          assert.deepEqual(
+            studioResult.state.layers[index].frames[preset],
+            studioFrameFromLegacy("center", "cover", sourceImageDimensions, viewport, "content"),
+            `New background ${index + 1} was not cover-cropped to the selected ${preset} content canvas`,
+          );
+        }
+      }
     }
     assert.equal(studioResult.state.feedback.budget.sourceArtworkBytes < 1_400_000, true);
+    const backgroundFramesInContent = new Map([0, 5].map((index) => [
+      index,
+      structuredClone(studioResult.state.layers[index].frames),
+    ]));
+    const nonBackgroundFrames = structuredClone(studioResult.state.layers[1].frames);
+    studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
+      mode: "shared", token: "backgroundScope", value: "full-window",
+    }));
+    for (const index of [0, 5]) {
+      for (const [preset, viewport] of Object.entries(STUDIO_FRAME_VIEWPORTS)) {
+        const before = backgroundFramesInContent.get(index)[preset];
+        const after = studioResult.state.layers[index].frames[preset];
+        assert.deepEqual(
+          { ...after, scale: before.scale },
+          before,
+          `Changing scope unexpectedly changed the ${preset} crop controls for background ${index + 1}`,
+        );
+        assert.equal(
+          after.scale,
+          studioReframeCoverScale(
+            before.scale,
+            sourceImageDimensions,
+            viewport,
+            "content",
+            "full-window",
+          ),
+          `Changing scope did not rebase background ${index + 1} to the ${preset} full-window canvas`,
+        );
+      }
+    }
+    assert.deepEqual(studioResult.state.layers[1].frames, nonBackgroundFrames,
+      "Changing background scope altered a non-background artwork layer");
+    studioResult = await studioRequest(mutationRequest(studioResult, "set-theme-token", {
+      mode: "shared", token: "backgroundScope", value: "content",
+    }));
+    for (const index of [0, 5]) {
+      assert.deepEqual(studioResult.state.layers[index].frames, backgroundFramesInContent.get(index),
+        `Returning to Main area only did not restore background ${index + 1}'s crop`);
+    }
+    const atomicScopeRoleBaseline = structuredClone(studioResult.state);
+    const explicitNormalScale = 1.37;
+    const atomicScopeRoleChanges = [
+      { kind: "token", mode: "shared", token: "backgroundScope", value: "full-window" },
+      { kind: "layer", index: 0, preset: "shared", property: "role", value: "hero" },
+      { kind: "layer", index: 1, preset: "shared", property: "role", value: "background" },
+      { kind: "layer", index: 1, preset: "normal", property: "scale", value: explicitNormalScale },
+    ];
+    studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: atomicScopeRoleChanges,
+    }));
+    assert.equal(studioResult.state.revision, atomicScopeRoleBaseline.revision + 1,
+      "A scope-and-role batch did not remain one history mutation");
+    assert.equal(studioResult.state.layers[0].role, "hero");
+    assert.deepEqual(studioResult.state.layers[0].frames, atomicScopeRoleBaseline.layers[0].frames,
+      "A background changed to a non-background role was reframed by a global scope edit");
+    assert.equal(studioResult.state.layers[1].role, "background");
+    assert.equal(studioResult.state.layers[1].frames.normal.scale, explicitNormalScale,
+      "An explicit frame scale did not win over automatic scope reframing");
+    assert.equal(
+      studioResult.state.layers[1].frames.wide.scale,
+      studioReframeCoverScale(
+        atomicScopeRoleBaseline.layers[1].frames.wide.scale,
+        sourceImageDimensions,
+        STUDIO_FRAME_VIEWPORTS.wide,
+        "content",
+        "full-window",
+      ),
+      "A layer becoming a background did not preserve its wide crop across the same scope batch",
+    );
+    const scopeRoleResult = {
+      scope: studioResult.state.shared.backgroundScope,
+      layers: structuredClone(studioResult.state.layers.slice(0, 2)),
+    };
+    studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
+    assert.equal(studioResult.state.shared.backgroundScope, "content");
+    assert.deepEqual(studioResult.state.layers.slice(0, 2), atomicScopeRoleBaseline.layers.slice(0, 2),
+      "Undo did not restore the complete pre-batch scope and crops");
+    studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [...atomicScopeRoleChanges].reverse(),
+    }));
+    assert.deepEqual({
+      scope: studioResult.state.shared.backgroundScope,
+      layers: studioResult.state.layers.slice(0, 2),
+    }, scopeRoleResult, "Scope/role patch ordering changed the final crop");
+    studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
     const ninthImportPath = path.join(studioImportsRoot, `layer-${"f".repeat(32)}.webp`);
     await fs.copyFile(sourceWebp, ninthImportPath);
     const revisionAtLayerLimit = studioResult.state.revision;
@@ -1516,16 +1772,20 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
     })), /metadata field is invalid/,
     "Studio accepted an inherited object property as a metadata field");
     await assert.rejects(studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
-      changes: [{ kind: "metadata", field: "label", locale: "fr", value: "Unsupported locale" }],
+      changes: [{ kind: "metadata", field: "label", locale: "ru", value: "Unsupported locale" }],
     })), /metadata locale has an unsupported value/,
-    "Studio accepted localized metadata outside the three supported locales");
+    "Studio accepted localized metadata outside the fifteen supported locales");
+    await assert.rejects(studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [{ kind: "metadata", field: "label", locale: "fr", value: "Not enabled" }],
+    })), /metadata locale is not enabled/,
+    "Studio wrote metadata for a supported locale before the user enabled it");
     await assert.rejects(studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
       changes: [{ kind: "metadata", field: "label", locale: "en", value: "x".repeat(81) }],
-    })), /label is required and must be at most 80 characters/,
+    })), /label must be at most 80 characters/,
     "Studio accepted an overlong localized label");
     await assert.rejects(studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
       changes: [{ kind: "metadata", field: "label", locale: "en", value: "Bad\u0001label" }],
-    })), /label is required and must be at most 80 characters/,
+    })), /contain no control characters/,
     "Studio accepted a control character in localized metadata");
     await assert.rejects(studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
       changes: [
@@ -1623,6 +1883,103 @@ test("user theme kits append, apply, persist, warn on collisions, and uninstall 
       "One Redo did not restore Studio's shell material");
     assert.equal(studioResult.payload, patchResult.payload,
       "Redo did not reproduce the patch's exact validated payload");
+
+    const localeRevision = studioResult.state.revision;
+    studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [{ kind: "metadata-locale", locale: "ja", enabled: true }],
+    }));
+    assert.equal(studioResult.state.revision, localeRevision + 1,
+      "Enabling one theme locale did not create one revision");
+    assert.equal(studioResult.state.actionSucceeded, false,
+      "An enabled locale with empty generated fields was treated as saveable");
+    assert.equal(studioResult.state.error, "invalid-metadata");
+    assert.deepEqual(studioResult.state.feedback.errors, [{
+      code: "invalid-metadata",
+      field: "metadata.labels.ja",
+    }], "An incomplete locale did not identify its first generated field");
+    assert.equal(studioResult.state.metadata.labels.ja, "");
+    assert.equal(studioResult.state.metadata.descriptions.ja, "");
+    const incompleteLocaleState = JSON.parse(await fs.readFile(editorStatePath, "utf8"));
+    assert.equal(incompleteLocaleState.currentDocument.labels.ja, "",
+      "The generated locale fields were not persisted in the editable draft");
+    assert.equal(Object.hasOwn(incompleteLocaleState.lastValidDocument.labels, "ja"), false,
+      "An incomplete locale replaced Aura's last-valid theme");
+
+    const hydratedLocaleDraft = await hydrateStudioDraft({
+      configPath: studioConfigPath,
+      userThemesDir: studioUserThemesDir,
+      editorRoot: studioEditorRoot,
+      locale: "ja",
+    });
+    assert.equal(hydratedLocaleDraft.state.metadata.labels.ja, "",
+      "Restart hydration discarded an incomplete selected locale");
+    assert.equal(typeof hydratedLocaleDraft.payload, "string",
+      "Restart hydration did not keep the last-valid payload active");
+    studioResult = hydratedLocaleDraft;
+
+    studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [
+        { kind: "metadata", field: "label", locale: "ja", value: "Japanese Studio Theme" },
+        { kind: "metadata", field: "description", locale: "ja", value: "Japanese theme description." },
+      ],
+    }));
+    assert.equal(studioResult.state.actionSucceeded, true,
+      "Completing both generated locale fields did not validate the draft");
+    assert.equal(studioResult.state.metadata.labels.ja, "Japanese Studio Theme");
+    assert.equal(studioResult.state.metadata.descriptions.ja, "Japanese theme description.");
+    studioResult = await hydrateStudioDraft({
+      configPath: studioConfigPath,
+      userThemesDir: studioUserThemesDir,
+      editorRoot: studioEditorRoot,
+      locale: "ja",
+    });
+    assert.equal(studioResult.state.metadata.labels.ja, "Japanese Studio Theme",
+      "Restart hydration rejected an incomplete locale snapshot in Undo history");
+
+    const runtimeLocaleThemesDir = path.join(temporary, "runtime-locale-themes");
+    const runtimeLocaleThemeDir = path.join(runtimeLocaleThemesDir, studioThemeId);
+    await fs.mkdir(runtimeLocaleThemesDir);
+    await fs.cp(path.join(studioEditorRoot, "active"), runtimeLocaleThemeDir, { recursive: true });
+    const japaneseRuntimeTheme = (await listThemes({
+      locale: "ja",
+      userThemesDir: runtimeLocaleThemesDir,
+    })).find((theme) => theme.name === studioThemeId);
+    const fallbackRuntimeTheme = (await listThemes({
+      locale: "ko",
+      userThemesDir: runtimeLocaleThemesDir,
+    })).find((theme) => theme.name === studioThemeId);
+    assert.equal(japaneseRuntimeTheme?.label, "Japanese Studio Theme",
+      "Runtime selection did not use an enabled locale");
+    assert.equal(fallbackRuntimeTheme?.label, patchedMetadata.labels.en,
+      "Runtime selection did not fall back to English for an unsupported theme locale");
+
+    studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
+    assert.equal(studioResult.state.actionSucceeded, false,
+      "Undo did not restore the incomplete generated locale fields");
+    assert.equal(studioResult.state.metadata.labels.ja, "");
+    studioResult = await studioRequest(mutationRequest(studioResult, "redo-theme-edit"));
+    assert.equal(studioResult.state.metadata.labels.ja, "Japanese Studio Theme",
+      "Redo did not restore the completed locale fields");
+    studioResult = await studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [{ kind: "metadata-locale", locale: "ja", enabled: false }],
+    }));
+    assert.equal(Object.hasOwn(studioResult.state.metadata.labels, "ja"), false,
+      "Disabling a locale retained its label field");
+    assert.equal(Object.hasOwn(studioResult.state.metadata.descriptions, "ja"), false,
+      "Disabling a locale retained its description field");
+    const revisionBeforeEnglishRemoval = studioResult.state.revision;
+    await assert.rejects(studioRequest(mutationRequest(studioResult, "apply-theme-patch", {
+      changes: [{ kind: "metadata-locale", locale: "en", enabled: false }],
+    })), /English theme metadata cannot be removed/,
+    "Studio allowed removal of the runtime fallback locale");
+    assert.equal(JSON.parse(await fs.readFile(editorStatePath, "utf8")).revision,
+      revisionBeforeEnglishRemoval, "A rejected English removal advanced the revision");
+    studioResult = await studioRequest(mutationRequest(studioResult, "undo-theme-edit"));
+    assert.equal(studioResult.state.metadata.labels.ja, "Japanese Studio Theme",
+      "Undo did not restore a disabled locale and its completed fields");
+    studioResult = await studioRequest(mutationRequest(studioResult, "redo-theme-edit"));
+    assert.equal(Object.hasOwn(studioResult.state.metadata.labels, "ja"), false,
+      "Redo did not remove the selected locale again");
 
     const staleRevisionRequest = mutationRequest(studioResult, "set-theme-layer", {
       index: 0, preset: "shared", property: "opacity", value: 0.7,

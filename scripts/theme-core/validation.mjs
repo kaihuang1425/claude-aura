@@ -35,6 +35,7 @@ import {
   STUDIO_LAYER_ROLES,
   STUDIO_LAYER_VIEWPORTS,
   STUDIO_MAX_LAYERS,
+  STUDIO_METADATA_LOCALES,
   STUDIO_RECIPE_CONTROL_OVERRIDES,
   STUDIO_SHADOWS,
   STUDIO_THEME_SCHEMA_VERSION,
@@ -947,23 +948,79 @@ export function validateTheme(theme, source = "theme", { enforceLauncherContrast
 }
 
 export function normalizeLocale(value = "en") {
-  const locale = String(value || "en").replaceAll("_", "-").toLowerCase();
-  if (locale === "zh-cn" || locale === "zh-sg" || locale === "zh-hans" || locale.startsWith("zh-hans-")) return "zh-CN";
-  if (locale === "zh-hktw" || locale === "zh-hk" || locale === "zh-mo" || locale === "zh-hant" || locale.startsWith("zh-hant-")) return "zh-HKTW";
+  const locale = String(value || "en").trim().replaceAll("_", "-").toLowerCase();
+  if (/^pt(?:-|$)/u.test(locale)) return "pt-BR";
+  if (/^zh-(?:cn|sg|hans)(?:-|$)/u.test(locale) || /^zh-hans(?:-|$)/u.test(locale)) return "zh-CN";
+  if (/^zh-(?:hktw|tw|hk|mo|hant)(?:-|$)/u.test(locale) || /^zh-hant(?:-|$)/u.test(locale)) return "zh-HKTW";
+  const base = locale.split("-", 1)[0];
+  const canonical = STUDIO_METADATA_LOCALES.find((candidate) => candidate === base);
+  if (canonical) return canonical;
   return "en";
 }
 
 export function validateLocalizedMap(value, label, maximum) {
-  if (!isPlainObject(value)) throw new Error(`${label} must be an object`);
+  assertExactKeys(value, SUPPORTED_LOCALES, label);
   const result = {};
   for (const locale of SUPPORTED_LOCALES) {
     const text = value[locale];
-    if (typeof text !== "string" || !text.trim() || text.length > maximum) {
+    if (typeof text !== "string" || !text.trim() || text.length > maximum
+        || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(text)) {
       throw new Error(`${label}.${locale} is required and must be at most ${maximum} characters`);
     }
     result[locale] = text.trim();
   }
   return result;
+}
+
+function validateStudioLocalizedMap(value, label, maximum, locales, { allowIncompleteMetadata }) {
+  if (!isPlainObject(value)) throw new Error(`${label} must be an object`);
+  const actual = Object.keys(value);
+  if (actual.some((locale) => !STUDIO_METADATA_LOCALES.includes(locale))) {
+    throw new Error(`${label} has an unsupported locale`);
+  }
+  const result = {};
+  for (const locale of STUDIO_METADATA_LOCALES) {
+    if (!locales.has(locale)) continue;
+    const text = value[locale];
+    if (typeof text !== "string" || text.length > maximum
+        || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(text)
+        || (!allowIncompleteMetadata && !text.trim())) {
+      throw new Error(`${label}.${locale} is required and must be at most ${maximum} characters`);
+    }
+    result[locale] = text.trim();
+  }
+  return result;
+}
+
+function validateStudioLocalizedMaps(raw, source, { allowIncompleteMetadata }) {
+  if (!isPlainObject(raw.labels)) throw new Error(`${source}.labels must be an object`);
+  if (!isPlainObject(raw.descriptions)) throw new Error(`${source}.descriptions must be an object`);
+  const labelKeys = Object.keys(raw.labels);
+  const descriptionKeys = Object.keys(raw.descriptions);
+  if (!labelKeys.includes("en") || !descriptionKeys.includes("en")) {
+    throw new Error(`${source}.labels and descriptions must include English`);
+  }
+  const labels = new Set(labelKeys);
+  const descriptions = new Set(descriptionKeys);
+  if (labels.size !== descriptions.size || [...labels].some((locale) => !descriptions.has(locale))) {
+    throw new Error(`${source}.labels and descriptions must support the same locales`);
+  }
+  return {
+    labels: validateStudioLocalizedMap(
+      raw.labels,
+      `${source}.labels`,
+      80,
+      labels,
+      { allowIncompleteMetadata },
+    ),
+    descriptions: validateStudioLocalizedMap(
+      raw.descriptions,
+      `${source}.descriptions`,
+      220,
+      descriptions,
+      { allowIncompleteMetadata },
+    ),
+  };
 }
 
 export function validateNewChatLayout(value, label) {
@@ -1146,7 +1203,11 @@ export function validateStudioThemeControls(theme, label) {
 export function validateStudioThemeKitDocument(
   raw,
   source,
-  { enforceLauncherContrast = true, builtinLayoutCapability = null } = {},
+  {
+    enforceLauncherContrast = true,
+    builtinLayoutCapability = null,
+    allowIncompleteMetadata = false,
+  } = {},
 ) {
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
@@ -1155,8 +1216,9 @@ export function validateStudioThemeKitDocument(
     "sourceRecipe", "controlOverrides", "theme",
   ]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`${source} has an unsupported property`);
-  // Accept v2 (pre-greeting) and v3 kits; both normalize up to the current
-  // version in memory. Older kits simply lack newChatGreetingStyle (treated null).
+  // Accept older Studio kits and normalize them to the current version in
+  // memory. v2/v3 metadata retains its original exact three-locale contract;
+  // v4 declares a selected locale through shared key presence in both maps.
   if (!STUDIO_KIT_SCHEMA_VERSIONS.has(raw.schemaVersion)) {
     throw new Error(`${source} must use schemaVersion ${[...STUDIO_KIT_SCHEMA_VERSIONS].join(" or ")}`);
   }
@@ -1216,18 +1278,28 @@ export function validateStudioThemeKitDocument(
     throw new Error(`${source}.theme.variant must match sourceRecipe`);
   }
   validateStudioThemeControls(theme, `${source}.theme`);
+  const localized = raw.schemaVersion >= 4
+    ? validateStudioLocalizedMaps(raw, source, { allowIncompleteMetadata })
+    : {
+      labels: validateLocalizedMap(raw.labels, `${source}.labels`, 80),
+      descriptions: validateLocalizedMap(raw.descriptions, `${source}.descriptions`, 220),
+    };
   return {
     schemaVersion: STUDIO_THEME_SCHEMA_VERSION,
     id: raw.id,
-    labels: validateLocalizedMap(raw.labels, `${source}.labels`, 80),
-    descriptions: validateLocalizedMap(raw.descriptions, `${source}.descriptions`, 220),
+    labels: localized.labels,
+    descriptions: localized.descriptions,
     swatches: swatches.map((value) => value.toUpperCase()),
     preview,
     studioPreview: null,
     studioPreviewFrame: null,
     newChatLayout: validateNewChatLayout(raw.newChatLayout, `${source}.newChatLayout`),
     newChatGreetingStyle: validateNewChatGreetingStyle(raw.newChatGreetingStyle ?? null, `${source}.newChatGreetingStyle`),
-    backgroundScope: strictEnum(raw.backgroundScope, new Set(["content", "full-window"]), `${source}.backgroundScope`),
+    backgroundScope: strictEnum(
+      raw.backgroundScope,
+      new Set(["sidebar", "content", "full-window"]),
+      `${source}.backgroundScope`,
+    ),
     artwork: null,
     artworkLayers,
     sourceRecipe,

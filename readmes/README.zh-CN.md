@@ -141,42 +141,80 @@ Claude Aura 在专用的 Microsoft Edge WebView2 窗口中打开真实的
 
 ### 安装
 
-1. 下载
-   [最新发布版 ZIP](https://github.com/kaihuang1425/claude-aura/releases)。
-2. 在文件资源管理器中右键单击 ZIP，然后选择 **全部解压缩**。
-3. 打开解压后的文件夹，双击 **Install Claude Aura.cmd**。
-4. 等待安装程序关闭并打开 **Claude Aura** 窗口。
-5. 如果 `claude.ai` 提示登录，请在 Aura 中完成登录。
-6. 点击悬浮 Aura 按钮打开 Studio，然后选择 **主题**。
+打开[最新发布版本](https://github.com/kaihuang1425/claude-aura/releases)，
+选择以下任一路径。两种方式都会为当前 Windows 账户安装同一版本。
 
-安装过程不会修改或替换 Claude Desktop。
+| 路径 | 适用情况 | 下载文件 |
+| --- | --- | --- |
+| **未签名 Setup** | 希望使用更简单的向导式安装程序，且 Windows 能正常打开该文件 | `Claude-Aura-Setup-v<version>-UNSIGNED.exe`、对应的 `.sha256` 和 `.manifest.json` |
+| **ZIP + CMD 备用方式** | Windows 对未签名 Setup 发出警告或将其拦截，或者希望使用可读的源代码脚本 | `claude-aura-v<version>.zip` 及其 `.sha256` |
+
+#### 路径 1 — 未签名 Setup
+
+1. 在 **Assets** 下下载 `-UNSIGNED.exe`、对应的 `.sha256` 和
+   `.manifest.json`。不要使用 GitHub 自动生成的 **Source code** 压缩包。
+2. 将 Setup 文件的 SHA-256 与两个配套文件中的值进行比对。如果任一值
+   不同，请停止安装并删除这些下载文件。
+3. 开发者没有代码签名证书，因此 Windows 无法验证此安装程序的发布者。
+   如果 Windows 发出警告或将其拦截，请勿绕过警告，改用路径 2。
+4. 如果文件能正常打开，请按照 Setup 向导操作。安装程序会检查 Node.js
+   和 WebView2，将 Aura 安装到 `%LOCALAPPDATA%\ClaudeAura` 下，添加
+   **Installed apps** 条目和快捷方式，然后打开 Aura。
+
+#### 路径 2 — ZIP + CMD 备用方式
+
+1. 在 **Assets** 下下载 `claude-aura-v<version>.zip` 及其配套的
+   `.sha256`。不要使用 GitHub 自动生成的 **Source code** 压缩包。
+2. 将 ZIP 的 SHA-256 与配套文件中的值进行比对。如果二者不同，请停止
+   安装并删除这两个文件。
+3. 选择 **Extract all**。在解压后的 `claude-aura` 文件夹中双击
+   **Install Claude Aura.cmd**。不要在 ZIP 预览窗口中直接运行。
+4. 可读的 CMD/PowerShell 安装程序会检查 Node.js 和 WebView2，安装 Aura、
+   创建快捷方式并打开 Aura。此方式不提供 Authenticode 发布者身份，也
+   不会添加 **Installed apps** 条目。
+
+通过任一路径安装后，如果 `claude.ai` 提示登录，请在 Aura 内登录。点击悬浮
+的 Aura 按钮，选择 **Open Studio**，再选择 **Themes**。
+
+不含 `-UNSIGNED` 的 `Claude-Aura-Setup-v<version>.exe` 属于另一种已签名
+安装方式，必须显示该发布说明中列出的发布者。以 `-UNSIGNED-DEV.exe`
+结尾的文件绝不会公开发布。
+
+安装过程不会打补丁或替换 Claude Desktop。
 
 <details>
-<summary><strong>安装程序行为、应用位置、开发者工作区与卸载</strong></summary>
+<summary><strong>安装程序行为、应用程序位置与卸载</strong></summary>
 
-非管理员权限安装程序会先运行内置校验，然后将应用程序文件复制到：
+两种方式均无需管理员权限，会检查必备组件并执行 Aura 受保护的应用树替换。
+应用文件将安装到：
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-安装程序会在桌面和“开始”菜单中创建 **Claude Aura** 和
-**Claude Aura Studio** 快捷方式。主题设置和登录数据与应用程序分开存储，
-因此重新安装 Aura 不会在不提示的情况下替换这些数据。
+它会在开始菜单和桌面创建 **Claude Aura**、**Claude Aura Studio** 及
+卸载快捷方式。主题设置和登录数据与应用程序分开存储，因此重新安装 Aura
+不会擅自替换这些数据。原生 Setup 会添加 **Installed apps** 条目和原生
+卸载程序；ZIP/CMD 方式则保留源代码脚本卸载快捷方式。
 
-开发者可以克隆仓库并从工作区运行同一个安装程序，无需下载 ZIP。
-从工作区安装时，安装前会运行完整的仓库测试套件。
+开发者可以克隆仓库，并构建名称明确的未签名开发安装程序用于本地检查。
+该构建与名称明确的公开未签名 Setup 不同。构建命令、固定编译器、验证门禁
+和发布清单均记录在
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md)。
 
 ### 卸载
 
-先右键单击悬浮 Aura 按钮，选择 **退出 Claude Aura**。然后打开
-**开始 > Claude Aura > Uninstall Claude Aura**，或在解压后的发布文件中
-双击 **Uninstall Claude Aura.cmd**。如果 Aura 仍在运行，卸载程序将拒绝继续。
+首先右键点击悬浮的 Aura 按钮，然后选择 **Exit Claude Aura**。
+对于 ZIP 安装，请打开 **Start > Claude Aura > Uninstall Claude Aura**，
+或在解压后的发布包中双击 **Uninstall Claude Aura.cmd**。使用任一原生
+Setup 安装时，也可以选择 **Settings > Apps > Installed apps > Claude
+Aura > Uninstall**。如果已注册原生卸载程序，`.cmd` 会将操作委托给该
+程序。Aura 仍在运行时，卸载程序不会继续。
 
-默认情况下，卸载操作会移除 Aura 应用程序和快捷方式，但会保留本地主题设置
-及 Aura 独立的 WebView 登录配置文件，供以后重新安装时使用。卸载程序会先询问，
-再决定是否同时删除这些文件夹。选择删除会移除 Aura 的本地登录会话，但绝不会
-删除 Claude Desktop、用户的 Anthropic 账号或服务器端账号数据。
+默认情况下，卸载会移除 Aura 应用和快捷方式，但保留本地主题设置和 Aura
+独立的 WebView 登录配置文件，以便日后重新安装。卸载程序会在删除这些
+文件夹前再次确认。选择删除后，Aura 的本地登录会话也会被移除；Claude
+Desktop、用户的 Anthropic 账号和服务器端账号数据不会受到影响。
 
 </details>
 

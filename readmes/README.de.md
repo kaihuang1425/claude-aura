@@ -146,44 +146,53 @@ Claude Desktop ist optional und bleibt eine separate Anwendung.
 <a id="installation"></a>
 ### Installation
 
-1. Laden Sie das
-   [aktuellste Release-ZIP](https://github.com/kaihuang1425/claude-aura/releases) herunter.
-2. Klicken Sie im File Explorer mit der rechten Maustaste auf die ZIP und wählen Sie **Extract All**.
-3. Öffnen Sie den entpackten Ordner und doppelklicken Sie **Install Claude Aura.cmd**.
-4. Warten Sie, bis der Installer schließt und das Fenster **Claude Aura** öffnet.
-5. Melden Sie sich in Aura an, falls `claude.ai` danach fragt.
-6. Klicken Sie auf den schwebenden Aura-Button, um Studio zu öffnen, und wählen Sie dann **Themes**.
+Öffnen Sie die [neuste Version](https://github.com/kaihuang1425/claude-aura/releases) und wählen Sie einen dieser Pfade. Beide installieren dieselbe Version für das aktuelle Windows-Konto.
 
-Die Installation patcht oder ersetzt Claude Desktop nicht.
+| Pfad | Verwenden Sie ihn, wenn | Herunterladen |
+| --- | --- | --- |
+| **Nicht signierter Setup** | Sie möchten den einfacheren geführten Installer und Windows öffnet ihn normal | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` sowie dazugehörige `.sha256` und `.manifest.json` |
+| **ZIP + CMD-Fallback** | Windows warnt vor oder blockiert den unsignierten Setup oder Sie bevorzugen lesbare Quellskripte | `claude-aura-v<version>.zip` sowie dazugehörige `.sha256` |
+
+#### Pfad 1 ??Unsigned Setup
+
+1. Laden Sie unter **Assets** die `-UNSIGNED.exe`, die zugehörige `.sha256` und die `.manifest.json` herunter. Verwenden Sie nicht die automatisch von GitHub erzeugten **Source code**-Archive.
+2. Vergleichen Sie die SHA-256 der Setup-Datei mit beiden Begleitdateien. Stoppen Sie den Vorgang und löschen Sie die Downloads, wenn ein Wert abweicht.
+3. Windows kann den Publisher dieses Installers nicht verifizieren, da der Entwickler kein Code-Signing-Zertifikat besitzt. Wenn Windows davor warnt oder ihn blockiert, umgehen Sie die Warnung nicht; verwenden Sie Pfad 2.
+4. Wenn er sich normal öffnet, folgen Sie Setup. Er prüft Node.js und WebView2, installiert nach `%LOCALAPPDATA%\ClaudeAura`, fügt die Registrierung für **Installed apps** und Verknüpfungen hinzu und öffnet dann Aura.
+
+#### Pfad 2 ??ZIP + CMD fallback
+
+1. Laden Sie unter **Assets** `claude-aura-v<version>.zip` und die passende `.sha256` herunter. Verwenden Sie nicht die automatisch von GitHub erzeugten **Source code**-Archive.
+2. Vergleichen Sie die SHA-256 der ZIP mit der Begleitdatei. Stoppen Sie und löschen Sie beide Dateien, wenn die Werte abweichen.
+3. Wählen Sie **Extract all**. Im extrahierten Ordner `claude-aura` klicken Sie auf **Install Claude Aura.cmd**. Führen Sie es nicht aus der ZIP-Vorschau heraus aus.
+4. Der lesbare CMD/PowerShell-Installer prüft Node.js und WebView2, installiert Aura, erstellt Verknüpfungen und öffnet es. Dieser Pfad hat keine Authenticode-Publisher-Identität und fügt keinen **Installed apps**-Eintrag hinzu.
+
+Nach beiden Pfaden melden Sie sich in Aura an, wenn `claude.ai` Sie dazu auffordert. Klicken Sie auf den schwebenden Aura-Button, wählen Sie **Open Studio** und anschließend **Themes**.
+
+Ein Asset namens `Claude-Aura-Setup-v<version>.exe` ohne `-UNSIGNED` ist ein anderer, signierter Pfad und muss den Publisher anzeigen, der in den Notizen dieser Veröffentlichung genannt ist. Ein Asset, das mit `-UNSIGNED-DEV.exe` endet, ist niemals öffentlich.
+
+Die Installation patched oder ersetzt Claude Desktop nicht.
 
 <details>
-<summary><strong>Installationsverhalten, Anwendungsort, Dev-Checkouts und Deinstallation</strong></summary>
+<summary><strong>Installationsverhalten, Anwendungsspeicherort und Deinstallation</strong></summary>
 
-Der nicht-elevierte Installer führt interne Prüfungen aus, dann kopiert er die Anwendungsdateien nach:
+Beide Pfade laufen ohne Administratorabfrage, validieren die Voraussetzungen und führen Aura's geschützten App-Tree-Swap durch. Anwendungsdateien werden installiert nach:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-Es erstellt Shortcuts für **Claude Aura** und **Claude Aura Studio** auf dem Desktop und im Startmenü.
-Theme-Einstellungen und Login-Daten werden getrennt gespeichert, sodass ein Neuinstallieren von Aura sie nicht
-still leise ersetzt.
+Es werden **Claude Aura**, **Claude Aura Studio** und Deinstallationsverknüpfungen im Startmenü und auf dem Desktop erstellt. Themen-Einstellungen und Anmeldedaten werden getrennt von der Anwendung gespeichert, sodass eine Neuinstallation von Aura diese nicht stillschweigend ersetzt. Der native Setup fügt einen **Installed apps**-Eintrag und native Uninstaller hinzu; der ZIP/CMD-Pfad behält stattdessen seine Quellcode-Deinstallationsverknüpfung.
 
-Entwickler können statt eines Downloads auch das Repository klonen und den gleichen Installer aus dem Checkout
-verwenden. Ein Checkout führt vor der Installation die vollständige Test-Suite aus.
+Entwickler können das Repository klonen und den explizit benannten unsignierten Entwicklungs-Installer zur lokalen Inspektion bauen. Er ist klar unterscheidbar vom klar gekennzeichneten öffentlichen unsignierten Setup. Die Build-Befehle, der pinned Compiler, die Verifikationstore und die Release-Checkliste sind im
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md) dokumentiert.
 
-<a id="uninstall"></a>
-### Deinstallation
+### Deinstallieren
 
-Klicken Sie zuerst mit der rechten Maustaste auf den schwebenden Aura-Button und wählen
-**Exit Claude Aura**.
-Öffnen Sie dann **Start > Claude Aura > Uninstall Claude Aura** oder doppelklicken Sie in einer entpackten
-Release auf **Uninstall Claude Aura.cmd**. Der Uninstaller läuft nicht, solange Aura noch geöffnet ist.
+Klicken Sie zuerst mit der rechten Maustaste auf den schwebenden Aura-Button und wählen Sie **Exit Claude Aura**.
+Für eine ZIP-Installation öffnen Sie **Start > Claude Aura > Uninstall Claude Aura** oder doppelklicken Sie **Uninstall Claude Aura.cmd** in einem extrahierten Release. Für beide nativen Setups können Sie auch **Settings > Apps > Installed apps > Claude Aura > Uninstall** verwenden. Der `.cmd`-Eintrag delegiert den registrierten nativen Uninstaller, falls vorhanden. Der Uninstaller verweigert die Fortsetzung, solange Aura noch geöffnet ist.
 
-Standardmäßig entfernt die Deinstallation die Aura-Anwendung und Shortcuts, behält aber lokale Theme-Einstellungen
-und das getrennte WebView-Login-Profil von Aura für eine spätere Neuinstallation. Der Uninstaller fragt,
-ob diese Ordner ebenfalls gelöscht werden sollen. Diese optionale Bereinigung löscht die lokale Aura-Login-Session;
-Claude Desktop, das Anthropic-Konto des Nutzers oder serverseitige Kontodaten werden dabei niemals gelöscht.
+Standardmäßig entfernt die Deinstallation die Aura-Anwendung und Verknüpfungen, behält jedoch lokale Theme-Einstellungen und das separate WebView-Anmeldeprofil von Aura für eine spätere Neuinstallation. Der Uninstaller fragt auch vor dem Entfernen dieser Ordner nach. Diese optionale Löschung entfernt die lokale Anmeldesitzung von Aura; er entfernt niemals Claude Desktop, das Anthropic-Konto des Nutzers oder serverseitige Kontodaten.
 
 </details>
 <p align="right">(<a href="#readme-top">nach oben</a>)</p>

@@ -1040,14 +1040,14 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
       preview: { chrome: "#102030", background: "#203040", surface: "#304050", accent: "#708090", text: "#F0F4F8" },
       studioPreview: null,
       newChatLayout: { widthRatio: 0.72, offsetXRatio: -0.08, offsetYRatio: 0.12 },
-      backgroundScope: "full-window",
+      backgroundScope: "sidebar",
       artworkLayers: studioLayers,
       theme: studioTheme,
     };
     await fs.writeFile(path.join(studioDirectory, "theme.json"), `${JSON.stringify(studioDocument, null, 2)}\n`, "utf8");
     const studioKit = await readThemeKit(studioDirectory);
     assert.equal(studioKit.schemaVersion, STUDIO_THEME_SCHEMA_VERSION);
-    assert.equal(studioKit.metadata.backgroundScope, "full-window");
+    assert.equal(studioKit.metadata.backgroundScope, "sidebar");
     assert.equal(studioKit.metadata.artworkLayers.length, STUDIO_MAX_LAYERS);
     assert.equal(new Set(studioKit.metadata.artworkLayers.map((layer) => layer.path)).size, 1,
       "Schema-v2 validation expanded one shared artwork source into duplicate paths");
@@ -1066,7 +1066,7 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
       config: { ...DEFAULT_CONFIG, theme: studioThemeId },
       themeKitDirectory: studioDirectory,
     });
-    assert.equal(studioCompiled.settings.backgroundScope, "full-window");
+    assert.equal(studioCompiled.settings.backgroundScope, "sidebar");
     assert.equal(studioCompiled.settings.artLayers.length, STUDIO_MAX_LAYERS);
     assert.deepEqual(studioCompiled.settings.newChatLayout, studioDocument.newChatLayout);
     assert.equal(studioCompiled.settings.artLayers[1].context, "new-chat");

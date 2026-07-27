@@ -145,40 +145,79 @@ Claude Desktop is optional and remains a separate application.
 
 ### Installation
 
-1. Download the
-   [latest release ZIP](https://github.com/kaihuang1425/claude-aura/releases).
-2. In File Explorer, right-click the ZIP and select **Extract All**.
-3. Open the extracted folder and double-click **Install Claude Aura.cmd**.
-4. Wait for the installer to close and the **Claude Aura** window to open.
-5. Sign in inside Aura if `claude.ai` asks you to.
-6. Click the floating Aura button to open Studio, then choose **Themes**.
+Open the [latest release](https://github.com/kaihuang1425/claude-aura/releases)
+and choose one of these paths. Both install the same version for the current
+Windows account.
+
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | You want the simpler guided installer and Windows opens it normally | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` plus its `.sha256` and `.manifest.json` |
+| **ZIP + CMD fallback** | Windows warns about or blocks the unsigned Setup, or you prefer readable source scripts | `claude-aura-v<version>.zip` plus its `.sha256` |
+
+#### Path 1 — Unsigned Setup
+
+1. Under **Assets**, download the `-UNSIGNED.exe`, its `.sha256`, and its
+   `.manifest.json`. Do not use GitHub's automatic **Source code** archives.
+2. Compare the Setup file's SHA-256 with both companion files. Stop and delete
+   the downloads if any value differs.
+3. Windows cannot verify this installer's publisher because the developer does
+   not have a code-signing certificate. If Windows warns about or blocks it,
+   do not bypass the warning; use Path 2.
+4. If it opens normally, follow Setup. It checks Node.js and WebView2, installs
+   below `%LOCALAPPDATA%\ClaudeAura`, adds **Installed apps** registration and
+   shortcuts, then opens Aura.
+
+#### Path 2 — ZIP + CMD fallback
+
+1. Under **Assets**, download `claude-aura-v<version>.zip` and its matching
+   `.sha256`. Do not use GitHub's automatic **Source code** archives.
+2. Compare the ZIP's SHA-256 with the companion file. Stop and delete both
+   files if the values differ.
+3. Select **Extract all**. In the extracted `claude-aura` folder, double-click
+   **Install Claude Aura.cmd**. Do not run it from inside the ZIP preview.
+4. The readable CMD/PowerShell installer checks Node.js and WebView2, installs
+   Aura, creates shortcuts, and opens it. This path has no Authenticode
+   publisher identity and does not add an **Installed apps** entry.
+
+After either path, sign in inside Aura if `claude.ai` asks you to. Click the
+floating Aura button, choose **Open Studio**, then choose **Themes**.
+
+An asset named `Claude-Aura-Setup-v<version>.exe` without `-UNSIGNED` is a
+different, signed path and must show the publisher named in that release's
+notes. An asset ending in `-UNSIGNED-DEV.exe` is never public.
 
 Installation does not patch or replace Claude Desktop.
 
 <details>
-<summary><strong>Installer behavior, application location, developer checkouts, and uninstall</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-The non-elevated installer runs its built-in validation checks, then copies the
-application files to:
+Both paths run without an administrator prompt, validate prerequisites, and
+perform Aura's guarded app-tree swap. Application files are installed to:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-It creates **Claude Aura** and **Claude Aura Studio** shortcuts on the Desktop
-and in the Start menu. Theme settings and sign-in data are stored separately
-from the application, so reinstalling Aura does not silently replace them.
+It creates **Claude Aura**, **Claude Aura Studio**, and uninstall shortcuts in
+the Start menu and on the Desktop. Theme settings and sign-in data are stored
+separately from the application, so reinstalling Aura does not silently replace
+them. Native Setup adds an **Installed apps** entry and native uninstaller; the
+ZIP/CMD path keeps its source-script uninstall shortcut instead.
 
-Developers may clone the repository instead of downloading a ZIP and run the
-same installer from the checkout. A checkout runs the complete repository test
-suite before installation.
+Developers may clone the repository and build the explicitly named unsigned
+development installer for local inspection. It is distinct from the clearly
+marked public unsigned Setup. The build commands, pinned compiler, verification
+gates, and release checklist are documented in the
+[Windows installer guide](./docs/WINDOWS_INSTALLER.md).
 
 ### Uninstall
 
 First right-click the floating Aura button and select **Exit Claude Aura**.
-Then open **Start > Claude Aura > Uninstall Claude Aura**, or double-click
-**Uninstall Claude Aura.cmd** in an extracted release. The uninstaller refuses
-to continue while Aura is still open.
+For a ZIP install, open **Start > Claude Aura > Uninstall Claude Aura** or
+double-click **Uninstall Claude Aura.cmd** in an extracted release. For either
+native Setup, you can also use **Settings > Apps > Installed apps > Claude Aura
+> Uninstall**. The `.cmd` entry delegates to the registered native uninstaller
+when one exists. The uninstaller refuses to continue while Aura is still open.
 
 By default, uninstall removes the Aura application and shortcuts but keeps local
 theme settings and Aura's separate WebView sign-in profile for a later
@@ -304,7 +343,7 @@ customize one.
 
 | Action | What it does |
 | --- | --- |
-| Click the floating Aura button | Opens Claude Aura Studio |
+| Click the floating Aura button | Opens the Aura menu with Prompt Shelf and Studio |
 | **Themes** | Opens the built-in gallery and saves the selected theme |
 | **Create a theme** | Creates or edits an Aura-owned custom theme |
 | **Personal wallpaper > Choose wallpaper…** | Selects a local image separately from the active theme |
@@ -317,8 +356,9 @@ The selected theme persists across Aura restarts. **Original look** turns off
 Aura's presentation layer; it does not delete saved themes or custom artwork.
 **Default** is Aura's first built-in theme; it is not the same as Original look.
 
-The floating Aura launcher stays as a compact circular control. Click it to
-open Studio, drag it to move it, or right-click it for the Aura menu.
+The floating Aura launcher stays as a compact circular control. Click or
+right-click it to open the Aura menu, where Prompt Shelf and Studio are both
+visible; drag it to move it.
 
 Personal wallpaper remains linked to the original image path. Moving or
 deleting that file makes the wallpaper unavailable. Theme artwork imported
@@ -373,6 +413,8 @@ The project has no npm package or runtime font dependency.
 - Sign-in provider pages are not themed.
 - Aura does not open a remote-debugging port or patch Claude Desktop.
 - Theme files and imported artwork stay in Aura-owned local folders.
+- Saved Prompt Shelf drafts are encrypted for the current Windows user. Insert
+  changes only the composer text; Aura never presses Enter or logs draft text.
 - The live webpage still connects to Anthropic as normal.
 - The WebView profile contains sign-in session data and must be protected.
 - Studio live-page captures stay in memory for the editing session and are not
@@ -399,12 +441,20 @@ Aura separates its application, settings, themes, drafts, and browser profile:
 | `%LOCALAPPDATA%\ClaudeAura\data` | Settings, logs, and Aura-owned local state |
 | `%LOCALAPPDATA%\ClaudeAura\data\themes` | Saved custom themes and derived artwork |
 | `%LOCALAPPDATA%\ClaudeAura\data\theme-drafts` | In-progress Studio drafts |
+| `%LOCALAPPDATA%\ClaudeAura\data\prompt-shelf\drafts.bin` | Prompt Shelf drafts encrypted with Windows DPAPI CurrentUser |
 | `%LOCALAPPDATA%\ClaudeAura\webview` | Aura's separate WebView2 sign-in profile |
 
 Treat the `webview` folder like any signed-in browser profile. Do not publish
 or share it. The default uninstall keeps `data` and `webview`; choose the
 explicit removal option only when you also want those local settings, themes,
-and the separate sign-in profile erased.
+Prompt Shelf drafts, and the separate sign-in profile erased. Deleting a draft
+inside Prompt Shelf also removes it from the encrypted store.
+
+Aura restricts an older plaintext Prompt Shelf file to the current user before
+reading it. It writes and verifies the DPAPI-protected replacement before
+deleting the legacy file. If migration fails, saved-draft features remain
+unavailable and the protected legacy file is retained for recovery; Aura does
+not put draft text in its log.
 
 </details>
 

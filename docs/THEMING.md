@@ -146,7 +146,7 @@ content-addressed ICO in Aura-owned data.
 Foreground must clear 4.5:1 contrast against both surfaces, radius is 8–24,
 and border width is 1–3. The theme controls appearance only: Aura retains the
 permanent circular 48 px target, whole-button DPI-scaled 6 px drag threshold,
-click-to-open action, right-click menu, safe edge gap, keyboard name, installed
+click-or-right-click action menu, safe edge gap, keyboard name, installed
 shortcut ownership, and Default fallback. Hover may change the validated
 material but never expands the window. Original look restores the Default
 identity everywhere.

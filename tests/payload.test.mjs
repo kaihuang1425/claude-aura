@@ -1255,6 +1255,133 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-y"), "",
     "Measuring a native new-chat composer must not author its vertical position");
 
+  const probeRectKeys = ["height", "left", "top", "width"];
+  const assertProbeRect = (rect, label, viewport) => {
+    assert(rect, `${label} must be measurable`);
+    assert.deepEqual(Object.keys(rect).sort(), probeRectKeys,
+      `${label} must expose geometry only`);
+    for (const [key, value] of Object.entries(rect)) {
+      assert(Number.isFinite(value), `${label}.${key} must be finite`);
+    }
+    assert(rect.width > 0 && rect.height > 0,
+      `${label} must have positive dimensions`);
+    assert(rect.left >= 0 && rect.top >= 0
+      && rect.left + rect.width <= viewport.width
+      && rect.top + rect.height <= viewport.height,
+    `${label} must stay inside the CSS viewport`);
+  };
+  window.devicePixelRatio = 1.5;
+  const layoutProbe = window.__CLAUDE_AURA_STATE__.getLayoutProbe();
+  assert.deepEqual(Object.keys(layoutProbe).sort(), [
+    "composer", "context", "controls", "digest", "frame", "greeting", "main",
+    "mode", "prompt", "toolbar", "version", "viewport",
+  ]);
+  assert.deepEqual(Object.keys(layoutProbe.viewport).sort(), ["dpr", "height", "width"]);
+  assert.deepEqual(layoutProbe.viewport, { width: 1440, height: 900, dpr: 1.5 },
+    "Layout probes must report the live CSS viewport and browser DPR");
+  assert.deepEqual(
+    [layoutProbe.version, layoutProbe.digest, layoutProbe.context, layoutProbe.mode, layoutProbe.frame],
+    [1, "native-layout-regression", "new-chat", "light", "wide"],
+    "Layout probes must bind geometry to the active renderer and semantic scene",
+  );
+  assert.deepEqual(Object.keys(layoutProbe.greeting).sort(), ["rect", "source", "status"]);
+  assert(["inactive", "missing", "ambiguous", "found"].includes(layoutProbe.greeting.status),
+    "Greeting probe status escaped its bounded vocabulary");
+  assert(["none", "native", "custom"].includes(layoutProbe.greeting.source),
+    "Greeting probe source escaped its bounded vocabulary");
+  assert.equal(layoutProbe.greeting.rect, null,
+    "A missing greeting must not leak a stale rectangle");
+  assert(Array.isArray(layoutProbe.controls) && layoutProbe.controls.length === 5,
+    "A valid composer must expose its bounded control rectangles");
+  for (const [key, rect] of Object.entries({
+    main: layoutProbe.main,
+    prompt: layoutProbe.prompt,
+    composer: layoutProbe.composer,
+    toolbar: layoutProbe.toolbar,
+  })) {
+    assertProbeRect(rect, key, layoutProbe.viewport);
+  }
+  layoutProbe.controls.forEach((rect, index) =>
+    assertProbeRect(rect, `controls[${index}]`, layoutProbe.viewport));
+  const serializedLayoutProbe = JSON.stringify(layoutProbe);
+  assert.deepEqual(JSON.parse(serializedLayoutProbe), layoutProbe,
+    "Layout probes must be plain serializable data");
+  assert.doesNotMatch(serializedLayoutProbe,
+    /Attach|Model|Sonnet|textarea|section|button|aria-|data-|querySelector/i,
+    "Layout probes must not transport text, selectors, attributes, or DOM details");
+
+  const firstControlRect = firstControl.rect;
+  firstControl.rect = { ...firstControl.rect, left: Number.NaN };
+  assert.equal(window.__CLAUDE_AURA_STATE__.getLayoutProbe().controls, null,
+    "One invalid control rectangle must fail the complete control set closed");
+  firstControl.rect = firstControlRect;
+
+  const overflowControls = Array.from({ length: 8 }, (_, index) => {
+    const control = new FakeElement("button");
+    control.rect = {
+      left: 750 + index * 20,
+      top: 356,
+      right: 766 + index * 20,
+      bottom: 372,
+      width: 16,
+      height: 16,
+    };
+    composer.appendChild(control);
+    return control;
+  });
+  assert.equal(window.__CLAUDE_AURA_STATE__.getLayoutProbe().controls, null,
+    "More than twelve composer controls must fail closed");
+  overflowControls.forEach((control) => control.remove());
+  assert.equal(window.__CLAUDE_AURA_STATE__.getLayoutProbe().controls.length, 5,
+    "The control probe must recover after an oversized set disappears");
+
+  window.innerWidth = 1180;
+  window.innerHeight = 640;
+  window.devicePixelRatio = 1.25;
+  mainRect = { left: 210, top: 0, right: 1180, bottom: 640, width: 970, height: 640 };
+  composerBaseTop = 220;
+  const resizedLayoutProbe = window.__CLAUDE_AURA_STATE__.getLayoutProbe();
+  assert.deepEqual(resizedLayoutProbe.viewport, { width: 1180, height: 640, dpr: 1.25 });
+  assert.equal(resizedLayoutProbe.frame, "normal");
+  assert.equal(resizedLayoutProbe.composer.top, 220,
+    "Layout probes must remeasure rather than cache composer geometry after resize");
+  window.innerWidth = 1440;
+  window.innerHeight = 900;
+  window.devicePixelRatio = 1;
+  mainRect = { left: 250, top: 0, right: 1440, bottom: 900, width: 1190, height: 900 };
+  composerBaseTop = 300;
+
+  const replacementPrompt = new FakeElement("div");
+  const replacementComposer = new FakeElement("section");
+  const replacementEditor = new FakeElement("textarea");
+  const replacementToolbar = new FakeElement("div");
+  const replacementControlA = new FakeElement("button");
+  const replacementControlB = new FakeElement("button");
+  replacementToolbar.setAttribute("role", "toolbar");
+  replacementEditor.rect = { left: 470, top: 262, right: 930, bottom: 302, width: 460, height: 40 };
+  replacementComposer.rect = { left: 450, top: 250, right: 970, bottom: 360, width: 520, height: 110 };
+  replacementToolbar.rect = { left: 460, top: 310, right: 960, bottom: 350, width: 500, height: 40 };
+  replacementControlA.rect = { left: 470, top: 310, right: 510, bottom: 350, width: 40, height: 40 };
+  replacementControlB.rect = { left: 820, top: 310, right: 950, bottom: 350, width: 130, height: 40 };
+  replacementPrompt.rect = { left: 450, top: 250, right: 970, bottom: 380, width: 520, height: 130 };
+  replacementToolbar.appendChild(replacementControlA);
+  replacementToolbar.appendChild(replacementControlB);
+  replacementComposer.appendChild(replacementEditor);
+  replacementComposer.appendChild(replacementToolbar);
+  replacementPrompt.appendChild(replacementComposer);
+  promptRoot.remove();
+  main.appendChild(replacementPrompt);
+  composerEditors = [replacementEditor];
+  const replacementLayoutProbe = window.__CLAUDE_AURA_STATE__.getLayoutProbe();
+  assert.deepEqual(replacementLayoutProbe.composer, {
+    left: 450, top: 250, width: 520, height: 110,
+  }, "Layout probes must discover and measure a replaced composer node live");
+  assert.equal(replacementLayoutProbe.controls.length, 2);
+  replacementPrompt.remove();
+  main.appendChild(promptRoot);
+  composerEditors = [editor];
+  window.__CLAUDE_AURA_STATE__.ensure();
+
   toolbar.remove();
   popup.remove();
   window.__CLAUDE_AURA_STATE__.ensure();
@@ -1545,6 +1672,29 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     "Dark/conversation/normal navigation did not atomically replace the new-chat scene");
   assert.equal(promptRoot["data-claude-aura-prompt"], undefined,
     "Prompt placement leaked from new-chat into a conversation");
+
+  const sidebarBundle = await buildPayloadFromCompiled({
+    ...studioRuntimeBase,
+    settings: { ...studioRuntimeSettings, digest: "studio-v2-sidebar", backgroundScope: "sidebar" },
+  });
+  const injectSidebar = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    sidebarBundle.payload,
+  );
+  injectSidebar(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  studioBackdrop = document.getElementById("claude-aura-backdrop");
+  studioLayers = studioBackdrop.children
+    .filter((child) => String(child.class ?? "").includes("claude-aura-theme-art-layer"));
+  assert.equal(studioBackdrop.dataset.artScope, "sidebar",
+    "Sidebar scope was not persisted to the renderer");
+  assert.equal(document.documentElement.style.getPropertyValue("--aura-main-start"), "220px",
+    "Sidebar artwork did not retain the live renderer's measured sidebar boundary");
+  assert(sidebarBundle.payload.includes('[data-art-scope=\\"sidebar\\"]'),
+    "The sidebar-scoped payload omitted its fail-closed clipping rule");
+  assert.equal(studioLayers.length, STUDIO_MAX_LAYERS,
+    "Sidebar reinjection duplicated or dropped Studio artwork layers");
+  assert.equal(document.body.children.filter((child) => child.id === "claude-aura-backdrop").length, 1,
+    "Sidebar reinjection left more than one owned backdrop");
 
   const fullWindowBundle = await buildPayloadFromCompiled({
     ...studioRuntimeBase,

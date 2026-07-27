@@ -141,43 +141,80 @@ Claude Desktop 為選用程式，會繼續以獨立應用程式執行。
 
 ### 安裝
 
-1. 下載
-   [最新發行版 ZIP](https://github.com/kaihuang1425/claude-aura/releases)。
-2. 在檔案總管中按 ZIP 檔案右鍵，選擇 **全部解壓縮**。
-3. 開啟解壓縮後的資料夾，按兩下 **Install Claude Aura.cmd**。
-4. 等待安裝程式關閉並開啟 **Claude Aura** 視窗。
-5. 如果 `claude.ai` 要求登入，請直接在 Aura 內完成登入。
-6. 按一下浮動的 Aura 按鈕開啟 Studio，再選擇 **主題**。
+開啟 [最新發行版本](https://github.com/kaihuang1425/claude-aura/releases)，
+選擇下列其中一種方式。兩種方式都會為目前的 Windows 帳戶安裝相同版本。
 
-安裝過程不會修改或取代 Claude Desktop。
+| 方式 | 適用情況 | 下載項目 |
+| --- | --- | --- |
+| **未簽署的 Setup** | 想使用較簡單的引導式安裝程式，而且 Windows 能正常開啟該檔案 | `Claude-Aura-Setup-v<version>-UNSIGNED.exe`、對應的 `.sha256` 與 `.manifest.json` |
+| **ZIP + CMD 備用方式** | Windows 對未簽署的 Setup 顯示警告或加以封鎖，或偏好可閱讀的原始碼指令碼 | `claude-aura-v<version>.zip` 與其 `.sha256` |
+
+#### 方式 1 — 未簽署的 Setup
+
+1. 在 **Assets** 下載 `-UNSIGNED.exe`、對應的 `.sha256` 與
+   `.manifest.json`。不要使用 GitHub 自動產生的 **Source code** 壓縮檔。
+2. 比對 Setup 檔案的 SHA-256 與兩個配套檔案中的值。只要有任何一個值
+   不同，請停止安裝並刪除這些下載項目。
+3. 開發者沒有程式碼簽署憑證，因此 Windows 無法驗證此安裝程式的發行者。
+   若 Windows 顯示警告或加以封鎖，請勿略過警告，改用方式 2。
+4. 若檔案能正常開啟，請依照 Setup 的指示操作。安裝程式會檢查 Node.js
+   與 WebView2、將 Aura 安裝到 `%LOCALAPPDATA%\ClaudeAura`、新增
+   **Installed apps** 項目與捷徑，然後開啟 Aura。
+
+#### 方式 2 — ZIP + CMD 備用方式
+
+1. 在 **Assets** 下載 `claude-aura-v<version>.zip` 及其配套的
+   `.sha256`。不要使用 GitHub 自動產生的 **Source code** 壓縮檔。
+2. 比對 ZIP 的 SHA-256 與配套檔案中的值。若兩者不同，請停止安裝並
+   刪除這兩個檔案。
+3. 選擇 **Extract all**。在解壓縮後的 `claude-aura` 資料夾中按兩下
+   **Install Claude Aura.cmd**。不要直接從 ZIP 預覽視窗執行。
+4. 可閱讀的 CMD/PowerShell 安裝程式會檢查 Node.js 與 WebView2、安裝
+   Aura、建立捷徑並開啟 Aura。此方式不提供 Authenticode 發行者身分，
+   也不會新增 **Installed apps** 項目。
+
+透過任一方式安裝後，若 `claude.ai` 要求登入，請在 Aura 內登入。點選浮動
+的 Aura 按鈕，選擇 **Open Studio**，再選擇 **Themes**。
+
+不含 `-UNSIGNED` 的 `Claude-Aura-Setup-v<version>.exe` 是另一種已簽署
+安裝方式，必須顯示該發行說明所列的發行者。以 `-UNSIGNED-DEV.exe`
+結尾的檔案絕不會公開發行。
+
+安裝不會修補或取代 Claude Desktop。
 
 <details>
-<summary><strong>安裝程式行為、應用程式位置、開發者工作目錄與解除安裝</strong></summary>
+<summary><strong>安裝程式行為、應用程式位置與解除安裝</strong></summary>
 
-這個安裝程式不需要系統管理員權限。它會先執行內建驗證，再將應用程式
-檔案複製到：
+兩種方式都不會要求系統管理員權限，會檢查必要元件並執行 Aura 受保護的
+應用程式樹置換。應用程式檔案會安裝到：
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-安裝程式會在桌面與開始功能表建立 **Claude Aura** 和
-**Claude Aura Studio** 捷徑。主題設定與登入資料會和應用程式分開儲存，
-因此重新安裝 Aura 時不會在未告知的情況下取代它們。
+它會在開始選單與桌面建立 **Claude Aura**、**Claude Aura Studio** 及
+解除安裝捷徑。主題設定與登入資料會和應用程式分開儲存，因此重新安裝 Aura
+不會擅自覆蓋這些資料。原生 Setup 會新增 **Installed apps** 項目與原生
+解除安裝程式；ZIP/CMD 方式則會保留原始碼指令碼解除安裝捷徑。
 
-開發者也可以複製儲存庫，不下載 ZIP，直接從工作目錄執行同一個安裝程式。
-從工作目錄安裝時，會先執行完整的儲存庫測試套件。
+開發者可複製此存放庫，並建立名稱明確的未簽署開發用安裝程式，在本機進行
+檢查。此建置與名稱明確的公開未簽署 Setup 不同。建置指令、固定編譯器、
+驗證門檻與發行清單皆記載於
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md)。
 
 ### 解除安裝
 
-請先在浮動的 Aura 按鈕上按右鍵，選擇 **結束 Claude Aura**。接著開啟
-**開始 > Claude Aura > 解除安裝 Claude Aura**，或在解壓縮後的發行版中
-按兩下 **Uninstall Claude Aura.cmd**。Aura 仍在執行時，解除安裝程式不會繼續。
+先在浮動的 Aura 按鈕上按滑鼠右鍵，然後選擇 **Exit Claude Aura**。
+若使用 ZIP 安裝，請開啟 **Start > Claude Aura > Uninstall Claude Aura**，
+或在解壓縮後的發行版本中按兩下 **Uninstall Claude Aura.cmd**。若透過
+任一原生 Setup 安裝，也可選擇 **Settings > Apps > Installed apps >
+Claude Aura > Uninstall**。若已有註冊的原生解除安裝程式，`.cmd` 會將
+操作交給該程式。只要 Aura 仍在執行，解除安裝程式就不會繼續。
 
-解除安裝預設只會移除 Aura 應用程式與捷徑，並保留本機主題設定和 Aura
-專用的 WebView 登入設定檔，方便日後重新安裝。解除安裝程式也會先詢問，
-再決定是否一併移除這些資料夾。選擇清除後，會移除 Aura 的本機登入工作階段；
-不會移除 Claude Desktop、Anthropic 帳號或伺服器端的帳號資料。
+預設情況下，解除安裝會移除 Aura 應用程式與捷徑，但保留本機主題設定與
+Aura 的獨立 WebView 登入設定檔，方便日後重新安裝。解除安裝程式會在刪除
+這些資料夾前再次確認。選擇刪除後，Aura 的本機登入工作階段也會移除；
+Claude Desktop、使用者的 Anthropic 帳戶與伺服器端帳戶資料不會受到影響。
 
 </details>
 

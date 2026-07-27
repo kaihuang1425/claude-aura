@@ -149,45 +149,53 @@ coba lagi. Claude Desktop opsional dan tetap aplikasi terpisah.
 <a id="installation"></a>
 ### Instalasi
 
-1. Unduh
-   [release ZIP terbaru](https://github.com/kaihuang1425/claude-aura/releases).
-2. Di File Explorer, klik kanan ZIP lalu pilih **Extract All**.
-3. Buka folder hasil ekstrak lalu klik dua kali **Install Claude Aura.cmd**.
-4. Tunggu instalasi selesai dan jendela **Claude Aura** terbuka.
-5. Masuk di Aura jika `claude.ai` memintanya.
-6. Klik tombol melayang Aura untuk membuka Studio, lalu pilih **Themes**.
+Buka [rilis terbaru](https://github.com/kaihuang1425/claude-aura/releases) dan pilih salah satu jalur ini. Keduanya menginstal versi yang sama untuk akun Windows saat ini.
 
-Instalasi tidak mempatch atau mengganti Claude Desktop.
+| Path | Gunakan saat | Unduh |
+| --- | --- | --- |
+| **Unsigned Setup** | Anda menginginkan instalator berguided yang lebih sederhana dan Windows membukanya secara normal | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` bersama `.sha256` dan `.manifest.json`-nya |
+| **ZIP + CMD fallback** | Windows memperingatkan atau memblokir Setup unsigned, atau Anda lebih suka skrip sumber yang dapat dibaca | `claude-aura-v<version>.zip` bersama `.sha256`-nya |
+
+#### Path 1 ??Unsigned Setup
+
+1. Di bawah **Assets**, unduh `-UNSIGNED.exe`, `.sha256`, dan `.manifest.json`-nya. Jangan gunakan arsip **Source code** otomatis dari GitHub.
+2. Bandingkan SHA-256 file Setup dengan kedua file pendamping. Hentikan dan hapus unduhan jika ada nilai yang berbeda.
+3. Installer ini tidak dapat memverifikasi penerbitnya karena pengembang tidak memiliki sertifikat code-signing. Jika Windows memperingatkan atau memblokirnya, jangan lewati peringatan; gunakan Jalur 2.
+4. Jika terbuka secara normal, ikuti Setup. Ia memeriksa Node.js dan WebView2, menginstal ke bawah `%LOCALAPPDATA%\ClaudeAura`, menambahkan pendaftaran **Installed apps** dan shortcut, lalu membuka Aura.
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. Di bawah **Assets**, unduh `claude-aura-v<version>.zip` dan `.sha256` yang cocok. Jangan gunakan arsip **Source code** otomatis dari GitHub.
+2. Bandingkan SHA-256 ZIP dengan file pendampingnya. Hentikan dan hapus kedua file jika nilainya berbeda.
+3. Pilih **Extract all**. Pada folder `claude-aura` yang diekstrak, klik dua kali **Install Claude Aura.cmd**. Jangan jalankan dari pratinjau ZIP.
+4. Installer CMD/PowerShell yang dapat dibaca memeriksa Node.js dan WebView2, menginstal Aura, membuat shortcut, dan membukanya. Jalur ini tidak memiliki identitas publisher Authenticode dan tidak menambahkan entri **Installed apps**.
+
+Setelah salah satu jalur, masuk ke Aura jika `claude.ai` memintamu. Klik tombol Aura mengambang, pilih **Open Studio**, lalu pilih **Themes**.
+
+Aset bernama `Claude-Aura-Setup-v<version>.exe` tanpa `-UNSIGNED` adalah jalur signed yang berbeda dan harus menampilkan publisher sesuai notes rilis tersebut. Aset yang berakhir dengan `-UNSIGNED-DEV.exe` tidak pernah bersifat publik.
+
+Instalasi tidak mem-patch atau menggantikan Claude Desktop.
 
 <details>
-<summary><strong>Perilaku installer, lokasi aplikasi, checkout pengembang, dan uninstall</strong></summary>
+<summary><strong>Perilaku installer, lokasi aplikasi, dan uninstall</strong></summary>
 
-Installer non-elevated menjalankan validasi bawaannya, lalu menyalin berkas aplikasi ke:
+Kedua jalur berjalan tanpa prompt administrator, memvalidasi prasyarat, dan melakukan pertukaran app-tree Aura yang terlindungi. File aplikasi diinstal ke:
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-Membuat shortcut **Claude Aura** dan **Claude Aura Studio** di Desktop dan menu Start.
-Pengaturan tema dan data masuk dipisahkan dari aplikasi, jadi menginstal ulang Aura tidak
-mengganti secara diam-diam.
+Ini membuat shortcut **Claude Aura**, **Claude Aura Studio**, dan uninstall di menu Start serta Desktop. Pengaturan tema dan data sign-in disimpan terpisah dari aplikasi, sehingga menginstal ulang Aura tidak menggantikannya secara diam-diam. Native Setup menambahkan entri **Installed apps** dan uninstaller native; jalur ZIP/CMD mempertahankan shortcut uninstall script source-nya sendiri.
 
-Developer dapat meng-clone repositori ketimbang mengunduh ZIP dan menjalankan installer
-sama dari checkout. Checkout menjalankan suite tes penuh sebelum instalasi.
+Developer dapat mengkloning repository dan membangun installer pengembangan unsigned bernama eksplisit untuk inspeksi lokal. Ini berbeda dari Setup public unsigned yang ditandai dengan jelas. Perintah build, compiler pinned, gerbang verifikasi, dan checklist release didokumentasikan di
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md).
 
-<a id="uninstall"></a>
 ### Uninstall
 
-Pertama klik kanan tombol melayang Aura lalu pilih **Exit Claude Aura**.
-Lalu buka **Start > Claude Aura > Uninstall Claude Aura**, atau klik dua kali
-**Uninstall Claude Aura.cmd** di release yang diekstrak. Uninstaller akan menolak
-lanjut jika Aura masih terbuka.
+Pertama klik kanan tombol floating Aura dan pilih **Exit Claude Aura**.
+Untuk instalasi ZIP, buka **Start > Claude Aura > Uninstall Claude Aura** atau klik dua kali **Uninstall Claude Aura.cmd** pada release yang diekstrak. Untuk masing-masing native Setup, Anda juga dapat menggunakan **Settings > Apps > Installed apps > Claude Aura > Uninstall**. Entri `.cmd` mendelegasikan ke uninstaller native terdaftar bila ada. Uninstaller menolak untuk melanjutkan saat Aura masih terbuka.
 
-Secara default uninstall menghapus aplikasi Aura dan shortcut tetapi menyimpan
-pengaturan tema lokal serta profil sign-in WebView terpisah untuk reinstall berikutnya.
-Uninstaller akan menanyakan dulu jika ingin menghapus folder itu juga. Penghapusan
-opsional ini menghapus sesi sign-in lokal Aura; ia tidak pernah menghapus Claude Desktop,
-akun Anthropic milik pengguna, atau data akun di server.
+Secara default, uninstall menghapus aplikasi Aura dan shortcut tetapi menyimpan pengaturan tema lokal dan profil sign-in WebView terpisah Aura untuk reinstall berikutnya. Uninstaller juga meminta konfirmasi sebelum menghapus folder-folder tersebut. Penghapusan opsional tersebut menghapus sesi sign-in lokal Aura; ia tidak pernah menghapus Claude Desktop, akun Anthropic pengguna, atau data akun server-side.
 
 </details>
 <p align="right">(<a href="#readme-top">kembali ke atas</a>)

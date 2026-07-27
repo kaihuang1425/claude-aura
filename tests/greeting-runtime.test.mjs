@@ -787,21 +787,54 @@ test("heading-like text inside a control is never owned", async () => {
   }
 });
 
-test("native and custom placement outside the main canvas fail open", async () => {
+test("native and custom placement clamp to the nearest safe canvas edge", async () => {
   const custom = await runtime({ greetingY: -0.4 });
   custom.flushFrame();
   custom.flushFrame();
-  assert.equal(custom.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "unmeasurable");
-  assert.equal(custom.replacements().length, 0);
+  const customProbe = custom.window.__CLAUDE_AURA_STATE__.getGreetingProbe();
+  assert.equal(customProbe.status, "custom");
+  assert(customProbe.rect.top >= custom.main.rect.top - 2);
+  assert(customProbe.rect.top + customProbe.rect.height <= custom.shell.rect.top + 2);
+  assert.equal(custom.replacements().length, 1);
   assert.equal(custom.ownerCount(), 1);
 
   const native = await runtime({ greetingY: -0.4, phrases: null });
-  assert.equal(native.window.__CLAUDE_AURA_STATE__.getGreetingProbe().status, "unmeasurable");
-  assert.equal(native.greetings[0].row.getAttribute(G), null);
+  const nativeProbe = native.window.__CLAUDE_AURA_STATE__.getGreetingProbe();
+  assert.equal(nativeProbe.status, "native");
+  assert(nativeProbe.rect.top >= native.main.rect.top - 2);
+  assert(nativeProbe.rect.top + nativeProbe.rect.height <= native.shell.rect.top + 2);
+  assert.equal(native.greetings[0].row.getAttribute(G), "native");
   assert.equal(native.ownerCount(), 1);
 });
 
-test("an established custom greeting fails open when the observed canvas shrinks", async () => {
+test("decorated greetings clamp their complete mark-and-text union at horizontal edges", async () => {
+  for (const phrases of [null, ["Only phrase"]]) {
+    for (const greetingX of [-0.45, 0.45]) {
+      const app = await runtime({ phrases, mark: true, greetingX });
+      app.flushFrame();
+      app.flushFrame();
+      const probe = app.window.__CLAUDE_AURA_STATE__.getGreetingProbe();
+      assert.equal(probe.status, phrases ? "custom" : "native");
+      const text = {
+        ...probe.rect,
+        right: probe.rect.left + probe.rect.width,
+        bottom: probe.rect.top + probe.rect.height,
+      };
+      const decorations = app.document
+        .querySelectorAll(`[${K}="native"],[${G}="decoration"]`)
+        .map((node) => node.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0);
+      const union = [text, ...decorations];
+      assert(Math.min(...union.map((rect) => rect.left)) >= app.main.rect.left - 2,
+        "a greeting mark escaped the left canvas edge");
+      assert(Math.max(...union.map((rect) => rect.right)) <= app.main.rect.right + 2,
+        "a greeting mark escaped the right canvas edge");
+      assert.equal(app.ownerCount(), 1);
+    }
+  }
+});
+
+test("an established custom greeting reclamps when the observed canvas shifts", async () => {
   const app = await runtime();
   app.flushFrame();
   app.flushFrame();
@@ -823,13 +856,31 @@ test("an established custom greeting fails open when the observed canvas shrinks
   };
   app.triggerResize(app.main);
   assert.equal(app.flushTimeout(), true);
-  assert.equal(state.getGreetingProbe().status, "unmeasurable");
+  const shiftedProbe = state.getGreetingProbe();
+  assert.equal(shiftedProbe.status, "custom");
+  assert(shiftedProbe.rect.left >= app.main.rect.left - 2);
+  assert.equal(app.replacements().length, 1);
+  assert.equal(app.ownerCount(), 1, "canvas movement duplicated greeting ownership");
+  assert.equal(app.activeResizeObservers(), 1);
+});
+
+test("a greeting wider than the observed canvas still fails open", async () => {
+  const app = await runtime();
+  app.flushFrame();
+  app.flushFrame();
+  const state = app.window.__CLAUDE_AURA_STATE__;
+  app.main.rect = {
+    left: 800, top: 0, right: 1000, bottom: 900, width: 200, height: 900,
+  };
+  app.triggerResize(app.main);
+  assert.equal(app.flushTimeout(), true);
+  assert(!["custom", "native"].includes(state.getGreetingProbe().status));
   assert.equal(app.replacements().length, 0);
-  assert.equal(app.ownerCount(), 1, "canvas shrink did not restore Claude's greeting");
+  assert.equal(app.ownerCount(), 1, "oversized greeting did not restore Claude's greeting");
   assert.equal(app.activeResizeObservers(), 0, "failed ownership left a ResizeObserver bound");
 });
 
-test("an established custom greeting fails open when the observed composer moves above it", async () => {
+test("an established custom greeting reclamps when the observed composer moves", async () => {
   const app = await runtime();
   app.flushFrame();
   app.flushFrame();
@@ -839,10 +890,12 @@ test("an established custom greeting fails open when the observed composer moves
   };
   app.triggerResize(app.shell);
   assert.equal(app.flushTimeout(), true, "composer ResizeObserver did not schedule a repair");
-  assert.equal(state.getGreetingProbe().status, "unmeasurable");
-  assert.equal(app.replacements().length, 0);
-  assert.equal(app.ownerCount(), 1, "composer movement did not restore Claude's greeting");
-  assert.equal(app.activeResizeObservers(), 0);
+  const probe = state.getGreetingProbe();
+  assert.equal(probe.status, "custom");
+  assert(probe.rect.top + probe.rect.height <= app.shell.rect.top + 2);
+  assert.equal(app.replacements().length, 1);
+  assert.equal(app.ownerCount(), 1, "composer movement duplicated greeting ownership");
+  assert.equal(app.activeResizeObservers(), 1);
 });
 
 test("a reparented native leaf restores even after its saved wrapper disconnects", async () => {

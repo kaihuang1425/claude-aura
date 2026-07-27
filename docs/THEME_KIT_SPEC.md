@@ -9,20 +9,30 @@ document, the tooling is not finished.
 1. Open **Claude Aura Studio**, then use **Create** to start visually from
    Default or choose **Duplicate to customize** on another built-in look. A
    built-in is immutable. For an installed user theme, choose **Edit**.
+   The ordinary Studio rail opens **Themes**, **Prompt Shelf**, **Personal
+   wallpaper**, **Create a theme**, and **Settings** as five exclusive pages
+   inside the same Studio window. Switching destinations never reveals the
+   next section below the current one, reloads the WebView, or changes product
+   state. The rail remains visible, marks exactly one current page, and keeps
+   `.content` as the only ordinary page scroller.
 2. **Quick customize** opens by default in one focused workspace: the live
    preview stays on the left and its compact inspector stays on the right at
    every supported Studio width. The ordinary gallery rail collapses to its
-   identity mark while editing. The inspector has exactly three branches in
-   both Quick customize and Advanced: **Interface** for the overall palette,
-   materials, type, current new-chat prompt target, and **Greeting**;
-   **Background** for canvas scope and artwork layers; and **Widgets** for Aura
-   app identity and the floating launcher. Future work registers Instant
-   prompts in those same branches instead of adding destinations or empty
-   placeholders. Theme name and descriptions remain document details in the
-   sticky header. Light/Dark, page, and Standard/Wide stay beside the preview
-   in every branch. The preview and inspector scroll independently inside the
-   editor workspace; the preview is not sticky and never floats over controls
-   lower in the inspector. The generated theme ID remains immutable.
+   identity mark while editing. The inspector uses five non-linear workflow
+   stages: **Details**, **Interface**, **Background**, **Widgets**, and
+   **Review**. They are destinations, not completion gates; move between them
+   in any order without changing the draft. Exactly three of those stages are
+   capability branches: **Interface** for the overall palette, materials,
+   type, current new-chat prompt target, and **Greeting**; **Background** for
+   canvas scope and artwork layers; and **Widgets** for Aura app identity and
+   the floating launcher. Future work registers Instant prompts in those same
+   branches instead of adding destinations or empty placeholders. The fixed
+   command and stage header stays outside the inspector's one body scroller,
+   so its scrollbar begins below the header. Light/Dark, page, and
+   Standard/Wide stay beside the preview in every capability branch. The
+   preview and inspector body scroll independently inside the editor
+   workspace; the preview is not sticky and never floats over controls lower
+   in the inspector. The generated theme ID remains immutable.
 3. Edit Light and Dark independently. Advanced Interface provides **Copy Light
    colors to Dark** and **Copy Dark colors to Light** for the editable colour
    and alpha set; each mode can then be refined without changing the other.
@@ -67,9 +77,12 @@ document, the tooling is not finished.
    silently choosing another object. Greeting provides independent Light/Dark
    and Standard/Wide controls for placement, width, typography, alignment,
    decoration, and an approved native or compact mark.
-7. Choose **Main area only** to begin artwork at the measured live main canvas,
-   or **Entire window** to continue it behind the translucent live sidebar. The
-   personal wallpaper page is separate and does not become part of the theme.
+7. In Background, choose **Sidebar**, **Main area only**, or **Entire window**.
+   The canvas keeps the sidebar and main area visibly labelled: clicking a
+   blank region selects it, while the explicit Entire window choice combines
+   both. The selected image remains available to drag immediately, and artwork
+   is clipped to that same measured region in live Aura. The personal wallpaper
+   page is separate and does not become part of the theme.
 8. The primary canvas uses an in-memory capture of the actual Aura WebView when
    its dimensions, appearance, and page context match the selected state. Drag,
    resize, select, hide-for-editing, and adjust opacity directly over that
@@ -93,14 +106,56 @@ document, the tooling is not finished.
    front so they do not force a window switch after every adjustment. The local
    prompt builder only drafts asset-generation text and makes no model or
    network call.
-9. Keep the compact global validation status in view, then Save. It is not a
-   fourth branch. Passing contrast ratios stay out of Quick customize; a
-   problem links to its exact branch, target, scope, and visible control, while
-   Advanced provides the full diagnostic
-   detail. Back, save status, Cancel, and Save remain together in the sticky
-   inspector header without covering controls. Undo, redo,
-   reset, and delete remain available. Deleting the selected user theme first
-   applies Default; built-in themes cannot be deleted.
+9. Open **Review** for the compact global validation status, then Save. Review
+   is a workflow stage, not a fourth capability branch. Passing contrast ratios
+   stay out of Quick customize; a problem links to its exact branch, target,
+   scope, and visible control, while Advanced provides the full diagnostic
+   detail. Back, save status, and Cancel remain together in the fixed inspector
+   header outside the body scroller and never cover controls. The final Save
+   action belongs to Review. Undo, redo, reset, and delete remain available.
+   Deleting the selected user theme first applies Default; built-in themes
+   cannot be deleted.
+
+### Staged inspector pages
+
+The five workflow stages organize one draft without turning editing into a
+linear wizard:
+
+- **Details / General** is one complete document page. It lets the author
+  choose any of Studio's fifteen interface languages and creates one paired
+  Name + Description card for each selected language. English (`en`) is the
+  required fallback and cannot be removed; the other languages are optional.
+  It also shows a truthful Light/Dark support summary. Every theme supports
+  both appearances and Save validates both, so Light and Dark are status, not
+  switches that can disable one mode.
+- **Interface**, **Background**, and **Widgets** are the only capability
+  branches. Within the active branch, the target dropdown contains only
+  Aura-registered targets. Choosing a target replaces the inspector body with
+  that target's one complete page; it never jumps within a stacked,
+  multi-target document. Canvas selection may route only among these registered
+  branch targets.
+- **Review** is one complete page for global validation, budgets, recovery
+  links, and final checks. It does not receive canvas selection or add a
+  capability target.
+
+The fixed header and stage navigation do not live inside the scrolling body.
+The inspector has one vertical body scroller, every page starts at its top when
+selected, and no section rail or nested page scrollbar can extend above the
+header.
+
+When a theme already has a saved Studio preview master, Details may expose its
+device-local card crop and position. That framing is gallery metadata rather
+than portable theme content. Studio does not currently support uploading,
+replacing, or importing a preview photo from the editor, and the Details page
+must not imply that it does.
+
+The explicit built-in layout-authoring mode is capability-filtered instead of
+showing disabled or misleading stages. It omits Details and Widgets, exposes
+Interface only for the authorized new-chat prompt and Greeting presentation
+targets, exposes Background only when the built-in already has artwork and only
+for authorized framing, and keeps Review for validation. It cannot change
+localized metadata, add preview media, add or remove theme artwork, personalize
+greeting words, or edit other unauthorized surfaces.
 
 The editor keeps four questions visibly separate:
 
@@ -285,17 +340,21 @@ URLs, custom CSS, and filesystem paths never style the Studio shell. Theme-card
 media, the editor's labelled asset guide/stage, and the validated launcher mark
 remain their own bounded product surfaces.
 
-### Studio-authored schemas v2 and v3
+### Studio-authored schemas v2, v3, and v4
 
-Studio saves an edited `theme.json` with `schemaVersion: 3`. Schema v3 carries
+Studio saves an edited `theme.json` with `schemaVersion: 4`. Schema v3 carries
 the schema-v2 document forward and adds optional `newChatGreetingStyle`; `null`
-means Claude-native presentation. Opening a schema-v1 or schema-v2 user theme
-normalizes only the in-memory editing history and does not rewrite the
-installed kit until Save. The document carries localized metadata and a
-validated, Studio-normalized `theme` token object forward from schema v1, and
-adds:
+means Claude-native presentation. Schema v4 lets localized metadata use a
+selected subset of Studio's fifteen interface locales. `labels` and
+`descriptions` must have the same locale keys, `en` must be present, and every
+selected locale must have a completed name and description before Save.
+Unselected locales fall back to English at runtime. Opening a schema-v1,
+schema-v2, or schema-v3 user theme normalizes only the in-memory editing
+history and does not rewrite the installed kit until Save. The document
+carries localized metadata and a validated, Studio-normalized `theme` token
+object forward from schema v1, and adds:
 
-- `backgroundScope`: `content` or `full-window`;
+- `backgroundScope`: `sidebar`, `content`, or `full-window`;
 - `newChatLayout`: `widthRatio` (0.4–0.96), `offsetXRatio` (-0.35–0.35), and
   `offsetYRatio` (-0.3–0.3), or `null`;
 - `sourceRecipe`: `null` or one of the eight frozen built-in IDs;
@@ -336,8 +395,8 @@ switching themes changes them together. Original look uses the Default identity
 on every surface. Aura stores the derived custom ICO under its own data root;
 themes cannot provide an ICO or shortcut path. Presentation is optional; the
 launcher itself, its permanent 48×48 circular geometry, keyboard name, safe
-edge gap, whole-button 6 px drag threshold, click-to-open action, and
-right-click menu remain host-owned and cannot be changed by a theme.
+edge gap, whole-button 6 px drag threshold, and click-or-right-click action
+menu remain host-owned and cannot be changed by a theme.
 
 The eight frozen built-ins also have a separate Aura-owned in-page wordmark
 pair at

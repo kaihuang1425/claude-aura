@@ -88,7 +88,9 @@ Also capture these stress cases when the available display supports them:
 For a Full-window background scope, the artwork must visibly extend behind the
 sidebar and the marked sidebar must remain legible as one translucent overlay.
 For Content-canvas scope, the sidebar must remain outside the artwork field.
-Exercise both scopes during custom-theme acceptance.
+For Sidebar scope, artwork must be clipped to the measured sidebar and leave
+the main area outside the artwork field. Exercise all three scopes during
+custom-theme acceptance.
 
 ### Floating launcher interaction
 
@@ -111,7 +113,17 @@ window; there is no expanded pill, text label, divider, or grip. Press anywhere
 on the launcher and move beyond the DPI-scaled 6 px threshold to drag it, then
 release and confirm the position persists and remains clamped after restart and
 a DPI change. Separately press and release without crossing the threshold to
-open Studio, and confirm right-click opens the host menu. Finally apply a
+open the host action menu, confirm Prompt Shelf and Studio are both visible,
+then confirm right-click opens the same menu. Open each action from the menu.
+Move the saved preferred position over the live composer and repeat with the
+composer toolbar/control row expanded. The launcher must move to the nearest
+collision-free position without changing `launcher-pos.json`, then return to the
+saved preference when the obstruction disappears. Repeat at normal and high DPI,
+after a WebView resize, and after new-chat/conversation navigation. Record the
+WebView CSS viewport, native client dimensions, and effective launcher rectangle;
+automatic avoidance must never hide the control, intercept page controls, or
+rewrite the position chosen by a drag.
+Finally apply a
 temporary theme with no `launcher` object and confirm the complete Default
 design appears. Theme styling must never hide the launcher, change its
 host-owned click/drag/menu semantics, or create more than one launcher window.
@@ -121,6 +133,36 @@ PNG and confirm Aura derives and reuses a content-addressed ICO under its owned
 data root. The custom kit must not supply an ICO or shortcut path. This complete
 revised identity-quality and shortcut cycle remains open at HUMAN CHECKPOINT D
 until it is observed in the actual Aura application.
+
+### Prompt Shelf quick panel and Studio page
+
+Use the installed release candidate and the same signed-in Aura profile for
+both surfaces. In Studio, open **Prompt Shelf** from the rail at 1080×720 and
+760×560. Capture Light and Dark, then sample System across a real Windows
+appearance change. Confirm the ordered draft cards, local search, editor,
+empty state, destructive confirmation, status feedback, enabled/disabled
+actions, visible focus, and long en/zh-CN/zh-HKTW copy remain readable without
+clipping. Repeat the complete keyboard path with Tab/Shift+Tab, arrow keys,
+Enter/Space, Escape, and the documented shortcuts. Inspect forced colors,
+increased contrast, and reduced motion. Studio captures document only this
+host-owned management surface.
+
+Create, edit, move, and delete drafts alternately in Studio and the native
+quick panel, including the first, second, and final item. Confirm both surfaces
+show the same order and text after every host acknowledgement and after an Aura
+restart. Search must only filter the in-memory view and must not alter stored
+order. With Original look active, drafts remain manageable in Studio while
+**Insert in Aura** is visibly unavailable; restoring Aura makes it available
+without changing the store.
+
+For insertion, pair the Studio capture with whole-window actual-Aura captures
+on live `claude.ai`. Insert a saved draft once at a retained mid-text caret on
+both new-chat and conversation routes, including while a response is
+generating. Confirm the text remains unsent and no retry, Enter, clipboard,
+interruption, response detection, or persistent Claude-page listener appears.
+Exercise a deliberately stale Studio mutation and a duplicate request ID:
+neither may change encrypted store bytes or create a second draft. Studio
+captures never substitute for the required live Aura evidence.
 
 ### Built-in in-page wordmarks
 
@@ -282,6 +324,33 @@ profile clips actions, changes the one-scroller layout, or alters preview/stage
 pixels. This is a live Studio walkthrough, not a replacement for the required
 whole-window Aura captures.
 
+Exercise the ordinary Studio shell at three measured CSS viewports: spacious
+(above 960 px wide and 680 px high), compact (at or below either threshold),
+and tight (at or below 640 px wide or 430 px high). Record the Studio outer
+window pixels, CSS viewport, DPR, and Windows display scaling rather than
+inferring a mode from native window dimensions. Confirm the rail changes from
+232 px to 184 px to a 56 px launcher ribbon; every tight-mode target remains at
+least 44 px; localized labels reveal on hover and keyboard focus; appearance
+choices and theme cards reflow without clipping; and `.content` remains the
+only page scroller. Repeat tight mode with en, zh-CN, and zh-HKTW, forced
+colors, reduced motion, and 200% scaling. Entering the editor must opt out of
+the ordinary-shell rail morph and retain its side-by-side stage/inspector
+workspace.
+
+At each ordinary-shell size, activate Themes, Prompt Shelf, Personal wallpaper,
+Create a theme, and Settings from the rail. Confirm exactly one labelled page
+is visible and interactive, no preceding or following destination can be
+reached by scrolling, the inactive pages are inert, and `.content` remains the
+only page scroller. The selected rail item alone has current-page semantics.
+Using keyboard only, move through the vertical rail with Arrow Up/Down and
+Home/End, activate with Enter and Space, and confirm a deliberate activation
+starts at the destination heading without moving the WebView root document.
+Change locale from Settings and confirm the same allowlisted page returns after
+the host reload. An unknown fragment must return safely to Themes. Opening
+Prompt Shelf must load its state without first scrolling near another section,
+and ordinary navigation must not alter the active theme, appearance, personal
+media, saved drafts, or editor state.
+
 1. enter through Create's visual path, duplicate a built-in, give the copy
    distinct en, zh-CN, and zh-HKTW metadata, and make valid Dark token changes in
    Quick customize. Confirm entering the draft switches to neutral chrome and
@@ -341,6 +410,14 @@ whole-window Aura captures.
    frame, and the next matching in-memory capture replaces it without an Apply
    step. Confirm these dimensions create no patch, override, Undo item, or third
    saved set and still map to exactly two persisted framing sets.
+   Treat 1180×640, 1560×940, and typed dimensions as requested WebView CSS
+   viewport sizes, never native WinForms client pixels. At 100%, 125%, 150%,
+   and 200% Windows scaling, record requested CSS size, observed CSS size, DPR,
+   and native WebView client size from the same accepted mirror. Confirm the
+   host settles the CSS viewport within one pixel using no more than three
+   measured corrections, a genuine user resize cancels the pending target, and
+   a truthful final measured size replaces an unattainable target rather than
+   labelling native pixels as CSS pixels.
    During every size change, keep keyboard focus in Studio and confirm Aura does
    not cover or steal focus from the inspector. Use **Review in Aura** once
    and confirm foregrounding the detached live window occurs only from that
@@ -350,14 +427,14 @@ whole-window Aura captures.
 4. prove the saved theme, artwork, and dual-mode Studio shell projection survive
    restart. If the editor is reopened while its current document is invalid,
    confirm Studio restores the persisted last-valid projection rather than the
-   invalid controls. Then exercise both visible background choices: **Main area
-   only** (the Content-canvas contract) and **Entire window** (the Full-window
-   contract);
+   invalid controls. Then exercise all three visible background choices:
+   **Sidebar** (the Sidebar contract), **Main area only** (the Content-canvas
+   contract), and **Entire window** (the Full-window contract);
 5. select **Original look** while a distinctive custom shell is visible. Confirm
    that Studio switches to the complete Default projection, appearance returns
    to System, and the effective mode follows Windows rather than retaining any
    custom variable. Reapply the saved theme and confirm its projection returns;
-6. for each background scope, in the real signed-in Aura window capture Light
+6. for each of the three background scopes, in the real signed-in Aura window capture Light
    and Dark at an empty new chat and an existing conversation, first at a
    normal window size and then maximized/fullscreen (the complete scope ×
    appearance × context × viewport matrix); and
@@ -367,9 +444,10 @@ whole-window Aura captures.
    installed or draft residue remains.
 
 The evidence set must include the whole Aura outer window and live
-`claude.ai`. It must show that **Main area only** / Content-canvas artwork
-excludes the sidebar and **Entire window** / Full-window artwork continues
-behind one readable translucent sidebar. Record
+`claude.ai`. It must show that **Sidebar** artwork excludes the main area,
+**Main area only** / Content-canvas artwork excludes the sidebar, and **Entire
+window** / Full-window artwork continues behind one readable translucent
+sidebar. Record
 the Studio locale used for the walkthrough, the usable Quick/Advanced layout at
 the normal 1080×720 Studio size, the persistent header Back/status/Cancel/Save controls,
 the personal-wallpaper distinction, the

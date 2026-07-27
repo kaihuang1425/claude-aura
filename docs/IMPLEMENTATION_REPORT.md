@@ -52,8 +52,9 @@ Eight changes landed after the initial eight-theme system:
    Windows groups a pinned entry with its live Aura window.
    The host presents one permanently circular 48 px control with a 16 px safe
    edge gap. A whole-button press becomes a drag beyond a DPI-scaled 6 px
-   threshold, release before that threshold opens Studio, and right-click opens
-   the host menu; hover changes material only. It falls back to the complete
+   threshold; release before that threshold opens the host action menu with
+   Studio and Prompt Shelf visible, and right-click opens the same menu. Hover
+   changes material only. It falls back to the complete
    Default design when metadata or an asset is absent or Original look is
    active. Custom schema-v1/v2 kits still opt into one exact
    kit-local 96×96 PNG; the host derives a content-addressed ICO under Aura-owned
@@ -231,11 +232,11 @@ implementation surface by responsibility.
 | Shared renderer styling | `assets/base.css`, `assets/theme-variants.css`, `assets/renderer-inject.js` | Semantic production coverage, centralized component variants, root attributes, artwork layers, cleanup, and accessibility preferences |
 | Runtime artwork and app identity | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers, eight separate Light/Dark in-page wordmark pairs, plus eight deterministic 96×96 PNG/nine-frame ICO pairs shared by running and installed identity surfaces |
 | Studio selector media and source references | `assets/studio-previews/` | Seven preserved uncropped, user-framable masters plus clearly separated repository-only alternates, authored 1254×1254 launcher sources, eight normalized in-page wordmark sources, prompts, and provenance |
-| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-core/*.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-brand-wordmarks.mjs`, `scripts/build-launcher-assets.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork/identity auditing, deterministic wordmark and launcher generation, Studio metadata generation, and release collection |
-| Windows experience | `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | DPI-aware localized content-only host plus Aura Studio, live application, adjustable card/background framing, dynamic theme identity, accessibility, allowlisted install, verification/restore helpers, and explicit app/data removal |
+| Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-core/*.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-brand-wordmarks.mjs`, `scripts/build-launcher-assets.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs`, `scripts/build-installer*.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork/identity auditing, deterministic artwork generation, Studio metadata generation, release collection, and signed/unsigned Windows installer builds |
+| Windows experience | `installer/`, `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | Native per-user setup/uninstall lifecycle, localized trust and prerequisite UI, journaled app-tree prepare/commit/rollback, versioned retry-safe maintenance, DPI-aware content-only host plus Aura Studio, live application, adjustable card/background framing, dynamic theme identity, accessibility, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
 | Verification | `tests/run-tests.mjs`, `scripts/verify-cycle.mjs`, `scripts/asset-audit.mjs`, `package.json`, `config.example.json` | Twenty end-to-end/static checks, payload-only Light/Dark compilation for all eight themes, status-only artwork audits, build commands, and Default baseline |
-| Documentation and policy | `README.md`, `CONTRIBUTING.md`, `docs/THEMING.md`, `docs/TROUBLESHOOTING.md`, `docs/FILE_MANIFEST.md`, `docs/SCREENSHOT_PLAN.md`, `docs/ACCEPTANCE_AUDIT.md`, this report, `SECURITY.md`, `NOTICE.md`, `THIRD_PARTY_NOTICES.md`, `.gitignore` | Use, maintenance, troubleshooting, exhaustive file inventory, repeatable capture, acceptance evidence, licensing, exclusions, and deliverables |
+| Documentation and policy | `README.md`, `CONTRIBUTING.md`, `docs/THEMING.md`, `docs/TROUBLESHOOTING.md`, `docs/WINDOWS_INSTALLER.md`, `docs/FILE_MANIFEST.md`, `docs/SCREENSHOT_PLAN.md`, `docs/ACCEPTANCE_AUDIT.md`, this report, `SECURITY.md`, `NOTICE.md`, `THIRD_PARTY_NOTICES.md`, `.gitignore` | Use, maintenance, installer signing and release procedure, troubleshooting, exhaustive file inventory, repeatable capture, acceptance evidence, licensing, exclusions, and deliverables |
 
 The earlier legacy theme JSON files remain for compatibility but are not exposed
 as additional picker entries; registry aliases migrate their saved IDs.
@@ -545,10 +546,11 @@ dependency/build output, temporary files, logs, existing release output, and
 source-only `assets/studio-previews/references/` are therefore excluded,
 including launcher source images and their prompt record. The derived
 `assets/theme-art/<id>/launcher-mark.png` and `launcher-mark.ico` files and the
-registered preview masters are shipped product media. From a repository
-checkout, the installer runs the complete suite before copying. An extracted
-release has no Git metadata or source-only references, so its installer runs
-the eight shipped-theme validation preflight before the exact-tree swap.
+registered preview masters are shipped product media. The native installer
+embeds only the release builder's allowlisted ZIP content, re-verifies that
+archive before compilation, and performs a hash-verified exact-tree swap.
+Repository tests and payload-cycle checks are separate build gates rather than
+hidden work performed on the user's computer.
 
 ## Visual evidence
 

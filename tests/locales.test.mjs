@@ -97,10 +97,19 @@ test("every locale surface names exactly the same languages", async () => {
 test("Windows host copy covers its languages completely", async () => {
   const hostCopy = await readHostCopy();
   const directory = path.join(PROJECT_ROOT, "windows", "locales");
+  const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
   const files = (await fs.readdir(directory)).filter((name) => name.endsWith(".json"))
     .map((name) => name.slice(0, -5)).sort();
   assert.deepEqual(files, [...UI_LOCALES].sort(),
     "windows/locales does not match the host languages the tests declare");
+  assert.deepEqual(UI_LOCALES, STUDIO_LOCALES,
+    "Aura and Studio must expose the same interface languages");
+  const copySelector = ui.slice(
+    ui.indexOf("function Get-AuraUiCopy {"),
+    ui.indexOf("function ConvertTo-AuraUiLocale {"),
+  );
+  assert.match(copySelector, /\$localeKey = ConvertTo-AuraUiLocale -Locale \$tag/,
+    "Windows host copy must use the canonical fifteen-locale normalizer");
 
   const englishKeys = Object.keys(hostCopy.en).sort();
   assert(englishKeys.length > 0, "windows/locales/en.json must not be empty");

@@ -108,8 +108,9 @@ Only the surrounding launcher material uses the table below.
 The launcher is permanently 48×48 px and circular, with a 16 px safe edge gap.
 Hover changes only the validated material/opacity. A whole-button press becomes
 a drag after a DPI-scaled 6 px movement threshold; release before that threshold
-opens Studio, and right-click opens the host menu. Theme styling never changes
-those host-owned interaction dimensions or semantics.
+opens the host action menu with Studio and Prompt Shelf visible, and right-click
+opens the same menu. Theme styling never changes those host-owned interaction
+dimensions or semantics.
 
 Host loading cover (WO-18 fixed permanent recipes; not user-schema fields):
 
@@ -304,6 +305,10 @@ marks are limited to the audited local SVG assets for Japanese Film Editorial,
 Korean Prestige, and Japanese Idol, plus Study Library's already-audited local
 launcher PNG reused as its book mark.
 
+All eight built-in themes use normal, non-italic greeting type and default to
+Claude's native greeting wording. Personal phrases remain an explicit user
+choice and stay outside theme documents.
+
 Authored recipes (exact values):
 
 - **Default** — centered warm display serif, restrained native mark.
@@ -337,8 +342,8 @@ Authored recipes (exact values):
   mark @0.85. Wide: 40px / -0.015em / 1.17 / max 0.56 / x -0.14 /
   y -0.01 / book mark @0.90; other values unchanged. Light and Dark are
   identical.
-- **Japanese Idol** — asymmetric italic serif, soft accent, approved flower mark.
-  Light Standard: editorial-serif / accent / 37px / 600 / italic / 0.005em /
+- **Japanese Idol** — asymmetric upright serif, soft accent, approved flower mark.
+  Light Standard: editorial-serif / accent / 37px / 600 / not italic / 0.005em /
   1.12 / start / max 0.58 / x -0.10 / y -0.03 / none / compact @0.85. Light
   Wide: 44px / 1.08 / max 0.54 / x -0.14 / y -0.01 / compact @0.90. Dark uses
   36px Standard and 43px Wide; all other values match Light.

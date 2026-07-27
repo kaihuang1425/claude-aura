@@ -32,3 +32,15 @@ config.local.json
 *.corrupt-*.json
 .DS_Store
 Thumbs.db
+
+# Local runtime, interrupted-write, and non-release preview artifacts
+/config.json
+*.tmp-*
+docs/preview.png
+
+# Local environment and Windows signing secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12

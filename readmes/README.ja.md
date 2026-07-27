@@ -135,42 +135,53 @@ Evergreen WebView2 Runtime をインストールまたは修復して再試行�
 <a id="installation"></a>
 ### インストール
 
-1. [最新版のリリース ZIP](https://github.com/kaihuang1425/claude-aura/releases)をダウンロードします。
-2. エクスプローラーで ZIP を右クリックし、**Extract All** を選択します。
-3. 展開したフォルダーを開き、**Install Claude Aura.cmd** をダブルクリックします。
-4. インストーラーが閉じ、**Claude Aura** ウィンドウが開くのを待ちます。
-5. `claude.ai` の指示で、Aura 内でサインインします。
-6. フローティングの Aura ボタンをクリックして Studio を開き、**Themes** を選択します。
+[最新リリース](https://github.com/kaihuang1425/claude-aura/releases)を開き、これらのいずれかのパスを選択します。どちらも現在のWindowsアカウントに同じバージョンをインストールします。
 
-インストールは Claude Desktop をパッチまたは置換しません。
+| Path | Use it when | Download |
+| --- | --- | --- |
+| **Unsigned Setup** | より簡単なガイド付きインストーラーを希望し、Windowsが通常通り開く場合 | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` とそれに対応する `.sha256`、`.manifest.json` |
+| **ZIP + CMD fallback** | Windowsがunsigned Setupを警告またはブロックする場合、または読み取り可能なソーススクリプトを希望する場合 | `claude-aura-v<version>.zip` とそれに対応する `.sha256` |
+
+#### Path 1 ??Unsigned Setup
+
+1. **Assets** から `-UNSIGNED.exe`、その `.sha256`、および `.manifest.json` をダウンロードします。GitHubが自動生成する **Source code** アーカイブは使用しないでください。
+2. SetupファイルのSHA-256を、companionファイルの両方と比較します。いずれかの値が異なる場合は、ダウンロードを停止して両方のファイルを削除します。
+3. 開発者はコード署名証明書を持っていないため、Windowsはこのインストーラーのpublisherを検証できません。Windowsが警告を出すかブロックした場合は、回避せずPath 2を使用してください。
+4. 正常に開いた場合はSetupに従ってください。Node.jsとWebView2をチェックし、`%LOCALAPPDATA%\ClaudeAura` 配下へコピー、**Installed apps**の登録とショートカットを追加し、その後Auraを開きます。
+
+#### Path 2 ??ZIP + CMD fallback
+
+1. **Assets** から `claude-aura-v<version>.zip` と対応する `.sha256` をダウンロードします。GitHubが自動生成する **Source code** アーカイブは使用しないでください。
+2. ZIPのSHA-256をcompanionファイルと比較します。値が異なる場合は、停止して両方のファイルを削除します。
+3. **Extract all** を選択します。展開された `claude-aura` フォルダーで **Install Claude Aura.cmd** をダブルクリックします。ZIPプレビュー内からは実行しないでください。
+4. 読み取り可能なCMD/PowerShellインストーラーはNode.jsとWebView2をチェックし、Auraをインストール、ショートカットを作成して開きます。このパスにはAuthenticode publisher identityはなく、**Installed apps**エントリは追加されません。
+
+どちらのパスでも、`claude.ai` が要求した場合はAura内でサインインしてください。フローティングAuraボタンをクリックし、**Open Studio**、続いて **Themes** を選択します。
+
+`-UNSIGNED` を含まない `Claude-Aura-Setup-v<version>.exe` は別のsigned pathで、このリリースノートで名前付きのpublisherを表示する必要があります。`-UNSIGNED-DEV.exe` で終わるassetは決して公開されません。
+
+インストールはClaude Desktopをパッチ適用または置換しません。
 
 <details>
-<summary><strong>インストーラーの動作、アプリ配置、開発者チェックアウト、アンインストール</strong></summary>
+<summary><strong>Installer behavior, application location, and uninstall</strong></summary>
 
-管理者権限なしのインストーラーは内蔵の検証を実行した後、アプリファイルを次の場所へコピーします:
+両パスとも管理者プロンプトなしで実行され、前提条件を検証し、Auraの保護付きapp-tree swapを実行します。アプリケーションファイルは以下にインストールされます。
 
 ```text
 %LOCALAPPDATA%\ClaudeAura\app
 ```
 
-デスクトップとスタートメニューに **Claude Aura** と **Claude Aura Studio** の
-ショートカットを作成します。テーマ設定とサインインデータはアプリ本体と別保存されるため、
-再インストール時に静かに上書きされません。
+Startメニューとデスクトップに **Claude Aura**、**Claude Aura Studio**、およびアンインストールショートカットを作成します。テーマ設定とサインインデータはアプリケーションとは別に保存されるため、Auraを再インストールしても静かに置換されません。ネイティブSetupは **Installed apps** エントリとネイティブアンインストーラーを追加しますが、ZIP/CMDパスはそのソーススクリプトのアンインストールショートカットを保持します。
 
-開発者は ZIP をダウンロードする代わりにリポジトリをクローンし、同じインストーラーをチェックアウトから実行できます。チェックアウトではインストール前に
-リポジトリ全体のテストスイートが実行されます。
+開発者はリポジトリをクローンし、ローカル検査用に明示的に命名されたunsigned development installerをビルドできます。これは明確に区別された公開のunsigned Setupとは異なります。ビルドコマンド、pinnedコンパイラ、検証ゲート、およびrelease checklistは
+[Windows installer guide](../docs/WINDOWS_INSTALLER.md) に文書化されています。
 
-<a id="uninstall"></a>
-### アンインストール
+### Uninstall
 
-まずフローティング Aura ボタンで右クリックし、**Exit Claude Aura** を選択します。
-次に **Start > Claude Aura > Uninstall Claude Aura** を開くか、展開済みリリース内の
-**Uninstall Claude Aura.cmd** をダブルクリックします。Aura が開いたままではアンインストーラーは続行しません。
+まず、フローティングAuraボタンを右クリックし、**Exit Claude Aura** を選択します。
+ZIPインストールでは、**Start > Claude Aura > Uninstall Claude Aura** を開くか、展開したrelease内の **Uninstall Claude Aura.cmd** をダブルクリックします。どちらのnative Setupでも、**Settings > Apps > Installed apps > Claude Aura > Uninstall** も使用できます。`.cmd`エントリは、存在する場合、登録済みのnative uninstallerに委任します。uninstallerはAuraがまだ開いている間は継続しません。
 
-既定では、アンインストールは Aura 本体とショートカットを削除しますが、ローカルの
-テーマ設定と Aura の独立した WebView サインインプロファイルは再インストール用に保持されます。
-そのフォルダーを削除するか確認するオプションがあります。これを選択しても Claude Desktop、
-ユーザーの Anthropic アカウント、サーバー側アカウントデータは削除されません。
+デフォルトではアンインストールによりAuraアプリケーションとショートカットが削除されますが、ローカルのテーマ設定とAuraの別個のWebViewサインインプロファイルは、後で再インストールするために保持されます。uninstallerはこれらのフォルダーを削除する前にも確認します。このオプションの消去によりAuraのローカルサインインセッションが削除されます。これはClaude Desktop、ユーザーのAnthropicアカウント、またはサーバー側のアカウントデータを削除しません。
 
 </details>
 <p align="right">(<a href="#readme-top">先頭へ戻る</a>)</p>

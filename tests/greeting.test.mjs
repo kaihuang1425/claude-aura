@@ -325,15 +325,15 @@ const EXPECTED_BUILTIN_GREETING_RECIPES = Object.freeze({
   ),
   "japanese-idol": {
     light: {
-      standard: recipeFrame("editorial-serif", "accent", 37, 600, true, 0.005, 1.12, "start",
+      standard: recipeFrame("editorial-serif", "accent", 37, 600, false, 0.005, 1.12, "start",
         0.58, -0.1, -0.03, "none", "compact", 0.85),
-      wide: recipeFrame("editorial-serif", "accent", 44, 600, true, 0.005, 1.08, "start",
+      wide: recipeFrame("editorial-serif", "accent", 44, 600, false, 0.005, 1.08, "start",
         0.54, -0.14, -0.01, "none", "compact", 0.9),
     },
     dark: {
-      standard: recipeFrame("editorial-serif", "accent", 36, 600, true, 0.005, 1.12, "start",
+      standard: recipeFrame("editorial-serif", "accent", 36, 600, false, 0.005, 1.12, "start",
         0.58, -0.1, -0.03, "none", "compact", 0.85),
-      wide: recipeFrame("editorial-serif", "accent", 43, 600, true, 0.005, 1.08, "start",
+      wide: recipeFrame("editorial-serif", "accent", 43, 600, false, 0.005, 1.08, "start",
         0.54, -0.14, -0.01, "none", "compact", 0.9),
     },
   },

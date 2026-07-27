@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
   [switch]$NoShortcuts,
+  [switch]$NoDesktopShortcuts,
   [switch]$Launch
 )
 
@@ -838,6 +839,7 @@ try {
     'THEME_KIT_SPEC.md',
     'THEMING.md',
     'TROUBLESHOOTING.md',
+    'WINDOWS_INSTALLER.md',
     'recipes/RECIPES.md'
   )
 
@@ -989,7 +991,32 @@ try {
         Description = 'Claude Aura Studio'
       }
     )
-    foreach ($folder in @($desktop, $menuRoot)) {
+    $shortcutFolders = @($menuRoot)
+    if (-not $NoDesktopShortcuts) {
+      $shortcutFolders = @($desktop, $menuRoot)
+    } else {
+      foreach ($definition in $shortcutDefinitions) {
+        $shortcutPath = Join-Path $desktop $definition.Name
+        if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) { continue }
+        try {
+          $existingShortcut = $shell.CreateShortcut($shortcutPath)
+          $ownedTarget = [string]::Equals(
+            [IO.Path]::GetFullPath([string]$existingShortcut.TargetPath),
+            [IO.Path]::GetFullPath($powershell),
+            [StringComparison]::OrdinalIgnoreCase)
+          $ownedArguments = [string]::Equals(
+            [string]$existingShortcut.Arguments,
+            [string]$definition.Arguments,
+            [StringComparison]::Ordinal)
+          if ($ownedTarget -and $ownedArguments) {
+            Remove-Item -LiteralPath $shortcutPath -Force
+          }
+        } catch {
+          Write-Verbose "Could not validate optional Desktop shortcut $shortcutPath`: $($_.Exception.Message)"
+        }
+      }
+    }
+    foreach ($folder in $shortcutFolders) {
       foreach ($definition in $shortcutDefinitions) {
         $shortcutPath = Join-Path $folder $definition.Name
         $shortcut = $shell.CreateShortcut($shortcutPath)

@@ -86,6 +86,12 @@ html.claude-aura body {
   overflow: hidden;
 }
 
+#claude-aura-backdrop[data-art-scope="sidebar"] .claude-aura-theme-art {
+  right: auto;
+  width: var(--aura-main-start, 0px);
+  overflow: hidden;
+}
+
 #claude-aura-backdrop .claude-aura-theme-art[data-art-framed="true"] > img {
   position: absolute;
   width: auto;
@@ -250,6 +256,7 @@ html.claude-aura [data-aura-role="sidebar-primary"] {
   border-color: hsl(var(--aura-accent-primary)) !important;
   border-radius: var(--aura-control-radius);
   box-shadow: var(--aura-state-shadow);
+  margin-block-end: 8px !important;
 }
 
 html.claude-aura [data-aura-role="sidebar-primary"]:not([disabled]):not([aria-disabled="true"]):hover {

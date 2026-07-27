@@ -65,6 +65,19 @@ The complete license and notice supplied with the package are included at
 
 Source: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4078.44
 
+## Inno Setup
+
+The Windows Setup executable is compiled with Inno Setup 7. Inno Setup is a
+build-time tool and is not an Aura runtime dependency.
+
+Copyright (c) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (c) 2000-2026 Martijn Laan. All rights reserved.
+
+The compiler's complete license is distributed with Inno Setup. The generated
+Setup executable retains the notices embedded by the compiler.
+
+Source and license: https://jrsoftware.org/isinfo.php
+
 ## Project theme artwork and reference derivatives
 
 The isolated SVG and WebP renderer layers under `assets/theme-art` are Claude
