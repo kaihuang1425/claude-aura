@@ -43,6 +43,21 @@ import {
   writeConfig,
 } from "../../scripts/theme-core.mjs";
 
+// GitHub Actions starts Windows jobs under PowerShell 7, whose module path can
+// make Windows PowerShell 5.1 resolve incompatible copies of built-in modules.
+// Every native regression probe uses powershell.exe, so keep its module lookup
+// on the Windows PowerShell roots that production uses.
+if (process.platform === "win32") {
+  const systemRoot = process.env.SystemRoot ?? process.env.WINDIR ?? "C:\\Windows";
+  const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+  const userProfile = process.env.USERPROFILE ?? os.homedir();
+  process.env.PSModulePath = [
+    path.join(userProfile, "Documents", "WindowsPowerShell", "Modules"),
+    path.join(programFiles, "WindowsPowerShell", "Modules"),
+    path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "Modules"),
+  ].join(path.delimiter);
+}
+
 export const THEME_IDS = [
   "default",
   "japanese-film-editorial",

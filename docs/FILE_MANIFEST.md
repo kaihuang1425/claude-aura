@@ -39,6 +39,7 @@ offline-preview files and comparison screenshots are not deliverables.
 
 ## Repository and policy
 
+- `.gitattributes`
 - `.github/ISSUE_TEMPLATE/bug.yml`
 - `.github/workflows/ci.yml`
 - `.gitignore`
