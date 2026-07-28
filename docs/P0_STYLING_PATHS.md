@@ -74,7 +74,13 @@ Everything past that waits on a spike result. Nothing in steps 1–4 requires on
 
 ## Frozen work
 
-Paused until both paths clear their gates:
+Paused until both paths **resolve** their gates. Resolved means a published
+decision either way: a go that starts that path's product work, or a no-go that
+ends it and keeps the current fallback — the Aura web window for Path 2,
+existing-session guidance for Path 1. A no-go unfreezes this list exactly like a
+go does; nothing here waits on a path that has already been decided against.
+
+Frozen while the gates are still open:
 
 - WO-19 instant prompts, WO-20 live selection, WO-25 Interface targets,
   WO-26 responsive layout sets

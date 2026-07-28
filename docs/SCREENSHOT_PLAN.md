@@ -467,7 +467,9 @@ are part of the still-open HUMAN CHECKPOINT D.
 
 ### Styled local Claude Code (HUMAN CHECKPOINT CODE)
 
-This is release-blocking v1 evidence for WO-27, the project's only P0. Under
+This is release-blocking v1 evidence for WO-27, one of the project's two P0
+paths; Claude Desktop styling is the other, and its gates and evidence carry
+the same priority. Under
 the [P0 styling paths brief](./P0_STYLING_PATHS.md) it is scheduled as soon
 as the terminal-theme export and the Code styling adapter land; it no longer
 waits for HUMAN CHECKPOINT D to close, and the two capture sessions may run in
