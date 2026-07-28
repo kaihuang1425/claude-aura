@@ -321,6 +321,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/theme-core/greeting.mjs`
 - `scripts/theme-core/registry.mjs`
 - `scripts/theme-core/studio.mjs`
+- `scripts/theme-core/terminal.mjs`
 - `scripts/theme-core/validation.mjs`
 - `scripts/verify-cycle.mjs`
 - `scripts/webview-cli.mjs`
@@ -341,6 +342,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/studio-editor.test.mjs`
 - `tests/support/context.mjs`
 - `tests/support/harness.mjs`
+- `tests/terminal-theme.test.mjs`
 - `tests/theme-cli.test.mjs`
 - `tests/themes.test.mjs`
 - `tests/user-kits.test.mjs`

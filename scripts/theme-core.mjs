@@ -61,6 +61,11 @@ export {
   renderGreetingCss,
 } from "./theme-core/compile.mjs";
 export {
+  buildTerminalTheme,
+  exportTerminalThemes,
+  TERMINAL_THEME_SCHEMA,
+} from "./theme-core/terminal.mjs";
+export {
   createThemeCopy,
   beginThemeEdit,
   setThemeToken,

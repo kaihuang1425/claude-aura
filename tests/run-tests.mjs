@@ -6,6 +6,7 @@ import "./themes.test.mjs";
 import "./payload.test.mjs";
 import "./artwork.test.mjs";
 import "./theme-cli.test.mjs";
+import "./terminal-theme.test.mjs";
 import "./user-kits.test.mjs";
 import "./config.test.mjs";
 import "./avatar.test.mjs";

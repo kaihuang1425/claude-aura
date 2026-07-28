@@ -210,6 +210,29 @@ Each light and dark mode also defines:
 Decoration must not be required to understand or operate the interface. Keep a
 readable text-safe region and verify the theme with artwork unavailable.
 
+## Export matching Claude Code colours
+
+Claude Code v2.1.118 or later supports custom terminal themes. Export an Aura
+theme's Light and Dark colour projections to Aura-owned staging:
+
+```powershell
+node scripts/theme-cli.mjs export-terminal default
+```
+
+Use `--out <folder>` to choose another explicit destination and
+`--user-themes <folder>` when exporting a valid installed user theme. Aura
+writes two deterministic JSON files plus a separate ownership manifest and
+refuses to replace a file it cannot prove it owns. Inspect the files, place
+them in the official `~/.claude/themes/` directory through an explicit user
+action, then choose the desired `Claude Aura — …` entry with `/theme`. Aura
+does not edit Claude settings or select a running CLI theme.
+
+This export provides **matching colours, not the same theme**. Claude Code's
+documented format cannot carry Aura artwork, fonts, blur, shadows, radii, or
+layout. See the current
+[Claude Code terminal-theme reference](https://code.claude.com/docs/en/terminal-config#create-a-custom-theme)
+for the supported client version, bases, tokens, and `/theme` workflow.
+
 ## Component variants
 
 Tokens establish the shared color and material system. Use
