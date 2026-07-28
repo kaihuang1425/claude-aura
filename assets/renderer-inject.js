@@ -1186,7 +1186,7 @@
     if (!document.documentElement || window.__CLAUDE_AURA_DISABLED__) return;
     const codeContext = codeRouteContext();
     if (codeContext) {
-      enterCodeRoute(codeContext);
+      if (currentContext !== codeContext) enterCodeRoute(codeContext);
       return;
     }
     if (currentContext === "code-list" || currentContext === "code-session") {
