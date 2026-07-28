@@ -390,8 +390,8 @@ Aura는 앱, 설정, 테마, 초안, 브라우저 프로필을 분리합니다:
 
 - [x] 전용 Windows WebView2 동반자 및 되돌릴 수 있는 **Original look**
 - [x] Light 및 Dark 지원이 포함된 8개 안정적 기본 테마
+- [ ] **P0** 로컬 공식 Claude Code Remote Control용 Aura Code 완성 및 승인, 터미널 테마 export 일치
 - [ ] 노코드 Studio 시각 편집기 완성 및 리뷰
-- [ ] 로컬 공식 Claude Code Remote Control용 Aura Code 완성 및 승인, 터미널 테마 export 일치
 - [ ] 30분 커스텀 테마 튜토리얼 게시
 - [ ] 최종 릴리스 검증 스윕 실행
 

@@ -416,8 +416,8 @@ silmek istediğinizde kullanın.
 
 - [x] Windows için özel WebView2 eşlikçisi ve geri alınabilir **Original look**
 - [x] Light ve Dark destekli sekiz sabit yerleşik tema
+- [ ] **P0** Aura Code’u resmi yerel Claude Code Remote Control için tamamla ve onayla, eşleşen terminal-theme dışa aktarma ile
 - [ ] Kod yazmadan çalıştırılan Studio görsel düzenleyicisini tamamla ve incelemeyi bitir
-- [ ] Aura Code’u resmi yerel Claude Code Remote Control için tamamla ve onayla, eşleşen terminal-theme dışa aktarma ile
 - [ ] 30 dakikalık özel tema öğreticisini yayınla
 - [ ] Son yayın doğrulama turunu çalıştır
 

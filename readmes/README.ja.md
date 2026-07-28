@@ -392,8 +392,8 @@ Aura はアプリ、設定、テーマ、下書き、ブラウザープロファ
 
 - [x] 専用 Windows WebView2 コンパニオンと可逆的 **Original look**
 - [x] Light と Dark 対応の 8 種の安定テーマ
+- [ ] **P0** 公式ローカル Claude Code Remote Control 用 Aura Code を、対応するターミナルテーマエクスポート付きで完成・承認
 - [ ] ノーコード Studio ビジュアルエディターを完成・レビュー
-- [ ] 公式ローカル Claude Code Remote Control 用 Aura Code を、対応するターミナルテーマエクスポート付きで完成・承認
 - [ ] 30 分カスタムテーマチュートリアル公開
 - [ ] 最終リリース検証スイープの実行
 

@@ -380,8 +380,8 @@ Aura अपने application, settings, themes, drafts, और browser profile 
 
 - [x] समर्पित Windows WebView2 companion और उलटने योग्य **Original look**
 - [x] Light और Dark समर्थन के साथ आठ स्थिर बिल्ट-इन थीमें
+- [ ] **P0** आधिकारिक local Claude Code Remote Control के लिए Aura Code को पूरा करना, matching terminal-theme export के साथ
 - [ ] नो-कोड Studio visual editor पूरा करके समीक्षा करना
-- [ ] आधिकारिक local Claude Code Remote Control के लिए Aura Code को पूरा करना, matching terminal-theme export के साथ
 - [ ] 30 मिनट कस्टम थीम ट्यूटोरियल प्रकाशित करना
 - [ ] अंतिम रिलीज़ verification sweep चलाना
 

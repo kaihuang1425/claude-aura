@@ -421,8 +421,8 @@ ajustes locales, temas y el perfil de sesión separado.
 
 - [x] Compañero dedicado de Windows WebView2 y **Original look** reversible
 - [x] Ocho temas integrados estables con soporte Light y Dark
+- [ ] **P0** Completar y aprobar Aura Code para Remote Control local oficial de Claude Code con terminal-theme export coincidente
 - [ ] Completar y revisar el editor visual no-code de Studio
-- [ ] Completar y aprobar Aura Code para Remote Control local oficial de Claude Code con terminal-theme export coincidente
 - [ ] Publicar el tutorial de tema personalizado de 30 minutos
 - [ ] Ejecutar la verificación final previa al lanzamiento
 

@@ -389,7 +389,9 @@ the retired reconstructed preview are not deliverables.
 ## Documentation
 
 - `docs/ACCEPTANCE_AUDIT.md`
+- `docs/AURA_CODE_PRIORITY.md`
 - `docs/FILE_MANIFEST.md`
+- `docs/handoff/AURA_CODE_IMPLEMENTER_BRIEF.md`
 - `docs/IMPLEMENTATION_REPORT.md`
 - `docs/SCREENSHOT_PLAN.md`
 - `docs/THEMING.md`

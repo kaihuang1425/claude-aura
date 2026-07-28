@@ -410,8 +410,8 @@ a sola quando vuoi anche cancellare impostazioni locali, temi e profilo di acces
 
 - [x] Companion Windows WebView2 dedicato e **Original look** reversibile
 - [x] Otto temi integrati stabili con supporto Light e Dark
+- [ ] **P0** Completare e approvare Aura Code per il Remote Control locale ufficiale di Claude Code, con terminal-theme export corrispondente
 - [ ] Completare e revisionare l’editor visuale no-code di Studio
-- [ ] Completare e approvare Aura Code per il Remote Control locale ufficiale di Claude Code, con terminal-theme export corrispondente
 - [ ] Pubblicare il tutorial del tema personalizzato da 30 minuti
 - [ ] Eseguire lo sweep finale di verifica della release
 

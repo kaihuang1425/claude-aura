@@ -414,8 +414,8 @@ Ne le publiez ni ne le partagez. La désinstallation par défaut conserve `data`
 
 - [x] Companion WebView2 Windows dédié et **Original look** réversible
 - [x] Huit thèmes intégrés stables avec support Light et Dark
+- [ ] **P0** Finaliser et approuver Aura Code pour le Remote Control local officiel de Claude Code avec export terminal-theme correspondant
 - [ ] Finaliser et valider l’éditeur visuel no-code de Studio
-- [ ] Finaliser et approuver Aura Code pour le Remote Control local officiel de Claude Code avec export terminal-theme correspondant
 - [ ] Publier le tutoriel de thème personnalisé de 30 minutes
 - [ ] Exécuter le passage de vérification finale avant release
 

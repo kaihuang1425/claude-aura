@@ -439,11 +439,17 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 
 - [x] 獨立的 Windows WebView2 伴隨工具，以及可還原的 **原始外觀**
 - [x] 8 個順序固定的內建主題，支援淺色與深色外觀
-- [ ] 完成並檢查免寫程式碼的 Studio 視覺化編輯器
-- [ ] 完成並驗收 Aura Code，使其透過官方 Remote Control 操作本機 Claude Code，
+- [ ] **P0** 完成並驗收 Aura Code，使其透過官方 Remote Control 操作本機 Claude Code，
       並提供相符的終端機主題匯出
+- [ ] 完成並檢查免寫程式碼的 Studio 視覺化編輯器
 - [ ] 發布 30 分鐘自訂主題教學
 - [ ] 執行最後一輪發行驗證
+
+Aura Code 是目前唯一的 P0。它的兩條路徑——即時 `claude.ai/code` 上的主題化
+Code 檢視，以及相符的終端機主題匯出——優先於其餘所有未完成項目，清單中的其他
+工作都排在其後暫停等待。凍結清單、執行順序與完成定義請參閱
+[Aura Code 優先順序說明](../docs/AURA_CODE_PRIORITY.md)。終端機主題匯出涵蓋官方
+Claude Code CLI 與 Agent View；原生 Claude Desktop 維持不變，也不會套用主題。
 
 公開進度請參閱
 [實作報告](../docs/IMPLEMENTATION_REPORT.md)與
@@ -471,6 +477,7 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 ### 說明文件索引
 
 - [疑難排解](../docs/TROUBLESHOOTING.md)
+- [Aura Code 優先順序說明（P0）](../docs/AURA_CODE_PRIORITY.md)
 - [安全性與信任邊界](./SECURITY.md)
 - [主題設定指南](../docs/THEMING.md)
 - [主題套件規格](../docs/THEME_KIT_SPEC.md)

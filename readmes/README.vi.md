@@ -389,8 +389,8 @@ và hồ sơ đăng nhập riêng đó.
 
 - [x] Đồng hành WebView2 Windows riêng và **Original look** có thể hoàn nguyên
 - [x] Tám theme tích hợp sẵn ổn định với hỗ trợ Light và Dark
+- [ ] **P0** Hoàn thành và phê duyệt Aura Code cho [Remote Control](https://code.claude.com/docs/en/remote-control) chính thức của Claude Code local, cùng export terminal-theme tương ứng
 - [ ] Hoàn thành và kiểm duyệt trình soạn visual editor không-code của Studio
-- [ ] Hoàn thành và phê duyệt Aura Code cho [Remote Control](https://code.claude.com/docs/en/remote-control) chính thức của Claude Code local, cùng export terminal-theme tương ứng
 - [ ] Công bố hướng dẫn tạo theme tùy chỉnh trong 30 phút
 - [ ] Thực hiện đợt kiểm tra phê duyệt phát hành cuối cùng
 

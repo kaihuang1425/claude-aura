@@ -79,7 +79,9 @@ Claude interface. Aura 0.3 also does not theme native Claude Desktop Code or
 the Claude Code terminal, and ordinary Claude chat inside Aura cannot read a
 local project.
 
-Aura Code is release-blocking work for the final release. Its approved plan is
+Aura Code is release-blocking work for the final release, and it is now the
+project's only P0; see the
+[Aura Code priority brief](./AURA_CODE_PRIORITY.md). Its approved plan is
 CLI-first: Aura will guide the user to an official local Claude Code/Remote
 Control engine while theming the supported live `claude.ai/code` conversation.
 The first Code activation will offer local Aura setup, an existing session,

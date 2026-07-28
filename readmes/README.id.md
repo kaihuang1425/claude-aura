@@ -423,9 +423,9 @@ sign-in terpisah.
 
 - [x] Komponen Windows WebView2 khusus dan **Original look** yang bisa dibalik
 - [x] Delapan tema bawaan stabil dengan dukungan Light dan Dark
-- [ ] Selesaikan dan review editor visual Studio no-code
-- [ ] Selesaikan dan setujui Aura Code untuk Claude Code Remote Control resmi lokal,
+- [ ] **P0** Selesaikan dan setujui Aura Code untuk Claude Code Remote Control resmi lokal,
 dengan export terminal-theme yang sesuai
+- [ ] Selesaikan dan review editor visual Studio no-code
 - [ ] Publikasikan tutorial tema kustom 30 menit
 - [ ] Jalankan sweep verifikasi rilis akhir
 

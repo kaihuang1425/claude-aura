@@ -415,8 +415,8 @@ wenn du lokale Einstellungen, Themes und das separate Login-Profil ebenfalls lö
 
 - [x] Dedizierter Windows WebView2 Companion und reversibler **Original look**
 - [x] Acht stabile integrierte Themes mit Light- und Dark-Support
+- [ ] **P0** Aura Code für den offiziellen lokalen Claude Code Remote Control freigeben und termi-nal-theme export validieren
 - [ ] Vollständiger No-Code Studio Visual Editor fertigstellen und prüfen
-- [ ] Aura Code für den offiziellen lokalen Claude Code Remote Control freigeben und termi-nal-theme export validieren
 - [ ] 30-minütiges Custom-Theme-Tutorial veröffentlichen
 - [ ] Endgültigen Release-Verification-Sweep durchführen
 

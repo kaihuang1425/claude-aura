@@ -438,11 +438,17 @@ Aura 会分别存储应用程序、设置、主题、草稿和浏览器配置文
 
 - [x] 专用的 Windows WebView2 伴侣应用及可撤销的 **原始外观**
 - [x] 八个支持浅色和深色模式的稳定内置主题
-- [ ] 完成并评审无代码 Studio 可视化编辑器
-- [ ] 完成并验收 Aura Code，使其通过官方 Remote Control 操作本地 Claude Code，
+- [ ] **P0** 完成并验收 Aura Code，使其通过官方 Remote Control 操作本地 Claude Code，
       并提供匹配的终端主题导出
+- [ ] 完成并评审无代码 Studio 可视化编辑器
 - [ ] 发布 30 分钟自定义主题教程
 - [ ] 执行最终发布验证
+
+Aura Code 是当前唯一的 P0。它的两条路径——实时 `claude.ai/code` 上的主题化
+Code 视图，以及匹配的终端主题导出——优先于其余所有未完成项，列表中的其他工作
+排在其后暂停等待。冻结清单、执行顺序与完成定义请参阅
+[Aura Code 优先级说明](../docs/AURA_CODE_PRIORITY.md)。终端主题导出覆盖官方
+Claude Code CLI 与 Agent View；原生 Claude Desktop 保持不变，也不会被应用主题。
 
 公开进度请参阅
 [实施报告](../docs/IMPLEMENTATION_REPORT.md)和
@@ -469,6 +475,7 @@ Aura 会分别存储应用程序、设置、主题、草稿和浏览器配置文
 ### 文档索引
 
 - [故障排除](../docs/TROUBLESHOOTING.md)
+- [Aura Code 优先级说明（P0）](../docs/AURA_CODE_PRIORITY.md)
 - [安全与信任边界](./SECURITY.md)
 - [主题指南](../docs/THEMING.md)
 - [主题工具包规范](../docs/THEME_KIT_SPEC.md)

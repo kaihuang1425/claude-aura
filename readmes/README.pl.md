@@ -420,9 +420,9 @@ oddzielny profil logowania.
 
 - [x] Dedykowany towarzysz WebView2 dla Windows i odwracalny **Original look**
 - [x] Osiem stabilnych wbudowanych motywów z obsługą Light i Dark
-- [ ] Zakończenie i przegląd wizualnego edytora Studio bez kodu
-- [ ] Dokończenie i zatwierdzenie Aura Code do oficjalnego Remote Control lokalnego Claude Code,
+- [ ] **P0** Dokończenie i zatwierdzenie Aura Code do oficjalnego Remote Control lokalnego Claude Code,
   z odpowiadającym eksportem terminal-theme
+- [ ] Zakończenie i przegląd wizualnego edytora Studio bez kodu
 - [ ] Opublikowanie 30-minutowego samouczka tworzenia własnego motywu
 - [ ] Przeprowadzenie końcowego przeglądu weryfikacji wydania
 
