@@ -503,6 +503,7 @@ described in [SECURITY.md](./SECURITY.md).
 - [Security and trust boundary](./SECURITY.md)
 - [Theming guide](./docs/THEMING.md)
 - [Theme Kit Specification](./docs/THEME_KIT_SPEC.md)
+- [Aura Code stylization readiness plan](./docs/CODE_STYLIZATION_PLAN.md)
 - [Implementation report](./docs/IMPLEMENTATION_REPORT.md)
 - [File Manifest](./docs/FILE_MANIFEST.md)
 - [Contributing guide](./CONTRIBUTING.md)
