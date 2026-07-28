@@ -41,7 +41,10 @@ public static class AuraShortcutPropertyStore
         }
     }
 
-    [StructLayout(LayoutKind.Explicit, Size = 16)]
+    // PROPVARIANT is 24 bytes on x64 and 16 on x86. The buffer must never be
+    // smaller than what the shell writes into an out parameter, so it is sized
+    // for the larger layout on both architectures.
+    [StructLayout(LayoutKind.Explicit, Size = 24)]
     private struct PropVariant
     {
         [FieldOffset(0)] public ushort ValueType;
@@ -122,6 +125,7 @@ public static class AuraShortcutPropertyStore
             }
             PropertyKey key = AppUserModelIdKey;
             ThrowIfFailed(store.SetValue(ref key, ref value));
+            ThrowIfFailed(store.Commit());
             persist.Save(path, true);
         }
         finally

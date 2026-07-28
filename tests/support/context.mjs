@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { buildAuraIcon } from "../../scripts/build-aura-icon.mjs";
 import { buildBrandWordmarks } from "../../scripts/build-brand-wordmarks.mjs";
@@ -286,6 +287,7 @@ export {
   path,
   readThemeKit,
   readThemeRegistry,
+  realpathSync,
   resolveArtwork,
   greetingPhraseDigest,
   resolveGreetingPhrases,

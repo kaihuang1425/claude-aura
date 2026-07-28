@@ -37,6 +37,7 @@ import {
   readStudioCopy,
   readThemeKit,
   readThemeRegistry,
+  realpathSync,
   resolveArtwork,
   run,
   spawnSync,
@@ -4514,7 +4515,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /ValueType == VariantUnicodeString[\s\S]{0,260}?unsupported AppUserModelID property type/,
     "Shortcut AppUserModelID reads must continue rejecting non-string property types");
   if (process.platform === "win32") {
-    const shortcutProbeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aura-shortcut-appid-"));
+    // Windows CI runners expose TMP as an 8.3 short path (C:\Users\RUNNER~1\...).
+    // The probe compares shortcut paths and arguments verbatim, and GetFullPath
+    // never expands short components, so the real long path is resolved once here.
+    const shortcutProbeRoot = realpathSync.native(
+      await fs.mkdtemp(path.join(os.tmpdir(), "aura-shortcut-appid-")));
     try {
       const commonPath = path.join(PROJECT_ROOT, "windows", "common.ps1").replaceAll("'", "''");
       const probePath = shortcutProbeRoot.replaceAll("'", "''");
@@ -4534,6 +4539,31 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
         "$studioArguments=\"$baseArguments -OpenStudio\"",
         "$shell=New-Object -ComObject WScript.Shell",
         "$shortcut=$null",
+        // Every assertion below reports the state it observed, so a runner-only
+        // failure names the broken invariant instead of needing another blind push.
+        "function Get-AuraProbeState {",
+        "  param([object[]]$Found=@())",
+        "  $lines=[Collections.Generic.List[string]]::new()",
+        "  $lines.Add(\"expected target:    $expectedPowerShell\")",
+        "  $lines.Add(\"expected arguments: $baseArguments\")",
+        "  $lines.Add(\"expected pin:       $pinPath\")",
+        "  $lines.Add(\"discovered $($Found.Count) shortcut(s)\")",
+        "  foreach($entry in $Found){ $lines.Add(\"  discovered: $($entry.Path)\") }",
+        "  foreach($probe in @($pinPath,$otherPath)){",
+        "    $lines.Add(\"  link: $probe\")",
+        "    try {",
+        "      $link=$shell.CreateShortcut($probe)",
+        "      try {",
+        "        $lines.Add(\"    target:    $($link.TargetPath)\")",
+        "        $lines.Add(\"    arguments: $($link.Arguments)\")",
+        "      } finally { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) }",
+        "      $lines.Add(\"    appid:     $(Get-AuraShortcutAppUserModelId -Path $probe)\")",
+        "    } catch { $lines.Add(\"    unreadable: $($_.Exception.Message)\") }",
+        "  }",
+        "  $lines.Add(\"skip log entries: $($script:ProbeLogs.Count)\")",
+        "  foreach($message in $script:ProbeLogs){ $lines.Add(\"  logged: $message\") }",
+        "  return ($lines -join [Environment]::NewLine)",
+        "}",
         "try {",
         "  $pinPath=Join-Path $taskbarRoot 'Claude Aura.lnk'",
         "  $shortcut=$shell.CreateShortcut($pinPath)",
@@ -4556,12 +4586,24 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
         "  [AuraShortcutPropertyStore]::SetAppUserModelId($otherPath,'Other.Product')",
         "  $script:ProbeLogs=[Collections.Generic.List[string]]::new()",
         "  $found=@(Get-AuraUiPinnedTaskbarShortcuts -Shell $shell -ExpectedPowerShell $expectedPowerShell -ExpectedScript $expectedScript -MainArguments $baseArguments -StudioArguments $studioArguments)",
-        "  if($found.Count -ne 1 -or -not [string]::Equals($found[0].Path,$pinPath,[StringComparison]::OrdinalIgnoreCase)){throw 'Pinned Aura shortcut discovery mismatch'}",
-        "  if($script:ProbeLogs.Count -ne 1){throw 'Foreign AppUserModelID pin was not explicitly skipped'}",
+        "  if($found.Count -ne 1 -or -not [string]::Equals($found[0].Path,$pinPath,[StringComparison]::OrdinalIgnoreCase)){",
+        "    Write-Output (Get-AuraProbeState -Found $found)",
+        "    throw 'Pinned Aura shortcut discovery mismatch'",
+        "  }",
+        "  if($script:ProbeLogs.Count -ne 1){",
+        "    Write-Output (Get-AuraProbeState -Found $found)",
+        "    throw 'Foreign AppUserModelID pin was not explicitly skipped'",
+        "  }",
         "  Set-AuraShortcutAppUserModelId -Path $pinPath",
-        "  if((Get-AuraShortcutAppUserModelId -Path $pinPath) -cne $AuraAppUserModelId){throw 'Aura AppUserModelID assignment mismatch'}",
+        "  if((Get-AuraShortcutAppUserModelId -Path $pinPath) -cne $AuraAppUserModelId){",
+        "    Write-Output (Get-AuraProbeState -Found $found)",
+        "    throw 'Aura AppUserModelID assignment mismatch'",
+        "  }",
         "  Set-AuraShortcutAppUserModelId -Path $pinPath -AppUserModelId $null",
-        "  if(Get-AuraShortcutAppUserModelId -Path $pinPath){throw 'Aura AppUserModelID rollback mismatch'}",
+        "  if(Get-AuraShortcutAppUserModelId -Path $pinPath){",
+        "    Write-Output (Get-AuraProbeState -Found $found)",
+        "    throw 'Aura AppUserModelID rollback mismatch'",
+        "  }",
         "} finally {",
         "  if($null -ne $shortcut -and [Runtime.InteropServices.Marshal]::IsComObject($shortcut)){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shortcut)}",
         "  if([Runtime.InteropServices.Marshal]::IsComObject($shell)){[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)}",
