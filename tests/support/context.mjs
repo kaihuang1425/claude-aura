@@ -220,9 +220,9 @@ export async function deliverableFiles(directory = PROJECT_ROOT, relativeDirecto
   ]);
   const deliverableDocumentation = new Set([
     "docs/ACCEPTANCE_AUDIT.md",
-    "docs/AURA_CODE_PRIORITY.md",
+    "docs/P0_STYLING_PATHS.md",
     "docs/FILE_MANIFEST.md",
-    "docs/handoff/AURA_CODE_IMPLEMENTER_BRIEF.md",
+    "docs/handoff/P0_IMPLEMENTER_BRIEF.md",
     "docs/IMPLEMENTATION_REPORT.md",
     "docs/SCREENSHOT_PLAN.md",
     "docs/THEME_KIT_SPEC.md",

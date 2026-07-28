@@ -467,17 +467,19 @@ not put draft text in its log.
 - [x] Eight stable built-in themes with Light and Dark support
 - [ ] **P0** Complete and approve Aura Code for official local Claude Code
       Remote Control, with matching terminal-theme export
+- [ ] **P0** Style the installed Claude Desktop application through a
+      consented, version-gated runtime connection, keeping the Aura web window
+      as the permanent fallback
 - [ ] Complete and review the no-code Studio visual editor
 - [ ] Publish the 30-minute custom-theme tutorial
 - [ ] Run the final release verification sweep
 
-Aura Code is the only P0. Its two paths — the themed Code view on live
-`claude.ai/code` and the matching terminal-theme export — take priority over
-every other open item, and the rest of the list is paused behind them. See the
-[Aura Code priority brief](./docs/AURA_CODE_PRIORITY.md) for the freeze list,
-execution order, and definition of done. The terminal-theme export covers the
-official Claude Code CLI and Agent View; native Claude Desktop stays unchanged
-and unthemed.
+Those two are the P0 work, and the rest of the list is paused behind them. See
+the [P0 styling paths brief](./docs/P0_STYLING_PATHS.md) for the execution
+order, freeze list, and definition of done. Desktop styling ships only if its
+feasibility and policy gates pass; until they do, Claude Desktop opens
+unchanged and unthemed. Aura never patches Claude Desktop's files, packages, or
+signatures on either outcome.
 
 See the
 [implementation report](./docs/IMPLEMENTATION_REPORT.md) and
@@ -508,7 +510,7 @@ described in [SECURITY.md](./SECURITY.md).
 ### Documentation map
 
 - [Troubleshooting](./docs/TROUBLESHOOTING.md)
-- [Aura Code priority brief (P0)](./docs/AURA_CODE_PRIORITY.md)
+- [P0 styling paths brief](./docs/P0_STYLING_PATHS.md)
 - [Security and trust boundary](./SECURITY.md)
 - [Theming guide](./docs/THEMING.md)
 - [Theme Kit Specification](./docs/THEME_KIT_SPEC.md)

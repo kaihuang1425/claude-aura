@@ -656,11 +656,15 @@ actual-Aura Light/Dark and fallback review.
   benefits/limitations/privacy disclosure, the fixed Aura Code adapter, and
   matching terminal-theme export. Native Desktop remains unchanged and
   unthemed. HUMAN CHECKPOINT CODE must pass before the tutorial or final
-  release sweep can begin. WO-27 is now the project's only P0: its two paths
-  run ahead of every other open item, and the remaining work orders are frozen
-  behind them. See [`AURA_CODE_PRIORITY.md`](./AURA_CODE_PRIORITY.md) for the
-  execution order, freeze list, and definition of done, and
-  [`handoff/AURA_CODE_IMPLEMENTER_BRIEF.md`](./handoff/AURA_CODE_IMPLEMENTER_BRIEF.md)
+  release sweep can begin. WO-27 and the separately planned Claude Desktop
+  styling path are now the project's two P0 items: they run ahead of every
+  other open item, and the remaining work orders are frozen behind them.
+  Desktop styling is a consented, version-gated runtime connection to the
+  unmodified signed application, blocked on its own feasibility and policy
+  gates; until those pass, native Desktop stays unchanged and unthemed. See
+  [`P0_STYLING_PATHS.md`](./P0_STYLING_PATHS.md) for the execution order,
+  freeze list, and definition of done, and
+  [`handoff/P0_IMPLEMENTER_BRIEF.md`](./handoff/P0_IMPLEMENTER_BRIEF.md)
   for the implementation prompt and budgets.
 - Production styling targets the current semantic and ARIA structure rendered by
   `claude.ai`; selectors should be rechecked when that upstream interface changes.

@@ -440,15 +440,17 @@ Aura 会分别存储应用程序、设置、主题、草稿和浏览器配置文
 - [x] 八个支持浅色和深色模式的稳定内置主题
 - [ ] **P0** 完成并验收 Aura Code，使其通过官方 Remote Control 操作本地 Claude Code，
       并提供匹配的终端主题导出
+- [ ] **P0** 通过取得用户同意、且限定已验证版本的运行时连接，为已安装的
+      Claude Desktop 应用应用主题，并始终保留 Aura 网页窗口作为回退方案
 - [ ] 完成并评审无代码 Studio 可视化编辑器
 - [ ] 发布 30 分钟自定义主题教程
 - [ ] 执行最终发布验证
 
-Aura Code 是当前唯一的 P0。它的两条路径——实时 `claude.ai/code` 上的主题化
-Code 视图，以及匹配的终端主题导出——优先于其余所有未完成项，列表中的其他工作
-排在其后暂停等待。冻结清单、执行顺序与完成定义请参阅
-[Aura Code 优先级说明](../docs/AURA_CODE_PRIORITY.md)。终端主题导出覆盖官方
-Claude Code CLI 与 Agent View；原生 Claude Desktop 保持不变，也不会被应用主题。
+这两项是当前的 P0，列表中的其他工作都排在其后暂停等待。执行顺序、冻结清单与
+完成定义请参阅[P0 主题化路径说明](../docs/P0_STYLING_PATHS.md)。Claude Desktop
+主题化只有在其可行性与政策关卡全部通过后才会发布；在此之前，Claude Desktop
+仍保持原样且不会被应用主题。无论关卡结果如何，Aura 都不会修改 Claude Desktop
+的文件、安装包或签名。
 
 公开进度请参阅
 [实施报告](../docs/IMPLEMENTATION_REPORT.md)和
@@ -475,7 +477,7 @@ Claude Code CLI 与 Agent View；原生 Claude Desktop 保持不变，也不会�
 ### 文档索引
 
 - [故障排除](../docs/TROUBLESHOOTING.md)
-- [Aura Code 优先级说明（P0）](../docs/AURA_CODE_PRIORITY.md)
+- [P0 主题化路径说明](../docs/P0_STYLING_PATHS.md)
 - [安全与信任边界](./SECURITY.md)
 - [主题指南](../docs/THEMING.md)
 - [主题工具包规范](../docs/THEME_KIT_SPEC.md)

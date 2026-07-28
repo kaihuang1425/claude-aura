@@ -441,15 +441,17 @@ Aura 會分開存放應用程式、設定、主題、草稿與瀏覽器設定檔
 - [x] 8 個順序固定的內建主題，支援淺色與深色外觀
 - [ ] **P0** 完成並驗收 Aura Code，使其透過官方 Remote Control 操作本機 Claude Code，
       並提供相符的終端機主題匯出
+- [ ] **P0** 透過取得使用者同意、且限定已驗證版本的執行階段連線，為已安裝的
+      Claude Desktop 應用程式套用主題，並永遠保留 Aura 網頁視窗作為後備
 - [ ] 完成並檢查免寫程式碼的 Studio 視覺化編輯器
 - [ ] 發布 30 分鐘自訂主題教學
 - [ ] 執行最後一輪發行驗證
 
-Aura Code 是目前唯一的 P0。它的兩條路徑——即時 `claude.ai/code` 上的主題化
-Code 檢視，以及相符的終端機主題匯出——優先於其餘所有未完成項目，清單中的其他
-工作都排在其後暫停等待。凍結清單、執行順序與完成定義請參閱
-[Aura Code 優先順序說明](../docs/AURA_CODE_PRIORITY.md)。終端機主題匯出涵蓋官方
-Claude Code CLI 與 Agent View；原生 Claude Desktop 維持不變，也不會套用主題。
+這兩項是目前的 P0，清單中的其他工作都排在其後暫停等待。執行順序、凍結清單與
+完成定義請參閱 [P0 主題化路徑說明](../docs/P0_STYLING_PATHS.md)。Claude Desktop
+主題化只有在其可行性與政策關卡全部通過後才會發行；在此之前，Claude Desktop
+維持原樣且不會套用主題。無論關卡結果如何，Aura 都不會修改 Claude Desktop 的
+檔案、安裝套件或簽章。
 
 公開進度請參閱
 [實作報告](../docs/IMPLEMENTATION_REPORT.md)與
@@ -477,7 +479,7 @@ Claude Code CLI 與 Agent View；原生 Claude Desktop 維持不變，也不會�
 ### 說明文件索引
 
 - [疑難排解](../docs/TROUBLESHOOTING.md)
-- [Aura Code 優先順序說明（P0）](../docs/AURA_CODE_PRIORITY.md)
+- [P0 主題化路徑說明](../docs/P0_STYLING_PATHS.md)
 - [安全性與信任邊界](./SECURITY.md)
 - [主題設定指南](../docs/THEMING.md)
 - [主題套件規格](../docs/THEME_KIT_SPEC.md)
