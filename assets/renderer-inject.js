@@ -30,6 +30,35 @@
       && window.innerHeight >= window.screen.availHeight - 96;
     return document.fullscreenElement || screenWide || window.innerWidth >= 1440 ? "w" : "n";
   };
+  const codeContextFromUrl = __AURA_CODE_CONTEXT_FACTORY__;
+  const codeRouteContext = () => codeContextFromUrl(window.location);
+  /*__AURA_CODE_ACTIVE_START__*/
+  const codeNavigationKey = () =>
+    String(window.navigation?.currentEntry?.key ?? window.location.href);
+  /*__AURA_CODE_ACTIVE_END__*/
+  const codeAdapter = __AURA_CODE_ADAPTER_FACTORY__(
+    /*__AURA_CODE_ACTIVE_START__*/
+    {
+    document,
+    requestAnimationFrame: window.requestAnimationFrame?.bind(window),
+    cancelAnimationFrame: window.cancelAnimationFrame?.bind(window),
+    now: window.performance?.now?.bind(window.performance),
+    MutationObserver,
+    getComputedStyle: window.getComputedStyle?.bind(window),
+    getNavigationKey: codeNavigationKey,
+    getContext: codeRouteContext,
+    addRouteListener: (listener) => {
+      window.addEventListener("popstate", listener);
+      window.navigation?.addEventListener?.("currententrychange", listener);
+      return () => {
+        window.removeEventListener("popstate", listener);
+        window.navigation?.removeEventListener?.("currententrychange", listener);
+      };
+    },
+    },
+    __AURA_CODE_SIGNATURES__
+    /*__AURA_CODE_ACTIVE_END__*/
+  );
   const SIDEBAR_MARKER = "data-claude-aura-sidebar";
   const MAIN_MARKER = "data-claude-aura-main-canvas";
   const PROMPT_MARKER = "data-claude-aura-prompt";
@@ -591,6 +620,7 @@
     };
   };
   const lp = () => {
+    if (codeRouteContext()) return null;
     const f = discoverComposer(), a = f.controls ?? [], c = a.length <= 12 ? a.map(lr) : null;
     const g = getGreetingProbe(), r = lr(g["rect"]);
     let s = ["native", "custom"].includes(g["status"]) && r ? "found"
@@ -1082,20 +1112,23 @@
   };
 
   const previous = window[STATE_KEY];
-  previous?.observer?.disconnect();
+  previous?.["observer"]?.disconnect();
   previous?.stopModeListener?.();
   previous?.stopContextListeners?.();
   previous?.clearBrandWordmark?.();
   previous?.clearAvatarOverlay?.();
   previous?.cg?.(false);
+  previous?.codeAdapter?.rollback?.("replaced");
   previous?.clearMarkedElements?.();
-  if (previous?.timer) clearInterval(previous.timer);
-  if (previous?.scheduled) clearTimeout(previous.scheduled);
+  if (previous?.["timer"]) clearInterval(previous["timer"]);
+  if (previous?.["scheduled"]) clearTimeout(previous["scheduled"]);
   document.getElementById(BACKDROP_ID)?.remove();
 
   const onModeChange = () => {
-    if (document.documentElement) document.documentElement.dataset.claudeAuraEffectiveMode = mode();
-    syncSemanticLayout();
+    if (document.documentElement && !codeRouteContext()) {
+      document.documentElement.dataset.claudeAuraEffectiveMode = mode();
+    }
+    ensure();
   };
   media?.addEventListener?.("change", onModeChange);
   forcedColors?.addEventListener?.("change", onModeChange);
@@ -1120,9 +1153,47 @@
     "--aura-art-position": settings.artPosition || "right center",
     "--aura-art-size": settings.artSize || "min(58vw, 860px) auto",
   });
+  const clearAuraRoot = () => {
+    const html = document.documentElement;
+    html?.classList.remove("claude-aura", "claude-aura-reduce-motion", "claude-aura-animated-image");
+    for (const property of [
+      "image", "image-opacity", "image-position", "image-scale",
+      "theme-art", "art-position", "art-size", "main-start",
+    ]) html?.style.removeProperty(`--aura-${property}`);
+    if (html?.dataset) {
+      for (const property of [
+        "Theme", "Variant", "ArtMobile", "Appearance", "EffectiveMode", "Context", "Viewport", "Digest",
+      ]) delete html.dataset[`claudeAura${property}`];
+    }
+  };
+  const enterCodeRoute = (context) => {
+    currentContext = context;
+    clearBrand();
+    clearAvatar?.();
+    clearGreeting?.(true);
+    clearMarks();
+    clearPromptLayout();
+    artBindings = [];
+    document.getElementById(STYLE_ID)?.remove();
+    document.getElementById(BACKDROP_ID)?.remove();
+    clearAuraRoot();
+    rootDirty = styleDirty = true;
+    codeAdapter.activate(context);
+    observeTargets();
+  };
 
   const ensure = () => {
     if (!document.documentElement || window.__CLAUDE_AURA_DISABLED__) return;
+    const codeContext = codeRouteContext();
+    if (codeContext) {
+      enterCodeRoute(codeContext);
+      return;
+    }
+    if (currentContext === "code-list" || currentContext === "code-session") {
+      codeAdapter.rollback("route-left");
+      currentContext = "other";
+      rootDirty = styleDirty = true;
+    }
     const html = document.documentElement;
     if (rootNeedsRepair()) rootDirty = true;
     if (rootDirty) {
@@ -1222,28 +1293,19 @@
   const cleanup = () => {
     window.__CLAUDE_AURA_DISABLED__ = true;
     const state = window[STATE_KEY];
-    state?.observer?.disconnect();
-    if (state?.timer) clearInterval(state.timer);
-    if (state?.scheduled) clearTimeout(state.scheduled);
+    state?.["observer"]?.disconnect();
+    if (state?.["timer"]) clearInterval(state["timer"]);
+    if (state?.["scheduled"]) clearTimeout(state["scheduled"]);
     stopMode();
     stopContext();
+    codeAdapter.rollback("cleanup");
     clearBrand();
     clearAvatar?.();
     clearGreeting?.(true);
     clearMarks();
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BACKDROP_ID)?.remove();
-    const html = document.documentElement;
-    html?.classList.remove("claude-aura", "claude-aura-reduce-motion", "claude-aura-animated-image");
-    for (const p of [
-      "image", "image-opacity", "image-position", "image-scale",
-      "theme-art", "art-position", "art-size", "main-start",
-    ]) html?.style.removeProperty(`--aura-${p}`);
-    if (html?.dataset) {
-      for (const p of [
-        "Theme", "Variant", "ArtMobile", "Appearance", "EffectiveMode", "Context", "Viewport", "Digest",
-      ]) delete html.dataset[`claudeAura${p}`];
-    }
+    clearAuraRoot();
     delete window[STATE_KEY];
     return true;
   };
@@ -1255,11 +1317,11 @@
     scheduled = setTimeout(() => {
       scheduled = null;
       const state = window[STATE_KEY];
-      if (state) state.scheduled = null;
+      if (state) state["scheduled"] = null;
       ensure();
     }, 160);
     const state = window[STATE_KEY];
-    if (state) state.scheduled = scheduled;
+    if (state) state["scheduled"] = scheduled;
   };
   const onContextSignal = () => scheduleEnsure();
   const onPopState = () => {
@@ -1284,6 +1346,7 @@
   let observedBody = null;
   let observedStyle = null;
   let observedBackdrop = null;
+  let observedCodeRoute = false;
   const rootNeedsRepair = () => !root.classList.contains("claude-aura")
     || root.dataset.claudeAuraTheme !== settings.theme
     || root.classList.contains("claude-aura-reduce-motion") !== Boolean(settings.reduceMotion)
@@ -1323,8 +1386,18 @@
     const body = document.body;
     const style = document.getElementById(STYLE_ID);
     const backdrop = document.getElementById(BACKDROP_ID);
-    if (head === observedHead && body === observedBody && style === observedStyle && backdrop === observedBackdrop) return;
+    const codeRoute = Boolean(codeRouteContext());
+    if (head === observedHead && body === observedBody && style === observedStyle
+        && backdrop === observedBackdrop && codeRoute === observedCodeRoute) return;
     observer.disconnect();
+    if (codeRoute) {
+      observedHead = head;
+      observedBody = body;
+      observedStyle = style;
+      observedBackdrop = backdrop;
+      observedCodeRoute = true;
+      return;
+    }
     observer.observe(document.documentElement, {
       childList: true,
       attributes: true,
@@ -1337,14 +1410,15 @@
     observedBody = body;
     observedStyle = style;
     observedBackdrop = backdrop;
+    observedCodeRoute = false;
   };
   const timer = setInterval(ensure, 1500);
   window[STATE_KEY] = {
-    cleanup,
-    ensure,
-    observer,
-    timer,
-    scheduled,
+    "cleanup": cleanup,
+    "ensure": ensure,
+    "observer": observer,
+    "timer": timer,
+    "scheduled": scheduled,
     stopModeListener: stopMode,
     stopContextListeners: stopContext,
     "getLayoutProbe": lp,
@@ -1353,8 +1427,9 @@
     clearAvatarOverlay: clearAvatar,
     cg: (endVisit = true) => clearGreeting?.(endVisit),
     "greetingMemory": greetingMemory,
-    getGreetingProbe,
+    "getGreetingProbe": getGreetingProbe,
     clearMarkedElements: clearMarks,
+    codeAdapter,
     version: settings.version,
     theme: settings.theme,
     digest: settings.digest,

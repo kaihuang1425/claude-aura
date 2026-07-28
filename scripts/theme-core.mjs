@@ -66,6 +66,12 @@ export {
   TERMINAL_THEME_SCHEMA,
 } from "./theme-core/terminal.mjs";
 export {
+  CODE_ROLE_SIGNATURES,
+  codeContextFromUrl,
+  createCodeAdapter,
+  createInertCodeAdapter,
+} from "./theme-core/code-adapter.mjs";
+export {
   createThemeCopy,
   beginThemeEdit,
   setThemeToken,

@@ -33,6 +33,12 @@ import {
   resolveBrandWordmark,
 } from "./artwork.mjs";
 import { resolveGreetingRuntime } from "./greeting.mjs";
+import {
+  CODE_ROLE_SIGNATURES,
+  codeContextFromUrl,
+  createCodeAdapter,
+  createInertCodeAdapter,
+} from "./code-adapter.mjs";
 
 // Marks the strippable WO-21 greeting subsystem inside the renderer template, and the
 // nested custom-phrases sub-block that native-greeting-only themes do not need.
@@ -48,6 +54,7 @@ const AVATAR_OVERLAY_CSS = [
 ].join("\n");
 const GREETING_BLOCK_PATTERN = /\/\*__AURA_GREETING_START__\*\/[\s\S]*?\/\*__AURA_GREETING_END__\*\//;
 const GREETING_PHRASES_PATTERN = /\/\*__AURA_GREETING_PHRASES_START__\*\/[\s\S]*?\/\*__AURA_GREETING_PHRASES_END__\*\//;
+const CODE_ADAPTER_ACTIVE_PATTERN = /\/\*__AURA_CODE_ACTIVE_START__\*\/[\s\S]*?\/\*__AURA_CODE_ACTIVE_END__\*\//g;
 
 const WALLPAPER_VARIABLES = Object.freeze({
   gradient: "--aura-wallpaper-gradient",
@@ -488,6 +495,69 @@ const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
   ["prompt", "L6"],
   ["sidebar", "L7"],
   ["control", "L8"],
+  ["layer", "A0"],
+  ["backdrop", "A1"],
+  ["native", "A2"],
+  ["role", "A3"],
+  ["hidden", "A4"],
+  ["appearance", "A5"],
+  ["host", "A6"],
+  ["state", "A7"],
+  ["side", "A8"],
+  ["artLayers", "A9"],
+  ["brand", "B0"],
+  ["frame", "B1"],
+  ["group", "B2"],
+  ["image", "B3"],
+  ["fail", "B4"],
+  ["section", "B5"],
+  ["primary", "B6"],
+  ["footer", "B7"],
+  ["mode", "B9"],
+  ["codeContextFromUrl", "C0"],
+  ["codeRouteContext", "C1"],
+  ["codeNavigationKey", "C2"],
+  ["clearAuraRoot", "C3"],
+  ["enterCodeRoute", "C4"],
+  ["codeContext", "C5"],
+  ["codeRoute", "C6"],
+  ["observedCodeRoute", "C7"],
+  ["list", "C8"],
+  ["anchorCode", "C9"],
+  ["value", "D0"],
+  ["space", "D1"],
+  ["anchor", "D2"],
+  ["tagLevel", "D3"],
+  ["decoded", "D4"],
+  ["rows", "D5"],
+  ["row", "D6"],
+  ["out", "D7"],
+  ["put", "D8"],
+  ["fit", "D9"],
+  ["sel", "E0"],
+  ["pass", "E1"],
+  ["other", "E2"],
+  ["listener", "E3"],
+  ["pick", "E4"],
+  ["avt", "E5"],
+  ["sem", "E6"],
+  ["getGreetingProbe", "E7"],
+  ["greetingMatches", "E8"],
+  ["observer", "E9"],
+  ["scheduled", "F0"],
+  ["ensure", "F1"],
+  ["timer", "F2"],
+  ["cleanup", "F3"],
+  ["cssDictionary", "F4"],
+  ["inset", "F5"],
+  ["siblings", "F6"],
+  ["brands", "F7"],
+  ["boundary", "F8"],
+  ["level", "F9"],
+  ["elements", "G0"],
+  ["offset", "G1"],
+  ["roots", "G2"],
+  ["parent", "G3"],
 ]);
 
 export function compactRendererIdentifiers(source) {
@@ -921,9 +991,21 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
   if (!compiled || typeof compiled.css !== "string" || !isPlainObject(compiled.settings)) {
     throw new Error("A compiled theme is required to build a renderer payload");
   }
-  let template = compactRendererSyntax(compactRendererIdentifiers(
-    await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8"),
-  ));
+  let rendererSource = await fs.readFile(
+    path.join(PROJECT_ROOT, "assets", "renderer-inject.js"),
+    "utf8",
+  );
+  const codeAdapterFactory = CODE_ROLE_SIGNATURES.signatures.length
+    ? createCodeAdapter
+    : createInertCodeAdapter;
+  if (!CODE_ROLE_SIGNATURES.signatures.length) {
+    rendererSource = rendererSource.replace(CODE_ADAPTER_ACTIVE_PATTERN, "");
+  }
+  rendererSource = rendererSource
+    .replace("__AURA_CODE_ADAPTER_FACTORY__", `(${codeAdapterFactory.toString()})`)
+    .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`)
+    .replace("__AURA_CODE_SIGNATURES__", JSON.stringify(CODE_ROLE_SIGNATURES));
+  let template = compactRendererSyntax(compactRendererIdentifiers(rendererSource));
   const runtimeSettings = { ...compiled.settings };
   for (const diagnosticKey of [
     "label",
@@ -1125,7 +1207,8 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
   // Validated phrases, presentation, and personal embeds are indivisible user
   // intent. Reclaim chrome elsewhere or fail rather than silently changing the
   // requested result while reporting a successful apply.
-  if (payload.includes("__AURA_CSS_JSON__") || payload.includes("__AURA_SETTINGS_JSON__")) {
+  if (payload.includes("__AURA_CSS_JSON__") || payload.includes("__AURA_SETTINGS_JSON__")
+      || payload.includes("__AURA_CODE_")) {
     throw new Error("Renderer payload placeholders were not fully replaced");
   }
   const measuredBudget = enforceBudget

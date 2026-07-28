@@ -320,6 +320,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/theme-core.mjs`
 - `scripts/theme-core/artwork.mjs`
 - `scripts/theme-core/compile.mjs`
+- `scripts/theme-core/code-adapter.mjs`
 - `scripts/theme-core/constants.mjs`
 - `scripts/theme-core/greeting.mjs`
 - `scripts/theme-core/registry.mjs`
@@ -332,6 +333,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/artwork.test.mjs`
 - `tests/avatar.test.mjs`
 - `tests/config.test.mjs`
+- `tests/code-adapter.test.mjs`
 - `tests/draft-handoff.test.mjs`
 - `tests/desktop-cdp.test.mjs`
 - `tests/greeting-runtime.test.mjs`
