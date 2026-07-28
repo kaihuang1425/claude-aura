@@ -228,6 +228,7 @@ export async function deliverableFiles(directory = PROJECT_ROOT, relativeDirecto
     "docs/THEMING.md",
     "docs/TROUBLESHOOTING.md",
     "docs/WINDOWS_INSTALLER.md",
+    "docs/handoff/P0_SPIKE_RUNBOOK.md",
     "docs/recipes/RECIPES.md",
   ]);
   // Supplied per-theme source kits are DIRECTORIES under themes/ — preserved on

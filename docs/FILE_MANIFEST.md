@@ -404,6 +404,7 @@ the retired reconstructed preview are not deliverables.
 - `docs/THEMING.md`
 - `docs/TROUBLESHOOTING.md`
 - `docs/WINDOWS_INSTALLER.md`
+- `docs/handoff/P0_SPIKE_RUNBOOK.md`
 
 ## Vendored WebView2 runtime integration
 
