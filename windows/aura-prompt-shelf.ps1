@@ -569,7 +569,24 @@ function Write-AuraPromptShelfItems {
   $directory = Split-Path -Parent $Path
   $temporary = Join-Path $directory ('.prompt-shelf-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
   $backup = Join-Path $directory ('.prompt-shelf-{0}.bak' -f [Guid]::NewGuid().ToString('N'))
+  $rollback = Join-Path $directory ('.prompt-shelf-{0}.rollback' -f [Guid]::NewGuid().ToString('N'))
   $cipher = $null
+  $priorEnvelope = $null
+  $restoredEnvelope = $null
+  $published = $false
+  $committed = $false
+  $rollbackCompleted = $false
+  $hadExisting = Test-Path -LiteralPath $Path -PathType Leaf
+  if ($hadExisting) {
+    Assert-AuraPromptShelfNotReparsePoint -Path $Path
+    $existingInfo = Get-Item -LiteralPath $Path -Force
+    if ($existingInfo.Length -gt ($script:PromptShelfMaxFileBytes + 4096)) {
+      throw 'Prompt Shelf existing state exceeds its byte limit.'
+    }
+    $priorEnvelope = [IO.File]::ReadAllBytes($Path)
+  } elseif (Test-Path -LiteralPath $Path) {
+    throw 'Prompt Shelf state path is not a regular file.'
+  }
   try {
     $cipher = [Security.Cryptography.ProtectedData]::Protect(
       $plain,
@@ -582,27 +599,86 @@ function Write-AuraPromptShelfItems {
       $cipher, 0, $envelope, $script:PromptShelfStateMagic.Length, $cipher.Length)
     [IO.File]::WriteAllBytes($temporary, $envelope)
     Set-AuraPromptShelfSecureAcl -Path $temporary
-    if (Test-Path -LiteralPath $Path -PathType Leaf) {
-      Assert-AuraPromptShelfNotReparsePoint -Path $Path
+    if ($hadExisting) {
       [IO.File]::Replace($temporary, $Path, $backup)
-      if (Test-Path -LiteralPath $backup -PathType Leaf) {
-        Set-AuraPromptShelfSecureAcl -Path $backup
+      $published = $true
+      if (-not (Test-Path -LiteralPath $backup -PathType Leaf)) {
+        throw 'Prompt Shelf replacement backup is unavailable.'
       }
+      $backupEnvelope = [IO.File]::ReadAllBytes($backup)
+      try {
+        if (-not [Linq.Enumerable]::SequenceEqual(
+            [byte[]]$priorEnvelope, [byte[]]$backupEnvelope)) {
+          throw 'Prompt Shelf backup did not preserve the previous state.'
+        }
+      } finally {
+        [Array]::Clear($backupEnvelope, 0, $backupEnvelope.Length)
+      }
+      Set-AuraPromptShelfSecureAcl -Path $backup
     } else {
       [IO.File]::Move($temporary, $Path)
+      $published = $true
     }
     Set-AuraPromptShelfSecureAcl -Path $Path
+    $verified = @(Read-AuraPromptShelfEncryptedItems -Path $Path)
+    if (-not (Test-AuraPromptShelfItemsEqual -Expected $normalized -Actual $verified)) {
+      throw 'Prompt Shelf replacement did not verify.'
+    }
+    $committed = $true
   } catch {
-    if ($isDefaultPath) { $script:PromptShelfPersistenceAvailable = $false }
-    throw
+    $failure = $_
+    if ($published) {
+      try {
+        if ($hadExisting) {
+          if (-not (Test-Path -LiteralPath $backup -PathType Leaf)) {
+            throw 'Prompt Shelf rollback backup is unavailable.'
+          }
+          [IO.File]::Replace($backup, $Path, $rollback)
+          Assert-AuraPromptShelfNotReparsePoint -Path $Path
+          Set-AuraPromptShelfSecureAcl -Path $Path
+          $restoredEnvelope = [IO.File]::ReadAllBytes($Path)
+          if (-not (Test-Path -LiteralPath $Path -PathType Leaf) -or
+              -not [Linq.Enumerable]::SequenceEqual(
+                [byte[]]$priorEnvelope, [byte[]]$restoredEnvelope)) {
+            throw 'Prompt Shelf rollback did not restore the previous state.'
+          }
+        } else {
+          [IO.File]::Move($Path, $rollback)
+          if (Test-Path -LiteralPath $Path) {
+            throw 'Prompt Shelf rollback did not restore the empty state.'
+          }
+        }
+        $rollbackCompleted = $true
+      } catch {
+        Write-AuraPromptShelfEvent -Code 'state-write-rollback-failed'
+      }
+    }
+    if ($isDefaultPath -and (-not $published -or -not $rollbackCompleted)) {
+      $script:PromptShelfPersistenceAvailable = $false
+    }
+    if ($published -and -not $rollbackCompleted) {
+      throw 'Prompt Shelf state write failed and rollback could not be verified.'
+    }
+    throw $failure
   } finally {
     [Array]::Clear($plain, 0, $plain.Length)
     if ($null -ne $cipher) { [Array]::Clear($cipher, 0, $cipher.Length) }
+    if ($null -ne $priorEnvelope) {
+      [Array]::Clear($priorEnvelope, 0, $priorEnvelope.Length)
+    }
+    if ($null -ne $restoredEnvelope) {
+      [Array]::Clear($restoredEnvelope, 0, $restoredEnvelope.Length)
+    }
     if (Test-Path -LiteralPath $temporary -PathType Leaf) {
       try { Remove-Item -LiteralPath $temporary -Force } catch {}
     }
-    if (Test-Path -LiteralPath $backup -PathType Leaf) {
-      try { Remove-Item -LiteralPath $backup -Force } catch {}
+    if ($committed -or $rollbackCompleted) {
+      if (Test-Path -LiteralPath $backup -PathType Leaf) {
+        try { Remove-Item -LiteralPath $backup -Force } catch {}
+      }
+      if (Test-Path -LiteralPath $rollback -PathType Leaf) {
+        try { Remove-Item -LiteralPath $rollback -Force } catch {}
+      }
     }
   }
 }
