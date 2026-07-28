@@ -15,6 +15,7 @@ import "./greeting-runtime.test.mjs";
 import "./prepaint.test.mjs";
 import "./aura-rescue.test.mjs";
 import "./draft-handoff.test.mjs";
+import "./desktop-cdp.test.mjs";
 import "./prompt-shelf.test.mjs";
 import "./installer.test.mjs";
 import "./locales.test.mjs";

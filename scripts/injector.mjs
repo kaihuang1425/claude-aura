@@ -2,11 +2,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { AURA_VERSION, buildPayload, PROJECT_ROOT } from "./theme-core.mjs";
-
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
-const ID_PATTERN = /^[A-Za-z0-9._-]{1,200}$/;
-
-class BrowserIdentityChangedError extends Error {}
+import {
+  assertBrowserIdentity as validateBrowserIdentity,
+  BrowserIdentityChangedError,
+  browserIdFromVersion,
+  CDP_TIMEOUT_POLICY,
+  parseCdpFrame,
+  validPageTarget,
+  validateBrowserId,
+  validatedDebuggerUrl,
+  validatePort,
+  validateTimeoutPolicy,
+} from "./desktop-cdp/validation.mjs";
 
 function parseArgs(argv) {
   const options = {
@@ -33,61 +40,13 @@ function parseArgs(argv) {
     else if (arg === "--screenshot") options.screenshot = path.resolve(argv[++index]);
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!Number.isInteger(options.port) || options.port < 1024 || options.port > 65535) {
-    throw new Error(`Invalid port: ${options.port}`);
-  }
-  if (!Number.isInteger(options.timeoutMs) || options.timeoutMs < 250 || options.timeoutMs > 120000) {
-    throw new Error(`Invalid timeout: ${options.timeoutMs}`);
-  }
-  if (options.browserId !== null && !ID_PATTERN.test(options.browserId)) {
-    throw new Error(`Invalid browser ID: ${options.browserId}`);
-  }
+  validatePort(options.port);
+  validateTimeoutPolicy(options.timeoutMs);
+  if (options.browserId !== null) validateBrowserId(options.browserId);
   if (["watch", "apply", "verify", "remove", "diagnose"].includes(options.mode) && !options.browserId) {
     throw new Error(`--browser-id is required in ${options.mode} mode`);
   }
   return options;
-}
-
-function validatedDebuggerUrl(value, port) {
-  const source = typeof value === "string" ? value : value?.webSocketDebuggerUrl;
-  const url = new URL(source);
-  const pathIsValid = /^\/devtools\/(?:page|browser)\/[A-Za-z0-9._-]{1,200}$/.test(url.pathname);
-  if (url.protocol !== "ws:" || !LOOPBACK_HOSTS.has(url.hostname) || Number(url.port) !== port ||
-      url.username || url.password || url.search || url.hash || !pathIsValid) {
-    throw new Error("Rejected a CDP WebSocket URL outside the loopback endpoint");
-  }
-  return url.href;
-}
-
-function browserIdFromVersion(version, port) {
-  const url = new URL(validatedDebuggerUrl(version, port));
-  const match = url.pathname.match(/^\/devtools\/browser\/([A-Za-z0-9._-]{1,200})$/);
-  if (!match || !ID_PATTERN.test(match[1])) throw new Error("Rejected an invalid CDP browser identity");
-  return match[1];
-}
-
-function potentialClaudeUrl(value) {
-  try {
-    const url = new URL(value);
-    if (["file:", "app:"].includes(url.protocol)) return true;
-    if (url.protocol === "about:" && url.pathname === "blank") return true;
-    if (!["https:", "http:"].includes(url.protocol)) return false;
-    const host = url.hostname.toLowerCase();
-    return host === "claude.ai" || host.endsWith(".claude.ai");
-  } catch {
-    return false;
-  }
-}
-
-function validPageTarget(target, port) {
-  if (target?.type !== "page" || typeof target.id !== "string" || !ID_PATTERN.test(target.id) ||
-      typeof target.url !== "string" || !potentialClaudeUrl(target.url)) return false;
-  try {
-    const url = new URL(validatedDebuggerUrl(target, port));
-    return url.pathname === `/devtools/page/${target.id}`;
-  } catch {
-    return false;
-  }
 }
 
 class CdpSession {
@@ -105,7 +64,7 @@ class CdpSession {
       const timeout = setTimeout(() => {
         try { this.ws.close(); } catch {}
         reject(new Error("CDP WebSocket open timed out"));
-      }, 5000);
+      }, CDP_TIMEOUT_POLICY.socketOpenMs);
       this.ws.addEventListener("open", () => { clearTimeout(timeout); resolve(); }, { once: true });
       this.ws.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("CDP WebSocket open failed")); }, { once: true });
     });
@@ -127,7 +86,7 @@ class CdpSession {
   onMessage(event) {
     let message;
     try {
-      message = JSON.parse(String(event.data));
+      message = parseCdpFrame(event.data);
     } catch {
       this.close();
       return;
@@ -157,7 +116,7 @@ class CdpSession {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`CDP command timed out: ${method}`));
-      }, 10000);
+      }, CDP_TIMEOUT_POLICY.commandMs);
       this.pending.set(id, { resolve, reject, timeout });
       try {
         this.ws.send(JSON.stringify({ id, method, params }));
@@ -209,7 +168,10 @@ class BrowserAnchor {
 
   async open() {
     await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { this.close(); reject(new Error("Browser identity anchor timed out")); }, 5000);
+      const timeout = setTimeout(() => {
+        this.close();
+        reject(new Error("Browser identity anchor timed out"));
+      }, CDP_TIMEOUT_POLICY.socketOpenMs);
       this.ws.addEventListener("open", () => { clearTimeout(timeout); resolve(); }, { once: true });
       this.ws.addEventListener("error", () => { clearTimeout(timeout); reject(new Error("Browser identity anchor failed")); }, { once: true });
     });
@@ -226,7 +188,7 @@ class BrowserAnchor {
 
 async function fetchCdpJson(port, resource) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2000);
+  const timeout = setTimeout(() => controller.abort(), CDP_TIMEOUT_POLICY.endpointMs);
   try {
     const response = await fetch(`http://127.0.0.1:${port}${resource}`, {
       redirect: "error",
@@ -241,10 +203,7 @@ async function fetchCdpJson(port, resource) {
 
 async function assertBrowserIdentity(port, expectedBrowserId) {
   const version = await fetchCdpJson(port, "/json/version");
-  const actualBrowserId = browserIdFromVersion(version, port);
-  if (actualBrowserId !== expectedBrowserId) {
-    throw new BrowserIdentityChangedError(`CDP browser identity changed from ${expectedBrowserId} to ${actualBrowserId}`);
-  }
+  validateBrowserIdentity(version, port, expectedBrowserId);
   return version;
 }
 

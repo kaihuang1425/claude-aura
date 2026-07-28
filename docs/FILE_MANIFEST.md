@@ -44,6 +44,7 @@ offline-preview files and comparison screenshots are not deliverables.
 - `.github/workflows/ci.yml`
 - `.gitignore`
 - `config.example.json`
+- `desktop-compatibility.json`
 - `CONTRIBUTING.md`
 - `Install Claude Aura.cmd`
 - `Install Claude Aura.command`
@@ -310,6 +311,8 @@ the retired reconstructed preview are not deliverables.
 - `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
 - `scripts/convert-theme-assets.mjs`
+- `scripts/desktop-cdp/validation.mjs`
+- `scripts/desktop-probe.mjs`
 - `scripts/injector.mjs`
 - `scripts/locale-tasks.mjs`
 - `scripts/state-cli.mjs`
@@ -330,6 +333,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/avatar.test.mjs`
 - `tests/config.test.mjs`
 - `tests/draft-handoff.test.mjs`
+- `tests/desktop-cdp.test.mjs`
 - `tests/greeting-runtime.test.mjs`
 - `tests/greeting.test.mjs`
 - `tests/installer.test.mjs`
@@ -350,6 +354,7 @@ the retired reconstructed preview are not deliverables.
 ## Windows application
 
 - `windows/aura-draft-handoff.ps1`
+- `windows/desktop-capability.ps1`
 - `windows/aura-ui.ps1`
 - `windows/aura-prompt-shelf.ps1`
 - `windows/common.ps1`
