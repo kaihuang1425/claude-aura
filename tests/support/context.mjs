@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -286,6 +287,7 @@ export {
   path,
   readThemeKit,
   readThemeRegistry,
+  realpathSync,
   resolveArtwork,
   greetingPhraseDigest,
   resolveGreetingPhrases,
