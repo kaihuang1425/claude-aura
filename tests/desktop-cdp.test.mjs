@@ -5,6 +5,11 @@ import { test, runIfMain } from "./support/harness.mjs";
 import { PROJECT_ROOT } from "./support/context.mjs";
 import { runDesktopProbe } from "../scripts/desktop-probe.mjs";
 import {
+  diagnosticExpression,
+  runDesktopProfile,
+} from "../scripts/desktop-profile.mjs";
+import { DesktopCdpSession } from "../scripts/desktop-cdp/session.mjs";
+import {
   assertBrowserIdentity,
   BrowserIdentityChangedError,
   browserIdFromVersion,
@@ -19,6 +24,13 @@ import {
 } from "../scripts/desktop-cdp/validation.mjs";
 
 const PORT = 9394;
+
+function powershellFunction(source, name) {
+  const start = source.indexOf(`function ${name} {`);
+  assert(start >= 0, `Missing PowerShell function ${name}`);
+  const end = source.indexOf("\nfunction ", start + 1);
+  return source.slice(start, end < 0 ? source.length : end);
+}
 
 test("Desktop CDP endpoints accept exact IPv4, localhost, and IPv6 loopback forms", () => {
   assert.equal(validateHttpEndpoint(`http://127.0.0.1:${PORT}`), `http://127.0.0.1:${PORT}/`);
@@ -156,6 +168,217 @@ test("Desktop probe reads only version and list resources and emits sanitized ta
     },
   }]);
   assert(!JSON.stringify(result).includes("Private session"));
+});
+
+test("Desktop profile diagnostic changes only its owned marker and custom property", async () => {
+  const source = diagnosticExpression();
+  assert.match(source, /data-claude-aura-desktop-probe/);
+  assert.match(source, /--claude-aura-desktop-probe:1/);
+  assert.match(source, /try\s*\{[\s\S]*finally\s*\{/,
+    "the diagnostic must clean its marker even after an evaluation failure");
+  assert(!/querySelector|querySelectorAll|innerHTML|innerText|outerHTML|document\.title|location\.|localStorage|sessionStorage|indexedDB|cookie|clipboard|fetch\(|XMLHttpRequest|WebSocket/.test(source));
+  assert(!/(?:background|color|display|position|opacity|transform)\s*:/.test(source),
+    "the diagnostic must not make a visible style change");
+  const profileModule = await fs.readFile(
+    path.join(PROJECT_ROOT, "scripts", "desktop-profile.mjs"),
+    "utf8",
+  );
+  assert.match(profileModule,
+    /const PROFILE_GATE_A_ENABLED = false;[\s\S]+desktop-profile-gate-a-no-go/,
+    "Direct profile execution must remain locked after the Gate A no-go");
+  assert.doesNotMatch(profileModule, /createHash|urlDigest/,
+    "The source-only profile must not retain a digest derived from a full target URL");
+});
+
+test("Desktop CDP session exposes no raw command channel and pins one expression", async () => {
+  const session = new DesktopCdpSession({
+    webSocketDebuggerUrl: `ws://127.0.0.1:${PORT}/devtools/page/page-1`,
+  }, PORT, { allowedExpression: "fixed-diagnostic" });
+  assert.equal(session.send, undefined);
+  assert.equal(session.socket, undefined);
+  assert.equal(session.url, undefined);
+  assert.equal(session.allowedExpression, undefined);
+  assert.equal(Object.isExtensible(session), false);
+  assert.throws(() => {
+    session.allowedExpression = "arbitrary-page-script";
+  }, TypeError);
+  assert.throws(() => {
+    session.socket = { send() {} };
+  }, TypeError);
+  await assert.rejects(
+    session.evaluate("arbitrary-page-script", 1),
+    /desktop-cdp-expression-rejected/,
+  );
+});
+
+test("Desktop profile orchestration passes only its pinned diagnostic expression", async () => {
+  class FakeWebSocket {
+    static OPEN = 1;
+
+    constructor() {
+      this.readyState = FakeWebSocket.OPEN;
+      this.listeners = new Map();
+      queueMicrotask(() => this.emit("open", {}));
+    }
+
+    addEventListener(type, listener) {
+      const listeners = this.listeners.get(type) ?? [];
+      listeners.push(listener);
+      this.listeners.set(type, listeners);
+    }
+
+    emit(type, event) {
+      for (const listener of this.listeners.get(type) ?? []) listener(event);
+    }
+
+    send(source) {
+      const request = JSON.parse(source);
+      const results = {
+        "Page.getFrameTree": { frameTree: { frame: { id: "frame-1" } } },
+        "Page.createIsolatedWorld": { executionContextId: 1 },
+        "Runtime.evaluate": {
+          result: {
+            type: "object",
+            value: {
+              pass: true,
+              reasonCode: "desktop-profile-complete",
+              markers: {
+                body: true,
+                documentRoot: true,
+                probeApplied: true,
+                cleanupComplete: true,
+                themeVariables: false,
+              },
+              variables: [],
+            },
+          },
+        },
+      };
+      queueMicrotask(() => this.emit("message", {
+        data: JSON.stringify({ id: request.id, result: results[request.method] }),
+      }));
+    }
+
+    close() {
+      this.readyState = 3;
+      this.emit("close", {});
+    }
+  }
+
+  const resources = [];
+  const version = {
+    webSocketDebuggerUrl: `ws://127.0.0.1:${PORT}/devtools/browser/browser-1`,
+  };
+  const result = await runDesktopProfile({
+    endpoint: `http://127.0.0.1:${PORT}/`,
+    browserId: "browser-1",
+    timeoutMs: 5_000,
+  }, {
+    WebSocketImpl: FakeWebSocket,
+    fetch: async (url) => {
+      resources.push(url.pathname);
+      return {
+        ok: true,
+        text: async () => JSON.stringify(url.pathname === "/json/version"
+          ? version
+          : [{
+            id: "page-1",
+            type: "page",
+            url: "https://claude.ai/code/private-session?account=hidden",
+            webSocketDebuggerUrl:
+              `ws://127.0.0.1:${PORT}/devtools/page/page-1`,
+          }]),
+      };
+    },
+  });
+
+  assert.equal(result.status, "ok");
+  assert.deepEqual(resources, [
+    "/json/version",
+    "/json/list",
+    "/json/version",
+    "/json/list",
+    "/json/version",
+    "/json/list",
+    "/json/version",
+    "/json/list",
+    "/json/version",
+  ]);
+  assert(!JSON.stringify(result).includes("private-session"));
+  assert(!JSON.stringify(result).includes("account"));
+});
+
+test("Desktop identity lookup is opt-in and unpackaged capability fails closed", async () => {
+  const [common, capability, controller, ui, releaseBuilder] = await Promise.all([
+    fs.readFile(path.join(PROJECT_ROOT, "windows", "common.ps1"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "windows", "desktop-capability.ps1"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "windows", "desktop-presentation.ps1"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "scripts", "build-release.mjs"), "utf8"),
+  ]);
+  const converter = powershellFunction(common, "ConvertTo-AuraMsixInstall");
+  const installResolver = powershellFunction(common, "Get-AuraClaudeInstall");
+  const identityResolver = powershellFunction(
+    common,
+    "Get-AuraClaudeMsixApplicationIdentity",
+  );
+  const genericDesktopAction = powershellFunction(ui, "Invoke-AuraUiOpenDesktopApp");
+  assert.doesNotMatch(converter, /Get-AppxPackageManifest|ApplicationId|AppUserModelId/,
+    "Generic MSIX discovery must not depend on registered-application lookup");
+  assert.doesNotMatch(installResolver,
+    /Get-AppxPackageManifest|Get-AuraClaudeMsixApplicationIdentity/,
+    "Generic Claude Desktop discovery must retain its previous fallback behavior");
+  assert.match(identityResolver,
+    /Claude_pzs8sxrjxfjjc[\s\S]+Get-AppxPackageManifest[\s\S]+app\\Claude\.exe[\s\S]+AppUserModelId/);
+  assert.match(genericDesktopAction, /Get-AuraClaudeInstall/);
+  assert.doesNotMatch(genericDesktopAction, /Get-AuraClaudeMsixApplicationIdentity/,
+    "The existing generic Desktop button must not acquire the experimental identity gate");
+  const unsupportedIndex = capability.indexOf("reasonCode = 'desktop-msix-required'");
+  const identityCallIndex = capability.indexOf(
+    "Get-AuraClaudeMsixApplicationIdentity -Install $install",
+  );
+  assert(unsupportedIndex >= 0 && identityCallIndex > unsupportedIndex,
+    "The capability probe must reject unpackaged Desktop before manifest lookup");
+  assert.match(capability, /reasonCode\s*=\s*'desktop-application-identity-unavailable'/);
+  assert.match(capability, /schemaVersion\s*=\s*2/);
+  assert(!/^\s+executablePath\s*=/m.test(capability),
+    "Desktop capability output must not expose the local executable path");
+  assert(!/^\s+processes\s*=/m.test(capability),
+    "Desktop capability output must not expose process identities");
+  assert.equal(
+    (capability.match(/Get-AuraClaudeMsixApplicationIdentity/g) ?? []).length,
+    1,
+  );
+  assert.equal(
+    (controller.match(/Get-AuraClaudeMsixApplicationIdentity/g) ?? []).length,
+    1,
+  );
+  assert.match(controller,
+    /\$script:DesktopPresentationGateAEnabled\s*=\s*\$false[\s\S]+desktop-presentation-gate-a-no-go[\s\S]+Get-AuraClaudeMsixApplicationIdentity[\s\S]+\$launchProcess\s*=\s*Start-AuraDesktopPackage/,
+    "The exhausted Gate A controller must refuse before identity lookup or launch");
+  assert.match(controller, /Start-Process -FilePath \$ExecutablePath[\s\S]+--remote-debugging-address=127\.0\.0\.1/);
+  assert.match(controller, /Get-NetTCPConnection/);
+  assert.match(controller, /Test-AuraPathEqual/);
+  assert.match(controller, /CreationTime/);
+  assert.match(controller, /ConfirmExperimentalGateA/);
+  assert.match(controller, /LaunchProcessId/);
+  assert.match(controller, /desktop-presentation-identity-changed/);
+  assert.match(controller, /Close-AuraDesktopDiagnosticInstance[\s\S]+CloseMainWindow/);
+  assert.match(controller, /Restore-AuraStockDesktop[\s\S]+shell:AppsFolder/);
+  assert.match(controller, /cleanupComplete[\s\S]+stockRelaunch/);
+  assert.match(controller, /desktop-restart-required/);
+  assert(!/Stop-Process|taskkill|TerminateProcess|Kill\(/i.test(controller));
+  const sourceOnlyFiles = releaseBuilder.match(
+    /const SOURCE_ONLY_RELEASE_FILES = new Set\(\[[\s\S]*?\]\);/,
+  )?.[0] ?? "";
+  for (const file of [
+    "scripts/desktop-cdp/session.mjs",
+    "scripts/desktop-profile.mjs",
+    "windows/desktop-presentation.ps1",
+  ]) {
+    assert(sourceOnlyFiles.includes(`"${file}"`),
+      `${file} must be explicitly excluded from release builds`);
+  }
 });
 
 async function productionSources() {

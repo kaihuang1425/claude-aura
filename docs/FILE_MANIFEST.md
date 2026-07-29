@@ -312,6 +312,8 @@ the retired reconstructed preview are not deliverables.
 - `scripts/build-release.mjs`
 - `scripts/convert-theme-assets.mjs`
 - `scripts/desktop-cdp/validation.mjs`
+- `scripts/desktop-cdp/session.mjs`
+- `scripts/desktop-profile.mjs`
 - `scripts/desktop-probe.mjs`
 - `scripts/injector.mjs`
 - `scripts/locale-tasks.mjs`
@@ -359,6 +361,7 @@ the retired reconstructed preview are not deliverables.
 - `windows/aura-code-popup-diagnostic.ps1`
 - `windows/aura-draft-handoff.ps1`
 - `windows/desktop-capability.ps1`
+- `windows/desktop-presentation.ps1`
 - `windows/aura-ui.ps1`
 - `windows/aura-prompt-shelf.ps1`
 - `windows/common.ps1`

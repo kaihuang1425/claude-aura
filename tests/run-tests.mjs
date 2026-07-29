@@ -17,7 +17,6 @@ import "./greeting-runtime.test.mjs";
 import "./prepaint.test.mjs";
 import "./aura-rescue.test.mjs";
 import "./draft-handoff.test.mjs";
-import "./desktop-cdp.test.mjs";
 import "./code-adapter.test.mjs";
 import "./prompt-shelf.test.mjs";
 import "./installer.test.mjs";
@@ -31,6 +30,16 @@ const sourceOnlyAuraCodeDiagnosticInputs = [
 ];
 if (sourceOnlyAuraCodeDiagnosticInputs.every((url) => existsSync(fileURLToPath(url)))) {
   await import("./aura-code-popup-diagnostic.test.mjs");
+}
+
+const sourceOnlyDesktopTestInputs = [
+  new URL("./desktop-cdp.test.mjs", import.meta.url),
+  new URL("../scripts/desktop-cdp/session.mjs", import.meta.url),
+  new URL("../scripts/desktop-profile.mjs", import.meta.url),
+  new URL("../windows/desktop-presentation.ps1", import.meta.url),
+];
+if (sourceOnlyDesktopTestInputs.every((url) => existsSync(fileURLToPath(url)))) {
+  await import("./desktop-cdp.test.mjs");
 }
 
 await runAll();

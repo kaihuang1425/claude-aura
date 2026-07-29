@@ -13,12 +13,50 @@ try {
   $install = Get-AuraClaudeInstall
 } catch {
   Write-AuraDesktopCapability @{
-    schemaVersion = 1
+    schemaVersion = 2
     status = 'blocked'
     reasonCode = 'desktop-not-found'
     install = $null
-    alreadyRunning = $false
-    processes = @()
+    alreadyRunning = $null
+    processCount = $null
+  }
+  exit 0
+}
+
+if ("$($install.Packaging)" -cne 'msix') {
+  Write-AuraDesktopCapability @{
+    schemaVersion = 2
+    status = 'blocked'
+    reasonCode = 'desktop-msix-required'
+    install = @{
+      packageKind = "$($install.Packaging)"
+      signatureValid = $true
+      productVersion = "$($install.Version)"
+      applicationId = $null
+      appUserModelId = $null
+    }
+    alreadyRunning = $null
+    processCount = $null
+  }
+  exit 0
+}
+
+try {
+  $applicationIdentity = Get-AuraClaudeMsixApplicationIdentity -Install $install
+} catch {
+  Write-AuraDesktopCapability @{
+    schemaVersion = 2
+    status = 'blocked'
+    reasonCode = 'desktop-application-identity-unavailable'
+    install = @{
+      packageKind = "$($install.Packaging)"
+      signatureValid = $true
+      productVersion = "$($install.Version)"
+      applicationId = $null
+      appUserModelId = $null
+    }
+    alreadyRunning = $null
+    processCount = $null
   }
   exit 0
 }
@@ -28,17 +66,18 @@ $executablePath = [IO.Path]::GetFullPath(
 $signatureValid = Test-AuraAnthropicSignature -Path $executablePath
 if (-not $signatureValid) {
   Write-AuraDesktopCapability @{
-    schemaVersion = 1
+    schemaVersion = 2
     status = 'blocked'
     reasonCode = 'desktop-signature-invalid'
     install = @{
       packageKind = "$($install.Packaging)"
-      executablePath = $executablePath
       signatureValid = $false
       productVersion = "$($install.Version)"
+      applicationId = "$($applicationIdentity.ApplicationId)"
+      appUserModelId = "$($applicationIdentity.AppUserModelId)"
     }
     alreadyRunning = $null
-    processes = @()
+    processCount = $null
   }
   exit 0
 }
@@ -48,17 +87,18 @@ try {
     -Property ProcessId, ParentProcessId, ExecutablePath, CreationDate -ErrorAction Stop)
 } catch {
   Write-AuraDesktopCapability @{
-    schemaVersion = 1
+    schemaVersion = 2
     status = 'blocked'
     reasonCode = 'desktop-process-discovery-unavailable'
     install = @{
       packageKind = "$($install.Packaging)"
-      executablePath = $executablePath
       signatureValid = $true
       productVersion = "$($install.Version)"
+      applicationId = "$($applicationIdentity.ApplicationId)"
+      appUserModelId = "$($applicationIdentity.AppUserModelId)"
     }
     alreadyRunning = $null
-    processes = @()
+    processCount = $null
   }
   exit 0
 }
@@ -84,31 +124,33 @@ foreach ($candidate in $candidates) {
 
 if ($processes.Count -gt 32) {
   Write-AuraDesktopCapability @{
-    schemaVersion = 1
+    schemaVersion = 2
     status = 'blocked'
     reasonCode = 'desktop-process-set-oversized'
     install = @{
       packageKind = "$($install.Packaging)"
-      executablePath = $executablePath
       signatureValid = $true
       productVersion = "$($install.Version)"
+      applicationId = "$($applicationIdentity.ApplicationId)"
+      appUserModelId = "$($applicationIdentity.AppUserModelId)"
     }
     alreadyRunning = $null
-    processes = @()
+    processCount = $null
   }
   exit 0
 }
 
 Write-AuraDesktopCapability @{
-  schemaVersion = 1
+  schemaVersion = 2
   status = 'ok'
   reasonCode = if ($processes.Count) { 'desktop-running' } else { 'desktop-installed-not-running' }
   install = @{
     packageKind = "$($install.Packaging)"
-    executablePath = $executablePath
     signatureValid = $true
     productVersion = "$($install.Version)"
+    applicationId = "$($applicationIdentity.ApplicationId)"
+    appUserModelId = "$($applicationIdentity.AppUserModelId)"
   }
   alreadyRunning = [bool]$processes.Count
-  processes = @($processes | Sort-Object pid)
+  processCount = [int]$processes.Count
 }

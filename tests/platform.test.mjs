@@ -42,9 +42,13 @@ import {
   zipEntryNames,
 } from "./support/context.mjs";
 
-const AURA_CODE_DIAGNOSTIC_SOURCE_ONLY_PATHS = [
+const SOURCE_ONLY_RELEASE_PATHS = [
+  "scripts/desktop-cdp/session.mjs",
+  "scripts/desktop-profile.mjs",
   "tests/aura-code-popup-diagnostic.test.mjs",
+  "tests/desktop-cdp.test.mjs",
   "windows/aura-code-popup-diagnostic.ps1",
+  "windows/desktop-presentation.ps1",
 ];
 
 test("legacy macOS CDP validation rejects unsafe endpoints", async () => {
@@ -837,7 +841,7 @@ test("release and installers exclude unsafe composite references and binary patc
   assert(installExclusionStart >= 0 && installExclusionEnd > installExclusionStart,
     "Windows install source-only filter is missing");
   const installExclusions = windowsInstall.slice(installExclusionStart, installExclusionEnd);
-  for (const sourceOnlyPath of AURA_CODE_DIAGNOSTIC_SOURCE_ONLY_PATHS) {
+  for (const sourceOnlyPath of SOURCE_ONLY_RELEASE_PATHS) {
     assert(installExclusions.includes(`'${sourceOnlyPath}'`),
       `Windows repo/dev installs include source-only file ${sourceOnlyPath}`);
     assert(macInstall.includes(`"$INSTALL_ROOT/${sourceOnlyPath}"`),
@@ -849,9 +853,15 @@ test("release and installers exclude unsafe composite references and binary patc
   assert.doesNotMatch(aggregateRunner,
     /^import "[.]\/aura-code-popup-diagnostic[.]test[.]mjs";$/m,
     "The shipped aggregate runner statically imports the source-only Aura Code diagnostic suite");
+  assert.doesNotMatch(aggregateRunner,
+    /^import "[.]\/desktop-cdp[.]test[.]mjs";$/m,
+    "The shipped aggregate runner statically imports the source-only Desktop suite");
   assert.match(aggregateRunner,
     /sourceOnlyAuraCodeDiagnosticInputs[\s\S]{0,500}?existsSync[\s\S]{0,200}?await import[(]"[.]\/aura-code-popup-diagnostic[.]test[.]mjs"[)]/,
     "The repository runner does not conditionally register its source-only Aura Code diagnostic suite");
+  assert.match(aggregateRunner,
+    /sourceOnlyDesktopTestInputs[\s\S]{0,700}?existsSync[\s\S]{0,200}?await import[(]"[.]\/desktop-cdp[.]test[.]mjs"[)]/,
+    "The repository runner does not conditionally register its source-only Desktop suite");
   assert.match(windowsInstall, /function New-AuraInstallStage/);
   assert.match(windowsInstall, /Get-FileHash[\s\S]{0,220}?SHA256/,
     "Windows installs must verify every staged application file");
@@ -940,7 +950,7 @@ test("release and installers exclude unsafe composite references and binary patc
     const release = JSON.parse(run(process.execPath, ["scripts/build-release.mjs"]));
     const releaseBytes = await fs.readFile(release.outputPath);
     const names = zipEntryNames(releaseBytes);
-    for (const sourceOnlyPath of AURA_CODE_DIAGNOSTIC_SOURCE_ONLY_PATHS) {
+    for (const sourceOnlyPath of SOURCE_ONLY_RELEASE_PATHS) {
       assert(!names.includes(`claude-aura/${sourceOnlyPath}`),
         `Release included source-only file ${sourceOnlyPath}`);
     }

@@ -57,8 +57,12 @@ const SOURCE_ONLY_RELEASE_DIRECTORIES = new Set([
   "assets/studio-previews/references",
 ]);
 const SOURCE_ONLY_RELEASE_FILES = new Set([
+  "scripts/desktop-cdp/session.mjs",
+  "scripts/desktop-profile.mjs",
   "tests/aura-code-popup-diagnostic.test.mjs",
+  "tests/desktop-cdp.test.mjs",
   "windows/aura-code-popup-diagnostic.ps1",
+  "windows/desktop-presentation.ps1",
 ]);
 const REQUIRED_THEME_DESCRIPTOR_FILES = new Set([
   "registry.json",

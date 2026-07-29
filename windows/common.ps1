@@ -253,6 +253,39 @@ function ConvertTo-AuraMsixInstall {
   }
 }
 
+function Get-AuraClaudeMsixApplicationIdentity {
+  param([Parameter(Mandatory = $true)][object]$Install)
+  if ("$($Install.Packaging)" -cne 'msix' -or
+      "$($Install.PackageFamilyName)" -cne 'Claude_pzs8sxrjxfjjc' -or
+      -not $Install.PackageFullName) {
+    throw 'desktop-msix-required'
+  }
+  $packageFullName = "$($Install.PackageFullName)"
+  if ($packageFullName -cnotmatch '^[A-Za-z0-9._-]{1,256}$') {
+    throw 'desktop-application-identity-unavailable'
+  }
+  try {
+    $manifest = Get-AppxPackageManifest -Package $packageFullName -ErrorAction Stop
+    $applications = @($manifest.Package.Applications.Application | Where-Object {
+      "$($_.Executable)".Replace('/', '\') -ieq 'app\Claude.exe'
+    })
+  } catch {
+    throw 'desktop-application-identity-unavailable'
+  }
+  if ($applications.Count -ne 1) {
+    throw 'desktop-application-identity-unavailable'
+  }
+  $applicationId = "$($applications[0].Id)"
+  $packageFamilyName = "$($Install.PackageFamilyName)"
+  if ($applicationId -cnotmatch '^[A-Za-z0-9._-]{1,64}$') {
+    throw 'desktop-application-identity-unavailable'
+  }
+  return [pscustomobject]@{
+    ApplicationId = $applicationId
+    AppUserModelId = "$packageFamilyName!$applicationId"
+  }
+}
+
 function Get-AuraClaudeInstall {
   $packages = @()
   try { $packages = @(Get-AppxPackage -Name 'Claude' -ErrorAction Stop | Sort-Object Version -Descending) } catch {}

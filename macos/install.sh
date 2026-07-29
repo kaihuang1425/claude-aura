@@ -80,14 +80,18 @@ done
 for obsolete_path in \
   "$INSTALL_ROOT/preview" \
   "$INSTALL_ROOT/scripts/build-preview.mjs" \
+  "$INSTALL_ROOT/scripts/desktop-cdp/session.mjs" \
+  "$INSTALL_ROOT/scripts/desktop-profile.mjs" \
   "$INSTALL_ROOT/scripts/preview-server.mjs" \
   "$INSTALL_ROOT/scripts/qa-board.mjs" \
   "$INSTALL_ROOT/docs/preview.png" \
   "$INSTALL_ROOT/docs/golden" \
   "$INSTALL_ROOT/docs/theme-screenshots" \
   "$INSTALL_ROOT/tests/aura-code-popup-diagnostic.test.mjs" \
+  "$INSTALL_ROOT/tests/desktop-cdp.test.mjs" \
   "$INSTALL_ROOT/tests/fixtures" \
   "$INSTALL_ROOT/windows/aura-code-popup-diagnostic.ps1" \
+  "$INSTALL_ROOT/windows/desktop-presentation.ps1" \
   "$INSTALL_ROOT/dist/qa" \
   "$INSTALL_ROOT/assets/studio-previews/references" \
   "$INSTALL_ROOT/assets/theme-art/japanese-film-editorial.svg" \
