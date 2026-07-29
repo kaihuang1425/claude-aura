@@ -1292,10 +1292,8 @@
 
   const cleanup = () => {
     window.__CLAUDE_AURA_DISABLED__ = true;
-    const state = window[STATE_KEY];
-    state?.["observer"]?.disconnect();
-    if (state?.["timer"]) clearInterval(state["timer"]);
-    if (state?.["scheduled"]) clearTimeout(state["scheduled"]);
+    observer.disconnect();
+    if (scheduled) clearTimeout(scheduled);
     stopMode();
     stopContext();
     codeAdapter.rollback("cleanup");
@@ -1316,12 +1314,8 @@
     if (scheduled) clearTimeout(scheduled);
     scheduled = setTimeout(() => {
       scheduled = null;
-      const state = window[STATE_KEY];
-      if (state) state["scheduled"] = null;
       ensure();
     }, 160);
-    const state = window[STATE_KEY];
-    if (state) state["scheduled"] = scheduled;
   };
   const onContextSignal = () => scheduleEnsure();
   const onPopState = () => {
@@ -1332,14 +1326,19 @@
     advanceGreetingVisit?.();
     scheduleEnsure();
   };
+  let t=0;
+  const onVis=()=>{clearInterval(t);t=document["hidden"]?0:setInterval(ensure,15e3);if(t&&window[STATE_KEY])ensure()};
   window.addEventListener("popstate", onPopState);
   window.addEventListener("resize", onContextSignal, { passive: true });
   document.addEventListener?.("fullscreenchange", onContextSignal);
+  document.addEventListener?.("visibilitychange", onVis);
   window.navigation?.addEventListener?.("currententrychange", onNavigationSignal);
   const stopContext = () => {
+    clearInterval(t);
     window.removeEventListener("popstate", onPopState);
     window.removeEventListener("resize", onContextSignal);
     document.removeEventListener?.("fullscreenchange", onContextSignal);
+    document.removeEventListener?.("visibilitychange", onVis);
     window.navigation?.removeEventListener?.("currententrychange", onNavigationSignal);
   };
   let observedHead = null;
@@ -1412,13 +1411,11 @@
     observedBackdrop = backdrop;
     observedCodeRoute = false;
   };
-  const timer = setInterval(ensure, 1500);
+  onVis();
   window[STATE_KEY] = {
     "cleanup": cleanup,
     "ensure": ensure,
     "observer": observer,
-    "timer": timer,
-    "scheduled": scheduled,
     stopModeListener: stopMode,
     stopContextListeners: stopContext,
     "getLayoutProbe": lp,

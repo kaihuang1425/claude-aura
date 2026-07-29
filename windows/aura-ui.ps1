@@ -3512,7 +3512,7 @@ function New-AuraUiLauncherSurfaceBitmap {
     $scale = Get-AuraUiLauncherScale -Dpi $Dpi
     $eased = [Math]::Min(1.0, [Math]::Max(0.0, $Hover))
     $eased = $eased * $eased * (3.0 - (2.0 * $eased))
-    $bitmap = [Drawing.Bitmap]::new($metrics.Client, $metrics.Client, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $bitmap = [Drawing.Bitmap]::new($metrics.Client, $metrics.Client, [Drawing.Imaging.PixelFormat]::Format32bppPArgb)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
@@ -3612,7 +3612,18 @@ function Push-AuraUiLauncherFrame {
   }
 }
 
+function Write-AuraUiLauncherBackendDiagnostic {
+  param(
+    [Parameter(Mandatory = $true)][ValidateSet('layered', 'classic')][string]$Backend,
+    [Parameter(Mandatory = $true)][string]$Reason
+  )
+  if ($script:LauncherBackendDiagnosticWritten) { return }
+  $script:LauncherBackendDiagnosticWritten = $true
+  Write-AuraUiLog -Message "Launcher backend selected: $Backend ($Reason)."
+}
+
 function Disable-AuraUiLauncherLayering {
+  param([string]$Reason = 'presentation-failed')
   # Permanent in-session fallback to the classic region look: clear the
   # per-pixel style (Windows forbids mixing layering modes), restore the legacy
   # translucency, and clip the window back to the circle.
@@ -3624,7 +3635,37 @@ function Disable-AuraUiLauncherLayering {
   if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
     $script:LauncherButton.Invalidate()
   }
-  Write-AuraUiLog -Message 'Launcher layered rendering is unavailable; using the classic region fallback.'
+  Write-AuraUiLauncherBackendDiagnostic -Backend classic -Reason $Reason
+}
+
+function Enable-AuraUiLauncherLayering {
+  # Capability smoke runs while the launcher is still hidden. The active flag
+  # is committed only after Windows accepts one real premultiplied frame.
+  if ($null -eq $script:Launcher -or $script:Launcher.IsDisposed -or $script:Launcher.Visible) {
+    Disable-AuraUiLauncherLayering -Reason 'hidden-smoke-unavailable'
+    return $false
+  }
+  $style = if ($null -ne $script:LauncherStyle) { $script:LauncherStyle } else { Get-AuraUiLauncherDefaultStyle }
+  $bitmap = New-AuraUiLauncherSurfaceBitmap -Style $style -Mark $script:LauncherMark
+  if ($null -eq $bitmap) {
+    Disable-AuraUiLauncherLayering -Reason 'frame-render-failed'
+    return $false
+  }
+  $oldRegion = $script:Launcher.Region
+  try {
+    $script:Launcher.Region = $null
+    if (-not (Push-AuraUiLauncherFrame -Bitmap $bitmap)) {
+      Disable-AuraUiLauncherLayering -Reason 'hidden-smoke-failed'
+      return $false
+    }
+    $script:LauncherLayeredActive = $true
+    try { $script:Launcher.Opacity = 1.0 } catch {}
+    Write-AuraUiLauncherBackendDiagnostic -Backend layered -Reason 'hidden-smoke-succeeded'
+    return $true
+  } finally {
+    $bitmap.Dispose()
+    if ($null -ne $oldRegion) { $oldRegion.Dispose() }
+  }
 }
 
 function Update-AuraUiLauncherSurface {
@@ -3645,7 +3686,7 @@ function Update-AuraUiLauncherSurface {
   $alpha = [byte][Math]::Min(255, [Math]::Round(245 + (10 * $hover)))
   $presented = Push-AuraUiLauncherFrame -Bitmap $bitmap -Alpha $alpha
   $bitmap.Dispose()
-  if (-not $presented) { Disable-AuraUiLauncherLayering }
+  if (-not $presented) { Disable-AuraUiLauncherLayering -Reason 'frame-presentation-failed' }
 }
 
 function Start-AuraUiLauncherAnimation {
@@ -8661,6 +8702,176 @@ function Invoke-AuraUiStudioMessage {
   }
 }
 
+function Request-AuraUiHostWork {
+  if ($script:Closing -or $script:HostWorkQueued -or
+      $null -eq $script:HostWorkAction -or
+      $null -eq $script:Form -or $script:Form.IsDisposed -or
+      -not $script:Form.IsHandleCreated) { return }
+  $script:HostWorkQueued = $true
+  try {
+    [void]$script:Form.BeginInvoke($script:HostWorkAction)
+  } catch {
+    $script:HostWorkQueued = $false
+    if (-not $script:Closing) {
+      Write-AuraUiLog -Message "Aura host work could not be queued: $($_.Exception.Message)"
+    }
+  }
+}
+
+function Register-AuraUiPendingTaskCompletions {
+  if ($script:Closing -or $null -eq $script:HostWorkRequestAction -or
+      $null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  $promptShelfTask = if ($null -ne $script:PromptShelfInsertOperation) {
+    $script:PromptShelfInsertOperation.Task
+  } else { $null }
+  $draftReadTask = if ($null -ne $script:DraftHandoffReadState) {
+    $script:DraftHandoffReadState.Task
+  } else { $null }
+  $draftWriteTask = if ($null -ne $script:DraftHandoffWriteState) {
+    $script:DraftHandoffWriteState.Task
+  } else { $null }
+  foreach ($task in @(
+      $script:EnvironmentTask,
+      $script:EnsureTask,
+      $script:StudioEnsureTask,
+      $script:PrepaintRegistrationTask,
+      $script:PrepaintCleanupTask,
+      $script:ScriptTask,
+      $script:MirrorCaptureTask,
+      $script:MirrorProbeTask,
+      $script:GreetingProbeTask,
+      $script:LauncherProbeTask,
+      $promptShelfTask,
+      $script:DraftHandoffAcceptTask,
+      $draftReadTask,
+      $draftWriteTask,
+      $script:DraftHandoffDisconnectTask
+    )) {
+    if ($task -is [Threading.Tasks.Task]) {
+      [AuraUiAsyncDispatch]::Watch(
+        $task, $script:Form, $script:HostWorkRequestAction)
+    }
+  }
+}
+
+function Get-AuraUiHostDeadlineUtc {
+  $candidates = [Collections.Generic.List[DateTime]]::new()
+  if (-not $script:JumpListRegistered) {
+    $candidates.Add([DateTime]$script:JumpListRegistrationDue)
+  }
+  if ($script:InitialNavigationPending -and
+      $null -ne $script:PrepaintRegistrationDueUtc) {
+    $candidates.Add([DateTime]$script:PrepaintRegistrationDueUtc)
+  }
+  if ($null -ne $script:PendingNavigationCompletion) {
+    $candidates.Add([DateTime]$script:PendingNavigationCompletion.DueUtc)
+  }
+  foreach ($candidate in @(
+      $script:MirrorDue,
+      $script:GreetingProbeDue,
+      $script:LauncherProbeDue
+    )) {
+    if ($null -ne $candidate) { $candidates.Add([DateTime]$candidate) }
+  }
+  if ($script:DraftHandoffIoDeadlineUtc -ne [DateTime]::MinValue) {
+    $candidates.Add([DateTime]$script:DraftHandoffIoDeadlineUtc)
+  }
+  if ($null -ne $script:DraftHandoffTransient) {
+    $candidates.Add([DateTime]$script:DraftHandoffTransient.DeadlineUtc)
+  }
+  if ($script:DraftHandoffEnabled -and $null -ne $script:DraftHandoffDescriptor) {
+    try {
+      $candidates.Add(
+        [DateTimeOffset]::FromUnixTimeMilliseconds(
+          [long]$script:DraftHandoffDescriptor.expiresAt).UtcDateTime)
+    } catch {}
+  }
+  if ($candidates.Count -eq 0) { return $null }
+  $next = $candidates[0]
+  foreach ($candidate in $candidates) {
+    if ($candidate -lt $next) { $next = $candidate }
+  }
+  return $next
+}
+
+function Update-AuraUiHostDeadline {
+  if ($script:Closing -or $null -eq $script:HostDeadlineTimer -or
+      $script:HostDeadlineTimer.IsDisposed) { return }
+  $next = Get-AuraUiHostDeadlineUtc
+  if ($null -eq $next) {
+    $script:HostDeadlineTimer.Stop()
+    $script:HostDeadlineDueUtc = $null
+    return
+  }
+  if ($script:HostDeadlineTimer.Enabled -and
+      $null -ne $script:HostDeadlineDueUtc -and
+      [DateTime]$script:HostDeadlineDueUtc -eq [DateTime]$next) { return }
+  $script:HostDeadlineTimer.Stop()
+  $script:HostDeadlineDueUtc = [DateTime]$next
+  $remaining = ([DateTime]$next - [DateTime]::UtcNow).TotalMilliseconds
+  $script:HostDeadlineTimer.Interval = [int][Math]::Min(
+    [int]::MaxValue, [Math]::Max(1, [Math]::Ceiling($remaining)))
+  $script:HostDeadlineTimer.Start()
+}
+
+function Register-AuraUiNamedSignalWaits {
+  if ($script:HostSignalWaits.Count -gt 0) { return }
+  $script:HostSignalWaits.Add([AuraUiAsyncDispatch]::RegisterSignal(
+      $script:MainOpenSignal,
+      $script:Form,
+      [Action]{ if (-not $script:Closing) { Show-AuraUiMain } }))
+  $script:HostSignalWaits.Add([AuraUiAsyncDispatch]::RegisterSignal(
+      $script:StudioOpenSignal,
+      $script:Form,
+      [Action]{ if (-not $script:Closing) { Show-AuraUiStudio } }))
+  $script:HostSignalWaits.Add([AuraUiAsyncDispatch]::RegisterSignal(
+      $script:DraftHandoffEnableSignal,
+      $script:Form,
+      [Action]{
+        if (-not $script:Closing) { Initialize-AuraDraftHandoff -Enabled $true }
+      }))
+}
+
+function Initialize-AuraUiEventDispatch {
+  if ($null -eq $script:HostDeadlineTimer) {
+    $script:HostDeadlineTimer = [Windows.Forms.Timer]::new()
+    $script:HostDeadlineTimer.add_Tick({
+      $script:HostDeadlineTimer.Stop()
+      $script:HostDeadlineDueUtc = $null
+      Request-AuraUiHostWork
+    })
+  }
+  if ($null -eq $script:HostIdleHandler) {
+    $script:HostIdleHandler = [EventHandler]{
+      if ($script:Closing) { return }
+      Register-AuraUiPendingTaskCompletions
+      Update-AuraUiHostDeadline
+    }
+    [Windows.Forms.Application]::add_Idle($script:HostIdleHandler)
+  }
+  Register-AuraUiNamedSignalWaits
+}
+
+function Dispose-AuraUiEventDispatch {
+  if ($null -ne $script:HostIdleHandler) {
+    try { [Windows.Forms.Application]::remove_Idle($script:HostIdleHandler) } catch {}
+    $script:HostIdleHandler = $null
+  }
+  if ($null -ne $script:HostDeadlineTimer) {
+    try {
+      $script:HostDeadlineTimer.Stop()
+      $script:HostDeadlineTimer.Dispose()
+    } catch {}
+    $script:HostDeadlineTimer = $null
+    $script:HostDeadlineDueUtc = $null
+  }
+  foreach ($wait in @($script:HostSignalWaits)) {
+    if ($null -ne $wait) { try { [void]$wait.Unregister($null) } catch {} }
+  }
+  $script:HostSignalWaits.Clear()
+  $script:HostWorkQueued = $false
+}
+
 $script:Node = $null
 $script:Config = $null
 $script:Payload = ''
@@ -8671,6 +8882,14 @@ $script:Form = $null
 $script:WebView = $null
 $script:WebReady = $false
 $script:PageReady = $false
+$script:HostWorkAction = $null
+$script:HostWorkRequestAction = $null
+$script:HostWorkQueued = $false
+$script:HostWorkRunning = $false
+$script:HostDeadlineTimer = $null
+$script:HostDeadlineDueUtc = $null
+$script:HostSignalWaits = [Collections.Generic.List[Threading.RegisteredWaitHandle]]::new()
+$script:HostIdleHandler = $null
 $script:EnvironmentTask = $null
 $script:EnsureTask = $null
 $script:PrepaintSource = $null
@@ -8873,6 +9092,7 @@ $script:LauncherLayoutProbe = $null
 $script:LauncherLayoutProbeClientSize = $null
 $script:LauncherLayoutPending = $false
 $script:LauncherLayeredActive = $false
+$script:LauncherBackendDiagnosticWritten = $false
 $script:LauncherAnimTimer = $null
 $script:LauncherAnimValue = 0.0
 $script:LauncherTip = $null
@@ -9089,6 +9309,50 @@ public static class AuraLayered {
       if (memoryDc != IntPtr.Zero) DeleteDC(memoryDc);
       ReleaseDC(IntPtr.Zero, screenDc);
     }
+  }
+}
+'@
+  }
+  if (-not ('AuraUiAsyncDispatch' -as [type])) {
+    Add-Type -ReferencedAssemblies System.Windows.Forms @'
+using System;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+public static class AuraUiAsyncDispatch {
+  static readonly object Gate = new object();
+  static readonly ConditionalWeakTable<Task, object> Watched =
+    new ConditionalWeakTable<Task, object>();
+
+  static void Post(Control control, Action action) {
+    if (control == null || action == null || control.IsDisposed || !control.IsHandleCreated) return;
+    try { control.BeginInvoke(action); }
+    catch (ObjectDisposedException) {}
+    catch (InvalidOperationException) {}
+  }
+
+  public static void Watch(Task task, Control control, Action action) {
+    if (task == null) return;
+    lock (Gate) {
+      object existing;
+      if (Watched.TryGetValue(task, out existing)) return;
+      Watched.Add(task, new object());
+    }
+    task.ContinueWith(delegate(Task completed) {
+      lock (Gate) { Watched.Remove(completed); }
+      Post(control, action);
+    }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+  }
+
+  public static RegisteredWaitHandle RegisterSignal(
+      WaitHandle signal, Control control, Action action) {
+    return ThreadPool.RegisterWaitForSingleObject(
+      signal,
+      delegate(object state, bool timedOut) { if (!timedOut) Post(control, action); },
+      null,
+      Timeout.Infinite,
+      false);
   }
 }
 '@
@@ -9469,17 +9733,15 @@ public static class AuraLayered {
   $script:Launcher.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
   $script:Launcher.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None
   $script:LauncherDpi = Get-AuraUiWindowDpi -Form $script:Launcher
-  # Honor an explicit opt-out of layered rendering before any visual is built.
-  if ($null -ne $script:Config -and $null -ne $script:Config.PSObject.Properties['launcherClassic'] -and
-      [bool]$script:Config.launcherClassic) {
-    $script:LauncherLayeredActive = $false
-  }
+  # Honor an explicit opt-out when selecting the backend after hidden setup.
+  $launcherClassicRequested = $null -ne $script:Config -and
+    $null -ne $script:Config.PSObject.Properties['launcherClassic'] -and
+    [bool]$script:Config.launcherClassic
   # The window carries a transparent halo around the circle for the layered
   # renderer's shadow and hover growth; only the inner circle takes input.
   $launcherMetrics = Get-AuraUiLauncherMetrics
   $script:Launcher.ClientSize = [Drawing.Size]::new($launcherMetrics.Client, $launcherMetrics.Client)
   $script:Launcher.BackColor = [Drawing.ColorTranslator]::FromHtml('#2F2937')
-  if (-not $script:LauncherLayeredActive) { $script:Launcher.Opacity = 0.96 }
   $script:Launcher.Text = 'Claude Aura'
 
   $script:LauncherButton = [System.Windows.Forms.Button]::new()
@@ -9706,6 +9968,11 @@ public static class AuraLayered {
   if (-not $initialIdentityReady) {
     throw 'Claude Aura could not establish a complete safe application identity.'
   }
+  if ($launcherClassicRequested) {
+    Disable-AuraUiLauncherLayering -Reason 'configuration'
+  } else {
+    [void](Enable-AuraUiLauncherLayering)
+  }
   $script:TrayIcon.Visible = $true
   $script:Launcher.add_FormClosing({
     param($sender, $eventArgs)
@@ -9739,11 +10006,13 @@ public static class AuraLayered {
     }
   })
 
-  $timer = [System.Windows.Forms.Timer]::new()
-  $timer.Interval = 60
-  $timer.add_Tick({
-    if ($script:Closing) { return }
-    if (-not $script:JumpListRegistered -and [DateTime]::UtcNow -ge $script:JumpListRegistrationDue) {
+  $script:HostWorkRequestAction = [Action]{ Request-AuraUiHostWork }
+  $script:HostWorkAction = [Action]{
+    $script:HostWorkQueued = $false
+    if ($script:Closing -or $script:HostWorkRunning) { return }
+    $script:HostWorkRunning = $true
+    try {
+      if (-not $script:JumpListRegistered -and [DateTime]::UtcNow -ge $script:JumpListRegistrationDue) {
       $script:JumpListRegistered = [bool](Register-AuraUiJumpList)
       if ($script:JumpListRegistered) {
         $script:JumpListRegistrationDue = [DateTime]::MinValue
@@ -9755,18 +10024,8 @@ public static class AuraLayered {
       } else {
         $script:JumpListRegistrationDue = [DateTime]::UtcNow.AddSeconds(30)
       }
-    }
-    try {
-      if ($null -ne $script:MainOpenSignal -and $script:MainOpenSignal.WaitOne(0)) {
-        Show-AuraUiMain
       }
-      if ($null -ne $script:StudioOpenSignal -and $script:StudioOpenSignal.WaitOne(0)) {
-        Show-AuraUiStudio
-      }
-      if ($null -ne $script:DraftHandoffEnableSignal -and
-          $script:DraftHandoffEnableSignal.WaitOne(0)) {
-        Initialize-AuraDraftHandoff -Enabled $true
-      }
+      try {
       Update-AuraDraftHandoff
       Complete-AuraUiDocumentPrepaintRegistration
       Complete-AuraUiDocumentPrepaintCleanup
@@ -10239,6 +10498,7 @@ public static class AuraLayered {
         } catch { Write-AuraUiLog -Message $_.Exception.ToString() }
         $script:WebReady = $true
         Set-AuraPromptShelfAvailability -Enabled (Get-AuraUiEnabled)
+        Update-AuraDraftHandoff
         $script:InitialNavigationPending = $true
         $script:PrepaintRegisteredGeneration = [long]-1
         Start-AuraUiDocumentPrepaintRegistration
@@ -10313,8 +10573,19 @@ public static class AuraLayered {
         Write-AuraUiLog -Message $_.Exception.ToString()
         Show-AuraUiLoading -Message "$($script:UiCopy.openedRetry)" -Retry $true
       }
+      }
+    } finally {
+      $script:HostWorkRunning = $false
+      try {
+        Register-AuraUiPendingTaskCompletions
+        Update-AuraUiHostDeadline
+      } catch {
+        if (-not $script:Closing) {
+          Write-AuraUiLog -Message "Aura event dispatch could not refresh: $($_.Exception.Message)"
+        }
+      }
     }
-  })
+  }
 
   $script:Form.add_Shown({
     $script:PageReady = $false
@@ -10334,7 +10605,8 @@ public static class AuraLayered {
     try {
       $script:EnvironmentTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $WebDataRoot, $null)
       Initialize-AuraDraftHandoff -Enabled ([bool]$ExperimentalDraftHandoff)
-      $timer.Start()
+      Initialize-AuraUiEventDispatch
+      Request-AuraUiHostWork
     } catch { Fail-AuraUiStartup -Exception $_.Exception }
   })
   $script:Form.add_FormClosing({
@@ -10355,7 +10627,7 @@ public static class AuraLayered {
     }
     Restore-AuraUiStudioPreviewState
     $script:Closing = $true
-    $timer.Stop()
+    Dispose-AuraUiEventDispatch
     if ($script:RescueForm -and -not $script:RescueForm.IsDisposed) {
       $script:RescueForm.Close()
       $script:RescueForm.Dispose()
@@ -10411,6 +10683,9 @@ public static class AuraLayered {
   } catch {}
   exit 1
 } finally {
+  if (Get-Command Dispose-AuraUiEventDispatch -ErrorAction SilentlyContinue) {
+    try { Dispose-AuraUiEventDispatch } catch {}
+  }
   if ($null -ne $startupOperationLock) {
     try { Exit-AuraOperationLock -Mutex $startupOperationLock } catch {}
     $startupOperationLock = $null

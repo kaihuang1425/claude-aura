@@ -60,10 +60,17 @@ test("Aura Rescue Mode detects only correlated Cloudflare challenge responses", 
   assert(gateRescueIndex >= 0 && gateRescueIndex < gateApplyIndex && gateRescueIndex < gateMirrorIndex,
     "The bounded gate must resolve a late marker before renderer or Studio work");
   assert.match(verificationGate, /DueUtc/);
-  const timerStart = ui.indexOf("$timer.add_Tick({");
-  const timerEnd = ui.indexOf("$script:Form.add_Shown({", timerStart);
-  assert.match(ui.slice(timerStart, timerEnd), /Complete-AuraUiPendingNavigationVerification/,
-    "The UI timer must service the bounded response-verification gate");
+  assert.match(powershellFunction(ui, "Get-AuraUiHostDeadlineUtc"),
+    /PendingNavigationCompletion[\s\S]{0,180}?DueUtc/,
+    "The response-verification due time must participate in one-shot host deadlines");
+  const hostWorkStart = ui.indexOf("$script:HostWorkAction = [Action]{");
+  const hostWorkEnd = ui.indexOf("$script:Form.add_Shown({", hostWorkStart);
+  assert.match(ui.slice(hostWorkStart, hostWorkEnd),
+    /Complete-AuraUiPendingNavigationVerification/,
+    "Event-driven host work must service the bounded response-verification gate");
+  assert.match(powershellFunction(ui, "Initialize-AuraUiEventDispatch"),
+    /add_Tick\(\{[\s\S]{0,120}?\.Stop\(\)[\s\S]{0,120}?Request-AuraUiHostWork/,
+    "The response-verification deadline must use a self-stopping one-shot timer");
 
   const navigationStartingStart = ui.indexOf("$core.add_NavigationStarting(", responseEnd);
   const navigationStartingEnd = ui.indexOf("$core.add_DOMContentLoaded(", navigationStartingStart);

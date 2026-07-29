@@ -51,6 +51,12 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   assert.match(rendererSource, /const imageCssValue =/);
   assert.match(rendererSource, /const artCssValue =/);
   assert.match(rendererSource, /attributeFilter:/);
+  assert.match(rendererSource, /document\["hidden"\]\?0:setInterval\(ensure,15e3\)/,
+    "The renderer watchdog must run only while the document is visible");
+  assert.match(rendererSource, /visibilitychange/,
+    "The renderer must resume its watchdog from the browser visibility signal");
+  assert(!/setInterval\(ensure,\s*1500\)/.test(rendererSource),
+    "The renderer must not retain its old 1.5-second perpetual poll");
   assert(!/observe\(document\.documentElement,\s*\{\s*childList:\s*true,\s*subtree:\s*true/.test(rendererSource),
     "Renderer must not observe the entire Claude SPA subtree");
   const defaultBundle = await buildPayload({ configPath: path.join(PROJECT_ROOT, "config.example.json") });
@@ -59,6 +65,13 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   assert.equal(defaultBundle.settings.appearance, "system");
   assert.equal(defaultBundle.settings.artDataUrl, null);
   assert.equal(defaultBundle.settings.artUnavailable, false);
+  const watchdogBudget = await buildPayload({
+    config: { ...DEFAULT_CONFIG, theme: "study-library", locale: "en", appearance: "light" },
+  });
+  assert(watchdogBudget.payloadBudget.chromeBytes <= 60_737,
+    `Visibility-aware watchdog grew renderer chrome above its 60,737-byte baseline: ${
+      watchdogBudget.payloadBudget.chromeBytes
+    } bytes`);
   assert.match(defaultBundle.settings.brandWordmark?.lightDataUrl ?? "", /^data:image\/png;base64,/);
   assert.match(defaultBundle.settings.brandWordmark?.darkDataUrl ?? "", /^data:image\/png;base64,/);
   assert.match(defaultBundle.css, /--aura-background-primary/);
@@ -801,11 +814,22 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     }
   }
 
+  let documentHidden = false;
+  const documentListeners = new Map();
   const document = {
     documentElement: new FakeElement("html"),
     head: new FakeElement("head"),
     body: new FakeElement("body"),
     createElement: (tagName) => new FakeElement(tagName),
+    get hidden() { return documentHidden; },
+    addEventListener(type, listener) {
+      const listeners = documentListeners.get(type) ?? new Set();
+      listeners.add(listener);
+      documentListeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      documentListeners.get(type)?.delete(listener);
+    },
   };
   document.documentElement.appendChild(document.head);
   document.documentElement.appendChild(document.body);
@@ -840,12 +864,12 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   };
 
   let timerId = 0;
-  const intervals = new Set();
+  const intervals = new Map();
   const timeouts = new Set();
   const observers = new Set();
-  const setInterval = () => {
+  const setInterval = (callback, delay) => {
     const id = ++timerId;
-    intervals.add(id);
+    intervals.set(id, { callback, delay });
     return id;
   };
   const clearInterval = (id) => intervals.delete(id);
@@ -956,6 +980,19 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
       assert.equal(document.documentElement.style.getPropertyValue("--aura-main-start"), "250px");
     }
   }
+  const visibilityListeners = documentListeners.get("visibilitychange") ?? new Set();
+  assert.equal(visibilityListeners.size, 1,
+    "Renderer reinjection left duplicate visibility watchdog listeners");
+  documentHidden = true;
+  for (const listener of visibilityListeners) listener();
+  assert.equal(intervals.size, 0, "Hidden documents must suspend the renderer watchdog");
+  document.documentElement.classList.remove("claude-aura");
+  documentHidden = false;
+  for (const listener of visibilityListeners) listener();
+  assert.equal(document.documentElement.classList.contains("claude-aura"), true,
+    "Returning visibility must immediately repair the renderer root");
+  assert.deepEqual([...intervals.values()].map(({ delay }) => delay), [15_000],
+    "Visible documents must use one 15-second fallback watchdog");
 
   const sidebarSection = new FakeElement("section");
   sidebarSection.role = "group";
@@ -1866,6 +1903,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   assert.equal(forcedColorListeners.size, 0);
   assert.equal([...windowListeners.values()].reduce((total, listeners) => total + listeners.size, 0), 0);
   assert.equal(navigationListeners.size, 0);
+  assert.equal([...documentListeners.values()].reduce((total, listeners) => total + listeners.size, 0), 0);
   assert.equal(window.__CLAUDE_AURA_STATE__, undefined);
 });
 

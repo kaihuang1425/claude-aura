@@ -263,14 +263,26 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /function New-AuraUiLauncherRegion[\s\S]{0,700}?\$metrics\.Halo,\s*\$metrics\.Halo,\s*\$metrics\.Compact,\s*\$metrics\.Compact/,
     "The classic fallback region must clip the same halo-inset circle the layered surface paints");
   assert.match(ui, /\$script:LauncherLayeredActive\s*=\s*\$false/,
-    "The launcher must default to the proven circular region path without an opaque halo tile");
-  // Keep the layered implementation available for later validation, but never
-  // make its unverified transparent halo the running default.
+    "The launcher must remain inactive until the hidden capability smoke succeeds");
+  assert.match(ui, /Format32bppPArgb/,
+    "The layered launcher must render a premultiplied frame for UpdateLayeredWindow");
   assert.match(ui, /UpdateLayeredWindow/,
     "The launcher must present per-pixel alpha frames, not only a 1-bit region");
+  const launcherLayeredActivation = powershellFunction("Enable-AuraUiLauncherLayering");
+  const launcherSmokePresent = launcherLayeredActivation.indexOf("Push-AuraUiLauncherFrame");
+  const launcherSmokeCommit = launcherLayeredActivation.indexOf("$script:LauncherLayeredActive = $true");
+  assert(launcherLayeredActivation.includes("$script:Launcher.Visible")
+      && launcherSmokePresent >= 0 && launcherSmokeCommit > launcherSmokePresent,
+  "Layering must activate only after a real hidden-window frame succeeds");
+  assert.match(ui,
+    /\$initialIdentityReady[\s\S]{0,500}?if\s*\(\$launcherClassicRequested\)[\s\S]{0,180}?Disable-AuraUiLauncherLayering[\s\S]{0,180}?Enable-AuraUiLauncherLayering[\s\S]{0,180}?\$script:TrayIcon\.Visible\s*=\s*\$true/,
+    "Backend selection must run while the launcher is hidden and before tray visibility");
+  assert.match(powershellFunction("Write-AuraUiLauncherBackendDiagnostic"),
+    /LauncherBackendDiagnosticWritten[\s\S]*?Launcher backend selected:/,
+    "Launcher backend selection must write one bounded local diagnostic");
   assert.match(ui, /function Update-AuraUiLauncherSurface[\s\S]{0,400}?LauncherLayeredActive/,
     "Launcher rendering must route through the layered surface pipeline");
-  assert.match(ui, /function Disable-AuraUiLauncherLayering[\s\S]{0,600}?Update-AuraUiLauncherRegion/,
+  assert.match(powershellFunction("Disable-AuraUiLauncherLayering"), /Update-AuraUiLauncherRegion/,
     "A layered-composition failure must degrade to the classic region look");
   assert.match(ui, /\$script:LauncherAnimTimer\.Interval\s*=\s*15/,
     "The hover microinteraction must animate on a UI timer, not jump states");
@@ -528,12 +540,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /if \(\$OpenStudio\) \{ \[void\]\$script:StudioOpenSignal\.Set\(\) \}/,
     "A first Aura instance launched with -OpenStudio must queue Studio opening");
-  assert.match(ui,
-    /\$script:StudioOpenSignal\.WaitOne\(0\)[\s\S]{0,100}?Show-AuraUiStudio/,
-    "The UI loop must consume the Studio-open signal without blocking");
-  assert.match(ui,
-    /\$script:MainOpenSignal\.WaitOne\(0\)[\s\S]{0,100}?Show-AuraUiMain/,
-    "The UI loop must consume the main-window foreground signal without blocking");
+  const namedSignalRegistration = powershellFunction("Register-AuraUiNamedSignalWaits");
+  assert.match(namedSignalRegistration,
+    /\$script:StudioOpenSignal[\s\S]{0,160}?Show-AuraUiStudio/,
+    "A registered wait must post the Studio-open signal to the UI thread");
+  assert.match(namedSignalRegistration,
+    /\$script:MainOpenSignal[\s\S]{0,160}?Show-AuraUiMain/,
+    "A registered wait must post the main-window foreground signal to the UI thread");
   assert.match(powershellFunction("Show-AuraUiStudio"),
     /\.Activate\(\)[\s\S]{0,120}?\.BringToFront\(\)/,
     "A signaled Studio window must be restored and foregrounded");
@@ -4250,7 +4263,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && mainFormRunIndex > trayVisibleIndex,
   "The initial identity transaction must finish before the tray or main form becomes visible");
   assert.match(ui,
-    /try \{ \$initialIdentityReady = \[bool\]\(Update-AuraUiLauncherStyle\) \}[\s\S]{0,220}?if \(-not \$initialIdentityReady\)\s*\{[\s\S]{0,180}?throw 'Claude Aura could not establish a complete safe application identity\.'[\s\S]{0,140}?\$script:TrayIcon\.Visible = \$true/,
+    /try \{ \$initialIdentityReady = \[bool\]\(Update-AuraUiLauncherStyle\) \}[\s\S]{0,220}?if \(-not \$initialIdentityReady\)\s*\{[\s\S]{0,180}?throw 'Claude Aura could not establish a complete safe application identity\.'[\s\S]{0,700}?\$script:TrayIcon\.Visible = \$true/,
     "Startup must fail closed instead of revealing tray or launcher surfaces without a complete identity");
   const launcherPositionUpdate = powershellFunction("Update-AuraUiLauncherPosition");
   assert.match(launcherPositionUpdate,
@@ -4651,14 +4664,24 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(launcherStyleUpdate,
     /\$jumpListCurrent = \$script:JumpListRegistered -and \[string\]::Equals\([\s\S]{0,180}?\$script:JumpListIdentityPath,\s*\$script:ShellIdentityIconPath[\s\S]{0,300}?if \(\$script:JumpListRegistered\)[\s\S]{0,500}?Register-AuraUiJumpList[\s\S]{0,500}?if \(\$jumpListCurrent\)\s*\{[\s\S]{0,120}?Remove-AuraUiUnusedShortcutIcons -KeepPath \$script:ShellIdentityIconPath/,
     "Old custom ICOs may be pruned only after the Jump List is confirmed on the current committed identity");
-  const timerStart = ui.indexOf("$timer.add_Tick({");
-  const timerIdentityEnd = ui.indexOf("if ($null -ne $script:MainOpenSignal", timerStart);
-  const timerIdentityRetry = ui.slice(timerStart, timerIdentityEnd);
-  assert(timerStart >= 0 && timerIdentityEnd > timerStart,
-    "The Jump List retry timer block is missing");
-  assert.match(timerIdentityRetry,
+  const hostWorkStart = ui.indexOf("$script:HostWorkAction = [Action]{");
+  const hostWorkIdentityEnd = ui.indexOf("Update-AuraDraftHandoff", hostWorkStart);
+  const hostWorkIdentityRetry = ui.slice(hostWorkStart, hostWorkIdentityEnd);
+  assert(hostWorkStart >= 0 && hostWorkIdentityEnd > hostWorkStart,
+    "The event-driven Jump List retry block is missing");
+  assert.match(hostWorkIdentityRetry,
     /Register-AuraUiJumpList[\s\S]{0,300}?\$script:JumpListRegistered[\s\S]{0,400}?\[string\]::Equals\(\$script:JumpListIdentityPath,\s*\$script:ShellIdentityIconPath[\s\S]{0,180}?Remove-AuraUiUnusedShortcutIcons -KeepPath \$script:ShellIdentityIconPath/,
     "Deferred cleanup must also prove the retried Jump List matches the current identity");
+  assert(!ui.includes("$timer.Interval = 60") && !ui.includes("WaitOne(0)"),
+    "Aura must not retain its 60 ms task and named-signal polling loop");
+  assert.match(ui,
+    /public static class AuraUiAsyncDispatch[\s\S]{0,800}?BeginInvoke[\s\S]{0,1000}?ContinueWith/,
+    "Task completion must marshal host work back to the UI thread");
+  assert.match(ui, /ThreadPool\.RegisterWaitForSingleObject/,
+    "Named Aura signals must use registered waits instead of UI polling");
+  assert.match(powershellFunction("Initialize-AuraUiEventDispatch"),
+    /add_Tick\(\{[\s\S]{0,120}?\.Stop\(\)[\s\S]{0,120}?Request-AuraUiHostWork/,
+    "Host deadlines must use a self-stopping one-shot timer");
   assert.equal((ui.match(/Remove-AuraUiUnusedShortcutIcons -KeepPath \$script:ShellIdentityIconPath/g) ?? []).length, 2,
     "Custom ICO cleanup must have no path that bypasses current Jump List confirmation");
   const uninstallShortcutBlock = uninstall.match(
@@ -6245,6 +6268,124 @@ test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", as
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("WO-29 activates the layered launcher and dispatches host work without polling", async () => {
+  const uiPath = path.join(PROJECT_ROOT, "windows", "aura-ui.ps1");
+  const ui = await fs.readFile(uiPath, "utf8");
+  assert(!ui.includes("$timer.Interval = 60") && !ui.includes("WaitOne(0)"));
+  assert.match(ui, /Format32bppPArgb/);
+  assert.match(ui, /ThreadPool\.RegisterWaitForSingleObject/);
+  assert.match(ui, /BeginInvoke[\s\S]{0,1000}?ContinueWith/);
+  if (process.platform !== "win32") return;
+
+  const quotedUiPath = uiPath.replaceAll("'", "''");
+  const smoke = [
+    "$ErrorActionPreference='Stop'",
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "Add-Type -AssemblyName System.Drawing",
+    `$uiPath='${quotedUiPath}'`,
+    "$tokens=$null",
+    "$errors=$null",
+    "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+    "if($errors.Count){throw ($errors|ForEach-Object{$_.ToString()}|Out-String)}",
+    "$strings=@($ast.FindAll({param($node) $node -is [System.Management.Automation.Language.StringConstantExpressionAst]},$true))",
+    "$layeredSource=@($strings|Where-Object{$_.Value.Contains('public static class AuraLayered')})[0].Value",
+    "$dispatchSource=@($strings|Where-Object{$_.Value.Contains('public static class AuraUiAsyncDispatch')})[0].Value",
+    "if(-not $layeredSource -or -not $dispatchSource){throw 'Aura native helper source is missing'}",
+    "Add-Type -TypeDefinition $layeredSource -ReferencedAssemblies System.Windows.Forms,System.Drawing",
+    "Add-Type -TypeDefinition $dispatchSource -ReferencedAssemblies System.Windows.Forms",
+    "$names=@(",
+    "  'New-AuraUiRoundedRectanglePath',",
+    "  'Get-AuraUiLauncherScale',",
+    "  'ConvertTo-AuraUiLauncherPixels',",
+    "  'Get-AuraUiLauncherMetrics',",
+    "  'New-AuraUiLauncherRegion',",
+    "  'Update-AuraUiLauncherRegion',",
+    "  'ConvertTo-AuraUiBlendedColor',",
+    "  'New-AuraUiLauncherSurfaceBitmap',",
+    "  'Push-AuraUiLauncherFrame',",
+    "  'Write-AuraUiLauncherBackendDiagnostic',",
+    "  'Disable-AuraUiLauncherLayering',",
+    "  'Enable-AuraUiLauncherLayering'",
+    ")",
+    "$definitions=[Collections.Generic.List[string]]::new()",
+    "foreach($name in $names){",
+    "  $match=@($ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true))",
+    "  if($match.Count -ne 1){throw \"Aura function extraction failed: $name\"}",
+    "  $definitions.Add($match[0].Extent.Text)",
+    "}",
+    "Invoke-Expression ($definitions -join [Environment]::NewLine)",
+    "$script:LauncherCompactSize=48",
+    "$script:LauncherHaloSize=10",
+    "$script:LauncherDpi=96",
+    "$script:LauncherStyle=[PSCustomObject]@{",
+    "  surface='#2F2937';surfaceHover='#3A3345';border='#7A6E89';borderWidth=1;",
+    "  foreground='#F5F1FA';accent='#D97757'",
+    "}",
+    "$script:LauncherMark=$null",
+    "$script:LauncherButton=$null",
+    "$script:LauncherAnimValue=0.0",
+    "$script:LauncherPressed=$false",
+    "$script:LauncherBackendDiagnostics=[Collections.Generic.List[string]]::new()",
+    "function Write-AuraUiLog{param([string]$Message) $script:LauncherBackendDiagnostics.Add($Message)}",
+    "$script:Launcher=[Windows.Forms.Form]::new()",
+    "$script:Launcher.FormBorderStyle=[Windows.Forms.FormBorderStyle]::None",
+    "$metrics=Get-AuraUiLauncherMetrics",
+    "$script:Launcher.ClientSize=[Drawing.Size]::new($metrics.Client,$metrics.Client)",
+    "[void]$script:Launcher.Handle",
+    "if($script:Launcher.Visible){throw 'Launcher smoke form became visible'}",
+    "$frame=New-AuraUiLauncherSurfaceBitmap -Style $script:LauncherStyle -Mark $null",
+    "try{if($frame.PixelFormat -ne [Drawing.Imaging.PixelFormat]::Format32bppPArgb){throw 'Launcher frame is not premultiplied'}}finally{$frame.Dispose()}",
+    "$script:LauncherLayeredActive=$false",
+    "$script:LauncherBackendDiagnosticWritten=$false",
+    "if(-not (Enable-AuraUiLauncherLayering)){throw 'Layered launcher smoke did not activate'}",
+    "if(-not $script:LauncherLayeredActive -or $null -ne $script:Launcher.Region){throw 'Layered launcher state was not committed'}",
+    "if($script:LauncherBackendDiagnostics.Count -ne 1 -or $script:LauncherBackendDiagnostics[0] -notmatch 'layered'){throw 'Layered backend diagnostic mismatch'}",
+    "$script:Launcher.Dispose()",
+    "function Push-AuraUiLauncherFrame{param([Drawing.Bitmap]$Bitmap,[byte]$Alpha=255) return $false}",
+    "$script:Launcher=[Windows.Forms.Form]::new()",
+    "$script:Launcher.FormBorderStyle=[Windows.Forms.FormBorderStyle]::None",
+    "$script:Launcher.ClientSize=[Drawing.Size]::new($metrics.Client,$metrics.Client)",
+    "[void]$script:Launcher.Handle",
+    "$script:LauncherLayeredActive=$false",
+    "$script:LauncherBackendDiagnosticWritten=$false",
+    "$script:LauncherBackendDiagnostics.Clear()",
+    "if(Enable-AuraUiLauncherLayering){throw 'Failed layered smoke did not select classic fallback'}",
+    "if($script:LauncherLayeredActive -or $null -eq $script:Launcher.Region){throw 'Classic launcher region was not restored'}",
+    "if($script:LauncherBackendDiagnostics.Count -ne 1 -or $script:LauncherBackendDiagnostics[0] -notmatch 'classic'){throw 'Classic backend diagnostic mismatch'}",
+    "$script:Launcher.Region.Dispose()",
+    "$script:Launcher.Dispose()",
+    "$dispatchForm=[Windows.Forms.Form]::new()",
+    "[void]$dispatchForm.Handle",
+    "$script:taskHits=0",
+    "$taskSource=[Threading.Tasks.TaskCompletionSource[bool]]::new()",
+    "[AuraUiAsyncDispatch]::Watch($taskSource.Task,$dispatchForm,[Action]{$script:taskHits++})",
+    "$taskSource.SetResult($true)",
+    "$watch=[Diagnostics.Stopwatch]::StartNew()",
+    "while($script:taskHits -lt 1 -and $watch.ElapsedMilliseconds -lt 2000){[Windows.Forms.Application]::DoEvents();[Threading.Thread]::Sleep(5)}",
+    "if($script:taskHits -ne 1){throw 'Task continuation was not posted to the UI thread'}",
+    "$script:signalHits=0",
+    "$signal=[Threading.AutoResetEvent]::new($false)",
+    "$registered=[AuraUiAsyncDispatch]::RegisterSignal($signal,$dispatchForm,[Action]{$script:signalHits++})",
+    "[void]$signal.Set()",
+    "$watch.Restart()",
+    "while($script:signalHits -lt 1 -and $watch.ElapsedMilliseconds -lt 2000){[Windows.Forms.Application]::DoEvents();[Threading.Thread]::Sleep(5)}",
+    "if($script:signalHits -ne 1){throw 'Registered signal was not posted to the UI thread'}",
+    "[void]$registered.Unregister($null)",
+    "$signal.Dispose()",
+    "$dispatchForm.Dispose()",
+    "Write-Output 'WO-29 launcher and dispatch smoke: PASS'",
+  ].join("\n");
+  const output = run("powershell.exe", [
+    "-NoProfile",
+    "-STA",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-EncodedCommand",
+    Buffer.from(smoke, "utf16le").toString("base64"),
+  ], { timeout: 30_000 });
+  assert.match(output, /WO-29 launcher and dispatch smoke: PASS/);
 });
 
 runIfMain(import.meta.url);
