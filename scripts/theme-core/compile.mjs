@@ -34,9 +34,7 @@ import {
 } from "./artwork.mjs";
 import { resolveGreetingRuntime } from "./greeting.mjs";
 import {
-  CODE_ROLE_SIGNATURES,
   codeContextFromUrl,
-  createCodeAdapter,
   createInertCodeAdapter,
 } from "./code-adapter.mjs";
 
@@ -995,16 +993,13 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
     path.join(PROJECT_ROOT, "assets", "renderer-inject.js"),
     "utf8",
   );
-  const codeAdapterFactory = CODE_ROLE_SIGNATURES.signatures.length
-    ? createCodeAdapter
-    : createInertCodeAdapter;
-  if (!CODE_ROLE_SIGNATURES.signatures.length) {
-    rendererSource = rendererSource.replace(CODE_ADAPTER_ACTIVE_PATTERN, "");
-  }
+  // Gates 3 and 4 remain open. Keep production payloads inert even if the
+  // dormant registry is edited; activation requires a separate reviewed change.
+  const codeAdapterFactory = createInertCodeAdapter;
+  rendererSource = rendererSource.replace(CODE_ADAPTER_ACTIVE_PATTERN, "");
   rendererSource = rendererSource
     .replace("__AURA_CODE_ADAPTER_FACTORY__", `(${codeAdapterFactory.toString()})`)
-    .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`)
-    .replace("__AURA_CODE_SIGNATURES__", JSON.stringify(CODE_ROLE_SIGNATURES));
+    .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`);
   let template = compactRendererSyntax(compactRendererIdentifiers(rendererSource));
   const runtimeSettings = { ...compiled.settings };
   for (const diagnosticKey of [

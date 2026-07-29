@@ -69,7 +69,6 @@ export {
 export {
   CODE_ROLE_SIGNATURES,
   codeContextFromUrl,
-  createCodeAdapter,
   createInertCodeAdapter,
 } from "./theme-core/code-adapter.mjs";
 export {

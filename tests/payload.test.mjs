@@ -41,6 +41,42 @@ import {
   writeConfig,
   zipEntryNames,
 } from "./support/context.mjs";
+
+test("production payload keeps the Code adapter inert independently of registry contents", async () => {
+  const publicThemeCore = await import("../scripts/theme-core.mjs");
+  assert.equal(Object.hasOwn(publicThemeCore, "createCodeAdapter"), false,
+    "The dormant active adapter must not be part of the production theme-core API");
+  const compilerSource = await fs.readFile(
+    path.join(PROJECT_ROOT, "scripts", "theme-core", "compile.mjs"),
+    "utf8",
+  );
+  assert(!compilerSource.includes("CODE_ROLE_SIGNATURES"),
+    "Production compilation must not activate Code when the dormant registry changes");
+  assert(!compilerSource.includes("createCodeAdapter"),
+    "Production compilation must not import or serialize the dormant active adapter");
+  assert.match(compilerSource, /const codeAdapterFactory = createInertCodeAdapter;/);
+  assert.match(
+    compilerSource,
+    /rendererSource = rendererSource\.replace\(CODE_ADAPTER_ACTIVE_PATTERN, ""\);/,
+  );
+
+  const bundle = await buildPayloadFromCompiled({
+    css: "",
+    settings: { digest: "inert-code-adapter" },
+  });
+  assert.match(bundle.payload, /function createInertCodeAdapter/);
+  for (const forbidden of [
+    "function createCodeAdapter",
+    "claude-aura-code-style",
+    "data-claude-aura-code-root",
+    "querySelectorAll(entry.selector)",
+    "role.css",
+  ]) {
+    assert(!bundle.payload.includes(forbidden),
+      `Production payload must not contain dormant Code adapter source: ${forbidden}`);
+  }
+});
+
 test("compiled payload uses one stable root attribute and active-theme-only artwork", async () => {
   const rendererSource = await fs.readFile(path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8");
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
