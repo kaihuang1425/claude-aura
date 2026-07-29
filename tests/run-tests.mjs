@@ -1,5 +1,7 @@
 // Aggregate runner: imports every domain suite (which registers its tests via the
 // shared harness), then runs them all. `npm test` still points here.
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { runAll } from "./support/harness.mjs";
 
 import "./themes.test.mjs";
@@ -22,5 +24,13 @@ import "./installer.test.mjs";
 import "./locales.test.mjs";
 import "./studio-editor.test.mjs";
 import "./platform.test.mjs";
+
+const sourceOnlyAuraCodeDiagnosticInputs = [
+  new URL("./aura-code-popup-diagnostic.test.mjs", import.meta.url),
+  new URL("../windows/aura-code-popup-diagnostic.ps1", import.meta.url),
+];
+if (sourceOnlyAuraCodeDiagnosticInputs.every((url) => existsSync(fileURLToPath(url)))) {
+  await import("./aura-code-popup-diagnostic.test.mjs");
+}
 
 await runAll();

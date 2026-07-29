@@ -330,6 +330,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/verify-cycle.mjs`
 - `scripts/webview-cli.mjs`
 - `tests/aura-rescue.test.mjs`
+- `tests/aura-code-popup-diagnostic.test.mjs`
 - `tests/artwork.test.mjs`
 - `tests/avatar.test.mjs`
 - `tests/config.test.mjs`
@@ -355,6 +356,7 @@ the retired reconstructed preview are not deliverables.
 
 ## Windows application
 
+- `windows/aura-code-popup-diagnostic.ps1`
 - `windows/aura-draft-handoff.ps1`
 - `windows/desktop-capability.ps1`
 - `windows/aura-ui.ps1`

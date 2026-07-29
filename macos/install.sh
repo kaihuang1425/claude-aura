@@ -85,7 +85,9 @@ for obsolete_path in \
   "$INSTALL_ROOT/docs/preview.png" \
   "$INSTALL_ROOT/docs/golden" \
   "$INSTALL_ROOT/docs/theme-screenshots" \
+  "$INSTALL_ROOT/tests/aura-code-popup-diagnostic.test.mjs" \
   "$INSTALL_ROOT/tests/fixtures" \
+  "$INSTALL_ROOT/windows/aura-code-popup-diagnostic.ps1" \
   "$INSTALL_ROOT/dist/qa" \
   "$INSTALL_ROOT/assets/studio-previews/references" \
   "$INSTALL_ROOT/assets/theme-art/japanese-film-editorial.svg" \

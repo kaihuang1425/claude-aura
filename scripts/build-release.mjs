@@ -56,6 +56,10 @@ const RETIRED_RELEASE_DIRECTORIES = new Set([
 const SOURCE_ONLY_RELEASE_DIRECTORIES = new Set([
   "assets/studio-previews/references",
 ]);
+const SOURCE_ONLY_RELEASE_FILES = new Set([
+  "tests/aura-code-popup-diagnostic.test.mjs",
+  "windows/aura-code-popup-diagnostic.ps1",
+]);
 const REQUIRED_THEME_DESCRIPTOR_FILES = new Set([
   "registry.json",
   "default.json",
@@ -210,6 +214,7 @@ function isRetiredReleasePath(relativePath) {
 
 function isSourceOnlyReleasePath(relativePath) {
   const normalized = relativePath.replaceAll("\\", "/");
+  if (SOURCE_ONLY_RELEASE_FILES.has(normalized)) return true;
   return [...SOURCE_ONLY_RELEASE_DIRECTORIES]
     .some((directory) => normalized === directory || normalized.startsWith(`${directory}/`));
 }

@@ -41,6 +41,12 @@ import {
   writeConfig,
   zipEntryNames,
 } from "./support/context.mjs";
+
+const AURA_CODE_DIAGNOSTIC_SOURCE_ONLY_PATHS = [
+  "tests/aura-code-popup-diagnostic.test.mjs",
+  "windows/aura-code-popup-diagnostic.ps1",
+];
+
 test("legacy macOS CDP validation rejects unsafe endpoints", async () => {
   const output = run(process.execPath, ["scripts/injector.mjs", "--self-test", "--port", "9394"]);
   const result = JSON.parse(output);
@@ -780,7 +786,11 @@ test("release and installers exclude unsafe composite references and binary patc
   assert.match(releaseBuilder, /RELEASE_DOCUMENT_FILES/);
   assert.match(releaseBuilder, /RETIRED_RELEASE_FILES/);
   assert.match(releaseBuilder, /RETIRED_RELEASE_DIRECTORIES/);
+  assert.match(releaseBuilder, /SOURCE_ONLY_RELEASE_FILES/);
   assert.match(releaseBuilder, /SOURCE_ONLY_RELEASE_DIRECTORIES/);
+  assert.match(releaseBuilder,
+    /isSourceOnlyReleasePath[\s\S]{0,240}?SOURCE_ONLY_RELEASE_FILES[.]has[(]normalized[)]/,
+    "Release builds must apply the source-only file denylist");
   assert.match(releaseBuilder, /REQUIRED_THEME_DESCRIPTOR_FILES/);
   assert.match(releaseBuilder, /REQUIRED_APP_SURFACE_FILES/);
   assert.match(releaseBuilder, /REQUIRED_RELEASE_FILES/);
@@ -808,6 +818,7 @@ test("release and installers exclude unsafe composite references and binary patc
       && releaseCollectIndex > releaseWordmarkBuildIndex,
   "Release builds must refresh derived identity assets before collecting files");
   const windowsInstall = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
+  const aggregateRunner = await fs.readFile(path.join(PROJECT_ROOT, "tests", "run-tests.mjs"), "utf8");
   const windowsInstallCommand = await fs.readFile(path.join(PROJECT_ROOT, "Install Claude Aura.cmd"), "utf8");
   const macInstall = await fs.readFile(path.join(PROJECT_ROOT, "macos", "install.sh"), "utf8");
   const commandPathIndex = windowsInstallCommand.indexOf('set "AURA_INSTALLER=%~dp0windows\\install.ps1"');
@@ -821,6 +832,26 @@ test("release and installers exclude unsafe composite references and binary patc
   assert(!/\b(?:preview|themes)\b/.test(macCopyList),
     "macOS install copy list retained an offline or source-kit directory");
   assert.match(windowsInstall, /function Get-AuraInstallSourceFiles/);
+  const installExclusionStart = windowsInstall.indexOf("function Test-AuraInstallExcludedReleasePath");
+  const installExclusionEnd = windowsInstall.indexOf("function Add-AuraInstallSourceFile", installExclusionStart);
+  assert(installExclusionStart >= 0 && installExclusionEnd > installExclusionStart,
+    "Windows install source-only filter is missing");
+  const installExclusions = windowsInstall.slice(installExclusionStart, installExclusionEnd);
+  for (const sourceOnlyPath of AURA_CODE_DIAGNOSTIC_SOURCE_ONLY_PATHS) {
+    assert(installExclusions.includes(`'${sourceOnlyPath}'`),
+      `Windows repo/dev installs include source-only file ${sourceOnlyPath}`);
+    assert(macInstall.includes(`"$INSTALL_ROOT/${sourceOnlyPath}"`),
+      `macOS repo/dev installs retain source-only file ${sourceOnlyPath}`);
+  }
+  assert.match(windowsInstall,
+    /Test-AuraInstallExcludedReleasePath -RelativePath \$relativePath/,
+    "Windows source enumeration does not apply its source-only filter");
+  assert.doesNotMatch(aggregateRunner,
+    /^import "[.]\/aura-code-popup-diagnostic[.]test[.]mjs";$/m,
+    "The shipped aggregate runner statically imports the source-only Aura Code diagnostic suite");
+  assert.match(aggregateRunner,
+    /sourceOnlyAuraCodeDiagnosticInputs[\s\S]{0,500}?existsSync[\s\S]{0,200}?await import[(]"[.]\/aura-code-popup-diagnostic[.]test[.]mjs"[)]/,
+    "The repository runner does not conditionally register its source-only Aura Code diagnostic suite");
   assert.match(windowsInstall, /function New-AuraInstallStage/);
   assert.match(windowsInstall, /Get-FileHash[\s\S]{0,220}?SHA256/,
     "Windows installs must verify every staged application file");
@@ -909,6 +940,10 @@ test("release and installers exclude unsafe composite references and binary patc
     const release = JSON.parse(run(process.execPath, ["scripts/build-release.mjs"]));
     const releaseBytes = await fs.readFile(release.outputPath);
     const names = zipEntryNames(releaseBytes);
+    for (const sourceOnlyPath of AURA_CODE_DIAGNOSTIC_SOURCE_ONLY_PATHS) {
+      assert(!names.includes(`claude-aura/${sourceOnlyPath}`),
+        `Release included source-only file ${sourceOnlyPath}`);
+    }
     const expectedChecksum = `${crypto.createHash("sha256").update(releaseBytes).digest("hex")}  ${path.basename(release.outputPath)}\n`;
     assert.equal(await fs.readFile(`${release.outputPath}.sha256`, "utf8"), expectedChecksum,
       "The public CMD ZIP must ship with a checksum of its final bytes");

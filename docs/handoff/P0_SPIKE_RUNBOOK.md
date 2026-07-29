@@ -9,6 +9,10 @@ Review the current [Remote Control documentation](https://code.claude.com/docs/e
 and [terminal-theme documentation](https://code.claude.com/docs/en/terminal-config)
 before starting. This runbook was reviewed against both on 2026-07-29.
 
+The historical Aura Code popup diagnostic is now source-only and its live
+WebView path is hard-disabled. `-ClassifyOnly` remains available for the bounded
+URI-policy regression; do not rerun the retired live diagnostic.
+
 ## Evidence and privacy rules
 
 - Record tested versions, packaging, OS version, document review date, reason

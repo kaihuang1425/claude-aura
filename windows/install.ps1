@@ -237,7 +237,9 @@ function Test-AuraInstallLocalOrTemporaryPath {
 function Test-AuraInstallExcludedReleasePath {
   param([Parameter(Mandatory = $true)][string]$RelativePath)
   $normalized = $RelativePath.Replace('\', '/')
-  if ($normalized -ceq 'scripts/qa-board.mjs' -or
+  if ($normalized -ceq 'tests/aura-code-popup-diagnostic.test.mjs' -or
+      $normalized -ceq 'windows/aura-code-popup-diagnostic.ps1' -or
+      $normalized -ceq 'scripts/qa-board.mjs' -or
       $normalized -ceq 'tests/fixtures/claude-dom.html') {
     return $true
   }
