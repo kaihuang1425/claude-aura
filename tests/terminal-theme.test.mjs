@@ -11,6 +11,39 @@ import {
 } from "../scripts/theme-core.mjs";
 import { contrastRatio, hexToHsl } from "../scripts/theme-core/validation.mjs";
 
+const APPROVED_TERMINAL_TOKENS = [
+  "claude",
+  "text",
+  "inverseText",
+  "inactive",
+  "subtle",
+  "promptBorder",
+  "bashBorder",
+  "ide",
+  "selectionBg",
+  "briefLabelYou",
+  "briefLabelClaude",
+];
+
+const NATIVE_SAFETY_TOKENS = [
+  "suggestion",
+  "permission",
+  "permissionPrompt",
+  "warning",
+  "error",
+  "success",
+  "autoAccept",
+  "autoAcceptMode",
+  "planMode",
+  "diffAdded",
+  "diffRemoved",
+  "diffContext",
+  "destructive",
+  "destructiveAction",
+  "danger",
+  "userMessageBackground",
+];
+
 async function builtIns() {
   return listThemes({ locale: "en" });
 }
@@ -32,14 +65,22 @@ async function withTemporaryDirectory(run) {
 
 test("all built-ins project complete, contrast-safe Light and Dark terminal themes", async () => {
   const failures = [];
+  assert.deepEqual(
+    TERMINAL_THEME_SCHEMA.tokens.map(({ token }) => token),
+    APPROVED_TERMINAL_TOKENS,
+  );
   for (const theme of await builtIns()) {
     for (const mode of ["light", "dark"]) {
       const document = buildTerminalTheme(theme, mode);
       if (document.base !== mode
           || Object.keys(document).join(",") !== "name,base,overrides"
-          || Object.keys(document.overrides).join(",")
-            !== TERMINAL_THEME_SCHEMA.tokens.map(({ token }) => token).join(",")) {
+          || Object.keys(document.overrides).join(",") !== APPROVED_TERMINAL_TOKENS.join(",")) {
         failures.push(`${theme.name}/${mode}: incomplete document`);
+      }
+      for (const token of NATIVE_SAFETY_TOKENS) {
+        if (Object.hasOwn(document.overrides, token)) {
+          failures.push(`${theme.name}/${mode}: unsafe override ${token}`);
+        }
       }
       for (const mapping of TERMINAL_THEME_SCHEMA.tokens) {
         const projected = hexToHsl(
@@ -56,6 +97,23 @@ test("all built-ins project complete, contrast-safe Light and Dark terminal them
   assert.deepEqual(failures, []);
 });
 
+test("terminal schema leaves status, permission, destructive, diff, and user-message semantics native", () => {
+  assert.deepEqual(
+    TERMINAL_THEME_SCHEMA.tokens.map(({ token }) => token),
+    APPROVED_TERMINAL_TOKENS,
+  );
+  assert.equal(
+    TERMINAL_THEME_SCHEMA.tokens.some(({ token }) => NATIVE_SAFETY_TOKENS.includes(token)),
+    false,
+  );
+  assert.equal(
+    TERMINAL_THEME_SCHEMA.tokens.some(
+      ({ source }) => /success|warning|destructive/i.test(source),
+    ),
+    false,
+  );
+});
+
 test("terminal projection is byte-identical and excludes non-colour Aura fields", async () => {
   const [theme] = await builtIns();
   const first = `${JSON.stringify(buildTerminalTheme(theme, "light"), null, 2)}\n`;
@@ -67,10 +125,10 @@ test("terminal projection is byte-identical and excludes non-colour Aura fields"
 test("terminal projection rejects a missing required semantic token", async () => {
   const [theme] = await builtIns();
   const hostile = structuredClone(theme);
-  delete hostile.dark.semantic["--aura-success"];
+  delete hostile.dark.semantic["--aura-text-on-accent"];
   assert.throws(
     () => buildTerminalTheme(hostile, "dark"),
-    /missing --aura-success/,
+    /missing --aura-text-on-accent/,
   );
 });
 

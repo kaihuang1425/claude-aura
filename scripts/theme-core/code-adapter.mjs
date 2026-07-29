@@ -169,9 +169,12 @@ export function createCodeAdapter(environment = {}, descriptor = null) {
       if (groups && !groups.has(role.group)) continue;
       const valid = record.candidates.filter((candidate) =>
         candidate.visible && candidate.contained);
-      if ((role.required && valid.length !== 1)
-          || (role.safetySensitive && record.matches.length > 1)) {
-        return outcome("native", role.safetySensitive ? "safety-role-ambiguous" : "required-role-mismatch");
+      if (role.safetySensitive && valid.length > 0) {
+        return outcome("native", "safety-role-detected");
+      }
+      if (valid.length > 1) return outcome("native", "role-ambiguous");
+      if (role.required && valid.length !== 1) {
+        return outcome("native", "required-role-mismatch");
       }
       if (valid.length === 1) selected.set(name, valid[0].element);
     }

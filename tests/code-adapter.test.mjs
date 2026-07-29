@@ -105,11 +105,15 @@ const SIGNATURES = {
         name: "permission", group: "safety", required: false, safetySensitive: true,
         probes: [{ kind: "aria", selector: '[role="dialog"]' }], css: "color:#444",
       },
+      {
+        name: "activity", group: "activity", required: false,
+        probes: [{ kind: "data", selector: '[data-role="activity"]' }], css: "color:#555",
+      },
     ],
   }],
 };
 
-function fixture({ dialogs = 1 } = {}) {
+function fixture({ dialogs = 0, activities = 0 } = {}) {
   const document = new Document();
   const main = document.body.appendChild(new Element("main"));
   const nav = main.appendChild(new Element("nav"));
@@ -122,7 +126,13 @@ function fixture({ dialogs = 1 } = {}) {
     dialog.setAttribute("role", "dialog");
     dialogNodes.push(dialog);
   }
-  return { document, main, nav, transcript, composer, dialogNodes };
+  const activityNodes = [];
+  for (let index = 0; index < activities; index += 1) {
+    const activity = main.appendChild(new Element("section"));
+    activity.setAttribute("data-role", "activity");
+    activityNodes.push(activity);
+  }
+  return { document, main, nav, transcript, composer, dialogNodes, activityNodes };
 }
 
 function runtime(options = {}) {
@@ -158,6 +168,7 @@ const markerState = (view) => [
   view.transcript.getAttribute(ROLE),
   view.composer.getAttribute(ROLE),
   ...view.dialogNodes.map((node) => node.getAttribute(ROLE)),
+  ...view.activityNodes.map((node) => node.getAttribute(ROLE)),
 ];
 
 test("code contexts register and an empty descriptor stays native", async () => {
@@ -177,11 +188,31 @@ test("a fixture signature commits one scoped style and every marker together", a
   assert.equal((await pending).status, "styled");
   assert.equal(view.document.querySelectorAll("style").length, 1);
   assert.deepEqual(markerState(view), [
-    "fixture-v1", "navigation", "transcript", "composer", "permission",
+    "fixture-v1", "navigation", "transcript", "composer",
   ]);
 });
 
-test("an ambiguous safety role rolls back the whole transaction", async () => {
+test("a uniquely discovered safety role keeps the complete adapter native", async () => {
+  const view = runtime({ dialogs: 1 });
+  const pending = view.adapter.activate();
+  assert.deepEqual(await pending, {
+    status: "native", reason: "safety-role-detected", signature: null,
+  });
+  assert.deepEqual(markerState(view), [null, null, null, null, null]);
+  assert.equal(view.document.querySelectorAll("style").length, 0);
+});
+
+test("an ambiguous optional role keeps the complete adapter native", async () => {
+  const view = runtime({ activities: 2 });
+  const pending = view.adapter.activate();
+  assert.deepEqual(await pending, {
+    status: "native", reason: "role-ambiguous", signature: null,
+  });
+  assert.deepEqual(markerState(view), [null, null, null, null, null, null]);
+  assert.equal(view.document.querySelectorAll("style").length, 0);
+});
+
+test("an emergent safety role rolls back the whole transaction", async () => {
   const view = runtime();
   const pending = view.adapter.activate();
   view.flush();
@@ -192,7 +223,7 @@ test("an ambiguous safety role rolls back the whole transaction", async () => {
   Observer.latest.callback([{ target: duplicate }]);
   view.flush();
   assert.equal(view.adapter.getState().status, "native");
-  assert.deepEqual(markerState(view), [null, null, null, null, null, null]);
+  assert.deepEqual(markerState(view), [null, null, null, null, null]);
 });
 
 test("a route change before promotion aborts without partial state", async () => {
@@ -204,7 +235,7 @@ test("a route change before promotion aborts without partial state", async () =>
   assert.deepEqual(await pending, {
     status: "native", reason: "route-changed", signature: "fixture-v1",
   });
-  assert.deepEqual(markerState(view), [null, null, null, null, null]);
+  assert.deepEqual(markerState(view), [null, null, null, null]);
 });
 
 test("rollback restores prior markers and is idempotent", async () => {
