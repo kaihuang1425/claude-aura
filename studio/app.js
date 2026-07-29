@@ -7,7 +7,7 @@
     "get-state", "set-theme", "set-appearance", "set-locale", "complete-studio-introduction",
     "set-image", "clear-image", "set-avatar", "clear-avatar", "set-avatar-framing",
     "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-desktop",
-    "import-theme", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
+    "import-theme", "export-terminal-themes", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
     "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "remove-theme-layer", "move-theme-layer",
     "undo-theme-edit", "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
@@ -222,6 +222,7 @@
   let pendingCropSave = null;
   let appearancePending = false;
   let localePending = null;
+  let terminalThemeExportPending = false;
   let introductionOffered = false;
   let introductionIsAutomatic = false;
   let introductionCompletionDestination = null;
@@ -791,6 +792,12 @@
     const imageUrl = studioPreviewUrl(theme.studioPreview, theme);
     if (frame && imageUrl && frame.image.src !== imageUrl) frame.image.src = imageUrl;
   };
+  const setTerminalThemeExportPending = (pending) => {
+    terminalThemeExportPending = Boolean(pending);
+    for (const button of grid.querySelectorAll("[data-terminal-theme-export]")) {
+      button.disabled = terminalThemeExportPending;
+    }
+  };
   const syncThemeCardActions = (card, theme) => {
     card.querySelector(".theme-card-actions")?.remove();
     const actions = document.createElement("div");
@@ -853,6 +860,22 @@
         theme.name, localized(theme.labels, theme.label), remove));
       actions.append(action, remove);
     }
+    const exportTerminalThemes = document.createElement("button");
+    exportTerminalThemes.type = "button";
+    exportTerminalThemes.className = "ghost-button";
+    exportTerminalThemes.dataset.terminalThemeExport = "";
+    exportTerminalThemes.textContent = t("exportTerminalThemes");
+    exportTerminalThemes.setAttribute("aria-label", `${exportTerminalThemes.textContent}: ${themeLabel}`);
+    exportTerminalThemes.disabled = terminalThemeExportPending;
+    exportTerminalThemes.addEventListener("click", () => {
+      if (terminalThemeExportPending) return;
+      setTerminalThemeExportPending(true);
+      setStatus(t("terminalThemesExporting"), "busy");
+      if (!send({ type: "export-terminal-themes", theme: theme.name })) {
+        setTerminalThemeExportPending(false);
+      }
+    });
+    actions.appendChild(exportTerminalThemes);
     card.appendChild(actions);
   };
   const removeHostThemeCard = (themeId) => {
@@ -1719,7 +1742,19 @@
           }
         }
         state.studioPreviewCrops = incomingCrops;
-        if (typeof data.status === "string") setStatus(data.status, data.tone ?? "ok");
+        const terminalThemeExportAcknowledged = terminalThemeExportPending
+          && data.action === "export-terminal-themes"
+          && typeof data.actionSucceeded === "boolean";
+        if (terminalThemeExportAcknowledged) {
+          setTerminalThemeExportPending(false);
+          if (data.actionSucceeded && data.tone !== "error") {
+            setStatus(t("terminalThemesExported"));
+          } else if (data.tone === "error") {
+            setStatus(t("terminalThemesExportFailed"), "error");
+          } else {
+            setStatus(t("statusReady"));
+          }
+        } else if (typeof data.status === "string") setStatus(data.status, data.tone ?? "ok");
         else if (appearanceAcknowledged) setStatus(t("statusReady"));
         if (Object.hasOwn(data, "editor")) editorController?.receive(data.editor, state.appearance);
         if (cropContext?.kind === "background") {

@@ -20,6 +20,7 @@ import "./draft-handoff.test.mjs";
 import "./code-adapter.test.mjs";
 import "./prompt-shelf.test.mjs";
 import "./installer.test.mjs";
+import "./desktop-guidance.test.mjs";
 import "./locales.test.mjs";
 import "./studio-editor.test.mjs";
 import "./platform.test.mjs";

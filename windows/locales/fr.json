@@ -146,5 +146,10 @@
   "openedRetry": "Claude a été ouvert, mais le thème nécessite un autre essai. Appuyez sur Réessayer.",
   "startupTitle": "Claude Aura n’a pas pu ouvrir",
   "startupMessage": "Claude Aura n’a pas pu démarrer sa fenêtre de navigateur. Installez ou réparez le Microsoft Edge WebView2 Runtime, puis réessayez.",
-  "technicalDetails": "Les détails techniques ont été enregistrés dans :"
+  "technicalDetails": "Les détails techniques ont été enregistrés dans :",
+  "openDesktopWorkspaceGuidance": "Consulter les instructions de l’espace de travail complet",
+  "desktopWorkspaceGuidanceTitle": "Espace de travail Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop est un espace de travail natif distinct avec sa propre apparence et ses propres contrôles. Aura ouvrira le guide actuel d’Anthropic. Aura ne choisira ni ne transférera votre session Remote Control, n’enverra pas de chemin de projet ou d’invite, et ne stylisera pas Claude Desktop. Si votre configuration prend en charge /desktop, exécutez-le vous-même dans la session CLI prévue.\n\nOuvrir le guide",
+  "desktopWorkspaceGuidanceFailedTitle": "Impossible d’ouvrir le guide",
+  "desktopWorkspaceGuidanceFailedMessage": "Ouvrez le guide de Claude Desktop d’Anthropic dans votre navigateur:\n{0}"
 }

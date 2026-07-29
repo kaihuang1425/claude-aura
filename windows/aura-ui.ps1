@@ -875,7 +875,10 @@ function Get-AuraUiSelectedThemeName {
 }
 
 function Invoke-AuraUiNode {
-  param([Parameter(Mandatory = $true)][string[]]$CommandArguments)
+  param(
+    [Parameter(Mandatory = $true)][string[]]$CommandArguments,
+    [switch]$PrivateDiagnostics
+  )
   $start = [System.Diagnostics.ProcessStartInfo]::new()
   $start.FileName = $script:Node.Path
   $start.Arguments = (($CommandArguments | ForEach-Object { ConvertTo-AuraUiArgument -Value "$_" }) -join ' ')
@@ -898,10 +901,15 @@ function Invoke-AuraUiNode {
   $stdout = $stdoutTask.GetAwaiter().GetResult()
   $stderr = $stderrTask.GetAwaiter().GetResult()
   if ($process.ExitCode -ne 0) {
+    if ($PrivateDiagnostics) {
+      throw 'A private Claude Aura helper operation failed.'
+    }
     $detail = if ($stderr.Trim()) { $stderr.Trim() } else { "Helper exited with code $($process.ExitCode)." }
     throw $detail
   }
-  if ($stderr.Trim()) { Write-AuraUiLog -Message "Theme helper warning: $($stderr.Trim())" }
+  if (-not $PrivateDiagnostics -and $stderr.Trim()) {
+    Write-AuraUiLog -Message "Theme helper warning: $($stderr.Trim())"
+  }
   return $stdout
 }
 
@@ -6517,6 +6525,7 @@ function Send-AuraUiStudioState {
     [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok',
     [ValidateSet(
       '', 'set-image-framing', 'set-card-preview-crop', 'set-avatar', 'set-avatar-framing',
+      'export-terminal-themes',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
@@ -7325,6 +7334,52 @@ function Invoke-AuraUiOpenDesktopApp {
   Start-Process -FilePath $claude.Executable | Out-Null
 }
 
+function Get-AuraUiDesktopWorkspaceGuidanceUri {
+  $expectedAbsoluteUri = 'https://code.claude.com/docs/en/desktop#coming-from-the-cli'
+  try {
+    $uri = [Uri]::new($expectedAbsoluteUri, [UriKind]::Absolute)
+  } catch {
+    throw 'The Claude Desktop workspace guidance address is invalid.'
+  }
+  if (-not $uri.IsAbsoluteUri -or
+      $uri.Scheme -cne [Uri]::UriSchemeHttps -or
+      $uri.Host -cne 'code.claude.com' -or
+      -not $uri.IsDefaultPort -or
+      $uri.AbsolutePath -cne '/docs/en/desktop' -or
+      $uri.Query.Length -ne 0 -or
+      $uri.UserInfo.Length -ne 0 -or
+      $uri.Fragment -cne '#coming-from-the-cli' -or
+      $uri.AbsoluteUri -cne $expectedAbsoluteUri) {
+    throw 'The Claude Desktop workspace guidance address is not allowlisted.'
+  }
+  return $uri
+}
+
+function Request-AuraUiDesktopWorkspaceGuidance {
+  $result = [System.Windows.Forms.MessageBox]::Show(
+    $script:Form,
+    "$($script:UiCopy.desktopWorkspaceGuidanceMessage)",
+    "$($script:UiCopy.desktopWorkspaceGuidanceTitle)",
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question,
+    [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+  if ($result -ne [System.Windows.Forms.DialogResult]::Yes) { return $false }
+
+  $guidanceUrl = 'https://code.claude.com/docs/en/desktop#coming-from-the-cli'
+  try {
+    $guidanceUri = Get-AuraUiDesktopWorkspaceGuidanceUri
+    Start-Process -FilePath $guidanceUri.AbsoluteUri -ErrorAction Stop | Out-Null
+    return $true
+  } catch {
+    Write-AuraUiLog -Message 'Desktop workspace guidance open failed.'
+    Show-AuraUiMessage `
+      -Title "$($script:UiCopy.desktopWorkspaceGuidanceFailedTitle)" `
+      -Icon Warning `
+      -Message ("$($script:UiCopy.desktopWorkspaceGuidanceFailedMessage)" -f $guidanceUrl)
+    return $false
+  }
+}
+
 function Assert-AuraUiThemeKitTree {
   param([Parameter(Mandatory = $true)][string]$Source)
   $sourceItem = Get-Item -LiteralPath $Source -Force
@@ -7574,6 +7629,135 @@ function Invoke-AuraUiImportTheme {
     return $false
   } finally {
     $dialog.Dispose()
+  }
+}
+
+function Assert-AuraUiTerminalThemeExportResult {
+  param(
+    [Parameter(Mandatory = $true)][object]$Result,
+    [Parameter(Mandatory = $true)][string]$Theme,
+    [Parameter(Mandatory = $true)][string]$LightPath,
+    [Parameter(Mandatory = $true)][string]$DarkPath
+  )
+  $invalidResult = 'The terminal theme helper returned an invalid result.'
+  try {
+    if ($Result -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $Result -Names @('pass', 'theme', 'files')) -or
+        $Result.pass -isnot [bool] -or -not $Result.pass -or
+        $Result.theme -isnot [string] -or
+        -not [string]::Equals([string]$Result.theme, $Theme, [StringComparison]::Ordinal) -or
+        $Result.files -isnot [System.Array]) {
+      throw $invalidResult
+    }
+    $files = @($Result.files)
+    if ($files.Count -ne 2) { throw $invalidResult }
+    $expectedModes = @('light', 'dark')
+    $expectedPaths = @(
+      [IO.Path]::GetFullPath($LightPath),
+      [IO.Path]::GetFullPath($DarkPath)
+    )
+    for ($index = 0; $index -lt 2; $index++) {
+      $file = $files[$index]
+      if ($file -isnot [System.Management.Automation.PSCustomObject] -or
+          -not (Test-AuraUiStudioExactProperties -Message $file -Names @('mode', 'path', 'sha256')) -or
+          $file.mode -isnot [string] -or $file.mode -cne $expectedModes[$index] -or
+          $file.path -isnot [string] -or -not $file.path.Trim() -or
+          $file.sha256 -isnot [string] -or $file.sha256 -cnotmatch '^[0-9a-f]{64}$') {
+        throw $invalidResult
+      }
+      $returnedPath = [IO.Path]::GetFullPath([string]$file.path)
+      if (-not [string]::Equals(
+          $returnedPath, $expectedPaths[$index], [StringComparison]::OrdinalIgnoreCase)) {
+        throw $invalidResult
+      }
+    }
+  } catch {
+    throw $invalidResult
+  }
+  return $true
+}
+
+function Get-AuraUiClaudeCodeThemesDirectory {
+  $override = [Environment]::GetEnvironmentVariable('CLAUDE_CONFIG_DIR')
+  $configCandidate = if ($null -ne $override) {
+    [string]$override
+  } else {
+    $userProfile = [Environment]::GetEnvironmentVariable('USERPROFILE')
+    if (-not $userProfile) { return $null }
+    try { [IO.Path]::Combine([string]$userProfile, '.claude') }
+    catch { return $null }
+  }
+  if (-not $configCandidate -or $configCandidate -cne $configCandidate.Trim()) { return $null }
+  try {
+    $root = [IO.Path]::GetPathRoot($configCandidate)
+    $isDriveAbsolute = $root -cmatch '^[A-Za-z]:[\\/]$'
+    $isUncAbsolute = $root -cmatch '^\\\\[^\\/]+[\\/][^\\/]+$'
+    if (-not ($isDriveAbsolute -or $isUncAbsolute)) { return $null }
+    $configDirectory = [IO.Path]::GetFullPath($configCandidate)
+    if (-not [IO.Directory]::Exists($configDirectory)) { return $null }
+    $themesDirectory = [IO.Path]::GetFullPath([IO.Path]::Combine($configDirectory, 'themes'))
+    if (-not [IO.Directory]::Exists($themesDirectory)) { return $null }
+    return $themesDirectory
+  } catch {
+    return $null
+  }
+}
+
+function Invoke-AuraUiExportTerminalThemes {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  $lightDialog = $null
+  $darkDialog = $null
+  try {
+    $theme = Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme)
+    $themeId = [string]$theme.name
+    $lightDialog = [System.Windows.Forms.SaveFileDialog]::new()
+    $darkDialog = [System.Windows.Forms.SaveFileDialog]::new()
+    foreach ($dialog in @($lightDialog, $darkDialog)) {
+      $dialog.Filter = 'JSON (*.json)|*.json'
+      $dialog.FilterIndex = 1
+      $dialog.DefaultExt = 'json'
+      $dialog.AddExtension = $true
+      $dialog.CheckPathExists = $true
+      $dialog.OverwritePrompt = $false
+      $dialog.ValidateNames = $true
+      $dialog.RestoreDirectory = $true
+    }
+    $claudeThemesDirectory = Get-AuraUiClaudeCodeThemesDirectory
+    if ($claudeThemesDirectory) { $lightDialog.InitialDirectory = $claudeThemesDirectory }
+    $lightDialog.FileName = "claude-aura-$themeId-light.json"
+    if ($lightDialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      Send-AuraUiStudioState -Action 'export-terminal-themes' -ActionSucceeded $false
+      return $false
+    }
+    $lightPath = [string]$lightDialog.FileName
+    $lightDirectory = [IO.Path]::GetDirectoryName($lightPath)
+    if ($lightDirectory) { $darkDialog.InitialDirectory = $lightDirectory }
+    $darkDialog.FileName = "claude-aura-$themeId-dark.json"
+    if ($darkDialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      Send-AuraUiStudioState -Action 'export-terminal-themes' -ActionSucceeded $false
+      return $false
+    }
+    $darkPath = [string]$darkDialog.FileName
+    $resultJson = Invoke-AuraUiNode -CommandArguments @(
+      $ThemeCli, 'export-terminal-pair', $themeId,
+      '--light', $lightPath, '--dark', $darkPath,
+      '--user-themes', $UserThemesRoot
+    ) -PrivateDiagnostics
+    $result = $resultJson | ConvertFrom-Json
+    [void](Assert-AuraUiTerminalThemeExportResult `
+      -Result $result -Theme $themeId -LightPath $lightPath -DarkPath $darkPath)
+    Send-AuraUiStudioState -Action 'export-terminal-themes' -ActionSucceeded $true
+    return $true
+  } catch {
+    Write-AuraUiLog -Message 'Terminal theme export failed.'
+    Send-AuraUiStudioState -Tone error -Action 'export-terminal-themes' -ActionSucceeded $false
+    return $false
+  } finally {
+    if ($null -ne $lightDialog) { $lightDialog.Dispose() }
+    if ($null -ne $darkDialog) { $darkDialog.Dispose() }
   }
 }
 
@@ -8017,6 +8201,10 @@ function Update-AuraUiLocalizedChrome {
     if ($null -ne $script:TrayOpenDesktopItem -and -not $script:TrayOpenDesktopItem.IsDisposed) {
       $script:TrayOpenDesktopItem.Text = "$($script:UiCopy.openDesktopApp)"
     }
+    if ($null -ne $script:TrayDesktopWorkspaceGuidanceItem -and
+        -not $script:TrayDesktopWorkspaceGuidanceItem.IsDisposed) {
+      $script:TrayDesktopWorkspaceGuidanceItem.Text = "$($script:UiCopy.openDesktopWorkspaceGuidance)"
+    }
     if ($null -ne $script:TrayExitItem -and -not $script:TrayExitItem.IsDisposed) {
       $script:TrayExitItem.Text = "$($script:UiCopy.exitApp)"
     }
@@ -8025,6 +8213,10 @@ function Update-AuraUiLocalizedChrome {
     }
     if ($null -ne $script:LauncherDesktopItem -and -not $script:LauncherDesktopItem.IsDisposed) {
       $script:LauncherDesktopItem.Text = "$($script:UiCopy.openDesktopApp)"
+    }
+    if ($null -ne $script:LauncherDesktopWorkspaceGuidanceItem -and
+        -not $script:LauncherDesktopWorkspaceGuidanceItem.IsDisposed) {
+      $script:LauncherDesktopWorkspaceGuidanceItem.Text = "$($script:UiCopy.openDesktopWorkspaceGuidance)"
     }
     if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
       $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
@@ -8490,6 +8682,7 @@ function Get-AuraUiStudioMessage {
   $type = [string]$message.type
   $expectedProperties = @(switch -CaseSensitive ($type) {
     'set-theme' { 'type'; 'theme'; break }
+    'export-terminal-themes' { 'type'; 'theme'; break }
     'set-appearance' { 'type'; 'appearance'; break }
     'set-locale' { 'type'; 'locale'; break }
     'set-enabled' { 'type'; 'enabled'; break }
@@ -8560,6 +8753,15 @@ function Get-AuraUiStudioMessage {
   if ($type -ceq 'set-locale' -and
       ($message.locale -isnot [string] -or $message.locale -cnotin $StudioLocaleIds)) {
     throw 'Studio locale is invalid.'
+  }
+  if ($type -ceq 'export-terminal-themes') {
+    if ($sourceUri.AbsolutePath -cne '/index.html' -or
+        -not (Test-AuraUiStudioDocumentUri -Uri $sourceUri -AllowFragment)) {
+      throw 'Terminal theme export message source is not allowed.'
+    }
+    if ($message.theme -isnot [string] -or $message.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
+      throw 'Terminal theme export id is invalid.'
+    }
   }
   if ($type -clike 'prompt-shelf-*') {
     if ($sourceUri.AbsolutePath -cne '/index.html') {
@@ -8675,6 +8877,10 @@ function Invoke-AuraUiStudioMessage {
     'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
     'import-theme' {
       [void](Invoke-AuraUiImportTheme -Owner $script:StudioForm)
+      break
+    }
+    'export-terminal-themes' {
+      [void](Invoke-AuraUiExportTerminalThemes -Request $message -Owner $script:StudioForm)
       break
     }
     'create-theme-copy' { [void](Invoke-AuraUiCreateThemeCopy -Request $message); break }
@@ -8958,6 +9164,7 @@ $script:StudioMessageTypes = @(
   'open-aura',
   'open-desktop',
   'import-theme',
+  'export-terminal-themes',
   'create-theme-copy',
   'begin-theme-edit',
   'set-theme-token',
@@ -9034,6 +9241,7 @@ $script:TrayMenu = $null
 $script:TrayOpenStudioItem = $null
 $script:TrayAppearanceItem = $null
 $script:TrayOpenDesktopItem = $null
+$script:TrayDesktopWorkspaceGuidanceItem = $null
 $script:TrayExitItem = $null
 $script:LoadingPanel = $null
 $script:LoadingMark = $null
@@ -9068,6 +9276,7 @@ $script:LauncherMenu = $null
 $script:LauncherStudioItem = $null
 $script:LauncherAppearanceItem = $null
 $script:LauncherDesktopItem = $null
+$script:LauncherDesktopWorkspaceGuidanceItem = $null
 $script:LauncherStyle = $null
 $script:LauncherMark = $null
 $script:LauncherDragging = $false
@@ -9552,12 +9761,15 @@ public static class AuraUiAsyncDispatch {
   $script:TrayOpenStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
   $script:TrayAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
   $script:TrayOpenDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
+  $script:TrayDesktopWorkspaceGuidanceItem = [System.Windows.Forms.ToolStripMenuItem]::new(
+    "$($script:UiCopy.openDesktopWorkspaceGuidance)")
   $script:TrayExitItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.exitApp)")
   $script:TrayMenu = [System.Windows.Forms.ContextMenuStrip]::new()
   [void]$script:TrayMenu.Items.AddRange(@(
     $script:TrayOpenStudioItem,
     $script:TrayAppearanceItem,
     $script:TrayOpenDesktopItem,
+    $script:TrayDesktopWorkspaceGuidanceItem,
     [System.Windows.Forms.ToolStripSeparator]::new(),
     $script:TrayExitItem
   ))
@@ -9579,6 +9791,9 @@ public static class AuraUiAsyncDispatch {
       Write-AuraUiLog -Message $_.Exception.ToString()
       Show-AuraUiMessage -Title "$($script:UiCopy.desktopNotFoundTitle)" -Icon Information -Message "$($script:UiCopy.desktopNotFoundMessage)"
     }
+  })
+  $script:TrayDesktopWorkspaceGuidanceItem.add_Click({
+    [void](Request-AuraUiDesktopWorkspaceGuidance)
   })
   $script:TrayExitItem.add_Click({ Request-AuraUiExit })
   $script:TrayIcon = [System.Windows.Forms.NotifyIcon]::new()
@@ -9686,12 +9901,15 @@ public static class AuraUiAsyncDispatch {
   $script:LauncherPromptShelfItem.ShortcutKeyDisplayString = 'Ctrl+Shift+P'
   $script:LauncherAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
   $script:LauncherDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
+  $script:LauncherDesktopWorkspaceGuidanceItem = [System.Windows.Forms.ToolStripMenuItem]::new(
+    "$($script:UiCopy.openDesktopWorkspaceGuidance)")
   [void]$script:LauncherMenu.Items.AddRange(@(
     $script:LauncherStudioItem,
     $script:LauncherPromptShelfItem,
     [System.Windows.Forms.ToolStripSeparator]::new(),
     $script:LauncherAppearanceItem,
-    $script:LauncherDesktopItem
+    $script:LauncherDesktopItem,
+    $script:LauncherDesktopWorkspaceGuidanceItem
   ))
   $script:LauncherMenu.add_Opening({
     Hide-AuraUiLauncherTip
@@ -9715,6 +9933,9 @@ public static class AuraUiAsyncDispatch {
       Write-AuraUiLog -Message $_.Exception.ToString()
       Show-AuraUiMessage -Title "$($script:UiCopy.desktopNotFoundTitle)" -Icon Information -Message "$($script:UiCopy.desktopNotFoundMessage)"
     }
+  })
+  $script:LauncherDesktopWorkspaceGuidanceItem.add_Click({
+    [void](Request-AuraUiDesktopWorkspaceGuidance)
   })
 
   $script:Launcher = [System.Windows.Forms.Form]::new()
@@ -10157,6 +10378,7 @@ public static class AuraUiAsyncDispatch {
                   } elseif ($failedMessage.type -in @(
                       'set-locale', 'complete-studio-introduction',
                       'set-image-framing', 'set-avatar-framing', 'set-card-preview-crop',
+                      'export-terminal-themes',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',

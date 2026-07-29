@@ -146,5 +146,10 @@
   "openedRetry": "Claude は開きましたが、テーマにはもう一度試行が必要です。再試行を押してください。",
   "startupTitle": "Claude Aura を起動できませんでした",
   "startupMessage": "Claude Aura がブラウザーウィンドウを起動できませんでした。Microsoft Edge WebView2 Runtime をインストールまたは修復してから、再試行してください。",
-  "technicalDetails": "技術的な詳細は次に保存されました:"
+  "technicalDetails": "技術的な詳細は次に保存されました:",
+  "openDesktopWorkspaceGuidance": "全ワークスペースガイダンスを確認",
+  "desktopWorkspaceGuidanceTitle": "Claude Desktopワークスペース",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktopは独自の外観とコントロールを持つ別個のネイティブワークスペースです。AuraはAnthropicの現在のガイドを開きます。AuraはRemote Controlセッションを選択または移譲せず、プロジェクトパスやプロンプトを送信せず、Claude Desktopのスタイルを変更しません。セットアップで/desktopがサポートされる場合は、対象のCLIセッションであなたが直接実行してください。\n\nガイドを開く",
+  "desktopWorkspaceGuidanceFailedTitle": "ガイドを開けませんでした",
+  "desktopWorkspaceGuidanceFailedMessage": "ブラウザーでAnthropicのClaude Desktopガイドを開く:\n{0}"
 }

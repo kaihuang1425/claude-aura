@@ -146,5 +146,10 @@
   "openedRetry": "Claude terbuka, tetapi tema perlu dicoba lagi. Tekan Coba lagi.",
   "startupTitle": "Claude Aura tidak dapat dibuka",
   "startupMessage": "Claude Aura tidak dapat memulai jendela browser-nya. Pasang atau perbaiki Microsoft Edge WebView2 Runtime, lalu coba lagi.",
-  "technicalDetails": "Rincian teknis disimpan ke:"
+  "technicalDetails": "Rincian teknis disimpan ke:",
+  "openDesktopWorkspaceGuidance": "Tinjau panduan ruang kerja penuh",
+  "desktopWorkspaceGuidanceTitle": "Ruang kerja Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop adalah ruang kerja native terpisah dengan tampilan dan kontrol sendiri. Aura akan membuka panduan saat ini dari Anthropic. Aura tidak akan memilih atau mentransfer sesi Remote Control Anda, tidak mengirim jalur proyek atau prompt, dan tidak akan mengatur gaya Claude Desktop. Jika setup Anda mendukung /desktop, jalankan sendiri di sesi CLI yang dimaksud.\n\nBuka panduan",
+  "desktopWorkspaceGuidanceFailedTitle": "Tidak dapat membuka panduan",
+  "desktopWorkspaceGuidanceFailedMessage": "Buka panduan Claude Desktop dari Anthropic di browser Anda:\n{0}"
 }

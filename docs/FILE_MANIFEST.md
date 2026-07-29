@@ -339,6 +339,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/code-adapter.test.mjs`
 - `tests/draft-handoff.test.mjs`
 - `tests/desktop-cdp.test.mjs`
+- `tests/desktop-guidance.test.mjs`
 - `tests/greeting-runtime.test.mjs`
 - `tests/greeting.test.mjs`
 - `tests/installer.test.mjs`

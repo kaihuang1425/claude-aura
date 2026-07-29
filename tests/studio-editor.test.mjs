@@ -575,6 +575,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "open-aura",
     "open-desktop",
     "import-theme",
+    "export-terminal-themes",
     "create-theme-copy",
     "begin-theme-edit",
     "set-theme-token",
@@ -627,6 +628,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "set-locale must accept only its exact locale property");
   assert(!expectedPropertiesMatch[1].includes("'complete-studio-introduction'"),
     "complete-studio-introduction must retain the default type-only message shape");
+  const terminalExportShape = expectedPropertiesMatch[1].match(
+    /'export-terminal-themes'\s*\{([^}]*)\}/,
+  );
+  assert(terminalExportShape, "Studio exact message-shape switch is missing export-terminal-themes");
+  assert.deepEqual(
+    [...terminalExportShape[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]),
+    ["type", "theme"],
+    "Terminal export must accept only its exact theme identifier",
+  );
+  assert.match(ui,
+    /\$type -ceq 'export-terminal-themes'[\s\S]{0,320}?\$sourceUri\.AbsolutePath -cne '\/index\.html'[\s\S]{0,240}?Test-AuraUiStudioDocumentUri -Uri \$sourceUri -AllowFragment[\s\S]{0,320}?\$message\.theme -isnot \[string\][\s\S]{0,220}?\^\[a-z\]\[a-z0-9-\]\{1,39\}\$/,
+    "Terminal export must validate its exact Studio document and bounded theme id");
   const expectedPromptShelfMessageShapes = {
     "prompt-shelf-read": ["type", "version", "requestId"],
     "prompt-shelf-create": ["type", "version", "requestId", "session", "revision", "commandEpoch", "text"],
@@ -2092,6 +2105,33 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   for (const action of literalPageActions) {
     assert(studioMessageTypes.includes(action), `The page emits ${action}, which the host bridge does not allow`);
   }
+  const themeCardActions = studioApp.slice(
+    studioApp.indexOf("const syncThemeCardActions ="),
+    studioApp.indexOf("const removeHostThemeCard ="),
+  );
+  const exportActionIndex = themeCardActions.indexOf("const exportTerminalThemes");
+  assert(exportActionIndex > themeCardActions.indexOf("actions.append(action, remove);")
+      && themeCardActions.indexOf("card.appendChild(actions);", exportActionIndex) > exportActionIndex,
+  "Every built-in and user theme card must receive the same terminal export action");
+  assert.match(themeCardActions,
+    /exportTerminalThemes\.dataset\.terminalThemeExport\s*=\s*""[\s\S]{0,360}?exportTerminalThemes\.disabled\s*=\s*terminalThemeExportPending/,
+    "Terminal export buttons must share one pending gate");
+  assert.match(themeCardActions,
+    /setStatus\(t\("terminalThemesExporting"\), "busy"\)[\s\S]{0,180}?send\(\{ type: "export-terminal-themes", theme: theme\.name \}\)/,
+    "A theme card must send only the selected theme id after showing localized busy state");
+  assert.match(studioApp,
+    /const setTerminalThemeExportPending[\s\S]{0,260}?\[data-terminal-theme-export\][\s\S]{0,180}?button\.disabled = terminalThemeExportPending/,
+    "All export buttons must remain disabled while either native picker is open");
+  assert.match(studioApp,
+    /terminalThemeExportPending[\s\S]{0,120}?data\.action === "export-terminal-themes"[\s\S]{0,100}?typeof data\.actionSucceeded === "boolean"[\s\S]{0,420}?terminalThemesExported[\s\S]{0,220}?terminalThemesExportFailed[\s\S]{0,180}?statusReady/,
+    "Studio must distinguish path-free export success, failure, and cancellation acknowledgements");
+  const terminalExportCopy = (await readStudioCopy()).shell;
+  assert.equal(terminalExportCopy.en.terminalThemesExported,
+    "Light and Dark terminal theme files saved. Put both in Claude Code's themes folder, then select one with /theme.");
+  assert.equal(terminalExportCopy["zh-CN"].terminalThemesExported,
+    "浅色和深色终端主题文件已保存。请将两个文件放入 Claude Code 的主题文件夹，然后使用 /theme 选择主题。");
+  assert.equal(terminalExportCopy["zh-HKTW"].terminalThemesExported,
+    "已儲存淺色與深色終端機主題檔案。請將兩個檔案放入 Claude Code 的主題資料夾，再使用 /theme 選擇主題。");
   assert.match(studioApp, /if \(source === "builtin"\)[\s\S]{0,1200}?type:\s*"create-theme-copy"/,
     "Built-in theme cards must retain duplicate-to-customize in every mode");
   assert.match(studioApp,
@@ -4236,6 +4276,79 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioApp,
     /const connectedIdentity\s*=\s*state\.effectiveIdentity\s*\?\?[\s\S]{0,260}?applyLauncherMaterial\(state\.connected\s*\?\s*connectedIdentity\.launcher\s*:\s*disconnectedLauncher\)[\s\S]{0,300}?const themeMarkUrl\s*=\s*state\.connected\s*\?\s*connectedIdentity\.previewUrl[\s\S]{0,300}?railThemeMark\.src\s*=\s*themeMarkUrl[\s\S]{0,120}?studioThemeIcon\.href\s*=\s*themeMarkUrl/,
     "The committed host identity must drive both Studio's rail mark and favicon");
+  const nodeHelper = powershellFunction("Invoke-AuraUiNode");
+  assert.match(nodeHelper, /\[switch\]\$PrivateDiagnostics/,
+    "The Node helper must expose an explicit private-diagnostics mode");
+  assert.match(nodeHelper,
+    /if \(\$PrivateDiagnostics\)\s*\{\s*throw 'A private Claude Aura helper operation failed\.'/,
+    "Private helper failures must replace path-bearing stderr with one fixed error");
+  assert.match(nodeHelper,
+    /if \(-not \$PrivateDiagnostics -and \$stderr\.Trim\(\)\)\s*\{[\s\S]{0,160}?Write-AuraUiLog/,
+    "Private helper warnings must not reach the Aura log");
+  const terminalThemeExport = powershellFunction("Invoke-AuraUiExportTerminalThemes");
+  assert.equal((terminalThemeExport.match(/\[System\.Windows\.Forms\.SaveFileDialog\]::new\(\)/g) ?? []).length, 2,
+    "Terminal export must ask separately for the Light and Dark JSON names");
+  assert.equal((terminalThemeExport.match(/\.ShowDialog\(\$Owner\)/g) ?? []).length, 2,
+    "Both terminal filenames must use Studio-owned native save dialogs");
+  assert.match(terminalThemeExport,
+    /Get-AuraUiClaudeCodeThemesDirectory[\s\S]{0,100}?\$lightDialog\.InitialDirectory = \$claudeThemesDirectory/,
+    "An existing host-only Claude Code themes folder must be the optional first save location");
+  assert.doesNotMatch(terminalThemeExport, /CreateDirectory|New-Item/,
+    "Terminal export must never create Claude Code's themes folder");
+  const claudeCodeThemesResolver = powershellFunction("Get-AuraUiClaudeCodeThemesDirectory");
+  assert.match(claudeCodeThemesResolver,
+    /GetEnvironmentVariable\('CLAUDE_CONFIG_DIR'\)[\s\S]{0,160}?if \(\$null -ne \$override\)[\s\S]{0,180}?else\s*\{[\s\S]{0,180}?GetEnvironmentVariable\('USERPROFILE'\)[\s\S]{0,180}?'\.claude'/,
+    "CLAUDE_CONFIG_DIR must take precedence, with USERPROFILE fallback only when it is unset");
+  assert.match(claudeCodeThemesResolver,
+    /GetPathRoot\(\$configCandidate\)[\s\S]{0,300}?\$isDriveAbsolute[\s\S]{0,180}?\$isUncAbsolute[\s\S]{0,180}?GetFullPath\(\$configCandidate\)/,
+    "The optional Claude config root must be a resolvable absolute Windows path");
+  assert.match(claudeCodeThemesResolver,
+    /Directory\]::Exists\(\$configDirectory\)[\s\S]{0,220}?Combine\(\$configDirectory, 'themes'\)[\s\S]{0,180}?Directory\]::Exists\(\$themesDirectory\)/,
+    "The resolver must require both the config root and its existing themes child");
+  assert.doesNotMatch(claudeCodeThemesResolver,
+    /CreateDirectory|New-Item|Write-AuraUiLog|Send-AuraUiStudioState/,
+    "Resolving a host-only Claude Code path must not create, log, or send it");
+  assert.match(terminalThemeExport, /\$dialog\.OverwritePrompt\s*=\s*\$false/,
+    "The native dialog must not imply that the strict exporter can overwrite a collision");
+  assert.match(terminalThemeExport,
+    /Invoke-AuraUiNode -CommandArguments @\([\s\S]{0,180}?['"]export-terminal-pair['"][\s\S]{0,180}?['"]--light['"], \$lightPath, ['"]--dark['"], \$darkPath[\s\S]{0,180}?['"]--user-themes['"], \$UserThemesRoot[\s\S]{0,100}?\) -PrivateDiagnostics/,
+    "The host must defer collision-safe pair publication to the strict private CLI path");
+  assert.match(terminalThemeExport,
+    /Assert-AuraUiTerminalThemeExportResult[\s\S]{0,180}?-Result \$result -Theme \$themeId -LightPath \$lightPath -DarkPath \$darkPath[\s\S]{0,180}?Send-AuraUiStudioState -Action 'export-terminal-themes' -ActionSucceeded \$true/,
+    "The host must validate the exact pair result before acknowledging success");
+  const terminalResultValidator = powershellFunction("Assert-AuraUiTerminalThemeExportResult");
+  assert.match(terminalResultValidator,
+    /Test-AuraUiStudioExactProperties -Message \$Result -Names @\('pass', 'theme', 'files'\)[\s\S]{0,360}?\$Result\.files -isnot \[System\.Array\]/,
+    "Terminal helper output must have the exact top-level schema and an array of files");
+  assert.match(terminalResultValidator,
+    /Test-AuraUiStudioExactProperties -Message \$file -Names @\('mode', 'path', 'sha256'\)[\s\S]{0,360}?\$file\.mode -cne \$expectedModes\[\$index\]/,
+    "Each terminal helper file must have the exact schema and ordered Light/Dark mode");
+  assert(terminalResultValidator.includes(
+    "$file.sha256 -isnot [string] -or $file.sha256 -cnotmatch '^[0-9a-f]{64}$'"),
+    "Both helper digests must be lowercase 64-hex SHA-256 strings");
+  assert.match(terminalResultValidator,
+    /\[IO\.Path\]::GetFullPath\(\$LightPath\)[\s\S]{0,120}?\[IO\.Path\]::GetFullPath\(\$DarkPath\)[\s\S]{0,700}?\[IO\.Path\]::GetFullPath\(\[string\]\$file\.path\)[\s\S]{0,220}?\[StringComparison\]::OrdinalIgnoreCase/,
+    "Normalized helper paths must equal both host-selected destinations");
+  assert.equal((terminalThemeExport.match(
+    /Send-AuraUiStudioState -Action 'export-terminal-themes' -ActionSucceeded \$false/g,
+  ) ?? []).length, 2, "Canceling either dialog must return one non-error cancellation acknowledgement");
+  assert.match(terminalThemeExport,
+    /Write-AuraUiLog -Message 'Terminal theme export failed\.'[\s\S]{0,120}?Send-AuraUiStudioState -Tone error -Action 'export-terminal-themes' -ActionSucceeded \$false/,
+    "Terminal export failures must use fixed, path-free log and Studio messages");
+  const terminalExportPublicCalls = terminalThemeExport.split(/\r?\n/)
+    .filter((line) => /(?:Send-AuraUiStudioState|Write-AuraUiLog)/.test(line))
+    .join("\n");
+  assert.doesNotMatch(terminalExportPublicCalls, /\$_|Exception|\$[A-Za-z]*Path/,
+    "Terminal export must never place a selected path or exception detail in remote state or logs");
+  const rejectedStudioMessageHandler = ui.slice(
+    ui.indexOf("$studioCore.add_WebMessageReceived"),
+    ui.indexOf("$studioCore.add_NewWindowRequested", ui.indexOf("$studioCore.add_WebMessageReceived")),
+  );
+  assert(rejectedStudioMessageHandler.includes("'export-terminal-themes'"),
+    "Rejected terminal export messages must be recognized as a bounded action");
+  assert.match(rejectedStudioMessageHandler,
+    /Send-AuraUiStudioState[^\r\n]*-Tone error -Action \$failedAction -ActionSucceeded \$false/,
+    "A rejected terminal export request must release the page pending gate with a path-free failure");
 
   const mouseEnterStart = ui.indexOf("$launcherPointerEnter = {");
   const mouseEnterEnd = ui.indexOf("$launcherPointerLeave = {", mouseEnterStart);
@@ -4814,6 +4927,104 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Windows exact-tree installer must include Aura Studio");
 
   if (process.platform === "win32") {
+    const terminalExportResultRegression = [
+      "$ErrorActionPreference='Stop'",
+      `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for terminal export result regression'}",
+      "foreach($name in @('Test-AuraUiStudioExactProperties','Assert-AuraUiTerminalThemeExportResult','Get-AuraUiClaudeCodeThemesDirectory')){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing terminal export result function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "function Assert-FixedRejected { param([scriptblock]$Operation,[string]$Label);try{&$Operation|Out-Null}catch{if($_.Exception.Message -cne 'The terminal theme helper returned an invalid result.'){throw \"$Label exposed private details\"};return};throw \"$Label was accepted\" }",
+      "$root=[IO.Path]::GetTempPath()",
+      "$light=Join-Path $root 'aura-terminal-light.json'",
+      "$dark=Join-Path $root 'aura-terminal-dark.json'",
+      "$lightReturned=Join-Path $root 'nested\\..\\aura-terminal-light.json'",
+      "$darkReturned=Join-Path $root 'nested\\..\\aura-terminal-dark.json'",
+      "$digest=('a'*64)-join ''",
+      "$valid=[pscustomobject][ordered]@{pass=$true;theme='default';files=@(",
+      "  [pscustomobject][ordered]@{mode='light';path=$lightReturned;sha256=$digest},",
+      "  [pscustomobject][ordered]@{mode='dark';path=$darkReturned;sha256=$digest}",
+      ")}",
+      "if(-not (Assert-AuraUiTerminalThemeExportResult -Result $valid -Theme 'default' -LightPath $light -DarkPath $dark)){throw 'Valid terminal pair was rejected'}",
+      "$extraTop=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$extraTop|Add-Member -NotePropertyName outputDirectory -NotePropertyValue $root",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $extraTop -Theme 'default' -LightPath $light -DarkPath $dark } 'an extra top-level property'",
+      "$extraFile=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$extraFile.files[0]|Add-Member -NotePropertyName bytes -NotePropertyValue 1",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $extraFile -Theme 'default' -LightPath $light -DarkPath $dark } 'an extra file property'",
+      "$scalarFiles=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$scalarFiles.files=$scalarFiles.files[0]",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $scalarFiles -Theme 'default' -LightPath $light -DarkPath $dark } 'a scalar files value'",
+      "$badMode=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$badMode.files[0].mode='dark'",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $badMode -Theme 'default' -LightPath $light -DarkPath $dark } 'an incorrect mode'",
+      "$badPath=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$badPath.files[1].path=(Join-Path $root 'other.json')",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $badPath -Theme 'default' -LightPath $light -DarkPath $dark } 'a changed destination'",
+      "$badDigest=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$badDigest.files[1].sha256=(('A'*64)-join '')",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $badDigest -Theme 'default' -LightPath $light -DarkPath $dark } 'an uppercase digest'",
+      "$missingDigest=$valid|ConvertTo-Json -Depth 6|ConvertFrom-Json;$missingDigest.files[0].PSObject.Properties.Remove('sha256')",
+      "Assert-FixedRejected { Assert-AuraUiTerminalThemeExportResult -Result $missingDigest -Theme 'default' -LightPath $light -DarkPath $dark } 'a missing digest'",
+      "$locationRoot=Join-Path $root ('aura-terminal-location-'+[Guid]::NewGuid().ToString('N'))",
+      "$overrideConfig=Join-Path $locationRoot 'override-config'",
+      "$overrideThemes=Join-Path $overrideConfig 'themes'",
+      "$profileRoot=Join-Path $locationRoot 'profile'",
+      "$defaultThemes=Join-Path (Join-Path $profileRoot '.claude') 'themes'",
+      "$noThemesConfig=Join-Path $locationRoot 'no-themes-config'",
+      "$originalOverride=[Environment]::GetEnvironmentVariable('CLAUDE_CONFIG_DIR')",
+      "$originalProfile=[Environment]::GetEnvironmentVariable('USERPROFILE')",
+      "try{",
+      "  [void][IO.Directory]::CreateDirectory($overrideThemes)",
+      "  [void][IO.Directory]::CreateDirectory($defaultThemes)",
+      "  [void][IO.Directory]::CreateDirectory($noThemesConfig)",
+      "  [Environment]::SetEnvironmentVariable('USERPROFILE',$profileRoot)",
+      "  [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_DIR',$overrideConfig)",
+      "  $resolved=Get-AuraUiClaudeCodeThemesDirectory",
+      "  if(-not [string]::Equals($resolved,[IO.Path]::GetFullPath($overrideThemes),[StringComparison]::OrdinalIgnoreCase)){throw 'CLAUDE_CONFIG_DIR did not take precedence'}",
+      "  [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_DIR',$null)",
+      "  $resolved=Get-AuraUiClaudeCodeThemesDirectory",
+      "  if(-not [string]::Equals($resolved,[IO.Path]::GetFullPath($defaultThemes),[StringComparison]::OrdinalIgnoreCase)){throw 'Unset override did not use USERPROFILE fallback'}",
+      "  [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_DIR','relative-config')",
+      "  if($null -ne (Get-AuraUiClaudeCodeThemesDirectory)){throw 'Relative override fell back to USERPROFILE'}",
+      "  [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_DIR',(Join-Path $locationRoot 'missing-config'))",
+      "  if($null -ne (Get-AuraUiClaudeCodeThemesDirectory)){throw 'Missing absolute override fell back to USERPROFILE'}",
+      "  [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_DIR',$noThemesConfig)",
+      "  if($null -ne (Get-AuraUiClaudeCodeThemesDirectory)){throw 'Override without themes fell back to USERPROFILE'}",
+      "  if([IO.Directory]::Exists((Join-Path $noThemesConfig 'themes'))){throw 'Resolver created a missing themes directory'}",
+      "}finally{",
+      "  [Environment]::SetEnvironmentVariable('CLAUDE_CONFIG_DIR',$originalOverride)",
+      "  [Environment]::SetEnvironmentVariable('USERPROFILE',$originalProfile)",
+      "  if([IO.Directory]::Exists($locationRoot)){[IO.Directory]::Delete($locationRoot,$true)}",
+      "}",
+    ].join("\n");
+    run("powershell.exe", ["-NoProfile", "-EncodedCommand",
+      Buffer.from(terminalExportResultRegression, "utf16le").toString("base64")]);
+
+    const privateNodeDiagnosticsRegression = [
+      "$ErrorActionPreference='Stop'",
+      `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for private Node diagnostics regression'}",
+      "foreach($name in @('ConvertTo-AuraUiArgument','Invoke-AuraUiNode')){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing private Node diagnostics function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "$script:Node=[pscustomobject]@{Path='" + process.execPath.replaceAll("'", "''") + "'}",
+      "$script:LogMessages=[Collections.Generic.List[string]]::new()",
+      "function Write-AuraUiLog { param([string]$Message);$script:LogMessages.Add($Message) }",
+      "$failed=$false",
+      "try{Invoke-AuraUiNode -PrivateDiagnostics -CommandArguments @('-e','process.stderr.write(\"C:/private/theme.json\");process.exit(7)')|Out-Null}",
+      "catch{$failed=$true;if($_.Exception.Message -cne 'A private Claude Aura helper operation failed.'){throw 'Private helper exposed its stderr'}}",
+      "if(-not $failed){throw 'Private helper failure was not reported'}",
+      "if($script:LogMessages.Count -ne 0){throw 'Private helper failure reached the log'}",
+      "$result=Invoke-AuraUiNode -PrivateDiagnostics -CommandArguments @('-e','process.stderr.write(\"C:/private/theme.json\");process.stdout.write(\"ok\")')",
+      "if($result -cne 'ok'){throw 'Private helper changed successful stdout'}",
+      "if($script:LogMessages.Count -ne 0){throw 'Private helper warning reached the log'}",
+    ].join("\n");
+    run("powershell.exe", ["-NoProfile", "-EncodedCommand",
+      Buffer.from(privateNodeDiagnosticsRegression, "utf16le").toString("base64")]);
+
     const compactPayloadStateRegression = [
       "$ErrorActionPreference='Stop'",
       `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
@@ -5325,7 +5536,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
       "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
       "$script:PromptShelfMaxTextLength=8000",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
       "$requestId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'",
@@ -5343,6 +5554,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  [ordered]@{type='set-locale';locale='ja'},",
       "  [ordered]@{type='set-locale';locale='zh-HKTW'},",
       "  [ordered]@{type='complete-studio-introduction'},",
+      "  [ordered]@{type='export-terminal-themes';theme='default'},",
       "  [ordered]@{type='create-theme-copy';theme='default'},",
       "  [ordered]@{type='begin-theme-edit';theme='user-theme';reset=$false},",
       "  [ordered]@{type='set-theme-token';session=$session;revision=0;mode='light';token='canvas';value='#123ABC'},",
@@ -5379,6 +5591,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"zh-hktw\"}' -Source $source } 'a case-changed locale'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"set-locale\",\"locale\":\"en\",\"extra\":true}' -Source $source } 'an extra locale property'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json '{\"type\":\"complete-studio-introduction\",\"completed\":true}' -Source $source } 'an extra introduction property'",
+      "$terminalExport=[ordered]@{type='export-terminal-themes';theme='default'}",
+      "$terminalExportWithPath=[ordered]@{type='export-terminal-themes';theme='default';path='C:\\private\\theme.json'}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($terminalExportWithPath|ConvertTo-Json -Compress) -Source $source } 'a terminal export carrying a path'",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($terminalExport|ConvertTo-Json -Compress) -Source 'https://aura.studio/not-index.html?locale=en' } 'a terminal export from another Studio path'",
+      "$terminalExportBadTheme=[ordered]@{type='export-terminal-themes';theme='Default'}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($terminalExportBadTheme|ConvertTo-Json -Compress) -Source $source } 'a noncanonical terminal export theme'",
       "$promptRead=[ordered]@{type='prompt-shelf-read';version=1;requestId=$requestId}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($promptRead|ConvertTo-Json -Compress) -Source 'https://aura.studio/not-index.html' } 'a Prompt Shelf message from another Studio path'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($promptRead|ConvertTo-Json -Compress) -Source 'https://aura.studio/index.html?locale=en&view=prompt-shelf&extra=1' } 'a Prompt Shelf message with an extra URL parameter'",
@@ -5786,7 +6004,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     /function Write-AuraUiStudioPreferences[\s\S]{0,1600}?\[IO\.File\]::WriteAllText\(\$temporary[\s\S]{0,500}?\[IO\.File\]::Replace\(\$temporary,\s*\$StudioPreferencesPath,\s*\$backup\)[\s\S]{0,180}?\[IO\.File\]::Move\(\$temporary,\s*\$StudioPreferencesPath\)/,
     "Studio preferences must use UTF-8 temporary-write plus atomic replace-or-move persistence");
   assert.match(ui,
-    /function Send-AuraUiStudioState[\s\S]{0,1800}?locale = "\$\(\$script:Locale\)"[\s\S]{0,180}?introductionPending =[\s\S]{0,220}?introductionRequested =/,
+    /function Send-AuraUiStudioState[\s\S]{0,2000}?locale = "\$\(\$script:Locale\)"[\s\S]{0,180}?introductionPending =[\s\S]{0,220}?introductionRequested =/,
     "The host must own locale, introduction completion, and launcher-entry state");
   assert.match(ui,
     /function Show-AuraUiStudio\s*\{\s*param\(\[switch\]\$OfferIntroduction\)[\s\S]{0,180}?StudioIntroductionRequested = \$true/,

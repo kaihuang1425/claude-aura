@@ -146,5 +146,10 @@
   "openedRetry": "Claude đã mở nhưng chủ đề cần thử lại. Nhấn Thử lại.",
   "startupTitle": "Claude Aura không thể mở",
   "startupMessage": "Claude Aura không thể khởi động cửa sổ trình duyệt. Cài đặt hoặc sửa Microsoft Edge WebView2 Runtime, rồi thử lại.",
-  "technicalDetails": "Chi tiết kỹ thuật đã được lưu vào:"
+  "technicalDetails": "Chi tiết kỹ thuật đã được lưu vào:",
+  "openDesktopWorkspaceGuidance": "Xem lại hướng dẫn không gian làm việc đầy đủ",
+  "desktopWorkspaceGuidanceTitle": "Không gian làm việc Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop là một workspace native riêng biệt với giao diện và điều khiển riêng. Aura sẽ mở hướng dẫn hiện tại của Anthropic. Aura sẽ không chọn hoặc chuyển phiên Remote Control của bạn, không gửi đường dẫn dự án hay prompt, và không áp dụng kiểu dáng cho Claude Desktop. Nếu thiết lập của bạn hỗ trợ /desktop, hãy tự chạy trong phiên CLI dự định.\n\nMở hướng dẫn",
+  "desktopWorkspaceGuidanceFailedTitle": "Không thể mở hướng dẫn",
+  "desktopWorkspaceGuidanceFailedMessage": "Mở hướng dẫn Claude Desktop của Anthropic trong trình duyệt của bạn:\n{0}"
 }

@@ -146,5 +146,10 @@
   "openedRetry": "Claude açıldı, ancak tema için bir deneme daha gerekli. Tekrar dene'ye basın.",
   "startupTitle": "Claude Aura açılamadı",
   "startupMessage": "Claude Aura tarayıcı penceresini başlatamadı. Microsoft Edge WebView2 Runtime'u yükleyin veya onarın, ardından yeniden deneyin.",
-  "technicalDetails": "Teknik ayrıntılar şuraya kaydedildi:"
+  "technicalDetails": "Teknik ayrıntılar şuraya kaydedildi:",
+  "openDesktopWorkspaceGuidance": "Tam çalışma alanı kılavuzunu gözden geçir",
+  "desktopWorkspaceGuidanceTitle": "Claude Desktop çalışma alanı",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop, kendi görünümü ve kontrol elemanları olan ayrı bir yerel (native) çalışma alanıdır. Aura Anthropic'in mevcut kılavuzunu açacaktır. Aura, Remote Control oturumunuzu seçmez veya taşımaz; proje yolu veya istem (prompt) göndermez ve Claude Desktop'un stilini değiştirmez. Kurulumunuz /desktop'ı destekliyorsa, bunu hedef CLI oturumunda kendiniz çalıştırın.\n\nKılavuzu aç",
+  "desktopWorkspaceGuidanceFailedTitle": "Kılavuz açılamadı",
+  "desktopWorkspaceGuidanceFailedMessage": "Tarayıcınızda Anthropic Claude Desktop kılavuzunu açın:\n{0}"
 }
