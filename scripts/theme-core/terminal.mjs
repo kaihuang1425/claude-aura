@@ -118,6 +118,176 @@ function documentBytes(document) {
   return `${JSON.stringify(document, null, 2)}\n`;
 }
 
+function normalizedPathIdentity(filePath) {
+  const normalized = path.normalize(filePath);
+  return process.platform === "win32" ? normalized.toLocaleLowerCase("en-US") : normalized;
+}
+
+function validatePairTarget(target, mode) {
+  if (typeof target !== "string" || !target.trim()) {
+    throw new Error(`Terminal ${mode} target path is required`);
+  }
+  if (!path.isAbsolute(target)) {
+    throw new Error(`Terminal ${mode} target path must be absolute`);
+  }
+  const resolved = path.resolve(target);
+  const basename = path.basename(resolved);
+  if (path.extname(basename).toLocaleLowerCase("en-US") !== ".json") {
+    throw new Error(`Terminal ${mode} target must be a JSON file`);
+  }
+  const opposite = mode === "light" ? "dark" : "light";
+  if (new RegExp(`(?:^|[-_. ])${opposite}(?:[-_. ]|$)`, "i").test(basename.slice(0, -5))) {
+    throw new Error(`Terminal ${mode} target path appears to name the ${opposite} theme`);
+  }
+  return resolved;
+}
+
+function resolvePairTargets(targets) {
+  if (!targets || typeof targets !== "object" || Array.isArray(targets)
+      || Object.keys(targets).sort().join(",") !== "darkPath,lightPath") {
+    throw new Error("Terminal theme pair targets must contain only lightPath and darkPath");
+  }
+  const lightPath = validatePairTarget(targets.lightPath, "light");
+  const darkPath = validatePairTarget(targets.darkPath, "dark");
+  if (normalizedPathIdentity(lightPath) === normalizedPathIdentity(darkPath)) {
+    throw new Error("Terminal Light and Dark target paths must be different");
+  }
+  return { lightPath, darkPath };
+}
+
+async function assertExistingDirectory(directory, operations, mode) {
+  let status;
+  try {
+    status = await operations.stat(directory);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error(`Terminal ${mode} destination directory must already exist`);
+    }
+    throw error;
+  }
+  if (!status.isDirectory()) {
+    throw new Error(`Terminal ${mode} destination directory must already exist`);
+  }
+}
+
+async function assertTargetAbsent(filePath, operations, mode) {
+  try {
+    await operations.lstat(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  throw new Error(`Refusing to overwrite existing Terminal ${mode} target`);
+}
+
+async function stageExclusiveDocument(document, operations) {
+  let handle = null;
+  try {
+    handle = await operations.open(document.stagePath, "wx", 0o600);
+    await handle.writeFile(document.contents, "utf8");
+    await handle.sync();
+    await handle.close();
+    handle = null;
+  } finally {
+    if (handle) await handle.close().catch(() => {});
+  }
+}
+
+async function pathsShareFile(left, right, operations) {
+  try {
+    const [leftStatus, rightStatus] = await Promise.all([
+      operations.stat(left),
+      operations.stat(right),
+    ]);
+    return leftStatus.dev === rightStatus.dev
+      && leftStatus.ino !== 0
+      && leftStatus.ino === rightStatus.ino;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Export one user-chosen Light/Dark pair without creating directories,
+ * overwriting files, writing an ownership manifest, or changing Claude state.
+ * Both complete documents are staged before either destination is published.
+ */
+export async function exportTerminalThemePair(theme, targets, options = {}) {
+  const resolvedTargets = resolvePairTargets(targets);
+  const operations = { ...fs, ...(options.fileOperations ?? {}) };
+  const documents = TERMINAL_THEME_SCHEMA.bases.map((mode) => {
+    const filePath = resolvedTargets[`${mode}Path`];
+    const contents = documentBytes(buildTerminalTheme(theme, mode));
+    return {
+      mode,
+      filePath,
+      contents,
+      digest: digest(contents),
+      stagePath: path.join(
+        path.dirname(filePath),
+        `.${path.basename(filePath)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`,
+      ),
+    };
+  });
+
+  for (const document of documents) {
+    await assertExistingDirectory(path.dirname(document.filePath), operations, document.mode);
+  }
+  for (const document of documents) {
+    await assertTargetAbsent(document.filePath, operations, document.mode);
+  }
+
+  const published = [];
+  try {
+    for (const document of documents) {
+      await stageExclusiveDocument(document, operations);
+    }
+    for (const document of documents) {
+      try {
+        // A hard-link promotion is same-volume, atomic, and exclusive on both
+        // Windows and POSIX. Unlike rename, it cannot replace a raced target.
+        await operations.link(document.stagePath, document.filePath);
+        published.push(document);
+      } catch (error) {
+        // A test or abrupt wrapper can report failure after the link syscall.
+        // Record only a target proven to be this staged inode; never delete a
+        // pre-existing path merely because its bytes happen to match.
+        if (await pathsShareFile(document.stagePath, document.filePath, operations)) {
+          published.push(document);
+        }
+        throw error;
+      }
+    }
+  } catch (error) {
+    const cleanupErrors = [];
+    for (const document of published.reverse()) {
+      try {
+        if (await pathsShareFile(document.stagePath, document.filePath, operations)) {
+          await operations.rm(document.filePath, { force: true });
+        }
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (cleanupErrors.length) {
+      throw new AggregateError([error, ...cleanupErrors], "Terminal theme pair rollback failed");
+    }
+    throw error;
+  } finally {
+    await Promise.all(documents.map(
+      (document) => operations.rm(document.stagePath, { force: true }).catch(() => {}),
+    ));
+  }
+
+  return {
+    files: documents.map((document) => ({
+      mode: document.mode,
+      path: document.filePath,
+      sha256: document.digest,
+    })),
+  };
+}
+
 async function readManifest(directory, operations) {
   const manifestPath = path.join(directory, TERMINAL_THEME_MANIFEST);
   let text;

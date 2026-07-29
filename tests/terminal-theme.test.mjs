@@ -5,6 +5,7 @@ import path from "node:path";
 import { test, runIfMain } from "./support/harness.mjs";
 import {
   buildTerminalTheme,
+  exportTerminalThemePair,
   exportTerminalThemes,
   listThemes,
   TERMINAL_THEME_SCHEMA,
@@ -153,6 +154,146 @@ test("terminal export refuses a foreign-owned collision without changing it", as
       /non-Aura-owned terminal theme/,
     );
     assert.equal(await fs.readFile(collision, "utf8"), "{\"foreign\":true}\n");
+  });
+});
+
+test("one-shot terminal export writes one canonical pair without a manifest", async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const [theme] = await builtIns();
+    const lightPath = path.join(directory, `claude-aura-${theme.name}-light.json`);
+    const darkPath = path.join(directory, `claude-aura-${theme.name}-dark.json`);
+    const result = await exportTerminalThemePair(theme, { lightPath, darkPath });
+    assert.deepEqual(
+      result.files.map(({ mode, path: filePath }) => ({ mode, path: filePath })),
+      [
+        { mode: "light", path: lightPath },
+        { mode: "dark", path: darkPath },
+      ],
+    );
+    assert.deepEqual(JSON.parse(await fs.readFile(lightPath, "utf8")), buildTerminalTheme(theme, "light"));
+    assert.deepEqual(JSON.parse(await fs.readFile(darkPath, "utf8")), buildTerminalTheme(theme, "dark"));
+    assert.deepEqual(
+      (await fs.readdir(directory)).sort(),
+      [path.basename(darkPath), path.basename(lightPath)].sort(),
+    );
+  });
+});
+
+test("one-shot terminal export refuses either collision before writing", async () => {
+  const [theme] = await builtIns();
+  for (const collisionMode of ["light", "dark"]) {
+    await withTemporaryDirectory(async (directory) => {
+      const lightPath = path.join(directory, `claude-aura-${theme.name}-light.json`);
+      const darkPath = path.join(directory, `claude-aura-${theme.name}-dark.json`);
+      const collisionPath = collisionMode === "light" ? lightPath : darkPath;
+      const foreignBytes = `{"foreign":"${collisionMode}"}\n`;
+      await fs.writeFile(collisionPath, foreignBytes, "utf8");
+      await assert.rejects(
+        exportTerminalThemePair(theme, { lightPath, darkPath }),
+        /Refusing to overwrite existing Terminal/,
+      );
+      assert.equal(await fs.readFile(collisionPath, "utf8"), foreignBytes);
+      assert.deepEqual(await fs.readdir(directory), [path.basename(collisionPath)]);
+    });
+  }
+});
+
+test("one-shot terminal export removes staged and published files after interruption", async () => {
+  const [theme] = await builtIns();
+  await withTemporaryDirectory(async (directory) => {
+    const lightPath = path.join(directory, `claude-aura-${theme.name}-light.json`);
+    const darkPath = path.join(directory, `claude-aura-${theme.name}-dark.json`);
+    let opens = 0;
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath, darkPath }, {
+        fileOperations: {
+          open: async (...args) => {
+            opens += 1;
+            if (opens === 2) throw new Error("interrupted while staging");
+            return fs.open(...args);
+          },
+        },
+      }),
+      /interrupted while staging/,
+    );
+    assert.deepEqual(await fs.readdir(directory), []);
+  });
+
+  await withTemporaryDirectory(async (directory) => {
+    const lightPath = path.join(directory, `claude-aura-${theme.name}-light.json`);
+    const darkPath = path.join(directory, `claude-aura-${theme.name}-dark.json`);
+    let promotions = 0;
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath, darkPath }, {
+        fileOperations: {
+          link: async (...args) => {
+            promotions += 1;
+            if (promotions === 2) throw new Error("interrupted during promotion");
+            return fs.link(...args);
+          },
+        },
+      }),
+      /interrupted during promotion/,
+    );
+    assert.deepEqual(await fs.readdir(directory), []);
+  });
+
+  await withTemporaryDirectory(async (directory) => {
+    const lightPath = path.join(directory, `claude-aura-${theme.name}-light.json`);
+    const darkPath = path.join(directory, `claude-aura-${theme.name}-dark.json`);
+    let promotions = 0;
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath, darkPath }, {
+        fileOperations: {
+          link: async (...args) => {
+            promotions += 1;
+            await fs.link(...args);
+            if (promotions === 2) throw new Error("wrapper failed after promotion");
+          },
+        },
+      }),
+      /wrapper failed after promotion/,
+    );
+    assert.deepEqual(await fs.readdir(directory), []);
+  });
+});
+
+test("one-shot terminal export rejects invalid, crossed, same, and missing-parent targets", async () => {
+  const [theme] = await builtIns();
+  await withTemporaryDirectory(async (directory) => {
+    const lightPath = path.join(directory, `claude-aura-${theme.name}-light.json`);
+    const darkPath = path.join(directory, `claude-aura-${theme.name}-dark.json`);
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath: "relative-light.json", darkPath }),
+      /must be absolute/,
+    );
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath: lightPath.replace(/\.json$/, ".txt"), darkPath }),
+      /must be a JSON file/,
+    );
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath: darkPath, darkPath: lightPath }),
+      /appears to name the dark theme/,
+    );
+    await assert.rejects(
+      exportTerminalThemePair(theme, {
+        lightPath: path.join(directory, "same-target.json"),
+        darkPath: path.join(directory, "same-target.json"),
+      }),
+      /must be different/,
+    );
+    await assert.rejects(
+      exportTerminalThemePair(theme, {
+        lightPath: path.join(directory, "missing", "custom-light.json"),
+        darkPath,
+      }),
+      /must already exist/,
+    );
+    await assert.rejects(
+      exportTerminalThemePair(theme, { lightPath, darkPath, extra: true }),
+      /must contain only lightPath and darkPath/,
+    );
+    assert.deepEqual(await fs.readdir(directory), []);
   });
 });
 

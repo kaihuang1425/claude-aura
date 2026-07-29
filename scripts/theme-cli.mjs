@@ -4,6 +4,7 @@ import path from "node:path";
 import { generateAssetAudit } from "./asset-audit.mjs";
 import {
   buildPayloadFromCompiled,
+  exportTerminalThemePair,
   exportTerminalThemes,
   compileTheme,
   DEFAULT_CONFIG,
@@ -231,6 +232,8 @@ function help() {
 Commands:
   list [--json] [--locale <tag>] [--user-themes <path>]
   export-terminal <theme-id> [--out <dir>] [--user-themes <path>]
+  export-terminal-pair <theme-id> --light <absolute-json-path> --dark <absolute-json-path>
+      [--user-themes <path>]
   scaffold <id>
   qa <id>
   init --config <path> [--locale <tag>] [--user-themes <path>] [--payload]
@@ -257,7 +260,7 @@ Commands:
 
 async function main() {
 const { command, options, positionals } = parse(process.argv.slice(2));
-if (!["export-terminal", "qa", "scaffold", "validate"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
+if (!["export-terminal", "export-terminal-pair", "qa", "scaffold", "validate"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
 const userThemesDir = options["user-themes"] === undefined ? null : path.resolve(options["user-themes"]);
 const emitWarning = (message) => process.stderr.write(`Warning: ${message}\n`);
 const runtimeOptions = { userThemesDir, onWarning: emitWarning };
@@ -410,6 +413,32 @@ if (command === "help" || command === "--help") {
     outputDirectory: result.outputDirectory,
     files: result.files.map((file) => file.path),
     ownershipManifest: result.manifestPath,
+  }, null, 2));
+} else if (command === "export-terminal-pair") {
+  if (positionals.length !== 1) {
+    throw new Error("Usage: theme-cli export-terminal-pair <theme-id> --light <absolute-json-path> --dark <absolute-json-path> [--user-themes <path>]");
+  }
+  const allowed = new Set(["light", "dark", "user-themes"]);
+  const unsupported = Object.keys(options).find((key) => !allowed.has(key));
+  if (unsupported) throw new Error(`Unsupported export-terminal-pair option: --${unsupported}`);
+  for (const key of ["light", "dark"]) {
+    if (typeof options[key] !== "string" || !options[key]) {
+      throw new Error(`--${key} is required`);
+    }
+  }
+  const themeId = positionals[0];
+  if (!THEME_ID_PATTERN.test(themeId)) throw new Error("Invalid theme id");
+  const theme = (await listThemes({ locale: "en", ...runtimeOptions }))
+    .find((candidate) => candidate.name === themeId);
+  if (!theme) throw new Error(`Theme not found: ${themeId}`);
+  const result = await exportTerminalThemePair(theme, {
+    lightPath: options.light,
+    darkPath: options.dark,
+  });
+  console.log(JSON.stringify({
+    pass: true,
+    theme: themeId,
+    files: result.files,
   }, null, 2));
 } else if (command === "list") {
   const locale = normalizeLocale(options.locale ?? "en");

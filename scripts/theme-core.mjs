@@ -62,6 +62,7 @@ export {
 } from "./theme-core/compile.mjs";
 export {
   buildTerminalTheme,
+  exportTerminalThemePair,
   exportTerminalThemes,
   TERMINAL_THEME_SCHEMA,
 } from "./theme-core/terminal.mjs";

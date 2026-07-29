@@ -44,6 +44,69 @@ import {
   zipEntryNames,
 } from "./support/context.mjs";
 
+test("theme-cli exports strict built-in and valid user terminal pairs to explicit paths", async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "aura-terminal-cli-"));
+  const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
+  try {
+    const builtInLight = path.join(temporary, "claude-aura-default-light.json");
+    const builtInDark = path.join(temporary, "claude-aura-default-dark.json");
+    const builtIn = JSON.parse(run(process.execPath, [
+      cliPath,
+      "export-terminal-pair",
+      "default",
+      "--light",
+      builtInLight,
+      "--dark",
+      builtInDark,
+    ], { cwd: temporary }));
+    assert.equal(builtIn.pass, true);
+    assert.equal(builtIn.theme, "default");
+    assert.deepEqual(builtIn.files.map(({ mode }) => mode), ["light", "dark"]);
+    assert.deepEqual(Object.keys(JSON.parse(await fs.readFile(builtInLight, "utf8"))),
+      ["name", "base", "overrides"]);
+    assert.deepEqual(Object.keys(JSON.parse(await fs.readFile(builtInDark, "utf8"))),
+      ["name", "base", "overrides"]);
+
+    const userThemeId = "terminal-user";
+    run(process.execPath, [cliPath, "scaffold", userThemeId], { cwd: temporary });
+    const userThemesDir = path.join(temporary, "themes");
+    const userLight = path.join(temporary, `claude-aura-${userThemeId}-light.json`);
+    const userDark = path.join(temporary, `claude-aura-${userThemeId}-dark.json`);
+    const user = JSON.parse(run(process.execPath, [
+      cliPath,
+      "export-terminal-pair",
+      userThemeId,
+      "--light",
+      userLight,
+      "--dark",
+      userDark,
+      "--user-themes",
+      userThemesDir,
+    ], { cwd: temporary }));
+    assert.equal(user.pass, true);
+    assert.equal(user.theme, userThemeId);
+    assert.equal(JSON.parse(await fs.readFile(userLight, "utf8")).base, "light");
+    assert.equal(JSON.parse(await fs.readFile(userDark, "utf8")).base, "dark");
+
+    assert.throws(
+      () => run(process.execPath, [
+        cliPath,
+        "export-terminal-pair",
+        "default",
+        "--light",
+        builtInLight,
+        "--dark",
+        path.join(temporary, "second-dark.json"),
+      ], { cwd: temporary }),
+      /Refusing to overwrite existing Terminal light target/,
+    );
+    assert.equal(await fs.readFile(builtInLight, "utf8").then((text) => JSON.parse(text).base), "light");
+    assert.equal(await fs.access(path.join(temporary, "second-dark.json")).then(() => true, () => false), false);
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
 test("built-in registry layers accept exact Studio frames without weakening kit isolation", async () => {
   const registryDocument = JSON.parse(await fs.readFile(
     path.join(PROJECT_ROOT, "themes", "registry.json"),
