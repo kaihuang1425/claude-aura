@@ -702,6 +702,12 @@ test("Prompt Shelf secures and verifies legacy state before plaintext deletion",
   assert.match(powershellFunction(shelf, "Write-AuraPromptShelfItems"),
     /\[Security\.Cryptography\.ProtectedData\]::Protect\([\s\S]{0,220}?\[Security\.Cryptography\.DataProtectionScope\]::CurrentUser/,
     "Encrypted Prompt Shelf writes must remain bound to DPAPI CurrentUser");
+  const writer = powershellFunction(shelf, "Write-AuraPromptShelfItems");
+  assert(writer.indexOf("try {") < writer.indexOf("Initialize-AuraPromptShelfStorage -Path $Path"),
+    "Storage initialization must stay inside the write transaction's fail-closed boundary");
+  assert.match(writer,
+    /finally \{[\s\S]+?\[Array\]::Clear\(\$plain, 0, \$plain\.Length\)/,
+    "Every initialized write transaction must clear its plaintext bytes");
   assert.match(migration,
     /if \(-not \$migrationCommitted -and \$createdReplacement[\s\S]{0,420}?Remove-Item -LiteralPath \$Path -Force/,
     "A failed verification must roll back only the replacement created by that migration");
@@ -789,6 +795,18 @@ test("Prompt Shelf storage round-trips Unicode and rejects partial or malformed 
       "try { Write-AuraPromptShelfItems -Items @($failedReplacement) -Path $newPath } catch { $rejected=$true }",
       "if(-not $rejected -or (Test-Path -LiteralPath $newPath)){throw 'Failed first write did not restore an empty state'}",
       "Set-Item -LiteralPath Function:\\Set-AuraPromptShelfSecureAcl -Value $script:OriginalPromptShelfSetAcl",
+      "$script:OriginalPromptShelfInitialize=${function:Initialize-AuraPromptShelfStorage}",
+      "function Initialize-AuraPromptShelfStorage { param([string]$Path); throw 'simulated storage initialization failure' }",
+      "$script:PromptShelfPersistenceAvailable=$true",
+      "$rejected=$false",
+      "try { Write-AuraPromptShelfItems -Items @($failedReplacement) -Path $path } catch { $rejected=$true }",
+      "if(-not $rejected){throw 'Storage initialization failure was accepted'}",
+      "if(-not [Linq.Enumerable]::SequenceEqual([byte[]]$stable,[byte[]][IO.File]::ReadAllBytes($path))){throw 'Storage initialization failure changed prior encrypted state'}",
+      "if($script:PromptShelfPersistenceAvailable){throw 'Storage initialization failure left persistence enabled'}",
+      "$leftovers=@(Get-ChildItem -LiteralPath $script:PromptShelfStoreRoot -Force | Where-Object { $_.Name -like '.prompt-shelf-*.tmp' -or $_.Name -like '.prompt-shelf-*.bak' -or $_.Name -like '.prompt-shelf-*.rollback' })",
+      "if($leftovers.Count){throw 'Storage initialization failure left transaction files'}",
+      "Set-Item -LiteralPath Function:\\Initialize-AuraPromptShelfStorage -Value $script:OriginalPromptShelfInitialize",
+      "$script:PromptShelfPersistenceAvailable=$true",
       "$positionA=[PSCustomObject][ordered]@{id=('d' * 32);text='Position A'}",
       "$positionB=[PSCustomObject][ordered]@{id=('e' * 32);text='Position B'}",
       "$script:PromptShelfItems=@($positionA,$positionB)",

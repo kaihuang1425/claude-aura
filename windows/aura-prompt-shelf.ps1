@@ -562,32 +562,38 @@ function Write-AuraPromptShelfItems {
   $json = ($value | ConvertTo-Json -Depth 4 -Compress) + [Environment]::NewLine
   $plain = [Text.UTF8Encoding]::new($false).GetBytes($json)
   if ($plain.Length -gt $script:PromptShelfMaxFileBytes) {
+    [Array]::Clear($plain, 0, $plain.Length)
     throw 'Prompt Shelf state exceeds its byte limit.'
   }
 
-  $Path = Initialize-AuraPromptShelfStorage -Path $Path
-  $directory = Split-Path -Parent $Path
-  $temporary = Join-Path $directory ('.prompt-shelf-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
-  $backup = Join-Path $directory ('.prompt-shelf-{0}.bak' -f [Guid]::NewGuid().ToString('N'))
-  $rollback = Join-Path $directory ('.prompt-shelf-{0}.rollback' -f [Guid]::NewGuid().ToString('N'))
+  $directory = $null
+  $temporary = $null
+  $backup = $null
+  $rollback = $null
   $cipher = $null
   $priorEnvelope = $null
   $restoredEnvelope = $null
   $published = $false
   $committed = $false
   $rollbackCompleted = $false
-  $hadExisting = Test-Path -LiteralPath $Path -PathType Leaf
-  if ($hadExisting) {
-    Assert-AuraPromptShelfNotReparsePoint -Path $Path
-    $existingInfo = Get-Item -LiteralPath $Path -Force
-    if ($existingInfo.Length -gt ($script:PromptShelfMaxFileBytes + 4096)) {
-      throw 'Prompt Shelf existing state exceeds its byte limit.'
-    }
-    $priorEnvelope = [IO.File]::ReadAllBytes($Path)
-  } elseif (Test-Path -LiteralPath $Path) {
-    throw 'Prompt Shelf state path is not a regular file.'
-  }
+  $hadExisting = $false
   try {
+    $Path = Initialize-AuraPromptShelfStorage -Path $Path
+    $directory = Split-Path -Parent $Path
+    $temporary = Join-Path $directory ('.prompt-shelf-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+    $backup = Join-Path $directory ('.prompt-shelf-{0}.bak' -f [Guid]::NewGuid().ToString('N'))
+    $rollback = Join-Path $directory ('.prompt-shelf-{0}.rollback' -f [Guid]::NewGuid().ToString('N'))
+    $hadExisting = Test-Path -LiteralPath $Path -PathType Leaf
+    if ($hadExisting) {
+      Assert-AuraPromptShelfNotReparsePoint -Path $Path
+      $existingInfo = Get-Item -LiteralPath $Path -Force
+      if ($existingInfo.Length -gt ($script:PromptShelfMaxFileBytes + 4096)) {
+        throw 'Prompt Shelf existing state exceeds its byte limit.'
+      }
+      $priorEnvelope = [IO.File]::ReadAllBytes($Path)
+    } elseif (Test-Path -LiteralPath $Path) {
+      throw 'Prompt Shelf state path is not a regular file.'
+    }
     $cipher = [Security.Cryptography.ProtectedData]::Protect(
       $plain,
       $script:PromptShelfEntropy,
@@ -669,14 +675,14 @@ function Write-AuraPromptShelfItems {
     if ($null -ne $restoredEnvelope) {
       [Array]::Clear($restoredEnvelope, 0, $restoredEnvelope.Length)
     }
-    if (Test-Path -LiteralPath $temporary -PathType Leaf) {
+    if ($temporary -and (Test-Path -LiteralPath $temporary -PathType Leaf)) {
       try { Remove-Item -LiteralPath $temporary -Force } catch {}
     }
     if ($committed -or $rollbackCompleted) {
-      if (Test-Path -LiteralPath $backup -PathType Leaf) {
+      if ($backup -and (Test-Path -LiteralPath $backup -PathType Leaf)) {
         try { Remove-Item -LiteralPath $backup -Force } catch {}
       }
-      if (Test-Path -LiteralPath $rollback -PathType Leaf) {
+      if ($rollback -and (Test-Path -LiteralPath $rollback -PathType Leaf)) {
         try { Remove-Item -LiteralPath $rollback -Force } catch {}
       }
     }
