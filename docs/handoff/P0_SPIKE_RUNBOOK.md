@@ -7,12 +7,20 @@ result is: **Claude Desktop opens unchanged and unthemed.**
 
 Review the current [Remote Control documentation](https://code.claude.com/docs/en/remote-control)
 and [terminal-theme documentation](https://code.claude.com/docs/en/terminal-config)
-before starting. This runbook was reviewed against both on 2026-07-29.
+before starting. This runbook was reviewed against both on 2026-07-30.
 The Desktop, Remote Control, and
 [Desktop deep-link](https://support.claude.com/en/articles/14729294-open-claude-desktop-with-a-link)
 contracts were rechecked on 2026-07-30. The documented Code deep link starts a
-new Desktop session; no existing-session handoff or Desktop-to-Aura return
-contract was documented, so `desktop-guidance-only` remains selected.
+new Desktop session. `/desktop` is a user-operated exact CLI-to-Desktop
+transfer, but no Aura-initiated existing-session handoff or Desktop-to-Aura
+return contract was documented, so `desktop-guidance-only` remains selected.
+
+The current [Claude account authentication guidance](https://support.claude.com/en/articles/13189465-log-in-to-your-claude-account)
+directs third-party products to API-key authentication and does not establish a
+supported contract for a subscription-authenticated third-party WebView.
+Claude Code 2.1.220 passed its documented eligibility-gated
+`remote-control --help` preflight, but Aura-hosted production Code remains
+**NO-GO** on support grounds.
 
 The historical Aura Code popup diagnostic is now source-only and its live
 WebView path is hard-disabled. `-ClassifyOnly` remains available for the bounded
@@ -353,7 +361,7 @@ terminal screenshot.
 | 1 | First-click Aura Local / existing session / Desktop / no-local / Back; Settings reopen/change/forget; no pre-consent side effect | Contract and mechanical scaffolding only; product activation remains disabled while substrate gates 3 and 4 are open. | Complete all choices, restart persistence, invalid-state fallback, and Settings recovery in the installed product. | **PENDING** |
 | 2 | Visible CLI-first setup and selection of a local Remote Control session inside Aura | A user-started official session previously appeared in Claude's web list; the same-window host diagnostic selected an existing session. Neither is installed-product evidence. | Start one visible user-owned `claude --remote-control` process for the disposable repository and select it in installed Aura. | **PENDING** |
 | 3 | Sentinel read and one bounded approved write from Aura | The bounded edit passed outside Aura: one tracked file, one added line, no deletion, exact marker count, and independent before/after hashes. Aura-owned canary scans were clean. | Repeat the fixed bounded request from installed Aura Code View and verify only hashes and exact-change booleans outside Aura. | **PENDING** |
-| 4 | Interrupt one turn and reject one permission request | Native device re-verification stayed visible and user-operated in the route diagnostic. Interruption, normal embedded permission approval, and rejection are unproved. | Exercise native trust/permission, interruption, rejection, eligibility, policy, and error behavior in the disposable installed-Aura session. | **PENDING** |
+| 4 | Interrupt one turn and reject one permission request | Native device re-verification stayed visible and user-operated in the route diagnostic. Claude Code 2.1.220 passed its documented eligibility-gated Remote Control help preflight. Official authentication guidance does not establish third-party subscription-authenticated WebView support, so the embedded product support decision is NO-GO. Interruption, normal embedded permission approval, and rejection remain unproved. | Do not exercise the retired embedded path unless official support changes. After such an unblock, exercise native account pairing, trust/permission, interruption, rejection, policy, and error behavior in the disposable installed-Aura session. | **PENDING** |
 | 5 | Named concurrency contract | `one-process-per-session` is selected after two server/worktree attempts produced no selectable session or worktree. No server capacity or worktree controls may ship. | Prove two explicit sessions, each backed by its own visible user-owned process, and verify Aura presents no server multiplexing controls. | **PENDING** |
 | 6 | Pin, restart, remove, and privacy scan | Persistence schema and product flow are not implemented while the hard substrate gates remain open. The earlier outside-Aura canary scan found no forbidden value in existing Aura-owned config/logs. | Prove label/path/route-only storage, removal, zero automatic recents, and clean config/log/diagnostic canary scans without reading official site storage. | **PENDING** |
 | 7 | Visible/minimized/background lifecycle, disconnect, restart, reconnect | `manual-launch-only` is selected; managed ownership and exact-process Stop are omitted. One previous user-started interactive session worked before later becoming unavailable. | Prove visible or normally minimized user-owned process state, truthful disconnect, restart, and reconnect without restarting Aura. | **PENDING** |
