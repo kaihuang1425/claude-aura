@@ -44,6 +44,69 @@ import {
   zipEntryNames,
 } from "./support/context.mjs";
 
+test("theme-cli activates Code styling only through the explicit source experiment", async () => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "aura-code-style-cli-"));
+  const configPath = path.join(temporary, "config.json");
+  const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
+  try {
+    await writeConfig(configPath, {
+      ...structuredClone(DEFAULT_CONFIG),
+      enabled: true,
+      theme: "anime-twilight",
+    });
+    const normal = run(process.execPath, [
+      cliPath,
+      "init",
+      "--config",
+      configPath,
+      "--payload",
+    ]);
+    assert.doesNotMatch(normal, /data-aura-code/);
+
+    const experimental = run(process.execPath, [
+      cliPath,
+      "init",
+      "--config",
+      configPath,
+      "--payload",
+      "--experimental-code-style",
+    ]);
+    assert.match(experimental, /data-aura-code/);
+    assert.match(experimental, /\\x20/,
+      "experimental palette validation must preserve HSL separators after renderer compaction");
+    assert.doesNotMatch(experimental, /\^\[\\d\.\]\+\[\\d\.\]\+%/,
+      "renderer compaction must not collapse the HSL validation separators");
+    assert.doesNotThrow(() => new Function(experimental));
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("the Windows source host forwards Code styling only through its explicit switch", async () => {
+  const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
+  const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
+  const install = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
+  assert.match(ui, /\[switch\]\$ExperimentalCodeStyle/);
+  assert.match(ui, /\[switch\]\$ExperimentalCodeStart/);
+  assert.match(ui,
+    /\$script:ExperimentalCodeStyle\s*=\s*\[bool\]\$ExperimentalCodeStyle[\s\S]{0,900}?\.git[\s\S]{0,900}?ReparsePoint/);
+  assert.match(ui,
+    /if\s*\(\$ExperimentalCodeStart -and -not \$script:ExperimentalCodeStyle\)[\s\S]{0,240}?throw/);
+  assert.match(ui,
+    /\$ClaudeInitialUrl\s*=\s*if\s*\(\$ExperimentalCodeStart\)\s*\{\s*'https:\/\/claude\.ai\/code'\s*\}\s*else\s*\{\s*'https:\/\/claude\.ai\/'\s*\}/);
+  assert.equal((ui.match(/CoreWebView2\.Navigate\(\$ClaudeInitialUrl\)/g) ?? []).length, 2,
+    "both bounded prepaint completion paths must use the fixed experimental start URL");
+  assert.equal((ui.match(/'--experimental-code-style'/g) ?? []).length, 3,
+    "set, snapshot restore, and initial payload builds must all preserve the source experiment");
+  assert.match(start,
+    /\[switch\]\$ExperimentalCodeStyle[\s\S]*?\$auraArguments\.ExperimentalCodeStyle\s*=\s*\$true/);
+  assert.match(start,
+    /\[switch\]\$ExperimentalCodeStart[\s\S]*?\$auraArguments\.ExperimentalCodeStart\s*=\s*\$true/);
+  assert.doesNotMatch(install,
+    /ExperimentalCodeStyle|ExperimentalCodeStart|experimental-code-style/,
+    "installed and release launch paths must not activate the source experiment");
+});
+
 test("theme-cli exports strict built-in and valid user terminal pairs to explicit paths", async () => {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "aura-terminal-cli-"));
   const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");

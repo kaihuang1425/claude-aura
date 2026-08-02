@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "Installa l'app ufficiale Claude Desktop, quindi riprova con questo pulsante.",
   "continueSigningIn": "Continua l'accesso; Aura applicherà automaticamente.",
   "loadFailed": "Claude non è stato caricato. Controlla la connessione, poi riprova.",
+  "codeRecoveryMessage": "Il passaggio all'app locale non è stato completato. Torna a Aura Code per continuare la sessione web.",
+  "returnToAuraCode": "Torna a Aura Code",
   "rescueAccessibleName": "Recupero Claude Aura",
   "rescueEyebrow": "Controllo browser rilevato",
   "rescueTitle": "Claude richiede un controllo browser",

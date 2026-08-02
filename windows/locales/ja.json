@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "公式の Claude Desktop アプリをインストールしてから、このボタンを再度お試しください。",
   "continueSigningIn": "サインインを続行します。Aura が自動で適用します。",
   "loadFailed": "Claude を読み込めませんでした。接続を確認してから再試行してください。",
+  "codeRecoveryMessage": "ローカルアプリへの移行が完了しませんでした。Webセッションを続けるには、Aura Codeに戻ってください。",
+  "returnToAuraCode": "Aura Codeに戻る",
   "rescueAccessibleName": "Claude Aura リカバリー",
   "rescueEyebrow": "ブラウザー検証が検出されました",
   "rescueTitle": "Claude でブラウザー確認が必要です",

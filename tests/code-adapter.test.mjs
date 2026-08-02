@@ -4,10 +4,14 @@ import {
   CODE_ROLE_SIGNATURES,
   codeContextFromUrl,
   createCodeAdapter,
+  createExperimentalCodeAdapter,
+  createExperimentalCodeDescriptor,
 } from "../scripts/theme-core/code-adapter.mjs";
+import { compileTheme, PROJECT_ROOT } from "./support/context.mjs";
 
 const ROOT = "data-claude-aura-code-root";
 const ROLE = "data-claude-aura-code-role";
+const EXPERIMENTAL_MARKER = "data-aura-code";
 
 class Element {
   constructor(tag) {
@@ -49,10 +53,23 @@ class Element {
   matches(selector) {
     if (selector === "*") return true;
     if (/^[a-z]+$/i.test(selector)) return this.tagName === selector.toUpperCase();
-    const match = selector.match(/^\[([^=]+)="([^"]+)"\]$/);
-    return Boolean(match && this.getAttribute(match[1]) === match[2]);
+    const match = selector.match(/^\[([^$=]+)(\$)?=(?:"([^"]+)"|([^\]]+))\]$/);
+    if (!match) return false;
+    const actual = this.getAttribute(match[1]);
+    const expected = match[3] ?? match[4];
+    return match[2] ? actual?.endsWith(expected) === true : actual === expected;
   }
   querySelectorAll(selector) {
+    const alternatives = selector.split(",").map((item) => item.trim()).filter(Boolean);
+    if (alternatives.length > 1) {
+      return [...new Set(alternatives.flatMap((item) => this.querySelectorAll(item)))];
+    }
+    const parts = selector.trim().split(/\s+/);
+    if (parts.length > 1) {
+      const [ancestor, ...descendant] = parts;
+      return this.querySelectorAll(ancestor)
+        .flatMap((element) => element.querySelectorAll(descendant.join(" ")));
+    }
     return this.children.flatMap((child) => [
       ...(child.matches(selector) ? [child] : []),
       ...child.querySelectorAll(selector),
@@ -162,6 +179,92 @@ function runtime(options = {}) {
   };
 }
 
+const EXPERIMENTAL = {
+  l: ["20 20% 90%", "20 20% 95%"],
+  d: ["240 20% 8%", "240 20% 12%"],
+};
+
+function experimentalRuntime({
+  context = "code-list",
+  asideCount = 1,
+  dialogs = 0,
+  nativeDialogs = 0,
+  editors = context === "code-session" ? 1 : 0,
+  regionCount = 1,
+  listCount = context === "code-list" ? 1 : 0,
+  outsideListCount = 0,
+  mainCount = 1,
+  descriptor = EXPERIMENTAL,
+} = {}) {
+  const document = new Document();
+  const asides = [];
+  for (let index = 0; index < asideCount; index += 1) {
+    asides.push(document.body.appendChild(new Element("aside")));
+  }
+  const mains = [];
+  const regions = [];
+  const lists = [];
+  const outsideLists = [];
+  const editorNodes = [];
+  for (let index = 0; index < mainCount; index += 1) {
+    const main = document.body.appendChild(new Element("main"));
+    mains.push(main);
+    if (index === 0) {
+      for (let regionIndex = 0; regionIndex < regionCount; regionIndex += 1) {
+        const region = main.appendChild(new Element("section"));
+        region.setAttribute("role", "region");
+        regions.push(region);
+      }
+      const innerRoot = regions[0] ?? main;
+      for (let listIndex = 0; listIndex < listCount; listIndex += 1) {
+        const list = innerRoot.appendChild(new Element("section"));
+        list.setAttribute("role", "list");
+        lists.push(list);
+      }
+      for (let editorIndex = 0; editorIndex < editors; editorIndex += 1) {
+        const editor = innerRoot.appendChild(new Element("div"));
+        editor.setAttribute("contenteditable", "true");
+        editorNodes.push(editor);
+      }
+    }
+  }
+  for (let index = 0; index < outsideListCount; index += 1) {
+    const list = document.body.appendChild(new Element("section"));
+    list.setAttribute("role", "list");
+    outsideLists.push(list);
+  }
+  for (let index = 0; index < dialogs; index += 1) {
+    const dialog = document.body.appendChild(new Element("section"));
+    dialog.setAttribute("role", "dialog");
+  }
+  for (let index = 0; index < nativeDialogs; index += 1) {
+    document.body.appendChild(new Element("dialog"));
+  }
+  let mode = "light";
+  let currentContext = context;
+  const adapter = createExperimentalCodeAdapter([
+    document,
+    () => ({ display: "block", visibility: "visible" }),
+    () => mode,
+  ], descriptor);
+  return {
+    document,
+    aside: asides[0] ?? null,
+    asides,
+    mains,
+    region: regions[0] ?? null,
+    regions,
+    list: lists[0] ?? null,
+    lists,
+    outsideLists,
+    editorNodes,
+    adapter,
+    activate: () => adapter.activate(currentContext),
+    setMode: (value) => { mode = value; },
+    setContext: (value) => { currentContext = value; },
+  };
+}
+
 const markerState = (view) => [
   view.main.getAttribute(ROOT),
   view.nav.getAttribute(ROLE),
@@ -170,6 +273,228 @@ const markerState = (view) => [
   ...view.dialogNodes.map((node) => node.getAttribute(ROLE)),
   ...view.activityNodes.map((node) => node.getAttribute(ROLE)),
 ];
+
+test("the experimental descriptor derives both palettes from the selected theme", async () => {
+  const compiled = await compileTheme({
+    projectRoot: PROJECT_ROOT,
+    config: { enabled: true, theme: "anime-twilight", appearance: "system" },
+  });
+  const descriptor = createExperimentalCodeDescriptor(compiled.theme);
+  const palette = (mode) => {
+    const semantic = compiled.theme[mode].semantic;
+    return [
+      semantic["--aura-sidebar-background"],
+      semantic["--aura-background-primary"],
+    ];
+  };
+  assert.deepEqual(descriptor.l, palette("light"));
+  assert.deepEqual(descriptor.d, palette("dark"));
+});
+
+test("the source experiment styles only the exact Code shell roles", async () => {
+  const view = experimentalRuntime();
+  assert.equal((await view.activate()).status, "styled");
+  assert.equal(view.document.body.getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "v1n");
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), "v1c");
+  assert.equal(view.region.getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.list.getAttribute(EXPERIMENTAL_MARKER), null);
+  const style = view.document.querySelectorAll("style")[0];
+  assert.match(
+    style.textContent,
+    /^@media\(forced-colors:none\) and \(prefers-contrast:no-preference\)\{/,
+    "The experimental palette must yield to forced-colors and increased-contrast modes",
+  );
+  assert.match(style.textContent, /hsl\(20 20% 90%\)/);
+  assert.doesNotMatch(style.textContent, /hsl\(240 20% 8%\)/);
+  assert.match(style.textContent,
+    /\[data-aura-code=v1n\]/,
+    "Code rules must require Aura's versioned ownership value");
+  for (const match of style.textContent.matchAll(/\[data-aura-code=([^\]]+)\]/g)) {
+    assert.match(match[1], /^-?[_a-zA-Z][-_a-zA-Z0-9]*$/,
+      "Every unquoted Code ownership value must be a valid CSS identifier");
+  }
+  assert.match(style.textContent, /background-color:/,
+    "Code surfaces should retain native background imagery");
+  assert.doesNotMatch(style.textContent, /(?:^|[;{])color:/,
+    "Code shells must not pass an Aura text color into unclassified descendants");
+  assert.doesNotMatch(style.textContent, /(?:box-shadow|outline|border):/,
+    "Code styling must preserve native focus, selection, and elevation frames");
+  assert.doesNotMatch(style.textContent, /(?:^|[;{])background:/,
+    "Code styling must not reset native background layers");
+});
+
+test("an unowned Code style id collision stays native and untouched", async () => {
+  const view = experimentalRuntime();
+  const pageStyle = view.document.head.appendChild(new Element("style"));
+  pageStyle.id = "claude-aura-code-style";
+  pageStyle.textContent = "main{background:page-owned}";
+
+  assert.equal((await view.activate()).status, "native");
+  assert.equal(pageStyle.isConnected, true);
+  assert.equal(pageStyle.textContent, "main{background:page-owned}");
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.deepEqual(view.document.querySelectorAll("style"), [pageStyle]);
+});
+
+test("the source experiment reapplies the selected dark palette", async () => {
+  const view = experimentalRuntime({ context: "code-session" });
+  await view.activate();
+  view.setMode("dark");
+  await view.activate();
+  const styles = view.document.querySelectorAll("style");
+  assert.equal(styles.length, 1);
+  assert.match(styles[0].textContent, /hsl\(240 20% 8%\)/);
+  assert.equal(view.editorNodes[0].getAttribute(EXPERIMENTAL_MARKER), null,
+    "A generic editable element must remain native");
+});
+
+test("safety UI or a missing or ambiguous required Code role keeps the experiment native", async () => {
+  for (const view of [
+    experimentalRuntime({ dialogs: 1 }),
+    experimentalRuntime({ nativeDialogs: 1 }),
+    experimentalRuntime({ asideCount: 0 }),
+    experimentalRuntime({ asideCount: 2 }),
+    experimentalRuntime({ mainCount: 0 }),
+    experimentalRuntime({ mainCount: 2 }),
+  ]) {
+    assert.equal((await view.activate()).status, "native");
+    for (const aside of view.asides) {
+      assert.equal(aside.getAttribute(EXPERIMENTAL_MARKER), null);
+    }
+    assert.equal(view.document.querySelectorAll("style").length, 0);
+  }
+});
+
+test("a malformed experimental palette keeps the Code page native", async () => {
+  for (const descriptor of [
+    {
+      ...EXPERIMENTAL,
+      l: [EXPERIMENTAL.l[0], "20 20% 90%;color:red"],
+    },
+    {
+      ...EXPERIMENTAL,
+      l: EXPERIMENTAL.l.slice(0, 1),
+    },
+    {
+      ...EXPERIMENTAL,
+      l: [`${EXPERIMENTAL.l[0]},${EXPERIMENTAL.l[1]}`],
+    },
+  ]) {
+    const view = experimentalRuntime({ descriptor });
+    assert.equal((await view.activate()).status, "native");
+    assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), null);
+    assert.equal(view.document.querySelectorAll("style").length, 0);
+  }
+});
+
+test("missing or ambiguous inner roles stay native while safe outer roles style", async () => {
+  const view = experimentalRuntime({
+    context: "code-list",
+    regionCount: 2,
+    listCount: 2,
+    editors: 2,
+  });
+  assert.equal((await view.activate()).status, "styled");
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "v1n");
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), "v1c");
+  assert.deepEqual(
+    view.regions.map((region) => region.getAttribute(EXPERIMENTAL_MARKER)),
+    [null, null],
+  );
+  assert.deepEqual(
+    view.lists.map((list) => list.getAttribute(EXPERIMENTAL_MARKER)),
+    [null, null],
+  );
+  assert.deepEqual(
+    view.editorNodes.map((editor) => editor.getAttribute(EXPERIMENTAL_MARKER)),
+    [null, null],
+  );
+});
+
+test("inner roles outside the unique Code main also stay native", async () => {
+  const view = experimentalRuntime({ listCount: 0, outsideListCount: 1 });
+  assert.equal((await view.activate()).status, "styled");
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "v1n");
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), "v1c");
+  assert.equal(view.outsideLists[0].getAttribute(EXPERIMENTAL_MARKER), null);
+});
+
+test("a newly visible dialog rolls back all styling and clean structure can reapply", async () => {
+  const view = experimentalRuntime();
+  assert.equal((await view.activate()).status, "styled");
+  const dialog = view.document.body.appendChild(new Element("section"));
+  dialog.setAttribute("role", "alertdialog");
+  assert.equal((await view.activate()).status, "native");
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.document.querySelectorAll("style").length, 0);
+  dialog.remove();
+  assert.equal((await view.activate()).status, "styled");
+});
+
+test("throwing DOM probes fail native without leaking partial state", async () => {
+  const document = new Document();
+  document.querySelectorAll = () => { throw new Error("probe failed"); };
+  const adapter = createExperimentalCodeAdapter([
+    document,
+    () => ({ display: "block", visibility: "visible" }),
+    () => "light",
+  ], EXPERIMENTAL);
+  await assert.doesNotReject(async () => adapter.activate("code-list"));
+  assert.equal((await adapter.activate("code-list")).status, "native");
+});
+
+test("leaving Code restores prior markers and removes the experimental sheet", async () => {
+  const view = experimentalRuntime({ context: "code-session" });
+  view.aside.setAttribute(EXPERIMENTAL_MARKER, "preexisting-owner");
+  await view.activate();
+  view.setContext(null);
+  assert.equal((await view.activate()).status, "native");
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "preexisting-owner");
+  assert.equal(view.document.body.getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.document.querySelectorAll("style").length, 0);
+});
+
+test("failed cleanup stays pending and retries the exact Aura mutations", async () => {
+  const view = experimentalRuntime();
+  view.aside.setAttribute(EXPERIMENTAL_MARKER, "page-owner");
+  await view.activate();
+  const style = view.document.querySelectorAll("style")[0];
+  const setAttribute = view.aside.setAttribute.bind(view.aside);
+  const remove = style.remove.bind(style);
+  let blocked = true;
+  view.aside.setAttribute = (name, value) => {
+    if (blocked && name === EXPERIMENTAL_MARKER) throw new Error("restore blocked");
+    setAttribute(name, value);
+  };
+  style.remove = () => {
+    if (blocked) throw new Error("remove blocked");
+    remove();
+  };
+
+  assert.equal(view.adapter.rollback(), false);
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "v1n");
+  assert.equal(style.isConnected, true);
+
+  blocked = false;
+  assert.equal(view.adapter.rollback(), true);
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "page-owner");
+  assert.equal(style.isConnected, false);
+});
+
+test("cleanup relinquishes a shell marker changed after Aura applied it", async () => {
+  const view = experimentalRuntime();
+  view.aside.setAttribute(EXPERIMENTAL_MARKER, "page-before");
+  await view.activate();
+  view.aside.setAttribute(EXPERIMENTAL_MARKER, "page-after");
+
+  assert.equal(view.adapter.rollback(), true);
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), "page-after");
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.document.querySelectorAll("style").length, 0);
+});
 
 test("code contexts register and an empty descriptor stays native", async () => {
   const view = runtime();

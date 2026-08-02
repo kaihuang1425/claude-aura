@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "आधिकारिक Claude Desktop ऐप इंस्टॉल करें, फिर इस बटन को दोबारा आज़माएँ।",
   "continueSigningIn": "साइन-इन जारी रखें; Aura इसे अपने आप लागू करेगा।",
   "loadFailed": "Claude लोड नहीं हो सका। कनेक्शन जाँचें, फिर दोबारा प्रयास करें।",
+  "codeRecoveryMessage": "लोकल ऐप हैंडऑफ़ पूरा नहीं हो सका। वेब सत्र जारी रखने के लिए Aura Code पर वापस जाएँ।",
+  "returnToAuraCode": "Aura Code पर लौटें",
   "rescueAccessibleName": "Claude Aura रिकवरी",
   "rescueEyebrow": "ब्राउज़र जाँच मिली",
   "rescueTitle": "Claude को ब्राउज़र जाँच चाहिए",

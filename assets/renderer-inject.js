@@ -32,30 +32,9 @@
   };
   const codeContextFromUrl = __AURA_CODE_CONTEXT_FACTORY__;
   const codeRouteContext = () => codeContextFromUrl(window.location);
-  /*__AURA_CODE_ACTIVE_START__*/
-  const codeNavigationKey = () =>
-    String(window.navigation?.currentEntry?.key ?? window.location.href);
-  /*__AURA_CODE_ACTIVE_END__*/
   const codeAdapter = __AURA_CODE_ADAPTER_FACTORY__(
     /*__AURA_CODE_ACTIVE_START__*/
-    {
-    document,
-    requestAnimationFrame: window.requestAnimationFrame?.bind(window),
-    cancelAnimationFrame: window.cancelAnimationFrame?.bind(window),
-    now: window.performance?.now?.bind(window.performance),
-    MutationObserver,
-    getComputedStyle: window.getComputedStyle?.bind(window),
-    getNavigationKey: codeNavigationKey,
-    getContext: codeRouteContext,
-    addRouteListener: (listener) => {
-      window.addEventListener("popstate", listener);
-      window.navigation?.addEventListener?.("currententrychange", listener);
-      return () => {
-        window.removeEventListener("popstate", listener);
-        window.navigation?.removeEventListener?.("currententrychange", listener);
-      };
-    },
-    },
+    [document, window.getComputedStyle?.bind(window), mode],
     __AURA_CODE_SIGNATURES__
     /*__AURA_CODE_ACTIVE_END__*/
   );
@@ -94,6 +73,9 @@
   let styleDirty = true;
   let rootDirty = true;
   let currentContext = "other";
+  /*__AURA_CODE_ACTIVE_START__*/
+  let codeCleanupRetry = 0;
+  /*__AURA_CODE_ACTIVE_END__*/
   let artBindings = [];
   let bb = null;
   let bt = 0;
@@ -1112,13 +1094,13 @@
   };
 
   const previous = window[STATE_KEY];
+  if (previous?.["cleanup"]?.(true) === false) return false;
   previous?.["observer"]?.disconnect();
   previous?.stopModeListener?.();
   previous?.stopContextListeners?.();
   previous?.clearBrandWordmark?.();
   previous?.clearAvatarOverlay?.();
   previous?.cg?.(false);
-  previous?.codeAdapter?.rollback?.("replaced");
   previous?.clearMarkedElements?.();
   if (previous?.["timer"]) clearInterval(previous["timer"]);
   if (previous?.["scheduled"]) clearTimeout(previous["scheduled"]);
@@ -1185,12 +1167,35 @@
   const ensure = () => {
     if (!document.documentElement || window.__CLAUDE_AURA_DISABLED__) return;
     const codeContext = codeRouteContext();
+    /*__AURA_CODE_ACTIVE_START__*/
+    if (codeCleanupRetry > 2 || (!codeContext && codeCleanupRetry === 2)) return;
+    /*__AURA_CODE_ACTIVE_END__*/
     if (codeContext) {
+      /*__AURA_CODE_ACTIVE_START__*/
+      codeCleanupRetry = 0;
+      /*__AURA_CODE_ACTIVE_END__*/
       if (currentContext !== codeContext) enterCodeRoute(codeContext);
+      /*__AURA_CODE_ACTIVE_START__*/
+      else {
+        codeAdapter.activate(codeContext);
+        observeTargets();
+      }
+      /*__AURA_CODE_ACTIVE_END__*/
       return;
     }
     if (currentContext === "code-list" || currentContext === "code-session") {
-      codeAdapter.rollback("route-left");
+      /*__AURA_CODE_ACTIVE_START__*/
+      if (!
+      /*__AURA_CODE_ACTIVE_END__*/
+      codeAdapter.rollback()
+      /*__AURA_CODE_ACTIVE_START__*/
+      ) {
+        if (codeCleanupRetry < 2 && !codeCleanupRetry++) scheduleEnsure();
+        return;
+      }
+      codeCleanupRetry = 0;
+      /*__AURA_CODE_ACTIVE_END__*/
+      ;
       currentContext = "other";
       rootDirty = styleDirty = true;
     }
@@ -1290,13 +1295,31 @@
     observeTargets();
   };
 
-  const cleanup = () => {
+  let scheduled = null;
+  const cleanup = (replacementOnly = false) => {
+    /*__AURA_CODE_ACTIVE_START__*/
+    if (!
+    /*__AURA_CODE_ACTIVE_END__*/
+    codeAdapter.rollback()
+    /*__AURA_CODE_ACTIVE_START__*/
+    ) {
+      if (codeCleanupRetry === 3) codeCleanupRetry = 4;
+      else if (codeCleanupRetry !== 4) {
+        codeCleanupRetry = 3;
+        scheduleEnsure();
+      }
+      return false;
+    }
+    codeCleanupRetry = 0;
+    /*__AURA_CODE_ACTIVE_END__*/
+    ;
+    if (scheduled) clearTimeout(scheduled);
+    scheduled = null;
+    if (replacementOnly) return true;
     window.__CLAUDE_AURA_DISABLED__ = true;
     observer.disconnect();
-    if (scheduled) clearTimeout(scheduled);
     stopMode();
     stopContext();
-    codeAdapter.rollback("cleanup");
     clearBrand();
     clearAvatar?.();
     clearGreeting?.(true);
@@ -1309,12 +1332,19 @@
   };
 
   window.__CLAUDE_AURA_DISABLED__ = false;
-  let scheduled = null;
   const scheduleEnsure = () => {
+    /*__AURA_CODE_ACTIVE_START__*/
+    if (codeCleanupRetry === 2 || codeCleanupRetry === 4) return;
+    if (scheduled && codeRouteContext()) return;
+    /*__AURA_CODE_ACTIVE_END__*/
     if (scheduled) clearTimeout(scheduled);
     scheduled = setTimeout(() => {
       scheduled = null;
-      ensure();
+      /*__AURA_CODE_ACTIVE_START__*/
+      if (codeCleanupRetry === 3) cleanup();
+      else
+      /*__AURA_CODE_ACTIVE_END__*/
+        ensure();
     }, 160);
   };
   const onContextSignal = () => scheduleEnsure();
@@ -1370,7 +1400,12 @@
       }
       if (record.target === document.body || document.body?.contains?.(record.target)) {
         if (backdrop !== observedBackdrop) return true;
-        if (record.type === "childList") return true;
+        if (
+          /*__AURA_CODE_ACTIVE_START__*/
+          observedCodeRoute ||
+          /*__AURA_CODE_ACTIVE_END__*/
+          record.type === "childList"
+        ) return true;
       }
       if (style && (record.target === style || style.contains(record.target)) && style.textContent !== cssText) {
         styleDirty = true;
@@ -1390,6 +1425,15 @@
         && backdrop === observedBackdrop && codeRoute === observedCodeRoute) return;
     observer.disconnect();
     if (codeRoute) {
+      /*__AURA_CODE_ACTIVE_START__*/
+      observer.observe(document.documentElement, { childList: true });
+      if (body) observer.observe(body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["role", "aria-hidden", "hidden", "open", "class", "style"],
+      });
+      /*__AURA_CODE_ACTIVE_END__*/
       observedHead = head;
       observedBody = body;
       observedStyle = style;

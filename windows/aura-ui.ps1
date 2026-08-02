@@ -7,13 +7,40 @@ param(
   [switch]$OpenStudio,
   [switch]$BuiltInAuthoring,
   [switch]$RescueSession,
-  [switch]$ExperimentalDraftHandoff
+  [switch]$ExperimentalDraftHandoff,
+  [switch]$ExperimentalCodeStyle,
+  [switch]$ExperimentalCodeStart
 )
 
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $ThemeCli = Join-Path $Root 'scripts\theme-cli.mjs'
 $script:BuiltInAuthoring = [bool]$BuiltInAuthoring
+$script:ExperimentalCodeStyle = [bool]$ExperimentalCodeStyle
+if ($script:ExperimentalCodeStyle) {
+  $sourceGit = Join-Path $Root '.git'
+  $sourceRegistry = Join-Path $Root 'themes\registry.json'
+  if (-not (Test-Path -LiteralPath $sourceGit -PathType Container) -or
+      -not (Test-Path -LiteralPath $sourceRegistry -PathType Leaf)) {
+    throw 'Experimental Code styling is available only from the Claude Aura source checkout.'
+  }
+  foreach ($sourceItem in @(
+      (Get-Item -LiteralPath $sourceGit -Force),
+      (Get-Item -LiteralPath $sourceRegistry -Force)
+    )) {
+    if (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw 'Experimental Code styling refused a linked source path.'
+    }
+  }
+}
+if ($ExperimentalCodeStart -and -not $script:ExperimentalCodeStyle) {
+  throw 'Experimental Code start requires experimental Code styling.'
+}
+$ClaudeInitialUrl = if ($ExperimentalCodeStart) {
+  'https://claude.ai/code'
+} else {
+  'https://claude.ai/'
+}
 if ($script:BuiltInAuthoring) {
   $sourceGit = Join-Path $Root '.git'
   $sourceRegistry = Join-Path $Root 'themes\registry.json'
@@ -1020,7 +1047,7 @@ function Complete-AuraUiInitialNavigationAfterPrepaint {
   }
   $script:InitialNavigationPending = $false
   $script:PrepaintRegistrationDueUtc = $null
-  $script:WebView.CoreWebView2.Navigate('https://claude.ai/')
+  $script:WebView.CoreWebView2.Navigate($ClaudeInitialUrl)
 }
 
 function Start-AuraUiDocumentPrepaintRegistration {
@@ -1070,7 +1097,7 @@ function Complete-AuraUiDocumentPrepaintRegistration {
       $script:InitialNavigationPending = $false
       $script:PrepaintRegistrationDueUtc = $null
       Write-AuraUiLog -Message 'Passive startup prepaint registration timed out; continuing fail-open.'
-      $script:WebView.CoreWebView2.Navigate('https://claude.ai/')
+      $script:WebView.CoreWebView2.Navigate($ClaudeInitialUrl)
     }
     return
   }
@@ -1202,6 +1229,7 @@ function Set-AuraUiConfig {
       $script:Payload) { $script:Payload } else { $null }
   $arguments = @($ThemeCli, 'set', '--config', $ConfigPath, '--user-themes', $UserThemesRoot) + $Options
   if ($script:Locale) { $arguments += @('--locale', $script:Locale) }
+  if ($script:ExperimentalCodeStyle) { $arguments += '--experimental-code-style' }
   $arguments += '--payload'
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
   $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -1232,6 +1260,52 @@ function Test-AuraUiSignInUri {
       $uriHost -eq 'accounts.google.com' -or $uriHost.EndsWith('.accounts.google.com') -or
       $uriHost -eq 'appleid.apple.com' -or $uriHost -eq 'login.microsoftonline.com'
   } catch { return $false }
+}
+
+function Test-AuraUiCodeUri {
+  param([AllowNull()][object]$Value)
+  try {
+    $uri = if ($Value -is [Uri]) { $Value } else { [Uri]"$Value" }
+    if (-not $uri.IsAbsoluteUri -or $uri.Scheme -cne [Uri]::UriSchemeHttps -or
+        $uri.UserInfo -or $uri.Host -cne 'claude.ai' -or -not $uri.IsDefaultPort) {
+      return $false
+    }
+    return $uri.AbsolutePath -ceq '/code' -or
+      $uri.AbsolutePath.StartsWith('/code/', [StringComparison]::Ordinal)
+  } catch { return $false }
+}
+
+function Get-AuraUiNavigationRecoverySurface {
+  param(
+    [bool]$ExperimentalCodeStyle,
+    [bool]$AuraEnabled,
+    [bool]$PageReady,
+    [AllowNull()][object]$CurrentSource
+  )
+  if ($ExperimentalCodeStyle -and $AuraEnabled -and $PageReady -and
+      (Test-AuraUiCodeUri -Value $CurrentSource)) {
+    return 'Code'
+  }
+  return 'None'
+}
+
+function Get-AuraUiCodeFailureDisposition {
+  param(
+    [bool]$ExperimentalCodeStyle,
+    [bool]$AuraEnabled,
+    [ValidateSet('None', 'Code')][string]$RecoverySurface,
+    [AllowNull()][object]$CurrentSource,
+    [AllowNull()][object]$WebErrorStatus
+  )
+  if (-not $ExperimentalCodeStyle -or -not $AuraEnabled -or
+      $RecoverySurface -cne 'Code') {
+    return 'GenericFailure'
+  }
+  if ((Test-AuraUiCodeUri -Value $CurrentSource) -and
+      "$WebErrorStatus" -in @('OperationCanceled', 'ConnectionAborted')) {
+    return 'RetainCode'
+  }
+  return 'OfferCodeRecovery'
 }
 
 function Get-AuraUiNavigationRequestIdentity {
@@ -1336,6 +1410,7 @@ function Complete-AuraUiPendingNavigationVerification {
   $script:RescueChallengeCandidate = $null
   if (Test-AuraUiClaudeUri -Value $script:WebView.Source) {
     if ($script:RescueActive) { Exit-AuraUiRescueMode }
+    $script:NavigationRecoverySurface = 'None'
     $script:ReadyNavigationId = $navigationId
     $script:PageReady = $true
     $enabled = $true
@@ -1990,11 +2065,22 @@ function Update-AuraUiLoadingTheme {
 }
 
 function Show-AuraUiLoading {
-  param([string]$Message, [bool]$Retry = $false)
+  param(
+    [string]$Message,
+    [bool]$Retry = $false,
+    [ValidateSet('Home', 'Code')][string]$RetrySurface = 'Home'
+  )
   if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
   Update-AuraUiLoadingTheme
   $script:LoadingLabel.Text = $Message
   $script:LoadingProgress.AccessibleName = $Message
+  $script:LoadingRetrySurface = if ($Retry) { $RetrySurface } else { 'Home' }
+  $script:RetryButton.Text = if ($Retry -and $RetrySurface -ceq 'Code') {
+    "$($script:UiCopy.returnToAuraCode)"
+  } else {
+    "$($script:UiCopy.retry)"
+  }
+  $script:RetryButton.AccessibleName = $script:RetryButton.Text
   $script:RetryButton.Visible = $Retry
   $script:LoadingProgress.Visible = -not $Retry
   if ($Retry -or -not (Test-AuraUiLoadingAnimationEnabled)) {
@@ -2293,6 +2379,7 @@ function Enter-AuraUiRescueMode {
   $script:RescueChallengeCandidate = $null
   $script:RescueVerificationPending = $false
   $script:PendingNavigationCompletion = $null
+  $script:NavigationRecoverySurface = 'None'
   $script:ReadyNavigationId = $null
   $script:PageReady = $false
   $script:PendingApply = $false
@@ -2317,6 +2404,7 @@ function Exit-AuraUiRescueMode {
   $script:RescueChallengeCandidate = $null
   $script:RescueVerificationPending = $false
   $script:PendingNavigationCompletion = $null
+  $script:NavigationRecoverySurface = 'None'
   $script:RescueAttemptCount = 0
   $script:RescueBreakerState = 'Closed'
   $script:RescueLastNavigationId = $null
@@ -2398,7 +2486,7 @@ function Start-AuraUiCleanSessionProcess {
 }
 
 function Start-AuraUiScript {
-  param([string]$Source, [ValidateSet('Apply', 'Restore')][string]$Action, [bool]$Cover = $false)
+  param([string]$Source, [ValidateSet('Apply', 'Restore', 'RestoreVerify')][string]$Action, [bool]$Cover = $false)
   if ($script:RescueActive -or $script:RescueVerificationPending) {
     if ($Cover) { Hide-AuraUiLoading }
     return
@@ -6539,7 +6627,13 @@ function Send-AuraUiStudioState {
     if (-not $themeName) { $themeName = 'default' }
     $enabled = Get-AuraUiEnabled
     if (-not $Status) {
-      if ($enabled) {
+      if ($script:OriginalRestoreState -ceq 'Pending') {
+        $Status = "$($script:UiCopy.applyingTheme)"
+        $Tone = 'busy'
+      } elseif ($script:OriginalRestoreState -ceq 'Failed') {
+        $Status = "$($script:UiCopy.appearanceNotChangedMessage)"
+        $Tone = 'error'
+      } elseif ($enabled) {
         $theme = Get-AuraUiThemeByName -Name $themeName
         $label = if ($null -ne $theme) { "$($theme.label)" } elseif ($script:ActiveLabel) { $script:ActiveLabel } else { $themeName }
         $Status = "$($script:UiCopy.activeTheme)" -f $label
@@ -7567,9 +7661,12 @@ function Restore-AuraUiConfigSnapshot {
     if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
     if ([IO.File]::Exists($backup)) { [IO.File]::Delete($backup) }
   }
-  $payload = Invoke-AuraUiNode -CommandArguments @(
+  $arguments = @(
     $ThemeCli, 'init', '--config', $ConfigPath, '--locale', $script:Locale,
-    '--user-themes', $UserThemesRoot, '--payload')
+    '--user-themes', $UserThemesRoot)
+  if ($script:ExperimentalCodeStyle) { $arguments += '--experimental-code-style' }
+  $arguments += '--payload'
+  $payload = Invoke-AuraUiNode -CommandArguments $arguments
   $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
   Set-AuraUiPayloadState -Payload $payload
   Update-AuraUiTrayAppearance
@@ -8164,17 +8261,25 @@ function Invoke-AuraUiSetEnabled {
   $appearance = if ($Enabled) { Get-AuraUiAppearance } else { 'system' }
   Set-AuraUiPreferredColorScheme -Appearance $appearance -Enabled $Enabled
   Set-AuraPromptShelfAvailability -Enabled $Enabled
+  $script:RestoreVerificationDueUtc = $null
   if ($Enabled) {
+    $script:OriginalRestoreState = 'None'
     Apply-AuraUiTheme
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
   } else {
     Stop-AuraUiLauncherLayoutProbe
     Update-AuraUiLauncherPosition
-    $cleanup = '(() => { window.__CLAUDE_AURA_DISABLED__ = true; return window.__CLAUDE_AURA_STATE__?.cleanup?.() ?? true; })()'
-    if ($script:WebReady -and (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+    $cleanup = '(() => { const state = window.__CLAUDE_AURA_STATE__; if (state?.cleanup) return state.cleanup(); window.__CLAUDE_AURA_DISABLED__ = true; return true; })()'
+    if ($script:WebReady -and $null -ne $script:WebView.CoreWebView2 -and
+        -not $script:RescueActive -and -not $script:RescueVerificationPending -and
+        $null -eq $script:RescueChallengeCandidate -and
+        (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+      $script:OriginalRestoreState = 'Pending'
       Start-AuraUiScript -Source $cleanup -Action Restore
+    } else {
+      $script:OriginalRestoreState = 'None'
+      Send-AuraUiStudioState -Status "$($script:UiCopy.originalActive)"
     }
-    Send-AuraUiStudioState -Status "$($script:UiCopy.originalActive)"
   }
 }
 
@@ -8973,6 +9078,7 @@ function Get-AuraUiHostDeadlineUtc {
     $candidates.Add([DateTime]$script:PendingNavigationCompletion.DueUtc)
   }
   foreach ($candidate in @(
+      $script:RestoreVerificationDueUtc,
       $script:MirrorDue,
       $script:GreetingProbeDue,
       $script:LauncherProbeDue
@@ -9112,9 +9218,12 @@ $script:ScriptAction = $null
 $script:ScriptCovered = $false
 $script:PendingApply = $false
 $script:PendingRestore = $false
+$script:RestoreVerificationDueUtc = $null
+$script:OriginalRestoreState = 'None'
 $script:ActiveNavigationId = $null
 $script:ActiveNavigationUri = $null
 $script:ReadyNavigationId = $null
+$script:NavigationRecoverySurface = 'None'
 $script:IsRescueSession = [bool]$RescueSession
 $script:RescueActive = $false
 $script:RescueReason = 'Challenge'
@@ -9251,6 +9360,7 @@ $script:LoadingProgressIndicator = $null
 $script:LoadingAnimationTimer = $null
 $script:LoadingProfile = $null
 $script:RetryButton = $null
+$script:LoadingRetrySurface = 'Home'
 $script:MainIcon = $null
 $script:StudioIcon = $null
 $script:NotificationIcon = $null
@@ -9352,9 +9462,12 @@ try {
   elseif ($Theme -or $Image -or $ClearImage) { $initialOptions += @('--enabled', 'true') }
   if ($initialOptions.Count -gt 0) { Set-AuraUiConfig -Options $initialOptions }
   else {
-    $initialPayload = Invoke-AuraUiNode -CommandArguments @(
+    $arguments = @(
       $ThemeCli, 'init', '--config', $ConfigPath, '--locale', $script:Locale,
-      '--user-themes', $UserThemesRoot, '--payload')
+      '--user-themes', $UserThemesRoot)
+    if ($script:ExperimentalCodeStyle) { $arguments += '--experimental-code-style' }
+    $arguments += '--payload'
+    $initialPayload = Invoke-AuraUiNode -CommandArguments $arguments
     $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Set-AuraUiPayloadState -Payload $initialPayload
   }
@@ -10222,8 +10335,13 @@ public static class AuraUiAsyncDispatch {
 
   $script:RetryButton.add_Click({
     if ($script:WebReady -and $null -ne $script:WebView.CoreWebView2) {
+      $retryUri = if ($script:LoadingRetrySurface -ceq 'Code') {
+        'https://claude.ai/code'
+      } else {
+        'https://claude.ai/'
+      }
       Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
-      $script:WebView.CoreWebView2.Navigate('https://claude.ai/')
+      $script:WebView.CoreWebView2.Navigate($retryUri)
     }
   })
 
@@ -10476,6 +10594,15 @@ public static class AuraUiAsyncDispatch {
           param($sender, $eventArgs)
           Advance-AuraPromptShelfPageEpoch
           Stop-AuraUiLauncherLayoutProbe
+          if ($script:PageReady) {
+            $script:NavigationRecoverySurface = Get-AuraUiNavigationRecoverySurface `
+              -ExperimentalCodeStyle $script:ExperimentalCodeStyle `
+              -AuraEnabled (Get-AuraUiEnabled) `
+              -PageReady $script:PageReady `
+              -CurrentSource $script:WebView.Source
+          } elseif ($script:NavigationRecoverySurface -cne 'Code') {
+            $script:NavigationRecoverySurface = 'None'
+          }
           $script:ActiveNavigationId = [UInt64]$eventArgs.NavigationId
           $script:ActiveNavigationUri = [string]$eventArgs.Uri
           $script:RescueChallengeCandidate = $null
@@ -10561,6 +10688,12 @@ public static class AuraUiAsyncDispatch {
             return
           }
           if ($navigationDisposition -eq 'Failure') {
+            $codeFailureDisposition = Get-AuraUiCodeFailureDisposition `
+              -ExperimentalCodeStyle $script:ExperimentalCodeStyle `
+              -AuraEnabled (Get-AuraUiEnabled) `
+              -RecoverySurface $script:NavigationRecoverySurface `
+              -CurrentSource $script:WebView.Source `
+              -WebErrorStatus $eventArgs.WebErrorStatus
             $script:PendingNavigationCompletion = $null
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
@@ -10574,13 +10707,32 @@ public static class AuraUiAsyncDispatch {
               Show-AuraUiRescueWindow
               return
             }
+            if ($codeFailureDisposition -eq 'RetainCode') {
+              $script:NavigationRecoverySurface = 'None'
+              $script:ReadyNavigationId = $null
+              $script:PageReady = $true
+              Hide-AuraUiLoading
+              return
+            }
+            if ($codeFailureDisposition -eq 'OfferCodeRecovery') {
+              $script:NavigationRecoverySurface = 'None'
+              $script:ReadyNavigationId = $null
+              $script:PageReady = $false
+              Show-AuraUiLoading `
+                -Message "$($script:UiCopy.codeRecoveryMessage)" `
+                -Retry $true `
+                -RetrySurface Code
+              return
+            }
             # A genuine navigation failure is the only case that keeps the cover.
+            $script:NavigationRecoverySurface = 'None'
             $script:ReadyNavigationId = $null
             $script:PageReady = $false
             Show-AuraUiLoading -Message "$($script:UiCopy.loadFailed)" -Retry $true
             return
           }
           if (Test-AuraUiClaudeUri -Value $script:WebView.Source) {
+            $script:NavigationRecoverySurface = 'None'
             $script:RescueVerificationPending = $true
             $script:PendingApply = $false
             $script:PendingRestore = $false
@@ -10601,6 +10753,7 @@ public static class AuraUiAsyncDispatch {
             }
             return
           } else {
+            $script:NavigationRecoverySurface = 'None'
             $script:PendingNavigationCompletion = $null
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
@@ -10654,6 +10807,19 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_ProcessFailed({
           Advance-AuraPromptShelfPageEpoch
+          $codeRecoveryAllowed = $script:ExperimentalCodeStyle -and (Get-AuraUiEnabled)
+          $processRecoverySurface = if ($codeRecoveryAllowed -and
+              $script:NavigationRecoverySurface -ceq 'Code') {
+            'Code'
+          } elseif ($codeRecoveryAllowed) {
+            Get-AuraUiNavigationRecoverySurface `
+              -ExperimentalCodeStyle $script:ExperimentalCodeStyle `
+              -AuraEnabled $true `
+              -PageReady $script:PageReady `
+              -CurrentSource $script:WebView.Source
+          } else {
+            'None'
+          }
           if ($script:RescueActive) {
             $script:PendingNavigationCompletion = $null
             $script:RescueVerificationPending = $false
@@ -10672,11 +10838,24 @@ public static class AuraUiAsyncDispatch {
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
             Enter-AuraUiRescueMode -NavigationId $candidateNavigationId -Reason Challenge
+          } elseif ($processRecoverySurface -ceq 'Code') {
+            $script:PendingNavigationCompletion = $null
+            $script:RescueVerificationPending = $false
+            $script:ActiveNavigationId = $null
+            $script:ActiveNavigationUri = $null
+            $script:NavigationRecoverySurface = 'None'
+            $script:ReadyNavigationId = $null
+            $script:PageReady = $false
+            Show-AuraUiLoading `
+              -Message "$($script:UiCopy.codeRecoveryMessage)" `
+              -Retry $true `
+              -RetrySurface Code
           } else {
             $script:PendingNavigationCompletion = $null
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:NavigationRecoverySurface = 'None'
             Show-AuraUiLoading -Message "$($script:UiCopy.reloadRetry)" -Retry $true
           }
         })
@@ -10725,6 +10904,29 @@ public static class AuraUiAsyncDispatch {
         $script:PrepaintRegisteredGeneration = [long]-1
         Start-AuraUiDocumentPrepaintRegistration
       }
+      if ($null -ne $script:RestoreVerificationDueUtc -and
+          [DateTime]::UtcNow -ge $script:RestoreVerificationDueUtc) {
+        $script:RestoreVerificationDueUtc = $null
+        if ($script:OriginalRestoreState -cne 'Pending') {
+          # A newer action already settled the restore state.
+        } elseif (Get-AuraUiEnabled) {
+          $script:OriginalRestoreState = 'None'
+        } elseif (-not $script:WebReady -or
+            $null -ne $script:RescueChallengeCandidate -or
+            $null -eq $script:WebView.CoreWebView2 -or
+            $script:RescueActive -or $script:RescueVerificationPending -or
+            $null -ne $script:ScriptTask) {
+          $script:RestoreVerificationDueUtc = [DateTime]::UtcNow.AddMilliseconds(240)
+        } elseif (-not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
+          # A completed navigation retired the prior document and its renderer.
+          $script:OriginalRestoreState = 'None'
+          Send-AuraUiStudioState
+          Request-AuraUiMirror
+        } else {
+          $verifyRestore = '(() => !window.__CLAUDE_AURA_STATE__)()'
+          Start-AuraUiScript -Source $verifyRestore -Action RestoreVerify
+        }
+      }
       if ($null -ne $script:ScriptTask -and $script:ScriptTask.IsCompleted) {
         $task = $script:ScriptTask
         $action = $script:ScriptAction
@@ -10735,6 +10937,19 @@ public static class AuraUiAsyncDispatch {
         $result = $task.GetAwaiter().GetResult()
         if ($action -eq 'Apply' -and $result -notmatch '"installed"\s*:\s*true') {
           throw 'The theme script completed without confirming installation.'
+        }
+        $restoreCompleted = [bool](
+          $action -eq 'Restore' -and $result -match '^\s*true\s*$')
+        $restoreVerified = [bool](
+          $action -eq 'RestoreVerify' -and $result -match '^\s*true\s*$')
+        if ($restoreCompleted -or $restoreVerified) {
+          $script:OriginalRestoreState = 'None'
+        } elseif ($action -eq 'Restore' -and -not $restoreCompleted) {
+          $script:RestoreVerificationDueUtc = [DateTime]::UtcNow.AddMilliseconds(240)
+        } elseif ($action -eq 'RestoreVerify' -and -not $restoreVerified) {
+          $script:OriginalRestoreState = 'Failed'
+          Write-AuraUiLog -Message 'Renderer cleanup remained pending after its bounded retry.'
+          Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error
         }
         if ($action -eq 'Apply') {
           # The injection return value is an immediate React snapshot. Probe the
@@ -10747,13 +10962,15 @@ public static class AuraUiAsyncDispatch {
           Update-AuraUiLauncherPosition
         }
         if ($covered) { Hide-AuraUiLoading }
-        Send-AuraUiStudioState
-        Request-AuraUiMirror
+        if ($action -eq 'Apply' -or $restoreCompleted -or $restoreVerified) {
+          Send-AuraUiStudioState
+          Request-AuraUiMirror
+        }
         if ($script:PendingRestore) {
           $script:PendingRestore = $false
           $script:PendingApply = $false
           Stop-AuraUiGreetingProbe
-          $cleanup = '(() => { window.__CLAUDE_AURA_DISABLED__ = true; return window.__CLAUDE_AURA_STATE__?.cleanup?.() ?? true; })()'
+          $cleanup = '(() => { const state = window.__CLAUDE_AURA_STATE__; if (state?.cleanup) return state.cleanup(); window.__CLAUDE_AURA_DISABLED__ = true; return true; })()'
           Start-AuraUiScript -Source $cleanup -Action Restore
         } elseif ($script:PendingApply) {
           $script:PendingApply = $false
@@ -10771,6 +10988,10 @@ public static class AuraUiAsyncDispatch {
       $script:ScriptTask = $null
       $script:PendingApply = $false
       $script:PendingRestore = $false
+      $script:RestoreVerificationDueUtc = $null
+      if ($script:OriginalRestoreState -ceq 'Pending') {
+        $script:OriginalRestoreState = 'Failed'
+      }
       if (-not $script:WebReady) {
         Fail-AuraUiStartup -Exception $_.Exception
       } elseif ($null -ne $script:RescueChallengeCandidate) {
@@ -10814,6 +11035,8 @@ public static class AuraUiAsyncDispatch {
     $script:ActiveNavigationId = $null
     $script:ActiveNavigationUri = $null
     $script:ReadyNavigationId = $null
+    $script:NavigationRecoverySurface = 'None'
+    $script:LoadingRetrySurface = 'Home'
     $script:RescueChallengeCandidate = $null
     $script:RescueVerificationPending = $false
     $script:PendingNavigationCompletion = $null

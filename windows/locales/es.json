@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "Instala la app oficial de Claude Desktop y vuelve a pulsar este botón.",
   "continueSigningIn": "Continúa iniciando sesión; Aura se aplicará automáticamente.",
   "loadFailed": "Claude no pudo cargar. Revisa la conexión y vuelve a intentarlo.",
+  "codeRecoveryMessage": "La transferencia al app local no se completó. Regresa a Aura Code para continuar en la sesión web.",
+  "returnToAuraCode": "Volver a Aura Code",
   "rescueAccessibleName": "Recuperación de Claude Aura",
   "rescueEyebrow": "Verificación del navegador detectada",
   "rescueTitle": "Claude necesita una verificación de navegador",

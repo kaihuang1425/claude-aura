@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "Resmi Claude Desktop uygulamasını yükleyin, ardından bu düğmeye tekrar deneyin.",
   "continueSigningIn": "Oturum açmaya devam edin; Aura otomatik olarak uygular.",
   "loadFailed": "Claude yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.",
+  "codeRecoveryMessage": "Yerel uygulama geçişi tamamlanmadı. Web oturumunu sürdürmek için Aura Code’a dönün.",
+  "returnToAuraCode": "Aura Code’a dön",
   "rescueAccessibleName": "Claude Aura kurtarma",
   "rescueEyebrow": "Tarayıcı kontrolü algılandı",
   "rescueTitle": "Claude'un tarayıcı kontrolü gerekiyor",

@@ -22,6 +22,10 @@ import {
   validateGreetingShuffleState,
   writeConfig,
 } from "./theme-core.mjs";
+import {
+  createExperimentalCodeAdapter,
+  createExperimentalCodeDescriptor,
+} from "./theme-core/code-adapter.mjs";
 
 const THEME_ID_PATTERN = /^[a-z][a-z0-9-]{1,39}$/;
 const SLOT_SPECS = [
@@ -47,7 +51,13 @@ function parse(argv) {
       continue;
     }
     const key = arg.slice(2);
-    if (["json", "clear-image", "clear-avatar", "payload"].includes(key)) options[key] = true;
+    if ([
+      "json",
+      "clear-image",
+      "clear-avatar",
+      "payload",
+      "experimental-code-style",
+    ].includes(key)) options[key] = true;
     else {
       if (!argv.length) throw new Error(`Missing value for ${arg}`);
       options[key] = argv.shift();
@@ -237,6 +247,7 @@ Commands:
   scaffold <id>
   qa <id>
   init --config <path> [--locale <tag>] [--user-themes <path>] [--payload]
+      [--experimental-code-style] (source checkout only)
   show --config <path> [--json] [--locale <tag>] [--user-themes <path>]
   validate <kit-folder>
   validate [--config <path>] [--theme <name>] [--locale <tag>]
@@ -255,6 +266,7 @@ Commands:
        --studio-preview-y <0..100> --studio-preview-zoom <1..6>]
       [--reduce-motion true|false] [--enabled true|false]
       [--user-themes <path>] [--payload]
+      [--experimental-code-style] (source checkout only)
 `);
 }
 
@@ -264,6 +276,28 @@ if (!["export-terminal", "export-terminal-pair", "qa", "scaffold", "validate"].i
 const userThemesDir = options["user-themes"] === undefined ? null : path.resolve(options["user-themes"]);
 const emitWarning = (message) => process.stderr.write(`Warning: ${message}\n`);
 const runtimeOptions = { userThemesDir, onWarning: emitWarning };
+const experimentalCodeStyle = options["experimental-code-style"] === true;
+if (experimentalCodeStyle) {
+  if (!["init", "set"].includes(command)) {
+    throw new Error("--experimental-code-style is allowed only with init or set");
+  }
+  const sourceGit = path.join(PROJECT_ROOT, ".git");
+  const sourceGitStat = await fs.lstat(sourceGit).catch(() => null);
+  if (!sourceGitStat?.isDirectory() || sourceGitStat.isSymbolicLink()) {
+    throw new Error("--experimental-code-style is available only in a source checkout");
+  }
+}
+const buildRuntimePayload = (compiled) => buildPayloadFromCompiled(
+  compiled,
+  experimentalCodeStyle
+    ? {
+      experimentalCode: {
+        factory: createExperimentalCodeAdapter,
+        descriptor: createExperimentalCodeDescriptor(compiled.theme),
+      },
+    }
+    : undefined,
+);
 if (command === "help" || command === "--help") {
   help();
 } else if (command === "studio") {
@@ -492,7 +526,7 @@ if (command === "help" || command === "--help") {
   const configPath = path.resolve(options.config);
   const existing = await readConfig(configPath);
   const compiled = await compileTheme({ configPath, config: existing, locale: options.locale ?? "en", ...runtimeOptions });
-  const bundle = options.payload ? await buildPayloadFromCompiled(compiled) : null;
+  const bundle = options.payload ? await buildRuntimePayload(compiled) : null;
   await writeConfig(configPath, compiled.effectiveConfig);
   if (options.payload) process.stdout.write(bundle.payload);
   else console.log(configPath);
@@ -595,7 +629,7 @@ if (command === "help" || command === "--help") {
   if (options["reduce-motion"] !== undefined) config.reduceMotion = booleanValue(options["reduce-motion"], "--reduce-motion");
   if (options.enabled !== undefined) config.enabled = booleanValue(options.enabled, "--enabled");
   const compiled = await compileTheme({ configPath, config, locale: options.locale ?? "en", ...runtimeOptions });
-  const bundle = options.payload ? await buildPayloadFromCompiled(compiled) : null;
+  const bundle = options.payload ? await buildRuntimePayload(compiled) : null;
   await writeConfig(configPath, compiled.effectiveConfig);
   if (options.payload) {
     process.stdout.write(bundle.payload);

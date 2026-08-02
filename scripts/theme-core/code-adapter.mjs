@@ -3,6 +3,24 @@ export const CODE_ROLE_SIGNATURES = Object.freeze({
   signatures: Object.freeze([]),
 });
 
+export function createExperimentalCodeDescriptor(theme) {
+  const keys = [
+    "--aura-sidebar-background",
+    "--aura-background-primary",
+  ];
+  const palette = (mode) => keys.map((key) => {
+    const value = theme?.[mode]?.semantic?.[key];
+    if (typeof value !== "string" || !/^[\d.]+ [\d.]+% [\d.]+%$/.test(value)) {
+      throw new TypeError(`Experimental Code palette is missing ${mode} ${key}`);
+    }
+    return value;
+  });
+  return Object.freeze({
+    l: Object.freeze(palette("light")),
+    d: Object.freeze(palette("dark")),
+  });
+}
+
 export function codeContextFromUrl(value) {
   let url;
   try {
@@ -27,6 +45,96 @@ export function createInertCodeAdapter() {
   return {
     activate: () => Promise.resolve(native()),
     rollback: native,
+  };
+}
+
+// Source-checkout experiment only. Production payloads keep using the inert
+// adapter until Aura Code has a first-party integration contract.
+export function createExperimentalCodeAdapter(
+  [codeDocument, codeGetComputedStyle, codeGetMode] = [],
+  codeDescriptor = null,
+) {
+  const codeMarker = "data-aura-code",
+    codeStyleId = "claude-aura-code-style";
+  let codeSnapshots = [], codeSheet = null;
+
+  const codeNative = { status: "native" }, codeStyled = { status: "styled" },
+    codePending = { status: "cleanup-pending" };
+  const codeVisible = (codeElement) => {
+    if (!codeElement?.isConnected) return false;
+    const codeRect = codeElement?.getBoundingClientRect?.(),
+      codeStyle = codeGetComputedStyle?.(codeElement);
+    return codeRect?.width > 0 && codeRect.height > 0
+      && codeStyle?.display !== "none" && codeStyle?.visibility !== "hidden"
+      && codeStyle?.opacity !== "0";
+  };
+  const codeMatches = (codeScope, codeSelector) =>
+    [...codeScope.querySelectorAll(codeSelector)].filter(codeVisible);
+  const codeReset = () => {
+    const codeFound = [];
+    for (const [codeElement, codeValue, codeApplied] of [...codeSnapshots].reverse()) {
+      try {
+        if (codeElement.getAttribute(codeMarker) !== codeApplied) continue;
+        if (codeValue === null) codeElement.removeAttribute(codeMarker);
+        else codeElement.setAttribute(codeMarker, codeValue);
+      } catch {
+        codeFound.push([codeElement, codeValue, codeApplied]);
+      }
+    }
+    codeSnapshots = codeFound.reverse();
+    try {
+      codeSheet?.remove();
+      codeSheet = null;
+    } catch {}
+    return !codeSnapshots.length && !codeSheet;
+  };
+  const codeRollback = codeReset;
+  const activate = (codeContext) => {
+    if (!codeReset()) return codePending;
+    try {
+      if (codeDocument?.getElementById?.(codeStyleId)) return codeNative;
+      const codeMode = codeGetMode?.(),
+        codePalette = codeDescriptor?.[
+          codeMode === "dark" ? "d" : codeMode === "light" ? "l" : ""
+        ];
+      if ((codeContext !== "code-list" && codeContext !== "code-session")
+          || !Array.isArray(codePalette)
+          || codePalette.length !== 2
+          || !/^(?:[\d.]+(?:\x20[\d.]+%){2},?){2}$/.test(codePalette)) {
+        return codeNative;
+      }
+      if (codeMatches(
+        codeDocument,
+        'dialog,[role="dialog"],[role="alertdialog"]',
+      ).length) return codeNative;
+      const codeAsides = codeMatches(codeDocument, "aside"),
+        codeMains = codeMatches(codeDocument, "main");
+      if (codeAsides.length !== 1 || codeMains.length !== 1) return codeNative;
+      const codeAside = codeAsides[0], codeMain = codeMains[0];
+      if (codeAside.contains?.(codeMain) || codeMain.contains?.(codeAside)) return codeNative;
+      codeSheet = codeDocument.createElement("style");
+      codeSheet.id = codeStyleId;
+      codeSheet.textContent = `@media(forced-colors:none) and (prefers-contrast:no-preference){`
+        + `[${codeMarker}=v1n]{background-color:hsl(${codePalette[0]})!important}`
+        + `[${codeMarker}=v1c]{background-color:hsl(${codePalette[1]})!important}}`;
+      for (const [codeElement, codeApplied] of [
+        [codeAside, "v1n"], [codeMain, "v1c"]
+      ]) {
+        codeSnapshots.push([
+          codeElement, codeElement.getAttribute(codeMarker), codeApplied
+        ]);
+        codeElement.setAttribute(codeMarker, codeApplied);
+      }
+      codeDocument.head.appendChild(codeSheet);
+      return codeStyled;
+    } catch {
+      return codeRollback() ? codeNative : codePending;
+    }
+  };
+
+  return {
+    activate,
+    rollback: codeRollback
   };
 }
 

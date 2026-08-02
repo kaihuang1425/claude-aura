@@ -41,6 +41,10 @@ import {
   writeConfig,
   zipEntryNames,
 } from "./support/context.mjs";
+import {
+  createExperimentalCodeAdapter,
+  createExperimentalCodeDescriptor,
+} from "../scripts/theme-core/code-adapter.mjs";
 
 test("production payload keeps the Code adapter inert independently of registry contents", async () => {
   const publicThemeCore = await import("../scripts/theme-core.mjs");
@@ -677,7 +681,7 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(forcedColorListeners.size, 0);
 });
 
-test("renderer switching keeps one lifecycle and clean ensures avoid root rewrites", async () => {
+test("renderer switching keeps one lifecycle, Code cleanup, and stable root writes", async () => {
   class FakeStyle {
     constructor() {
       this.values = new Map();
@@ -816,6 +820,8 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
         if (simple === '[role="link"]') return this.role === "link";
         if (simple === '[role="menuitem"]') return this.role === "menuitem";
         if (simple === '[role="list"]') return this.role === "list";
+        if (simple === '[role="dialog"]') return this.role === "dialog";
+        if (simple === '[role="alertdialog"]') return this.role === "alertdialog";
         if (simple === '[role="group"]') return this.role === "group";
         if (simple === '[role="navigation"]') return this.role === "navigation";
         if (simple === '[role="toolbar"]') return this.role === "toolbar";
@@ -884,8 +890,11 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   let mainCandidates = [main];
   const walk = (element) => [element, ...element.children.flatMap(walk)];
   document.querySelectorAll = (selector) => {
-    if (selector === 'main,[role="main"]') return mainCandidates;
+    if (selector === "main" || selector === 'main,[role="main"]') return mainCandidates;
     if (selector.includes("aside") || selector.includes('[role="navigation"]')) return sidebarCandidates;
+    if (selector.includes("dialog")) {
+      return walk(document.documentElement).filter((element) => element.matches(selector));
+    }
     const markers = [...selector.matchAll(/\[([^\]=]+)(?:=[^\]]+)?\]/g)].map((match) => match[1]);
     if (markers.some((name) => name.startsWith("data-claude-aura-") || name.startsWith("data-aura-"))) {
       return walk(document.documentElement).filter((element) => markers.some((name) => Object.hasOwn(element, name)));
@@ -901,7 +910,7 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
 
   let timerId = 0;
   const intervals = new Map();
-  const timeouts = new Set();
+  const timeouts = new Map();
   const observers = new Set();
   const setInterval = (callback, delay) => {
     const id = ++timerId;
@@ -909,9 +918,9 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
     return id;
   };
   const clearInterval = (id) => intervals.delete(id);
-  const setTimeout = () => {
+  const setTimeout = (callback, delay) => {
     const id = ++timerId;
-    timeouts.add(id);
+    timeouts.set(id, { callback, delay });
     return id;
   };
   const clearTimeout = (id) => timeouts.delete(id);
@@ -1907,7 +1916,297 @@ test("renderer switching keeps one lifecycle and clean ensures avoid root rewrit
   for (let iteration = 0; iteration < 10; iteration += 1) window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(document.documentElement.style.setCalls, writesAfterSwitch, "Clean ensures rewrote root image values");
 
-  assert.equal(window.__CLAUDE_AURA_STATE__.cleanup(), true);
+  const experimentalCompiled = await compileTheme({
+    config: { ...DEFAULT_CONFIG, theme: "cartoon-studio" },
+  });
+  const experimentalBundle = await buildPayloadFromCompiled(experimentalCompiled, {
+    experimentalCode: {
+      factory: createExperimentalCodeAdapter,
+      descriptor: createExperimentalCodeDescriptor(experimentalCompiled.theme),
+    },
+  });
+  const injectExperimental = new Function(
+    "window",
+    "document",
+    "MutationObserver",
+    "setInterval",
+    "clearInterval",
+    "setTimeout",
+    "clearTimeout",
+    experimentalBundle.payload,
+  );
+  const codeSheets = () => document.head.children.filter((child) =>
+    child.tagName === "STYLE"
+      && child.textContent.startsWith("@media(forced-colors:none)"));
+
+  window.location = { href: "https://claude.ai/code" };
+  injectExperimental(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.equal(sidebar["data-aura-code"], "v1n",
+    "The full experimental renderer must mark one visible Code navigation surface");
+  assert.equal(main["data-aura-code"], "v1c",
+    "The full experimental renderer must mark one visible Code canvas");
+  assert.equal(codeSheets().length, 1, "The Code route must commit exactly one owned sheet");
+  assert.equal(document.getElementById("claude-aura-style"), null,
+    "Code must suppress the broad Chat stylesheet");
+  assert.equal(document.getElementById("claude-aura-backdrop"), null,
+    "Code must suppress Chat artwork");
+  assert.equal(document.documentElement.classList.contains("claude-aura"), false,
+    "Code must clear the broad Chat root class");
+
+  const nativeSidebarRemoveAttribute = sidebar.removeAttribute.bind(sidebar);
+  let routeCleanupBlocked = true;
+  sidebar.removeAttribute = (name) => {
+    if (routeCleanupBlocked && name === "data-aura-code") {
+      throw new Error("simulated transient Code marker cleanup failure");
+    }
+    nativeSidebarRemoveAttribute(name);
+  };
+  window.location.href = "https://claude.ai/";
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(sidebar["data-aura-code"], "v1n",
+    "A transient route cleanup failure must retain its retryable marker");
+  assert.equal(main["data-aura-code"], undefined,
+    "Successful parts of a failed Code cleanup may complete without starting Chat");
+  assert.equal(codeSheets().length, 0,
+    "A transient marker failure must still release Aura's identity-owned Code sheet");
+  assert.equal(document.documentElement.classList.contains("claude-aura"), false,
+    "Chat must stay native until Code cleanup fully succeeds");
+  assert.equal(document.getElementById("claude-aura-style"), null,
+    "Chat styling must not overlap a cleanup-pending Code transaction");
+  assert.equal(document.getElementById("claude-aura-backdrop"), null,
+    "Chat artwork must not overlap a cleanup-pending Code transaction");
+  assert.equal(timeouts.size, 1,
+    "A transient route cleanup failure must schedule exactly one bounded retry");
+  routeCleanupBlocked = false;
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  sidebar.removeAttribute = nativeSidebarRemoveAttribute;
+  assert.equal(sidebar["data-aura-code"], undefined,
+    "Returning to Chat must remove the Code navigation marker");
+  assert.equal(main["data-aura-code"], undefined,
+    "Returning to Chat must remove the Code canvas marker");
+  assert.equal(codeSheets().length, 0, "Returning to Chat must remove the Code sheet");
+  assert.equal(document.documentElement.classList.contains("claude-aura"), true,
+    "Returning to Chat must restore the normal Aura root");
+  assert(document.getElementById("claude-aura-style"),
+    "Returning to Chat must restore the normal Aura stylesheet");
+  assert(document.getElementById("claude-aura-backdrop"),
+    "Returning to Chat must restore the normal Aura backdrop");
+
+  assert.equal(window.__CLAUDE_AURA_STATE__.cleanup(), true,
+    "Original look from Chat must complete renderer cleanup");
+  assert.equal(document.documentElement.classList.contains("claude-aura"), false);
+  assert.equal(document.getElementById("claude-aura-style"), null);
+  assert.equal(document.getElementById("claude-aura-backdrop"), null);
+
+  const codeEditor = new FakeElement("div");
+  codeEditor.setAttribute("contenteditable", "true");
+  main.appendChild(codeEditor);
+  window.location.href = "https://claude.ai/code/session-fixture";
+  injectExperimental(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.equal(sidebar["data-aura-code"], "v1n");
+  assert.equal(main["data-aura-code"], "v1c");
+  assert.equal(codeEditor["data-aura-code"], undefined,
+    "The full experimental renderer must leave generic editable elements native");
+  assert.equal(codeSheets().length, 1);
+
+  const stateBeforeBlockedReplacement = window.__CLAUDE_AURA_STATE__;
+  const nativeSessionSidebarRemoveAttribute = sidebar.removeAttribute.bind(sidebar);
+  let replacementCleanupBlocked = true;
+  let replacementCleanupAttempts = 0;
+  sidebar.removeAttribute = (name) => {
+    if (replacementCleanupBlocked && name === "data-aura-code") {
+      replacementCleanupAttempts += 1;
+      throw new Error("simulated persistent Code replacement cleanup failure");
+    }
+    nativeSessionSidebarRemoveAttribute(name);
+  };
+  injectExperimental(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.equal(replacementCleanupAttempts, 1,
+    "A blocked replacement must delegate its first cleanup attempt to the live renderer");
+  assert.equal(window.__CLAUDE_AURA_STATE__, stateBeforeBlockedReplacement,
+    "A still-pending replacement must retain the live renderer that owns the retry path");
+  assert.equal(sidebar["data-aura-code"], "v1n");
+  assert.equal(main["data-aura-code"], undefined);
+  assert.equal(codeSheets().length, 0);
+  assert.equal(timeouts.size, 1,
+    "The retained renderer must own exactly one bounded replacement cleanup retry");
+  replacementCleanupBlocked = false;
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  assert.equal(window.__CLAUDE_AURA_STATE__, undefined,
+    "A successful retained cleanup retry must retire the prior renderer");
+  sidebar.removeAttribute = nativeSessionSidebarRemoveAttribute;
+  injectExperimental(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.notEqual(window.__CLAUDE_AURA_STATE__, stateBeforeBlockedReplacement,
+    "A later explicit replacement may install after native restoration succeeds");
+  assert.equal(sidebar["data-aura-code"], "v1n",
+    "The later explicit replacement must restyle only after native restoration");
+  assert.equal(main["data-aura-code"], "v1c");
+  assert.equal(codeSheets().length, 1);
+
+  const experimentalStateBeforeStable = window.__CLAUDE_AURA_STATE__;
+  [...observers][0].callback([{ target: main, type: "childList" }]);
+  assert.equal(timeouts.size, 1,
+    "The experimental renderer fixture must have one queued structural recheck");
+  injectFramed(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.notEqual(window.__CLAUDE_AURA_STATE__, experimentalStateBeforeStable,
+    "A stable renderer must replace an experimental renderer only after owned cleanup");
+  assert.equal(sidebar["data-aura-code"], undefined,
+    "Experimental to stable replacement must restore the Code navigation marker");
+  assert.equal(main["data-aura-code"], undefined,
+    "Experimental to stable replacement must restore the Code canvas marker");
+  assert.equal(codeSheets().length, 0,
+    "Experimental to stable replacement must remove the identity-owned Code sheet");
+  assert.equal(timeouts.size, 0,
+    "Experimental to stable replacement must cancel the retired renderer's queued callback");
+  assert.equal(window.__CLAUDE_AURA_STATE__.cleanup(), true,
+    "Original look after a stable replacement must retire the stable renderer");
+  assert.equal(window.__CLAUDE_AURA_STATE__, undefined);
+  assert.equal(sidebar["data-aura-code"], undefined);
+  assert.equal(main["data-aura-code"], undefined);
+  assert.equal(codeSheets().length, 0);
+
+  injectExperimental(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.equal(sidebar["data-aura-code"], "v1n");
+  assert.equal(main["data-aura-code"], "v1c");
+  assert.equal(codeSheets().length, 1);
+
+  const replacementBody = new FakeElement("body");
+  const replacementSidebar = replacementBody.appendChild(new FakeElement("aside"));
+  const replacementMain = replacementBody.appendChild(new FakeElement("main"));
+  document.body.remove();
+  document.body = replacementBody;
+  document.documentElement.appendChild(replacementBody);
+  sidebarCandidates = [replacementSidebar];
+  mainCandidates = [replacementMain];
+  [...observers][0].callback([{ target: document.documentElement, type: "childList" }]);
+  assert.equal(timeouts.size, 1,
+    "Replacing the Code body must schedule one bounded structural recheck");
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  assert.equal(sidebar["data-aura-code"], undefined);
+  assert.equal(main["data-aura-code"], undefined);
+  assert.equal(replacementSidebar["data-aura-code"], "v1n");
+  assert.equal(replacementMain["data-aura-code"], "v1c");
+
+  const codeDialog = new FakeElement("section");
+  codeDialog.setAttribute("role", "alertdialog");
+  replacementMain.appendChild(codeDialog);
+  assert.equal(timeouts.size, 0);
+  [...observers][0].callback([{ target: replacementMain, type: "childList" }]);
+  assert.equal(timeouts.size, 1,
+    "A Code mutation must schedule one bounded structural recheck");
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  assert.equal(replacementSidebar["data-aura-code"], undefined,
+    "A newly visible safety UI must automatically roll back the complete Code transaction");
+  assert.equal(replacementMain["data-aura-code"], undefined);
+  assert.equal(codeSheets().length, 0);
+  codeDialog.remove();
+  [...observers][0].callback([{ target: replacementMain, type: "childList" }]);
+  assert.equal(timeouts.size, 1);
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  assert.equal(replacementSidebar["data-aura-code"], "v1n",
+    "A clean Code structure must be eligible for reapplication");
+  assert.equal(replacementMain["data-aura-code"], "v1c");
+  assert.equal(codeSheets().length, 1);
+  const stateBeforeCleanupRetry = window.__CLAUDE_AURA_STATE__;
+  const nativeReplacementRemoveAttribute = replacementSidebar.removeAttribute.bind(replacementSidebar);
+  let originalCleanupBlocked = true;
+  replacementSidebar.removeAttribute = (name) => {
+    if (originalCleanupBlocked && name === "data-aura-code") {
+      throw new Error("simulated transient Original-look cleanup failure");
+    }
+    nativeReplacementRemoveAttribute(name);
+  };
+  assert.equal(stateBeforeCleanupRetry.cleanup(), false,
+    "Original look must report cleanup-pending instead of abandoning native restoration");
+  assert.equal(window.__CLAUDE_AURA_STATE__, stateBeforeCleanupRetry,
+    "Cleanup-pending must retain the renderer-owned retry path");
+  assert.equal(window.__CLAUDE_AURA_DISABLED__, false,
+    "Cleanup-pending must not disable the retained renderer");
+  assert.equal(replacementSidebar["data-aura-code"], "v1n");
+  assert.equal(replacementMain["data-aura-code"], undefined);
+  assert.equal(timeouts.size, 1,
+    "Original look must schedule exactly one bounded cleanup retry");
+  originalCleanupBlocked = false;
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  replacementSidebar.removeAttribute = nativeReplacementRemoveAttribute;
+  assert.equal(window.__CLAUDE_AURA_STATE__, undefined,
+    "A successful Original-look retry must retire the renderer state");
+  assert.equal(sidebar["data-aura-code"], undefined,
+    "Original look from Code must remove the Code navigation marker");
+  assert.equal(main["data-aura-code"], undefined,
+    "Original look from Code must remove the Code canvas marker");
+  assert.equal(replacementSidebar["data-aura-code"], undefined);
+  assert.equal(replacementMain["data-aura-code"], undefined);
+  assert.equal(codeEditor["data-aura-code"], undefined,
+    "Original look from Code must leave the active-session editor unmarked");
+  assert.equal(codeSheets().length, 0, "Original look from Code must remove the Code sheet");
+  codeEditor.remove();
   assert.equal(sidebar["data-claude-aura-sidebar"], undefined);
   assert.equal(primaryAction["data-aura-role"], undefined);
   assert.equal(main["data-claude-aura-main-canvas"], undefined);

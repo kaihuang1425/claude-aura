@@ -146,6 +146,111 @@ test("Aura Rescue Mode detects only correlated Cloudflare challenge responses", 
   }
 });
 
+test("Aura Code detours retain or recover only a verified experimental Code surface", async () => {
+  const ui = await fs.readFile(uiPath, "utf8");
+  const uiCopy = await readHostCopy();
+  const captureRecovery = powershellFunction(ui, "Get-AuraUiNavigationRecoverySurface");
+  const resolveFailure = powershellFunction(ui, "Get-AuraUiCodeFailureDisposition");
+
+  assert.doesNotMatch(captureRecovery, /Write-AuraUiLog|Set-AuraUiConfig|Start-Process/);
+  assert.doesNotMatch(resolveFailure, /Write-AuraUiLog|Set-AuraUiConfig|Start-Process/);
+
+  const navigationStartingStart = ui.indexOf("$core.add_NavigationStarting(");
+  const navigationStartingEnd = ui.indexOf("$core.add_DOMContentLoaded(", navigationStartingStart);
+  const navigationStarting = ui.slice(navigationStartingStart, navigationStartingEnd);
+  const recoveryCaptureIndex = navigationStarting.indexOf(
+    "$script:NavigationRecoverySurface = Get-AuraUiNavigationRecoverySurface",
+  );
+  const pageResetIndex = navigationStarting.indexOf("$script:PageReady = $false");
+  assert(recoveryCaptureIndex >= 0 && recoveryCaptureIndex < pageResetIndex,
+    "Navigation recovery must snapshot only the already verified page before clearing readiness");
+  assert.doesNotMatch(navigationStarting, /NavigationRecovery(?:Surface|Uri|Url)\s*=\s*\$eventArgs\.Uri/,
+    "Code recovery must retain an enum, never the detour URI");
+
+  const completedStart = ui.indexOf("$core.add_NavigationCompleted({", navigationStartingEnd);
+  const completedEnd = ui.indexOf("$core.add_SourceChanged(", completedStart);
+  const completedHandler = ui.slice(completedStart, completedEnd);
+  const codeDispositionIndex = completedHandler.indexOf("Get-AuraUiCodeFailureDisposition");
+  const genericFailureIndex = completedHandler.indexOf(
+    'Show-AuraUiLoading -Message "$($script:UiCopy.loadFailed)" -Retry $true',
+  );
+  assert(codeDispositionIndex >= 0 && codeDispositionIndex < genericFailureIndex,
+    "A verified Code detour must resolve before generic load-failure handling");
+  assert.match(completedHandler,
+    /\$codeFailureDisposition\s+-eq\s+['"]RetainCode['"][\s\S]{0,520}?\$script:PageReady\s*=\s*\$true[\s\S]{0,220}?Hide-AuraUiLoading[\s\S]{0,120}?\breturn\b/,
+    "A non-catastrophic detour that left Code loaded must reveal the retained page");
+  assert.match(completedHandler,
+    /\$codeFailureDisposition\s+-eq\s+['"]OfferCodeRecovery['"][\s\S]{0,520}?codeRecoveryMessage[\s\S]{0,180}?-RetrySurface Code[\s\S]{0,120}?\breturn\b/,
+    "A failed detour that did not retain Code must offer an explicit fixed-route return");
+
+  const retryStart = ui.indexOf("$script:RetryButton.add_Click({");
+  const retryEnd = ui.indexOf("$script:HostWorkRequestAction", retryStart);
+  const retryHandler = ui.slice(retryStart, retryEnd);
+  assert.match(retryHandler,
+    /\$script:LoadingRetrySurface\s+-ceq\s+['"]Code['"][\s\S]{0,220}?['"]https:\/\/claude\.ai\/code['"]/,
+    "The Code recovery button must use one fixed trusted Code URL");
+  assert.match(retryHandler, /['"]https:\/\/claude\.ai\/['"]/,
+    "Generic retry must retain its fixed Claude home fallback");
+  assert.doesNotMatch(retryHandler, /WebView\.Source|ActiveNavigationUri|eventArgs|GoBack|CanGoBack/,
+    "Recovery must not replay a mutable detour or browser history");
+
+  const processFailedStart = ui.indexOf("$core.add_ProcessFailed({");
+  const processFailedEnd = ui.indexOf("# Keyboard accelerators", processFailedStart);
+  const processFailed = ui.slice(processFailedStart, processFailedEnd);
+  assert.match(processFailed, /Get-AuraUiNavigationRecoverySurface/);
+  assert.match(processFailed,
+    /\$processRecoverySurface\s+-ceq\s+['"]Code['"][\s\S]{0,700}?codeRecoveryMessage[\s\S]{0,180}?-RetrySurface Code/,
+    "A Code renderer failure must reach the same explicit fixed-route recovery");
+
+  for (const locale of Object.keys(uiCopy)) {
+    for (const key of ["codeRecoveryMessage", "returnToAuraCode"]) {
+      assert.equal(typeof uiCopy[locale][key], "string", `${locale}.${key} is missing`);
+      assert(uiCopy[locale][key].trim(), `${locale}.${key} is empty`);
+    }
+  }
+  assert.equal(
+    uiCopy.en.codeRecoveryMessage,
+    "The local-app handoff did not complete. Return to Aura Code to continue in the web session.",
+  );
+  assert.equal(uiCopy.en.returnToAuraCode, "Return to Aura Code");
+
+  if (process.platform === "win32") {
+    const regression = [
+      "$ErrorActionPreference='Stop'",
+      `$uiPath='${uiPath.replaceAll("'", "''")}'`,
+      "$tokens=$null;$errors=$null",
+      "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+      "if($errors.Count){throw 'Could not parse Aura UI for Code recovery regression'}",
+      "$names=@('Test-AuraUiCodeUri','Get-AuraUiNavigationRecoverySurface','Get-AuraUiCodeFailureDisposition')",
+      "foreach($name in $names){",
+      "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing Code recovery function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "$code='https://claude.ai/code/session-redacted?view=active#latest'",
+      "$chat='https://claude.ai/new'",
+      "$other='https://example.com/code'",
+      "if((Get-AuraUiNavigationRecoverySurface -ExperimentalCodeStyle $true -AuraEnabled $true -PageReady $true -CurrentSource $code) -cne 'Code'){throw 'Verified Code did not arm recovery'}",
+      "if((Get-AuraUiNavigationRecoverySurface -ExperimentalCodeStyle $false -AuraEnabled $true -PageReady $true -CurrentSource $code) -cne 'None'){throw 'Production Aura armed Code recovery'}",
+      "if((Get-AuraUiNavigationRecoverySurface -ExperimentalCodeStyle $true -AuraEnabled $false -PageReady $true -CurrentSource $code) -cne 'None'){throw 'Original look armed Code recovery'}",
+      "if((Get-AuraUiNavigationRecoverySurface -ExperimentalCodeStyle $true -AuraEnabled $true -PageReady $false -CurrentSource $code) -cne 'None'){throw 'Unverified Code armed recovery'}",
+      "if((Get-AuraUiNavigationRecoverySurface -ExperimentalCodeStyle $true -AuraEnabled $true -PageReady $true -CurrentSource $chat) -cne 'None'){throw 'Chat armed Code recovery'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $true -AuraEnabled $true -RecoverySurface Code -CurrentSource $code -WebErrorStatus OperationCanceled) -cne 'RetainCode'){throw 'Canceled Code detour did not retain Code'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $true -AuraEnabled $true -RecoverySurface Code -CurrentSource $code -WebErrorStatus ConnectionAborted) -cne 'RetainCode'){throw 'Aborted Code detour did not retain Code'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $true -AuraEnabled $true -RecoverySurface Code -CurrentSource $code -WebErrorStatus Unknown) -cne 'OfferCodeRecovery'){throw 'Unknown Code failure was silently retained'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $true -AuraEnabled $true -RecoverySurface Code -CurrentSource $other -WebErrorStatus OperationCanceled) -cne 'OfferCodeRecovery'){throw 'Changed destination was silently retained'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $true -AuraEnabled $true -RecoverySurface None -CurrentSource $code -WebErrorStatus OperationCanceled) -cne 'GenericFailure'){throw 'Unarmed failure entered Code recovery'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $false -AuraEnabled $true -RecoverySurface Code -CurrentSource $code -WebErrorStatus OperationCanceled) -cne 'GenericFailure'){throw 'Production Aura entered Code recovery'}",
+      "if((Get-AuraUiCodeFailureDisposition -ExperimentalCodeStyle $true -AuraEnabled $false -RecoverySurface Code -CurrentSource $code -WebErrorStatus OperationCanceled) -cne 'GenericFailure'){throw 'Original look entered Code recovery'}",
+    ].join("\n");
+    run("powershell.exe", [
+      "-NoProfile",
+      "-EncodedCommand",
+      Buffer.from(regression, "utf16le").toString("base64"),
+    ]);
+  }
+});
+
 test("Aura Rescue Mode fails native and offers reversible user actions", async () => {
   const ui = await fs.readFile(uiPath, "utf8");
   const uiCopy = await readHostCopy();

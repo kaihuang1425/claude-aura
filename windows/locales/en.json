@@ -123,6 +123,8 @@
   "desktopNotFoundMessage": "Install the official Claude Desktop app, then try this button again.",
   "continueSigningIn": "Continue signing in; Aura will apply automatically.",
   "loadFailed": "Claude could not load. Check your connection, then retry.",
+  "codeRecoveryMessage": "The local-app handoff did not complete. Return to Aura Code to continue in the web session.",
+  "returnToAuraCode": "Return to Aura Code",
   "rescueAccessibleName": "Claude Aura recovery",
   "rescueEyebrow": "Browser check detected",
   "rescueTitle": "Claude needs a browser check",

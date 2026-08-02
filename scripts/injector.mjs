@@ -226,21 +226,17 @@ async function probeSession(session) {
     const style = getComputedStyle(root);
     const host = location.hostname.toLowerCase();
     const protocol = location.protocol;
-    const title = document.title || '';
     const markers = {
       claudeHost: host === 'claude.ai' || host.endsWith('.claude.ai'),
       semanticTokens: Boolean(style.getPropertyValue('--bg-100').trim() || style.getPropertyValue('--claude-background-color').trim()),
       desktopFrame: Boolean(document.querySelector('.dframe-root, .dframe-sidebar, .dframe-content, .cds-root')),
       editor: Boolean(document.querySelector('.ProseMirror, [contenteditable="true"], textarea')),
-      claudeTitle: /(^|\\s)Claude(\\s|$)/i.test(title),
     };
     const localClaudeFrame = (protocol === 'file:' || protocol === 'app:' || protocol === 'about:') &&
-      (markers.semanticTokens || markers.desktopFrame || markers.claudeTitle);
+      (markers.semanticTokens || markers.desktopFrame);
     return {
       claude: markers.claudeHost || localClaudeFrame,
       markers,
-      title: title.slice(0, 120),
-      url: location.href.slice(0, 400),
     };
   })()`);
 }
@@ -278,9 +274,9 @@ async function connectClaudeTargets(options) {
 
 async function removeFromSession(session) {
   return session.evaluate(`(() => {
-    window.__CLAUDE_AURA_DISABLED__ = true;
     const state = window.__CLAUDE_AURA_STATE__;
     if (state?.cleanup) return state.cleanup();
+    window.__CLAUDE_AURA_DISABLED__ = true;
     document.getElementById('claude-aura-style')?.remove();
     document.getElementById('claude-aura-backdrop')?.remove();
     const html = document.documentElement;
@@ -409,7 +405,7 @@ async function runOneShot(options) {
           if (options.mode === "apply") await session.evaluate(bundle.payload);
           result = await waitForVerify(session, bundle.digest, options.timeoutMs);
         }
-        results.push({ targetId: target.id, targetUrl: target.url.slice(0, 400), markers: probe.markers, result });
+        results.push({ targetId: target.id, markers: probe.markers, result });
         if (options.screenshot && !captured) {
           await capture(session, options.screenshot);
           captured = true;
@@ -445,9 +441,16 @@ async function runWatch(options) {
     if (!probe?.claude) {
       session.close();
       sessions.delete(id);
-      return false;
+      failures.set(id, Date.now() + 3000);
+      throw new Error("Renderer target no longer matched Claude");
     }
-    await session.evaluate(bundle.payload);
+    const installation = await session.evaluate(bundle.payload);
+    if (!installation?.installed) {
+      session.close();
+      sessions.delete(id);
+      failures.set(id, Date.now() + 3000);
+      throw new Error("Renderer replacement did not confirm installation");
+    }
     const item = sessions.get(id);
     if (item) item.digest = bundle.digest;
     return true;
@@ -469,12 +472,18 @@ async function runWatch(options) {
             const nextBundle = await buildPayload({ configPath: options.configPath });
             bundle = nextBundle;
             signature = await dependencySignature(bundle);
+            let pendingTargets = 0;
             for (const [id, item] of sessions) {
               try { await applyCurrent(id, item.session); } catch (error) {
+                pendingTargets += 1;
                 console.error(`[claude-aura] live theme update failed for ${id}: ${error.message}`);
               }
             }
-            console.log(`[claude-aura] switched live to ${bundle.theme.name} (${bundle.digest.slice(0, 10)})`);
+            if (pendingTargets) {
+              console.log(`[claude-aura] loaded ${bundle.theme.name}; ${pendingTargets} target(s) pending retry`);
+            } else {
+              console.log(`[claude-aura] switched live to ${bundle.theme.name} (${bundle.digest.slice(0, 10)})`);
+            }
           } catch (error) {
             console.error(`[claude-aura] config change rejected; keeping previous theme: ${error.message}`);
           }
@@ -519,7 +528,7 @@ async function runWatch(options) {
           });
           await applyCurrent(target.id, session);
           failures.delete(target.id);
-          console.log(`[claude-aura] themed ${target.id} (${probe.title || target.url})`);
+          console.log(`[claude-aura] themed ${target.id}`);
         } catch (error) {
           session?.close();
           sessions.delete(target.id);

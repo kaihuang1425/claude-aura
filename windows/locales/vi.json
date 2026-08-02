@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "Cài đặt ứng dụng Claude Desktop chính thức, rồi thử lại nút này.",
   "continueSigningIn": "Tiếp tục đăng nhập; Aura sẽ tự áp dụng.",
   "loadFailed": "Không thể tải Claude. Kiểm tra kết nối rồi thử lại.",
+  "codeRecoveryMessage": "Việc chuyển sang ứng dụng cục bộ chưa hoàn tất. Quay lại Aura Code để tiếp tục phiên web.",
+  "returnToAuraCode": "Quay lại Aura Code",
   "rescueAccessibleName": "Phục hồi Claude Aura",
   "rescueEyebrow": "Phát hiện kiểm tra trình duyệt",
   "rescueTitle": "Claude cần kiểm tra trình duyệt",

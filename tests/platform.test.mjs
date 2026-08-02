@@ -59,6 +59,16 @@ test("legacy macOS CDP validation rejects unsafe endpoints", async () => {
   for (const marker of ["claude-aura-animated-image", "--aura-theme-art", "claudeAuraTheme", "claudeAuraArtMobile", "claudeAuraDigest"]) {
     assert(injector.includes(marker), `Legacy cleanup does not cover ${marker}`);
   }
+  for (const privateSurface of ["targetUrl", "target.url.slice", "probe.title", "document.title", "location.href.slice"]) {
+    assert(!injector.includes(privateSurface),
+      `Legacy diagnostics must not retain or print private page data: ${privateSurface}`);
+  }
+  assert.match(injector,
+    /const installation = await session\.evaluate\(bundle\.payload\);\s*if \(!installation\?\.installed\)[\s\S]{0,300}?sessions\.delete\(id\)[\s\S]{0,220}?throw new Error\("Renderer replacement did not confirm installation"\)/,
+    "Watch mode must retry rather than report a cleanup-pending replacement as themed");
+  assert.match(injector,
+    /if \(!probe\?\.claude\) \{[\s\S]{0,220}?sessions\.delete\(id\)[\s\S]{0,180}?failures\.set\(id, Date\.now\(\) \+ 3000\)[\s\S]{0,180}?throw new Error\("Renderer target no longer matched Claude"\)/,
+    "Watch mode must retry rather than report a target that navigated between its safe probes");
 });
 
 // Windows can expose several bash launchers. The WindowsApps alias is WSL, which

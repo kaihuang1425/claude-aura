@@ -556,6 +556,66 @@ const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
   ["offset", "G1"],
   ["roots", "G2"],
   ["parent", "G3"],
+  ["createExperimentalCodeAdapter", "H2"],
+  ["codeEnvironment", "H3"],
+  ["codeDescriptor", "H4"],
+  ["codeGetContext", "H5"],
+  ["codeGetNavigationKey", "H6"],
+  ["codeGetComputedStyle", "H7"],
+  ["codeMarkers", "H8"],
+  ["codeSnapshots", "H9"],
+  ["codeOutcome", "I0"],
+  ["codeStatus", "I1"],
+  ["codeReason", "I2"],
+  ["codeSignature", "I3"],
+  ["codeVisible", "I4"],
+  ["codeMatches", "I5"],
+  ["codeSelector", "I6"],
+  ["codePresent", "I7"],
+  ["codeRollback", "I8"],
+  ["codeDefinitions", "I9"],
+  ["codeRequired", "J0"],
+  ["codeStyleKey", "J1"],
+  ["codeSelected", "J2"],
+  ["codeName", "J4"],
+  ["codePrefix", "J5"],
+  ["codeGetMode", "J6"],
+  ["codePalette", "J7"],
+  ["codeImportant", "J8"],
+  ["codeText", "J9"],
+  ["codeBackground", "K0"],
+  ["codeBorder", "K1"],
+  ["codeStyles", "K2"],
+  ["codeIndex", "K3"],
+  ["codeDocument", "K4"],
+  ["codeMarker", "K5"],
+  ["codeStyleId", "K6"],
+  ["codeRect", "K7"],
+  ["codeStyle", "K8"],
+  ["codeValue", "K9"],
+  ["codeContext", "O0"],
+  ["codeList", "O1"],
+  ["codeFound", "O2"],
+  ["codeSet", "O3"],
+  ["codeElement", "O4"],
+  ["activate", "O5"],
+  ["rollback", "O6"],
+  ["codeSheet", "O7"],
+  ["codeNative", "O8"],
+  ["codeStyled", "O9"],
+  ["codeScope", "P2"],
+  ["codeReset", "P3"],
+  ["codeClean", "P4"],
+  ["codeMode", "P8"],
+  ["codeAsides", "Q0"],
+  ["codeMains", "Q1"],
+  ["codeAside", "Q2"],
+  ["codeMain", "Q3"],
+  ["codePending", "Q4"],
+  ["codeApplied", "Q5"],
+  ["codeCleanupRetry", "R1"],
+  ["codeAdapter", "R7"],
+  ["replacementOnly", "R8"],
 ]);
 
 export function compactRendererIdentifiers(source) {
@@ -985,9 +1045,17 @@ export async function compileTheme({
   };
 }
 
-export async function buildPayloadFromCompiled(compiled, { enforceBudget = true } = {}) {
+export async function buildPayloadFromCompiled(compiled, {
+  enforceBudget = true,
+  experimentalCode = null,
+} = {}) {
   if (!compiled || typeof compiled.css !== "string" || !isPlainObject(compiled.settings)) {
     throw new Error("A compiled theme is required to build a renderer payload");
+  }
+  if (experimentalCode !== null
+      && (typeof experimentalCode?.factory !== "function"
+        || !isPlainObject(experimentalCode?.descriptor))) {
+    throw new Error("Experimental Code payload input is invalid");
   }
   let rendererSource = await fs.readFile(
     path.join(PROJECT_ROOT, "assets", "renderer-inject.js"),
@@ -996,10 +1064,19 @@ export async function buildPayloadFromCompiled(compiled, { enforceBudget = true 
   // Gates 3 and 4 remain open. Keep production payloads inert even if the
   // dormant registry is edited; activation requires a separate reviewed change.
   const codeAdapterFactory = createInertCodeAdapter;
-  rendererSource = rendererSource.replace(CODE_ADAPTER_ACTIVE_PATTERN, "");
+  if (experimentalCode === null) {
+    rendererSource = rendererSource.replace(CODE_ADAPTER_ACTIVE_PATTERN, "");
+  }
   rendererSource = rendererSource
-    .replace("__AURA_CODE_ADAPTER_FACTORY__", `(${codeAdapterFactory.toString()})`)
-    .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`);
+    .replace(
+      "__AURA_CODE_ADAPTER_FACTORY__",
+      `(${(experimentalCode?.factory ?? codeAdapterFactory).toString()})`,
+    )
+    .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`)
+    .replace(
+      "__AURA_CODE_SIGNATURES__",
+      JSON.stringify(experimentalCode?.descriptor ?? null),
+    );
   let template = compactRendererSyntax(compactRendererIdentifiers(rendererSource));
   const runtimeSettings = { ...compiled.settings };
   for (const diagnosticKey of [

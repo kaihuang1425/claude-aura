@@ -515,8 +515,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && mainPrepaintStartIndex > mainNavigationPendingIndex,
   "Aura must apply the WebView2 color preference before its gated claude.ai navigation");
   assert.match(ui,
-    /function Complete-AuraUiInitialNavigationAfterPrepaint[\s\S]{0,500}?CoreWebView2\.Navigate\('https:\/\/claude\.ai\/'\)/,
-    "The gated initial navigation must still target claude.ai after passive prepaint registration");
+    /function Complete-AuraUiInitialNavigationAfterPrepaint[\s\S]{0,500}?CoreWebView2\.Navigate\(\$ClaudeInitialUrl\)/,
+    "The gated initial navigation must use the audited fixed Claude target after passive prepaint registration");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
   assert.match(ui, /PostWebMessageAsJson\s*\(/);
   assert.match(ui, /\[switch\]\$OpenStudio/,
@@ -1518,6 +1518,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(enabledConfigIndex >= 0 && enabledSchemeIndex > enabledConfigIndex
       && enabledCleanupIndex > enabledSchemeIndex,
   "Original look must persist System and reset the profile preference before renderer cleanup");
+  assert.match(setEnabled,
+    /const state = window\.__CLAUDE_AURA_STATE__; if \(state\?\.cleanup\) return state\.cleanup\(\); window\.__CLAUDE_AURA_DISABLED__ = true; return true;/,
+    "Original look must let renderer cleanup remain enabled while its native restoration is pending");
+  assert.match(setEnabled,
+    /if \(\$script:WebReady[\s\S]{0,500}?Start-AuraUiScript -Source \$cleanup -Action Restore[\s\S]{0,100}?else \{[\s\S]{0,100}?originalActive/,
+    "Original look may report immediate success only when no live Claude renderer needs cleanup");
+  assert.match(setEnabled,
+    /if \(\$script:WebReady -and \$null -ne \$script:WebView\.CoreWebView2 -and\s*-not \$script:RescueActive -and -not \$script:RescueVerificationPending -and\s*\$null -eq \$script:RescueChallengeCandidate -and/,
+    "Original look must enter cleanup-pending only when the host can actually run renderer cleanup");
   assert.match(ui,
     /if \(\$Mode -eq 'Restore'\)\s*\{\s*\$initialOptions \+= @\('--enabled', 'false', '--appearance', 'system'\)\s*\}/,
     "The command-line Restore path must also persist Original look in System appearance");
@@ -4839,8 +4848,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(navigationCompletionDisposition,
     /\$IsSuccess\s+-or[\s\S]*?\[UInt64\]\$ReadyNavigationId\s+-eq\s+\$CompletedNavigationId[\s\S]*?return\s+['"]Loaded['"]/,
     "DOMContentLoaded must keep a usable post-auth document visible when completion reports cancellation");
-  assert.match(ui,
-    /\$core\.add_NavigationStarting\(\{\s*param\(\$sender,\s*\$eventArgs\)[\s\S]{0,240}?\$script:ActiveNavigationId\s*=\s*\[UInt64\]\$eventArgs\.NavigationId/,
+  const navigationStartingIndex = ui.indexOf("$core.add_NavigationStarting({");
+  const navigationStartingEnd = ui.indexOf("$core.add_DOMContentLoaded({", navigationStartingIndex);
+  assert(navigationStartingIndex >= 0 && navigationStartingEnd > navigationStartingIndex,
+    "Aura UI must register its main NavigationStarting handler");
+  const navigationStartingHandler = ui.slice(navigationStartingIndex, navigationStartingEnd);
+  assert.match(navigationStartingHandler,
+    /\$script:ActiveNavigationId\s*=\s*\[UInt64\]\$eventArgs\.NavigationId/,
     "Every main navigation must record its WebView2 NavigationId");
   assert.match(ui,
     /\$core\.add_DOMContentLoaded\(\{[\s\S]{0,700}?\$script:ReadyNavigationId\s*=\s*\[UInt64\]\$eventArgs\.NavigationId[\s\S]{0,220}?Hide-AuraUiLoading/,
@@ -4864,6 +4878,30 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "A busy renderer must queue Restore and cancel a stale pending Apply");
   assert.match(ui, /if\s*\(\$script:PendingRestore\)\s*\{[\s\S]{0,500}?Start-AuraUiScript\s+-Source\s+\$cleanup\s+-Action\s+Restore/,
     "Queued Restore must run as soon as the active renderer task completes");
+  assert.match(ui,
+    /\$action -eq 'Restore'[\s\S]{0,180}?\$result -match '\^\\s\*true\\s\*\$'[\s\S]{0,260}?RestoreVerificationDueUtc\s*=\s*\[DateTime\]::UtcNow\.AddMilliseconds\(240\)/,
+    "A cleanup-pending Restore must wait for one bounded renderer retry before any success claim");
+  assert.match(ui,
+    /RestoreVerificationDueUtc[\s\S]{0,500}?-Action RestoreVerify[\s\S]{0,900}?\$restoreVerified[\s\S]{0,500}?Send-AuraUiStudioState/,
+    "Only a verified retired renderer may complete a delayed Original-look claim");
+  assert.match(ui,
+    /function Send-AuraUiStudioState[\s\S]{0,1800}?if \(-not \$Status\) \{\s*if \(\$script:OriginalRestoreState -ceq 'Pending'\)[\s\S]{0,180}?applyingTheme[\s\S]{0,180}?elseif \(\$script:OriginalRestoreState -ceq 'Failed'\)[\s\S]{0,180}?appearanceNotChangedMessage[\s\S]{0,420}?originalActive/,
+    "Every default Studio refresh must preserve an honest pending or failed Original-look status");
+  assert.match(ui,
+    /if \(\$script:WebReady[\s\S]{0,520}?OriginalRestoreState\s*=\s*'Pending'[\s\S]{0,180}?-Action Restore/,
+    "A live Original-look request must enter the pending state before renderer cleanup starts");
+  assert.match(ui,
+    /\$restoreCompleted[\s\S]{0,500}?OriginalRestoreState\s*=\s*'None'[\s\S]{0,400}?OriginalRestoreState\s*=\s*'Failed'/,
+    "Renderer retirement success and failure must settle the host-owned Original-look state explicitly");
+  assert.match(ui,
+    /function Get-AuraUiHostDeadlineUtc[\s\S]{0,1500}?RestoreVerificationDueUtc/,
+    "The host deadline must wake the bounded Original-look retirement verification");
+  assert.match(ui,
+    /if \(\$null -ne \$script:RestoreVerificationDueUtc -and\s*\[DateTime\]::UtcNow -ge \$script:RestoreVerificationDueUtc\) \{\s*\$script:RestoreVerificationDueUtc = \$null[\s\S]{0,700}?AddMilliseconds\(240\)[\s\S]{0,700}?-Action RestoreVerify/,
+    "Every expired restore deadline must be consumed before an ineligible verification is deferred");
+  assert.match(ui,
+    /RestoreVerificationDueUtc = \$null[\s\S]{0,600}?RescueChallengeCandidate[\s\S]{0,220}?CoreWebView2[\s\S]{0,300}?RestoreVerificationDueUtc = \[DateTime\]::UtcNow\.AddMilliseconds\(240\)/,
+    "Restore verification must defer across every guard that can decline script execution");
   assert(!ui.includes("'Customize themes'"), "Picker chrome must come from localized UI copy");
   assert(!ui.includes("'Applying your look...'"), "Loading status must come from localized UI copy");
   assert.match(ui, /themeFallbackDescription/);
@@ -6004,7 +6042,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     /function Write-AuraUiStudioPreferences[\s\S]{0,1600}?\[IO\.File\]::WriteAllText\(\$temporary[\s\S]{0,500}?\[IO\.File\]::Replace\(\$temporary,\s*\$StudioPreferencesPath,\s*\$backup\)[\s\S]{0,180}?\[IO\.File\]::Move\(\$temporary,\s*\$StudioPreferencesPath\)/,
     "Studio preferences must use UTF-8 temporary-write plus atomic replace-or-move persistence");
   assert.match(ui,
-    /function Send-AuraUiStudioState[\s\S]{0,2000}?locale = "\$\(\$script:Locale\)"[\s\S]{0,180}?introductionPending =[\s\S]{0,220}?introductionRequested =/,
+    /function Send-AuraUiStudioState[\s\S]{0,2600}?locale = "\$\(\$script:Locale\)"[\s\S]{0,180}?introductionPending =[\s\S]{0,220}?introductionRequested =/,
     "The host must own locale, introduction completion, and launcher-entry state");
   assert.match(ui,
     /function Show-AuraUiStudio\s*\{\s*param\(\[switch\]\$OfferIntroduction\)[\s\S]{0,180}?StudioIntroductionRequested = \$true/,

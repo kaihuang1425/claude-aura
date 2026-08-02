@@ -3,9 +3,13 @@
 // renderer overlay lifecycle (mount over the account button, then clear).
 import { test, runIfMain } from "./support/harness.mjs";
 import {
-  assert, fs, path, PROJECT_ROOT, DEFAULT_CONFIG,
+  assert, fs, path, PROJECT_ROOT, DEFAULT_CONFIG, THEME_IDS,
   compileTheme, buildPayload, buildPayloadFromCompiled, writeConfig, readPayloadSettings,
 } from "./support/context.mjs";
+import {
+  createExperimentalCodeAdapter,
+  createExperimentalCodeDescriptor,
+} from "../scripts/theme-core/code-adapter.mjs";
 
 // A minimal but real 1x1 PNG.
 const PNG_1x1 = Buffer.from(
@@ -72,6 +76,49 @@ test("personal avatar embeds, stays budget-exempt, strips when absent, and fits 
     const heavy = await buildPayload({ configPath });
     assert.equal(readPayloadSettings(heavy.payload).avatarDataUrl, compiled.settings.avatarDataUrl,
       "The overlay must fit even the heaviest built-in theme rather than shedding");
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("the source-only Code experiment fits every built-in theme with a personal avatar", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-avatar-code-"));
+  try {
+    const configPath = path.join(temporary, "config.json");
+    const avatarPath = path.join(temporary, "me.png");
+    await fs.writeFile(avatarPath, PNG_1x1);
+
+    const overBudget = [];
+    for (const theme of THEME_IDS) {
+      for (const appearance of ["system", "light", "dark"]) {
+        await writeConfig(configPath, {
+          ...DEFAULT_CONFIG,
+          theme,
+          appearance,
+          avatar: avatarPath,
+        });
+        const compiled = await compileTheme({ configPath });
+        const experimentalCode = {
+          factory: createExperimentalCodeAdapter,
+          descriptor: createExperimentalCodeDescriptor(compiled.theme),
+        };
+        const measured = await buildPayloadFromCompiled(compiled, {
+          enforceBudget: false,
+          experimentalCode,
+        });
+        assert.equal(
+          readPayloadSettings(measured.payload).avatarDataUrl,
+          compiled.settings.avatarDataUrl,
+          `${theme} ${appearance} must preserve the configured personal avatar`,
+        );
+        if (measured.payloadBudget.chromeBytes >= 65000) {
+          overBudget.push([theme, appearance, measured.payloadBudget.chromeBytes]);
+        } else {
+          await buildPayloadFromCompiled(compiled, { experimentalCode });
+        }
+      }
+    }
+    assert.deepEqual(overBudget, [], "Every experimental theme must stay below the 65 KB chrome budget");
   } finally {
     await fs.rm(temporary, { recursive: true, force: true });
   }

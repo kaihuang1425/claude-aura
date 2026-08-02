@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "Pasang aplikasi resmi Claude Desktop, lalu tekan tombol ini lagi.",
   "continueSigningIn": "Lanjutkan proses masuk; Aura akan menerapkan secara otomatis.",
   "loadFailed": "Claude tidak dapat dimuat. Periksa koneksi Anda, lalu coba lagi.",
+  "codeRecoveryMessage": "Transfer ke aplikasi lokal belum selesai. Kembali ke Aura Code untuk melanjutkan sesi web.",
+  "returnToAuraCode": "Kembali ke Aura Code",
   "rescueAccessibleName": "Pemulihan Claude Aura",
   "rescueEyebrow": "Pemeriksaan browser terdeteksi",
   "rescueTitle": "Claude memerlukan pemeriksaan browser",

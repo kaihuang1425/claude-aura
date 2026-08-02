@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "Zainstaluj oficjalną aplikację Claude Desktop, a następnie spróbuj jeszcze raz.",
   "continueSigningIn": "Kontynuuj logowanie; Aura zastosuje to automatycznie.",
   "loadFailed": "Nie udało się załadować Claude. Sprawdź połączenie, a potem spróbuj ponownie.",
+  "codeRecoveryMessage": "Przekazanie do aplikacji lokalnej nie zostało zakończone. Wróć do Aura Code, aby kontynuować sesję internetową.",
+  "returnToAuraCode": "Wróć do Aura Code",
   "rescueAccessibleName": "Przywracanie Claude Aura",
   "rescueEyebrow": "Wykryto sprawdzanie przeglądarki",
   "rescueTitle": "Claude potrzebuje sprawdzenia przeglądarki",

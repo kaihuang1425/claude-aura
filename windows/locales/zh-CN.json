@@ -123,6 +123,8 @@
   "desktopNotFoundMessage": "请安装官方 Claude 桌面版，然后重试。",
   "continueSigningIn": "请继续登录；Aura 会自动应用主题。",
   "loadFailed": "无法加载 Claude。请检查网络连接后重试。",
+  "codeRecoveryMessage": "本地应用切换未完成。请返回 Aura Code，继续使用网页会话。",
+  "returnToAuraCode": "返回 Aura Code",
   "rescueAccessibleName": "Claude Aura 恢复选项",
   "rescueEyebrow": "检测到浏览器验证",
   "rescueTitle": "Claude 需要进行浏览器验证",

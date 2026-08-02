@@ -123,6 +123,8 @@
   "desktopNotFoundMessage": "請安裝官方 Claude 桌面版，然後再試一次。",
   "continueSigningIn": "請繼續登入；Aura 會自動套用主題。",
   "loadFailed": "無法載入 Claude。請檢查網路連線後重試。",
+  "codeRecoveryMessage": "切換到本機 App 的流程沒有完成。請返回 Aura Code，繼續使用網頁工作階段。",
+  "returnToAuraCode": "返回 Aura Code",
   "rescueAccessibleName": "Claude Aura 復原選項",
   "rescueEyebrow": "偵測到瀏覽器驗證",
   "rescueTitle": "Claude 需要進行瀏覽器驗證",

@@ -79,9 +79,10 @@ Claude interface. Aura 0.3 also does not theme native Claude Desktop Code or
 the Claude Code terminal, and ordinary Claude chat inside Aura cannot read a
 local project.
 
-Aura Code is release-blocking work for the final release. Its approved plan is
+Aura Code is release-blocking work for the final release and is not currently
+a supported, stable, installed, or released Aura feature. Its approved plan is
 CLI-first: Aura will guide the user to an official local Claude Code/Remote
-Control engine while theming the supported live `claude.ai/code` conversation.
+Control engine only after the remaining support and live-human gates pass.
 The first Code activation will offer local Aura setup, an existing session,
 the full native Desktop workspace, or no local editing, with the setup and its
 benefits, limitations, and privacy details available again in Settings.
@@ -91,6 +92,33 @@ rather than a hidden Aura dependency. Aura will use a direct handoff only if
 that documented route passes its feasibility gate; otherwise it will offer
 truthful current guidance. Optional Agent View status, Desktop minimization,
 and VS Code theming ship only if their separate feasibility gates pass.
+
+### Source-checkout Aura Code styling experiment and detour recovery
+
+Developers can opt into a reversible source-checkout-only styling experiment.
+Installers, ordinary launches, release payloads, and Claude Desktop remain
+unchanged. The experiment requires exactly one visible `aside` and one visible
+`main`; it themes only those two structural surfaces. Inner regions, lists,
+editors, controls, and unknown structures stay native. Any visible native
+`dialog`, ARIA `dialog`, or ARIA `alertdialog` rolls the entire experiment back
+to native presentation until the safety surface is gone.
+
+Start it explicitly from the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\start.ps1 -ExperimentalCodeStyle -ExperimentalCodeStart
+```
+
+If WebView2 reports a canceled or aborted handoff while the verified Code
+document is still current, Aura reveals that document. Otherwise Aura shows
+**Return to Aura Code**. Select it to navigate to the fixed
+`https://claude.ai/code` route. Aura does not retry automatically, replay the
+failed destination, or retain that destination. It does not automate sign-in,
+trust, prompts, permissions, or project access, and it does not read or retain
+Code text, paths, files, transcripts, or session URLs. Ordinary launches,
+failed classification, **Original look**, and cleanup keep or restore native
+behavior. Passing developer tests or a private live observation does not make
+this experiment release-eligible; the full WO-27 checkpoint remains open.
 
 ## A custom image does not appear
 

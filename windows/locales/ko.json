@@ -118,6 +118,8 @@
   "desktopNotFoundMessage": "공식 Claude Desktop 앱을 설치한 뒤 이 버튼을 다시 시도하세요.",
   "continueSigningIn": "로그인을 계속 진행하세요. Aura가 자동으로 적용합니다.",
   "loadFailed": "Claude를 로드할 수 없습니다. 연결 상태를 확인하고 재시도하세요.",
+  "codeRecoveryMessage": "로컬 앱 이전이 완료되지 않았습니다. 웹 세션을 계속하려면 Aura Code로 돌아가십시오.",
+  "returnToAuraCode": "Aura Code로 돌아가기",
   "rescueAccessibleName": "Claude Aura 복구",
   "rescueEyebrow": "브라우저 확인이 감지됨",
   "rescueTitle": "Claude에 브라우저 확인이 필요함",
