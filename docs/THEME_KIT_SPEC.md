@@ -28,8 +28,10 @@ document, the tooling is not finished.
    the floating launcher plus **Instant prompts**. Capabilities stay in those
    branches instead of adding destinations or empty placeholders. The fixed
    command and stage header stays outside the inspector's one body scroller,
-   so its scrollbar begins below the header. Light/Dark, page, and
-   Standard/Wide stay beside the preview in every capability branch. The
+   so its scrollbar begins below the header. Light/Dark, page, and the current
+   framing controls stay beside the preview in every capability branch. Legacy
+   themes show Standard/Wide; an explicitly responsive theme shows its saved
+   layout track. The
    preview and inspector body scroll independently inside the editor
    workspace; the preview is not sticky and never floats over controls lower
    in the inspector. The generated theme ID remains immutable.
@@ -53,12 +55,15 @@ document, the tooling is not finished.
    pointer drag, keyboard movement, and reorder keep the same opaque layer ID
    even when another layer is visually above it.
 5. The preview and dimension controls stay beside the live preview in both
-   editor levels. Choose Standard or Wide, or type a bounded width and height;
-   width below 1440 uses the Standard position set and width at or above 1440
-   uses the Wide set. There is no Apply action and custom dimensions do not
-   silently create more saved sets. The effective preview-result label follows
-   the width, but the edit-target selector never moves unless you explicitly
-   choose Standard or Wide. Studio echoes dimensions immediately,
+   editor levels. A legacy theme offers Standard and Wide: width below 1440
+   uses Standard, and width at or above 1440 uses Wide. Choose **Enable
+   responsive layouts** only when you want named saved sizes and numeric
+   geometry that steps or flows between them. That explicit upgrade starts
+   with Standard 1180×640 and Wide 1560×940; it does not move the current
+   new-chat prompt. There is no Apply action. Typing a bounded custom width and
+   height previews that size but never creates a set, revision, or Undo item.
+   The edit target never moves unless you choose a saved layout or use **Add
+   layout set here**. Studio echoes dimensions immediately,
    coalesces rapid changes, resizes the
    actual Aura window without bringing it in front, and replaces the canvas
    capture when the matching frame is ready.
@@ -68,15 +73,18 @@ document, the tooling is not finished.
    never more top-level destinations. The preview, branch, target, preview
    context, edit scope, and draft stay in place when the level changes. For an
    image, Advanced adds its exact appearance, page, viewport, mask, mobile
-   behavior, and Standard/Wide framing. Pointer dragging, keyboard operation,
+   behavior, and legacy Standard/Wide or saved-layout framing. Pointer dragging, keyboard operation,
    sliders, and exact numeric fields edit the same safe values. Selection and
    temporary **Hide while editing** follow the same layer after reorder and do
    not change saved visibility by accident. In Conversation, a selected
    New-chat-area or Greeting target stays selected but unavailable and inert,
    explains that it is New chat only, and offers **Switch preview** instead of
    silently choosing another object. Greeting provides independent Light/Dark
-   and Standard/Wide controls for placement, width, typography, alignment,
-   decoration, and an approved native or compact mark.
+   and legacy Standard/Wide controls for placement, width, typography,
+   alignment, decoration, and an approved native or compact mark. After the
+   responsive upgrade, those numeric controls belong only to the explicitly
+   selected saved layout; categorical presentation remains shared or
+   appearance-owned and never interpolates.
 7. In Background, choose **Sidebar**, **Main area only**, or **Entire window**.
    The canvas keeps the sidebar and main area visibly labelled: clicking a
    blank region selects it, while the explicit Entire window choice combines
@@ -112,7 +120,8 @@ document, the tooling is not finished.
    canvas surfaces route to existing Interface token controls; they are never
    moved or rewritten. A marked new-chat Greeting routes to the existing
    Interface Greeting target. Its overlay-owned proxy can move or resize the
-   active Light/Dark and Standard/Wide frame; resize writes real bounded font
+   active Light/Dark frame at the selected legacy or saved responsive layout;
+   resize writes real bounded font
    size, line height, maximum width, and mark size rather than a transform.
    A registered artwork layer routes to Background by its opaque layer ID, and
    an Instant prompt routes to Widgets by its opaque card ID. Drag the move or
@@ -180,14 +189,17 @@ greeting words, or edit other unauthorized surfaces.
 
 The editor keeps four questions visibly separate:
 
-- **Previewing** says which appearance, page, dimensions, and effective
-  Standard/Wide result the canvas shows.
+- **Previewing** says which appearance, page, and actual dimensions the canvas
+  shows, including the effective Standard/Wide result for a legacy theme.
 - **Editing** names the selected target.
 - **Applies to** names the appearance, page, and frame scope the next edit will
   change. Shared is an Applies-to value.
-- **Source** says Theme original or Customized in schema v2. Later sparse
-  schemas may name the exact inherited source, including Standard when Wide is
-  linked; they never mislabel shared scope as provenance.
+- A responsive theme separately names **Editing layout** and **Between**, so a
+  custom preview or interpolated midpoint cannot silently retarget the next
+  edit.
+- **Source** says Theme original or Customized in schema v2, and explicit,
+  inherited, or interpolated for responsive numeric values. It never
+  mislabels shared scope as provenance.
 
 Changing Previewing alone may update the in-memory capture or resize the Aura
 window, but it cannot send a theme patch, advance the draft revision, add an
@@ -241,8 +253,10 @@ token, choose the font category, size, colour role, and position, or use
 one Undo-able action. Changing the preview to Conversation keeps Greeting
 selected, disables its controls, and offers **Switch preview**.
 
-Advanced exposes the independent Light/Dark and Standard/Wide frames. Each
-frame has exact numeric controls for X/Y position, maximum width, size,
+Advanced exposes independent Light/Dark presentation and legacy Standard/Wide
+frames. After responsive layouts are enabled, the same numeric controls belong
+to the selected saved layout instead. Each frame has exact numeric controls for
+X/Y position, maximum width, size,
 tracking, line height, and mark scale, plus allowlisted alignment, weight,
 italic, decoration, and mark choices. Pointer movement, keyboard movement or
 resize, sliders, and exact inputs all submit one complete bounded frame and
@@ -273,10 +287,12 @@ for every language enabled in the theme; English remains the fallback.
 Tickets can be reordered or removed without changing the identities of the
 remaining tickets.
 
-Each ticket stores one shared opacity and separate Standard/Wide placement.
-Opacity is `0`–`1`; horizontal and vertical offsets are `-50`–`50` viewport
-percent; scale is `0.5`–`1.75`. A legacy ticket without layout migrates to
-opacity `1`, zero offsets, and scale `1` in both frames. Studio, the compiled
+Each ticket stores one shared opacity and separate Standard/Wide placement in a
+legacy theme. A responsive theme stores sparse numeric placement, width, scale,
+and bounded pixel offsets under its registered layout IDs. Opacity is `0`–`1`;
+horizontal and vertical positions are `-50`–`50` viewport percent; scale is
+`0.5`–`1.75`. A legacy ticket without layout migrates to opacity `1`, zero
+offsets, and scale `1` in both frames. Studio, the compiled
 payload, and Edit on window use this same bounded layout object, so saving and
 restarting cannot reinterpret a live gesture.
 
@@ -399,18 +415,21 @@ URLs, custom CSS, and filesystem paths never style the Studio shell. Theme-card
 media, the editor's labelled asset guide/stage, and the validated launcher mark
 remain their own bounded product surfaces.
 
-### Studio-authored schemas v2, v3, and v4
+### Studio-authored schemas v2 through v5
 
-Studio saves an edited `theme.json` with `schemaVersion: 4`. Schema v3 carries
-the schema-v2 document forward and adds optional `newChatGreetingStyle`; `null`
-means Claude-native presentation. Schema v4 adds localized metadata, bounded
+Studio creates and continues saving a non-responsive edited `theme.json` with
+`schemaVersion: 4`. It accepts schema v1 through v4 without upgrading the
+installed document merely because it was opened. Only **Enable responsive
+layouts** or a responsive edit upgrades the complete current, baseline,
+last-valid, applied, Undo, and Redo family to schema v5 as one transaction.
+Schema v3 carries the schema-v2 document forward and adds optional
+`newChatGreetingStyle`; `null` means Claude-native presentation. Schema v4 adds localized metadata, bounded
 interface surfaces, and background filters. Localized metadata may use a
 selected subset of Studio's fifteen interface locales. `labels` and
 `descriptions` must have the same locale keys, `en` must be present, and every
 selected locale must have a completed name and description before Save.
-Unselected locales fall back to English at runtime. Opening a schema-v1,
-schema-v2, or schema-v3 user theme normalizes only the in-memory editing
-history and does not rewrite the installed kit until Save. The document
+Unselected locales fall back to English at runtime. Opening a schema-v1 through
+v4 user theme does not rewrite the installed kit. The document
 carries localized metadata and a validated, Studio-normalized `theme` token
 object forward from schema v1, and adds:
 
@@ -423,27 +442,48 @@ object forward from schema v1, and adds:
 - `interfaceSurfaces`: `null` or exact sparse wrappers for `sidebar`,
   `sidebarIdentity`, and `promptBlock`; unsupported properties, selectors,
   URLs, paths, HTML, CSS strings, and font sources are rejected;
-- `newChatGreetingStyle`: `null` or exact Light/Dark × Standard/Wide greeting
-  presentation and frame values;
+- `newChatGreetingStyle`: `null` or, in schema v4, exact Light/Dark ×
+  Standard/Wide greeting presentation and frame values;
 - `artworkLayers`: zero to eight entries using app-owned
   `artwork/layer-<32 lowercase hex>.webp` files; and
 - per-layer `role`, `appearance`, `context`, `viewport`, `visible`, `opacity`,
   `mask`, `mobile`, optional bounded `filters`, plus exact `normal` and `wide`
-  frame objects.
+  frame objects in schema v4.
+
+Schema v5 retains the complete schema-v4 document and adds exactly
+`responsiveLayouts: { mode, axis, sets, breakpoints }`. `axis` is `width`;
+`mode` is `step` or `fluid`; and one to six sets are sorted by a unique width.
+Each set has a stable bounded ID, a non-empty label of at most 40 characters,
+and an exact reference width of 920–3840 px and height of 620–2400 px. Fluid
+mode stores `breakpoints: null`. Step mode stores one activation width strictly
+between every adjacent pair.
+
+The explicit upgrade seeds Standard 1180×640, Wide 1560×940, and the legacy
+1440 px step breakpoint. Existing artwork and greeting geometry maps to those
+IDs. The shared new-chat prompt tuple remains inherited until one set receives
+an explicit prompt edit, so migration cannot move it. Responsive frame maps may
+use only registered set IDs and capability-approved numeric geometry. Artwork,
+Greeting, new-chat prompt, Instant prompt, and compatible sparse interface
+targets skip missing frames and inherit rather than copying an effective value.
+Adding metadata therefore cannot move an unrelated target; duplicate copies
+only sparse explicit frames, Reset removes them, and delete removes every frame
+for that set.
 
 Each interface surface uses the sparse wrapper `{ base, appearance, view,
 frame }`, but validation exposes only the axes owned by that surface. Shared
 material belongs in `base`; `appearance` permits only `light` and `dark`; and
-the prompt block alone may use `frame.standard` and `frame.wide` for new-chat
-width and offsets. Resolution is deterministic: base, then appearance, then
-view, then frame. Reset removes the authored leaf, so the inherited token or
-native value becomes visible again. Studio's preview width still maps to the
-frozen Standard/Wide switch and does not create a new stored state.
+the schema-v4 prompt block alone may use `frame.standard` and `frame.wide` for
+new-chat width and offsets. Schema v5 generalizes numeric frame keys to the
+registered layout IDs. Resolution is deterministic: base, then appearance,
+then view, then frame. Reset removes the authored leaf, so the inherited token
+or native value becomes visible again. Asset identity, anchor, wording, colour,
+appearance, page, visibility, mask, and interaction state remain categorical
+and never interpolate.
 
 `sidebar` contains only approved colours, an interface-font category, row
 radius, and compact/comfortable spacing controls. `promptBlock` contains only
-approved material, editor-inset, toolbar/control-state, and bounded
-Standard/Wide geometry controls. The WO-21 greeting remains its own validated
+approved material, editor-inset, toolbar/control-state, and bounded legacy or
+registered-layout geometry controls. The WO-21 greeting remains its own validated
 `newChatGreetingStyle`; schema v4 does not duplicate it inside
 `interfaceSurfaces`.
 

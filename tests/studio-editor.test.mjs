@@ -603,6 +603,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "begin-theme-edit",
     "set-theme-token",
     "set-theme-layer",
+    "enable-responsive-layouts",
+    "mutate-responsive-layout",
     "apply-theme-patch",
     "pick-theme-layer-image",
     "pick-theme-launcher-mark",
@@ -714,6 +716,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "begin-theme-edit": ["type", "theme", "reset"],
     "set-theme-token": ["type", "session", "revision", "mode", "token", "value"],
     "set-theme-layer": ["type", "session", "revision", "index", "preset", "property", "value"],
+    "enable-responsive-layouts": ["type", "session", "revision"],
+    "mutate-responsive-layout": ["type", "session", "revision", "operation", "id", "value"],
     "apply-theme-patch": ["type", "session", "revision", "changes"],
     "pick-theme-layer-image": ["type", "session", "revision", "index", "role", "appearance", "context"],
     "pick-theme-launcher-mark": ["type", "session", "revision"],
@@ -1063,7 +1067,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /const fieldFrame\s*=\s*\/\^layers[\s\S]{0,300}?shared\\\.greeting\\\.frames[\s\S]{0,260}?inspectorField === "shared\.prompt"[\s\S]{0,180}?contextFrameRow\.hidden\s*=\s*!fieldFrame/,
     "Only responsive image, prompt, or greeting-frame properties may show the Standard or Wide edit target");
   assert.match(inspectorContextBlock,
-    /const editFrameLabel[\s\S]{0,140}?const previewFrameLabel\s*=\s*tr\(stageViewport[\s\S]{0,320}?editFrameLabel[\s\S]{0,120}?customFrameUses"\), previewFrameLabel/,
+    /const editFrameLabel\s*=\s*frameDisplayLabel\(fieldFrame\)[\s\S]{0,120}?const previewFrameLabel\s*=\s*responsiveActive\(\)[\s\S]{0,220}?stageViewport[\s\S]{0,320}?editFrameLabel[\s\S]{0,120}?customFrameUses"\), previewFrameLabel/,
     "A custom preview must name its resolved saved set without replacing the field's edit target");
   const targetPickerBlock = studioEditor.match(
     /const syncTargetPicker\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/)?.[0] ?? "";
@@ -1369,6 +1373,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioEditor,
     /for \(const input of \[previewWidthInput, previewHeightInput\]\)[\s\S]{0,240}?addEventListener\("input",\s*\(\)\s*=>\s*\{[\s\S]{0,120}?previewSizeEditing\s*=\s*true[\s\S]{0,100}?schedulePreviewSize\(\)[\s\S]{0,140}?addEventListener\("change",\s*\(\)\s*=>\s*commitPreviewSize/,
     "Both preview dimensions must update the canvas live and commit their final value");
+  assert.match(studioEditor, /const truncateText[\s\S]{0,260}?slice\(0, maximum\)/,
+    "Studio must bound generated local text without splitting a surrogate pair");
+  assert.match(studioEditor,
+    /label:\s*truncateText\(format\(tr\("layoutCopyName"\), selected\.label\), 40\)/,
+    "Duplicating a maximum-length layout label must stay inside the 40-character bridge contract");
   assert.equal((quickCanvasControls.match(/name="stage-viewport"/g) ?? []).length, 2,
     "Quick customize must expose both persisted responsive placement sets");
   assert.equal((quickCanvasControls.match(/name="editor-mode"/g) ?? []).length, 2,
@@ -1471,7 +1480,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && stageLayerPaletteBlock.includes("eye.disabled = gated"),
     "A layer outside the selected appearance, page, or viewport must not be manipulable from the canvas palette");
   const renderFrameBlock = studioEditor.match(/const renderFrame\s*=\s*\([\s\S]*?\n\s*};/)?.[0] ?? "";
-  assert.match(renderFrameBlock, /fieldset\.disabled = disabled[\s\S]{0,80}?dataset\.gated = String\(disabled\)/,
+  assert.match(renderFrameBlock,
+    /const locked = disabled \|\| \(responsiveActive\(\) && !responsiveEditExact\(\)\)[\s\S]{0,80}?fieldset\.disabled = locked[\s\S]{0,80}?dataset\.gated = String\(locked\)/,
     "Advanced framing controls must be inert when their layer is outside the selected preview state");
   assert.match(studioEditor,
     /renderFrame\(layer, "normal", gated\),\s*renderFrame\(layer, "wide", gated\)/,
@@ -2862,7 +2872,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(receiveMirrorBlock, /rememberStageMirror\(mirror\)[\s\S]*?selectStageMirror\(\)/,
     "A validated live capture must be cached before resolving the selected page preview");
   assert.match(studioEditor,
-    /const priorLayerIds = new Set\([\s\S]{0,260}?const pickedLayerId = pendingAction === "pick-theme-layer-image"[\s\S]{0,1600}?state = normalized;[\s\S]{0,100}?selectedLayerId = pickedLayerId/,
+    /const priorLayerIds = new Set\([\s\S]{0,260}?const pickedLayerId = pendingAction === "pick-theme-layer-image"[\s\S]{0,1600}?state = normalized;[\s\S]{0,180}?selectedLayerId = pickedLayerId/,
     "A newly added image must become the selected image instead of reopening Image 1");
   const backdropBlock = studioEditor.match(/const stageBackdropOn\s*=\s*\(\)[\s\S]*?\n\s*};/)?.[0] ?? "";
   assert.match(backdropBlock, /stageMirror\?\.revision\s*===\s*state\?\.revision/,
@@ -3188,7 +3198,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /if \(!handle && !directSelection\)[\s\S]{0,160}?if \(selectStageBranchSurface\(\)\) event\.preventDefault\(\)/,
     "Blank canvas clicks must be consumed only when that branch has a truthful canvas target");
   assert(stagePointerBlock.includes(
-    'inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;',
+    'inspectorField = `layers[${index}].frames.${stageFrameId()}.${handleKind === "scale" ? "scale" : "positionX"}`;',
   ),
     "An explicit artwork gesture must align the inspector with the frame it will edit");
   assert.match(stagePointerBlock, /!state \|\| isBlockingAction\(\)/,
@@ -3573,6 +3583,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     interfaceStyle: null,
     identityPreviewUrl: null,
     identityStylePreviewUrl: null,
+    responsiveLayouts: null,
     shared: {
       fontUi: "system-sans", fontDisplay: "editorial-serif", radius: 12, blur: 16,
       shadow: "soft", backgroundScope: "content", prompt: { native: false, width: 0.7, x: 0, y: 0 },
@@ -5664,7 +5675,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "$tokens=$null;$errors=$null",
       "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
       "if($errors.Count){throw 'Could not parse Aura UI for editor bridge regression'}",
-      "foreach($name in @('Get-AuraUiPropertyValue','Get-AuraUiUnicodeScalarLength','ConvertTo-AuraUiStudioNumber','ConvertTo-AuraUiStudioInteger','Assert-AuraUiStudioEditorRoots','Test-AuraUiStudioExactProperties','Test-AuraUiStudioMetadataText','Assert-AuraUiStudioEditorPublicValue','Assert-AuraUiStudioEditorMessage','Test-AuraUiStudioDocumentUri','Get-AuraUiStudioMessage','Assert-AuraUiStudioEditorSession','Request-AuraUiMirror','ConvertTo-AuraUiGreetingShuffleCheckpoint')){",
+      "foreach($name in @('Get-AuraUiPropertyValue','Get-AuraUiUnicodeScalarLength','ConvertTo-AuraUiStudioNumber','ConvertTo-AuraUiStudioInteger','Assert-AuraUiStudioEditorRoots','Test-AuraUiStudioExactProperties','Test-AuraUiStudioMetadataText','Assert-AuraUiStudioResponsiveLayouts','Assert-AuraUiStudioResponsiveFrameMap','Assert-AuraUiStudioInstantPromptLayout','Assert-AuraUiStudioEditorPublicValue','Assert-AuraUiStudioEditorMessage','Test-AuraUiStudioDocumentUri','Get-AuraUiStudioMessage','Assert-AuraUiStudioEditorSession','Request-AuraUiMirror','ConvertTo-AuraUiGreetingShuffleCheckpoint')){",
       "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
       "  if($null -eq $definition){throw \"Missing Studio editor bridge function $name\"}",
       "  Invoke-Expression $definition.Extent.Text",
@@ -5688,7 +5699,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
       "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','enable-responsive-layouts','mutate-responsive-layout','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
       "$script:PromptShelfMaxTextLength=8000",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
       "$script:PersonalWordmarkSession=$session",
@@ -5717,6 +5728,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  [ordered]@{type='set-theme-token';session=$session;revision=0;mode='light';token='canvas';value='#123ABC'},",
       "  [ordered]@{type='set-theme-token';session=$session;revision=0;mode='shared';token='backgroundScope';value='full-window'},",
       "  [ordered]@{type='set-theme-layer';session=$session;revision=0;index=7;preset='wide';property='scale';value=3},",
+      "  [ordered]@{type='enable-responsive-layouts';session=$session;revision=0},",
+      "  [ordered]@{type='mutate-responsive-layout';session=$session;revision=0;operation='add';id='compact';value=[ordered]@{id='compact';label='Compact';width=1000;height=700}},",
       "  [ordered]@{type='apply-theme-patch';session=$session;revision=0;changes=@(",
       "    [ordered]@{kind='token';mode='shared';token='radius';value=12},",
       "    [ordered]@{kind='layer';index=0;preset='normal';property='scale';value=1.25},",
@@ -6598,7 +6611,7 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /const queueGreetingFrame = \([\s\S]{0,260}?appearance = selectedMode[\s\S]{0,160}?frameId = greetingFrameId\(\)[\s\S]{0,260}?operation:\s*"set-frame"[\s\S]{0,120}?appearance,[\s\S]{0,80}?frame:\s*frameId[\s\S]{0,80}?value:\s*frame/,
     "greeting patches must carry one complete scoped frame");
   assert.match(editorSource,
-    /const activeGreetingFrame = \([\s\S]{0,500}?stageOverrides\.has\(path\)\) draft\[field\] = stageOverrides\.get\(path\)/,
+    /const activeGreetingFrame = \([\s\S]{0,1100}?stageOverrides\.has\(path\)\) draft\[field\] = stageOverrides\.get\(path\)/,
     "reflections must preserve the current local greeting draft until its acknowledgement");
   assert.match(editorSource,
     /const confirmedGreeting = state\?\.shared\?\.greeting\?\.frames\?\.\[selectedMode\]\?\.\[greetingFrameId\(\)\][\s\S]{0,1200}?stageValue\(`\$\{greetingStagePrefix\(\)\}xRatio`\)\) - confirmedGreeting\.xRatio/,

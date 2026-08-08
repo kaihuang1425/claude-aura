@@ -566,9 +566,14 @@ payload compilation in both appearance modes, the prohibition on fixture-image
 generation, and release exclusions. `theme-cli qa <id>` writes only a JSON
 asset/payload status record; it does not create a UI board or screenshot.
 
-Results recorded through 2026-08-08:
+The aggregate test runner uses four bounded suite processes by default and runs
+the shared release-generation suite exclusively after the parallel phase.
+`AURA_TEST_JOBS=1` provides a serial diagnostic run, while
+`AURA_TEST_VERBOSE=1` restores per-test pass output.
 
-The current shared work tree has completed every non-visual gate below. Windows
+Results recorded through 2026-08-09:
+
+The current isolated checkout has completed every non-visual gate below. Windows
 release candidates are built from the explicit distribution allowlist and
 checked byte-for-byte against the workspace and installed application. Each
 source edit invalidates that snapshot, so the authoritative archive digest is
@@ -577,9 +582,9 @@ reinstalled after the source tree and live checkpoint settle.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | Covered by the clean-clone `npm run check` run; 170/170 tests passed |
-| `npm run check` | Passed, 170/170; includes JavaScript and platform parsing plus the complete test suite |
-| `npm run verify:cycle` | Passed, 17/17; the payload-only verifier runs the test suite, then compiles and syntax-checks all eight themes in Light and Dark; it launches no browser and writes no images |
+| `npm test` | Covered by the isolated-checkout `npm run check` run; 193/193 tests passed through bounded parallel suites |
+| `npm run check` | Passed, 193/193; includes JavaScript and platform parsing plus the complete test suite |
+| `npm run verify:cycle` | Passed, 16/16; after the separate check gate, the payload-only verifier compiles and syntax-checks all eight themes in Light and Dark without rerunning the suite; it launches no browser and writes no images |
 | Fresh-state verifier | Passed from an absent sandboxed data directory; initialized Default/enabled state and detected WebView2 `151.0.4129.72` |
 | PowerShell parser | Passed with zero errors for all 15 `windows/*.ps1` files |
 | Production asset audits | All eight `theme-cli qa <id>` runs wrote `asset-audit-pass` status records and no UI images |

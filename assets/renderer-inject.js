@@ -29,6 +29,48 @@
       && window.innerHeight >= window.screen.availHeight - 96;
     return document.fullscreenElement || screenWide || window.innerWidth >= 1440 ? "w" : "n";
   };
+  let responsiveTrack = null, responsiveValue = null, responsiveLayoutId = null;
+  /*__AURA_RESPONSIVE_START__*/
+  if (Array.isArray(settings.R) && settings.R.length === 4) {
+    const responsiveResolver = __AURA_RESPONSIVE_FACTORY__();
+    responsiveTrack = {
+      "mode": settings.R[0] === "f" ? "fluid" : "step",
+      "ids": settings.R[1],
+      "widths": settings.R[2],
+      "breakpoints": settings.R[3],
+    };
+    responsiveValue = (frames, inherited, fields, precisions = {}) => {
+      const asObject = (tuple) => tuple
+        ? Object.fromEntries(fields.flatMap((field, index) => (
+          typeof tuple[index] === "number" && Number.isFinite(tuple[index])
+            ? [[field, tuple[index]]]
+            : []
+        )))
+        : null;
+      return responsiveResolver(
+        responsiveTrack,
+        frames.map(asObject),
+        window.innerWidth,
+        asObject(inherited),
+        precisions,
+      );
+    };
+    responsiveLayoutId = () => {
+      let index = 0;
+      if (responsiveTrack["mode"] === "step") {
+        while (index < responsiveTrack["breakpoints"].length
+            && window.innerWidth >= responsiveTrack["breakpoints"][index]) index += 1;
+      } else {
+        let distance = Infinity;
+        responsiveTrack["widths"].forEach((width, candidate) => {
+          const next = Math.abs(window.innerWidth - width);
+          if (next < distance) index = candidate, distance = next;
+        });
+      }
+      return responsiveTrack["ids"][index];
+    };
+  }
+  /*__AURA_RESPONSIVE_END__*/
   const codeContextFromUrl = __AURA_CODE_CONTEXT_FACTORY__;
   const codeRouteContext = () => codeContextFromUrl(window.location);
   const codeAdapter = __AURA_CODE_ADAPTER_FACTORY__(
@@ -84,7 +126,10 @@
   let syncGreeting, clearGreeting, advanceGreetingVisit, greetingMemory, greetingMatches = -1;
   /*__AURA_INSTANT_PROMPTS_START__*/
   let syncInstantPrompts, clearInstantPrompts;
-  const instantPromptController = __AURA_INSTANT_PROMPTS_FACTORY__(document, window, settings);
+  const instantPromptController = __AURA_INSTANT_PROMPTS_FACTORY__(document, window, settings, {
+    "track": responsiveTrack,
+    "value": responsiveValue,
+  });
   syncInstantPrompts = instantPromptController.sync;
   clearInstantPrompts = instantPromptController.clear;
   /*__AURA_INSTANT_PROMPTS_END__*/
@@ -701,11 +746,14 @@
   const applyPromptLayout = (prompt, main) => {
     clearPromptLayout();
     if (!prompt || !main) return;
-    const layout = Array.isArray(settings.n?.[0])
-      ? settings.n[viewport() === "w" ? 1 : 0]
-      : settings.n;
+    const responsive = responsiveTrack && Array.isArray(settings.n?.[1]);
+    let layout = responsive
+      ? null
+      : Array.isArray(settings.n?.[0])
+        ? settings.n[viewport() === "w" ? 1 : 0]
+        : settings.n;
     prompt.setAttribute(PROMPT_MARKER, "native");
-    if (!layout) return;
+    if (!responsive && !layout) return;
     const mainRect = visibleRect(main);
     if (!mainRect) return;
     const bounds = {
@@ -717,6 +765,30 @@
     bounds.width = bounds.right - bounds.left;
     bounds.height = bounds.bottom - bounds.top;
     if (bounds.width < 480 || bounds.height < 400) return;
+    if (responsive) {
+      const nativeRect = visibleRect(prompt);
+      if (!nativeRect) return;
+      const inherited = Array.isArray(settings.n[0])
+        ? settings.n[0]
+        : [
+          Math.min(0.96, Math.max(0.4, nativeRect.width / bounds.width)),
+          Math.min(0.35, Math.max(-0.35,
+            ((nativeRect.left + (nativeRect.width / 2)) - (bounds.left + (bounds.width / 2))) / bounds.width)),
+          0,
+        ];
+      const resolved = responsiveValue(
+        settings.n[1],
+        inherited,
+        ["width", "x", "y"],
+        { width: 4, x: 4, y: 4 },
+      );
+      layout = [
+        resolved["value"]["width"],
+        resolved["value"]["x"],
+        resolved["value"]["y"],
+      ];
+    }
+    if (!layout) return;
     const authoredTranslate = window.getComputedStyle?.(prompt)?.translate ?? "none";
     if (authoredTranslate && !["none", "0px", "0px 0px"].includes(authoredTranslate)) return;
     const inset = 16;
@@ -737,6 +809,8 @@
   const applyArtworkContext = (context) => {
     const view = viewport();
     root.dataset.claudeAuraViewport = view === "w" ? "wide" : "normal";
+    if (responsiveLayoutId) root.dataset.claudeAuraLayout = responsiveLayoutId();
+    else delete root.dataset.claudeAuraLayout;
     const anchors = { tl: [0, 0], t: [50, 0], tr: [100, 0], l: [0, 50], c: [50, 50], r: [100, 50], bl: [0, 100], b: [50, 100], br: [100, 100] };
     for (const { element, image, layer } of artBindings) {
       if (!element.isConnected) continue;
@@ -749,8 +823,28 @@
       element.dataset.artContext = context;
       element.dataset.artViewport = view === "w" ? "wide" : "normal";
       if (image && Array.isArray(layer.n)) {
-        const frame = view === "w" && Array.isArray(layer.w) ? layer.w : layer.n;
-        const anchorCode = view === "w" ? (layer.z || layer.h || "c") : (layer.h || "c");
+        let frame, anchorCode;
+        if (responsiveTrack) {
+          const resolved = responsiveValue(
+            layer.n,
+            [0, 0, 50, 50, 1],
+            ["positionX", "positionY", "focalX", "focalY", "scale"],
+            { positionX: 2, positionY: 2, focalX: 2, focalY: 2, scale: 2 },
+          );
+          frame = [
+            resolved["value"].positionX,
+            resolved["value"].positionY,
+            resolved["value"].focalX,
+            resolved["value"].focalY,
+            resolved["value"].scale,
+          ];
+          anchorCode = layer.h || "c";
+          element.dataset.artLayoutSource = resolved["source"];
+        } else {
+          frame = view === "w" && Array.isArray(layer.w) ? layer.w : layer.n;
+          anchorCode = view === "w" ? (layer.z || layer.h || "c") : (layer.h || "c");
+          delete element.dataset.artLayoutSource;
+        }
         const anchor = anchors[anchorCode] || anchors.c;
         image.style.setProperty("left", `calc(${anchor[0]}% + ${frame[0]}%)`);
         image.style.setProperty("top", `calc(${anchor[1]}% + ${frame[1]}%)`);
@@ -790,6 +884,26 @@
       l: iv && il !== null ? il : -1, e: 1, v: false,
     };
     let bd, rn, tn, dn, ro, ft = 0, st = "missing", cc = 0, mf = false, rt = [];
+    const responsiveGreetingGeometry = (...nodes) => {
+      if (!responsiveTrack || !Array.isArray(g.r)) return;
+      const frames = g.r[mode() === "dark" ? 1 : 0];
+      if (!Array.isArray(frames)) return;
+      const resolved = responsiveValue(
+        frames,
+        [34, 1.15, 0.72, 0, 0, 1],
+        ["fontSize", "lineHeight", "maxWidth", "x", "y", "markScale"],
+        { fontSize: 2, lineHeight: 2, maxWidth: 2, x: 2, y: 2, markScale: 2 },
+      );
+      for (const node of new Set(nodes.filter((candidate) => candidate?.isConnected))) {
+        node.style.setProperty("--aura-responsive-greeting-font-size", `${resolved["value"].fontSize}px`);
+        node.style.setProperty("--aura-responsive-greeting-line-height", String(resolved["value"].lineHeight));
+        node.style.setProperty("--aura-responsive-greeting-max-ratio", String(resolved["value"].maxWidth));
+        node.style.setProperty("--aura-responsive-greeting-x", String(resolved["value"].x));
+        node.style.setProperty("--aura-responsive-greeting-y", String(resolved["value"].y));
+        node.style.setProperty("--aura-responsive-greeting-mark-scale", String(resolved["value"].markScale));
+        node.dataset.claudeAuraGreetingLayoutSource = resolved["source"];
+      }
+    };
     const src = ps.length ? "custom" : "native", rr = (r) => r && ({
       left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height),
     });
@@ -943,6 +1057,7 @@
     };
     clearGreeting = (e = false) => { unwatch(); restore(); remove(); bd = null; if (e) end(); };
     const geometry = (n, ma) => {
+      responsiveGreetingGeometry(n, bd?.n, rn);
       const c = window.getComputedStyle?.(n), r = visibleRect(ma);
       if (!c || !r) return;
       const v = (p) => Number.parseFloat(c.getPropertyValue?.(`--aura-greeting-${p}`));
@@ -1217,7 +1332,7 @@
     ]) html?.style.removeProperty(`--aura-${property}`);
     if (html?.dataset) {
       for (const property of [
-        "Theme", "Variant", "ArtMobile", "Appearance", "EffectiveMode", "Context", "Viewport", "Digest",
+        "Theme", "Variant", "ArtMobile", "Appearance", "EffectiveMode", "Context", "Viewport", "Layout", "Digest",
       ]) delete html.dataset[`claudeAura${property}`];
     }
   };
@@ -1375,7 +1490,7 @@
     observeTargets();
   };
 
-  let scheduled = null;
+  let scheduled = null, responsiveAnimationFrame = 0;
   const cleanup = (replacementOnly = false) => {
     /*__AURA_CODE_ACTIVE_START__*/
     if (!
@@ -1395,6 +1510,8 @@
     ;
     if (scheduled) clearTimeout(scheduled);
     scheduled = null;
+    if (responsiveAnimationFrame) window.cancelAnimationFrame?.(responsiveAnimationFrame);
+    responsiveAnimationFrame = 0;
     /*__AURA_INSTANT_PROMPTS_START__*/
     clearInstantPrompts?.();
     /*__AURA_INSTANT_PROMPTS_END__*/
@@ -1431,6 +1548,14 @@
     }, 160);
   };
   const onContextSignal = () => scheduleEnsure();
+  const onResize = () => {
+    if (!responsiveTrack) return scheduleEnsure();
+    if (responsiveAnimationFrame) return;
+    responsiveAnimationFrame = window.requestAnimationFrame(() => {
+      responsiveAnimationFrame = 0;
+      ensure();
+    });
+  };
   const onPopState = () => {
     if (!window.navigation) advanceGreetingVisit?.();
     scheduleEnsure();
@@ -1447,14 +1572,14 @@
   let t=0;
   const onVis=()=>{clearInterval(t);t=document["hidden"]?0:setInterval(ensure,15e3);if(t&&window[STATE_KEY])ensure()};
   window.addEventListener("popstate", onPopState);
-  window.addEventListener("resize", onContextSignal, { passive: true });
+  window.addEventListener("resize", onResize, { passive: true });
   document.addEventListener?.("fullscreenchange", onContextSignal);
   document.addEventListener?.("visibilitychange", onVis);
   window.navigation?.addEventListener?.("currententrychange", onNavigationSignal);
   const stopContext = () => {
     clearInterval(t);
     window.removeEventListener("popstate", onPopState);
-    window.removeEventListener("resize", onContextSignal);
+    window.removeEventListener("resize", onResize);
     document.removeEventListener?.("fullscreenchange", onContextSignal);
     document.removeEventListener?.("visibilitychange", onVis);
     window.navigation?.removeEventListener?.("currententrychange", onNavigationSignal);
@@ -1551,6 +1676,11 @@
     stopModeListener: stopMode,
     stopContextListeners: stopContext,
     "getLayoutProbe": lp,
+    "responsiveLayoutResolver": responsiveTrack ? {
+      "track": responsiveTrack,
+      "value": responsiveValue,
+      "layoutId": responsiveLayoutId,
+    } : null,
     "discoverComposer": discoverComposer,
     clearBrandWordmark: clearBrand,
     clearAvatarOverlay: clearAvatar,

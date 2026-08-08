@@ -39,7 +39,6 @@ import {
   STUDIO_SHADOWS,
   STUDIO_SHARED_TOKENS,
   STUDIO_STATE_FILENAME,
-  STUDIO_THEME_SCHEMA_VERSION,
   THEME_ID_PATTERN,
   THEME_KIT_FILENAME,
   WINDOWS_FILESYSTEM_RETRY_DELAYS_MS,
@@ -64,6 +63,7 @@ import {
   validateLauncherPngBytes,
   validateInstantPrompts,
   validateNewChatGreetingStyle,
+  validateResponsiveGreetingStyle,
   validateRegistryEntry,
   validateStudioThemeKitDocument,
   validateTheme,
@@ -91,6 +91,16 @@ import {
   validateInterfaceSurfaces,
   validateLayerFilters,
 } from "./surface-overrides.mjs";
+import {
+  RESPONSIVE_LAYOUT_ID_PATTERN,
+  RESPONSIVE_ARTWORK_FIELDS,
+  RESPONSIVE_GREETING_FIELDS,
+  insertResponsiveLayoutSet,
+  resolveResponsiveFrame,
+  upgradeStudioDocumentToResponsive,
+  validateResponsiveFrames,
+  validateResponsiveLayouts,
+} from "./responsive-layouts.mjs";
 
 const execStudioFile = promisify(execFile);
 
@@ -858,7 +868,84 @@ export function studioGreetingFrameState(frame) {
   };
 }
 
-export function studioGreetingState(style, compactMarkAvailable = false) {
+function responsiveGreetingCombinedFrame(base, numeric) {
+  return {
+    font: base.font,
+    color: base.color,
+    fontSize: numeric.fontSize,
+    weight: base.weight,
+    italic: base.italic,
+    letterSpacing: base.letterSpacing,
+    lineHeight: numeric.lineHeight,
+    align: base.align,
+    maxWidthRatio: numeric.maxWidthRatio,
+    xRatio: numeric.xRatio,
+    yRatio: numeric.yRatio,
+    decoration: base.decoration,
+    mark: { source: base.markSource, scale: numeric.markScale },
+  };
+}
+
+function defaultResponsiveGreetingStyle(responsiveLayouts) {
+  const legacy = defaultStudioGreetingStyle();
+  const base = (frame) => ({
+    font: frame.font,
+    color: frame.color,
+    weight: frame.weight,
+    italic: frame.italic,
+    letterSpacing: frame.letterSpacing,
+    align: frame.align,
+    decoration: frame.decoration,
+    markSource: frame.mark.source,
+  });
+  return Object.fromEntries(["light", "dark"].map((appearance) => [appearance, {
+    base: base(legacy[appearance].standard),
+    frames: {},
+  }]));
+}
+
+export function studioGreetingState(
+  style,
+  compactMarkAvailable = false,
+  responsiveLayouts = null,
+) {
+  if (responsiveLayouts) {
+    const layouts = validateResponsiveLayouts(responsiveLayouts);
+    const matrix = style ?? defaultResponsiveGreetingStyle(layouts);
+    const inherited = {
+      fontSize: 34,
+      lineHeight: 1.15,
+      maxWidthRatio: 0.72,
+      xRatio: 0,
+      yRatio: 0,
+      markScale: 1,
+    };
+    return {
+      native: style === null,
+      compactMarkAvailable: Boolean(compactMarkAvailable),
+      responsive: true,
+      explicitFrames: Object.fromEntries(["light", "dark"].map((appearance) => [
+        appearance,
+        cloneJson(matrix[appearance].frames),
+      ])),
+      frames: Object.fromEntries(["light", "dark"].map((appearance) => [
+        appearance,
+        Object.fromEntries(layouts.sets.map((set) => {
+          const resolved = resolveResponsiveFrame(
+            layouts,
+            matrix[appearance].frames,
+            set.width,
+            inherited,
+            RESPONSIVE_GREETING_FIELDS,
+          );
+          return [set.id, studioGreetingFrameState(responsiveGreetingCombinedFrame(
+            matrix[appearance].base,
+            resolved.value,
+          ))];
+        })),
+      ])),
+    };
+  }
   const matrix = style ?? defaultStudioGreetingStyle();
   return {
     native: style === null,
@@ -939,19 +1026,76 @@ export function validateStudioGreetingFrame(value, label = "greeting frame") {
 // therefore creates one coherent Undo entry. Reset is the only operation that
 // may carry null and always restores the entire greeting surface to Claude.
 export function mutateStudioGreetingDocument(document, change) {
-  const operation = strictEnum(change.operation, new Set(["set-frame", "reset"]), "greeting operation");
+  const operation = strictEnum(
+    change.operation,
+    new Set(["set-frame", "reset-frame", "reset"]),
+    "greeting operation",
+  );
   const appearance = strictEnum(change.appearance, new Set(["light", "dark"]), "greeting appearance");
-  const frame = strictEnum(change.frame, new Set(["standard", "wide"]), "greeting frame");
+  const responsiveLayouts = document.schemaVersion === 5
+    ? validateResponsiveLayouts(document.responsiveLayouts)
+    : null;
+  const frame = strictEnum(
+    change.frame,
+    new Set(responsiveLayouts
+      ? responsiveLayouts.sets.map(({ id }) => id)
+      : ["standard", "wide"]),
+    "greeting frame",
+  );
   if (operation === "reset") {
     if (change.value !== null) throw new Error("Greeting reset value must be null");
     document.newChatGreetingStyle = null;
     return;
   }
-  const style = document.newChatGreetingStyle ?? defaultStudioGreetingStyle();
-  style[appearance][frame] = validateStudioGreetingFrame(
+  if (operation === "reset-frame") {
+    if (!responsiveLayouts || change.value !== null) {
+      throw new Error("Responsive greeting frame reset requires a null value");
+    }
+    if (document.newChatGreetingStyle?.[appearance]?.frames) {
+      delete document.newChatGreetingStyle[appearance].frames[frame];
+      document.newChatGreetingStyle = validateResponsiveGreetingStyle(
+        document.newChatGreetingStyle,
+        "newChatGreetingStyle",
+        responsiveLayouts,
+      );
+    }
+    return;
+  }
+  const validatedFrame = validateStudioGreetingFrame(
     change.value,
     `newChatGreetingStyle.${appearance}.${frame}`,
   );
+  if (responsiveLayouts) {
+    const style = document.newChatGreetingStyle
+      ? cloneJson(document.newChatGreetingStyle)
+      : defaultResponsiveGreetingStyle(responsiveLayouts);
+    style[appearance].base = {
+      font: validatedFrame.font,
+      color: validatedFrame.color,
+      weight: validatedFrame.weight,
+      italic: validatedFrame.italic,
+      letterSpacing: validatedFrame.letterSpacing,
+      align: validatedFrame.align,
+      decoration: validatedFrame.decoration,
+      markSource: validatedFrame.mark.source,
+    };
+    style[appearance].frames[frame] = {
+      fontSize: validatedFrame.fontSize,
+      lineHeight: validatedFrame.lineHeight,
+      maxWidthRatio: validatedFrame.maxWidthRatio,
+      xRatio: validatedFrame.xRatio,
+      yRatio: validatedFrame.yRatio,
+      markScale: validatedFrame.mark.scale,
+    };
+    document.newChatGreetingStyle = validateResponsiveGreetingStyle(
+      style,
+      "newChatGreetingStyle",
+      responsiveLayouts,
+    );
+    return;
+  }
+  const style = document.newChatGreetingStyle ?? defaultStudioGreetingStyle();
+  style[appearance][frame] = validatedFrame;
   document.newChatGreetingStyle = validateNewChatGreetingStyle(style, "newChatGreetingStyle");
 }
 
@@ -1171,6 +1315,7 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       opacity: layer.opacity,
       mask: layer.mask,
       mobile: layer.mobile,
+      ...(document.schemaVersion === 5 ? { anchor: layer.anchor } : {}),
       filters: layer.filters ? cloneJson(layer.filters) : null,
       bytes: bytes[index],
       previewUrl: `https://aura.editor/active/${preview.filename}?v=${preview.digest}`,
@@ -1218,6 +1363,9 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
     interfaceStyle: internal.lastValidDocument.interfaceSurfaces
       ? cloneJson(internal.lastValidDocument.interfaceSurfaces)
       : null,
+    responsiveLayouts: document.schemaVersion === 5
+      ? cloneJson(document.responsiveLayouts)
+      : null,
     identityPreviewUrl: currentIdentityPreviewUrl,
     identityStylePreviewUrl: appliedIdentityPreviewUrl,
     shared: {
@@ -1236,6 +1384,7 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       greeting: studioGreetingState(
         document.newChatGreetingStyle,
         studioGreetingCompactMarkAvailable(document),
+        document.schemaVersion === 5 ? document.responsiveLayouts : null,
       ),
       inherited: Object.fromEntries(["fontUi", "fontDisplay", "radius", "shadow"]
         .map((token) => [
@@ -1293,38 +1442,6 @@ export async function persistStudioInternal(paths, internal, {
   await assertStudioActivePaths(paths, { requireActive: true, requireState: true });
   if (collectLauncherMarks) await collectStudioLauncherMarksAfterCommit(paths, internal);
   if (collectIdentityMarks) await collectStudioIdentityMarksAfterCommit(paths, internal);
-}
-
-async function upgradeStudioLegacyFrames(document, paths) {
-  let changed = false;
-  const dimensions = new Map();
-  for (const layer of document.artworkLayers) {
-    if (!layer.legacy) continue;
-    let image = dimensions.get(layer.path);
-    if (!image) {
-      image = await readStudioArtworkDimensions(
-        paths.active,
-        layer.path,
-        `Editor artwork ${layer.path}`,
-      );
-      dimensions.set(layer.path, image);
-    }
-    const frames = Object.fromEntries(Object.entries(STUDIO_FRAME_VIEWPORTS).map(([preset, viewport]) => [
-      preset,
-      studioFrameFromLegacy(
-        layer.legacy.position,
-        layer.legacy.size,
-        image,
-        viewport,
-        document.backgroundScope,
-      ),
-    ]));
-    if (JSON.stringify(layer.frames) !== JSON.stringify(frames)) {
-      layer.frames = frames;
-      changed = true;
-    }
-  }
-  return changed;
 }
 
 async function upgradeStudioSchemaV1Document(raw, label, paths) {
@@ -1431,39 +1548,6 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
       allowIncompleteMetadata,
     });
     if (document.id !== internal.id) throw new Error(`Editor ${name} theme id does not match the session`);
-    changed = await upgradeStudioLegacyFrames(document, paths) || changed;
-    // WO-21: normalize pre-greeting (v2) documents up to the current schema. The
-    // greeting surface starts Claude-native (null); personal phrases stay
-    // host-owned and never enter the theme document.
-    if (!Object.hasOwn(document, "newChatGreetingStyle")) {
-      document.newChatGreetingStyle = null;
-      changed = true;
-    }
-    if (!Object.hasOwn(document, "instantPrompts")) {
-      document.instantPrompts = [];
-      changed = true;
-    }
-    if (!Object.hasOwn(document, "interfaceSurfaces")) {
-      document.interfaceSurfaces = null;
-      changed = true;
-    }
-    const normalizedInstantPrompts = validateInstantPrompts(
-      document.instantPrompts,
-      `editor ${name} theme.instantPrompts`,
-    );
-    if (JSON.stringify(normalizedInstantPrompts) !== JSON.stringify(document.instantPrompts)) {
-      document.instantPrompts = normalizedInstantPrompts;
-      changed = true;
-    }
-    if (document.schemaVersion !== STUDIO_THEME_SCHEMA_VERSION) {
-      document.schemaVersion = STUDIO_THEME_SCHEMA_VERSION;
-      changed = true;
-    }
-    validateStudioThemeKitDocument(document, `editor ${name} theme`, {
-      enforceLauncherContrast: false,
-      builtinLayoutCapability,
-      allowIncompleteMetadata,
-    });
   }
   internal.version = 2;
   return changed;
@@ -2260,8 +2344,10 @@ async function studioDocumentFromResolvedSource({
   builtinLayoutCapability = null,
 }) {
   const labels = copyLabels ? appendCopyLabel(theme.labels) : cloneJson(theme.labels);
-  const document = {
-    schemaVersion: STUDIO_THEME_SCHEMA_VERSION,
+  let document = {
+    schemaVersion: entry.source === "user" && [2, 3, 4, 5].includes(entry.schemaVersion)
+      ? entry.schemaVersion
+      : 4,
     id: targetId,
     labels,
     descriptions: cloneJson(theme.descriptions),
@@ -2271,6 +2357,9 @@ async function studioDocumentFromResolvedSource({
     newChatLayout: theme.newChatLayout ? cloneJson(theme.newChatLayout) : null,
     newChatGreetingStyle: theme.newChatGreetingStyle ? cloneJson(theme.newChatGreetingStyle) : null,
     interfaceSurfaces: theme.interfaceSurfaces ? cloneJson(theme.interfaceSurfaces) : null,
+    ...(entry.source === "user" && entry.schemaVersion === 5
+      ? { responsiveLayouts: cloneJson(theme.responsiveLayouts) }
+      : {}),
     instantPrompts: entry.source === "builtin" ? [] : cloneJson(theme.instantPrompts ?? []),
     backgroundScope: theme.backgroundScope ?? "full-window",
     artworkLayers: [],
@@ -2357,6 +2446,7 @@ async function studioDocumentFromResolvedSource({
       mask: sourceLayer.mask ?? "soft-right",
       mobile: sourceLayer.mobile ?? "reduce",
       ...(sourceLayer.filters ? { filters: cloneJson(sourceLayer.filters) } : {}),
+      ...(document.schemaVersion === 5 ? { anchor: sourceLayer.anchor } : {}),
       frames,
       ...(sourceLayer.legacy ? { legacy: cloneJson(sourceLayer.legacy) } : sourceLayer.frames ? {} : {
         legacy: {
@@ -2680,6 +2770,7 @@ function assertBuiltinLayoutDocumentChange(baseline, candidate) {
     const value = cloneJson(document);
     delete value.newChatLayout;
     delete value.newChatGreetingStyle;
+    delete value.responsiveLayouts;
     value.artworkLayers = value.artworkLayers.map((layer) => {
       const result = cloneJson(layer);
       delete result.frames;
@@ -2731,14 +2822,15 @@ async function guardBuiltinStudioRequest(context, request) {
   requireBuiltinAuthoring(context);
   const simpleActions = new Set([
     "begin-theme-edit", "undo-theme-edit", "redo-theme-edit", "save-theme-edit",
-    "discard-theme-edit", "reset-greeting",
+    "discard-theme-edit", "reset-greeting", "enable-responsive-layouts", "mutate-responsive-layout",
   ]);
   if (simpleActions.has(request.type)) return;
   if (request.type === "set-theme-token") {
     throw new Error("Built-in prompt placement must be changed as one complete layout");
   }
   if (request.type === "set-theme-layer") {
-    if (!["normal", "wide"].includes(request.preset)) {
+    if (!["normal", "wide"].includes(request.preset)
+        && !RESPONSIVE_LAYOUT_ID_PATTERN.test(request.preset)) {
       throw new Error("Built-in authoring may change layer frames only");
     }
     return;
@@ -2756,7 +2848,10 @@ async function guardBuiltinStudioRequest(context, request) {
       if (change?.kind === "token") {
         return change.mode !== "shared" || !["promptWidth", "promptX", "promptY"].includes(change.token);
       }
-      if (change?.kind === "layer") return !["normal", "wide"].includes(change.preset);
+      if (change?.kind === "layer") {
+        return !["normal", "wide"].includes(change.preset)
+          && !RESPONSIVE_LAYOUT_ID_PATTERN.test(change.preset);
+      }
       return change?.kind !== "greeting";
     })) {
       throw new Error("Built-in authoring patch contains a non-layout change");
@@ -3126,13 +3221,46 @@ export function mutateStudioLayerDocument(document, change) {
       else layer.mobile = strictEnum(change.value, STUDIO_LAYER_MOBILE, "layer mobile behavior");
       return;
     }
-    if (!["normal", "wide"].includes(change.preset)) throw new Error("Layer framing preset is invalid");
-    const frame = layer.frames[change.preset];
+    const responsiveLayouts = document.schemaVersion === 5
+      ? validateResponsiveLayouts(document.responsiveLayouts)
+      : null;
+    const frameIds = responsiveLayouts
+      ? responsiveLayouts.sets.map(({ id }) => id)
+      : ["normal", "wide"];
+    if (!frameIds.includes(change.preset)) throw new Error("Layer framing preset is invalid");
+    if (responsiveLayouts && change.property === "anchor") {
+      if (change.value === null) throw new Error("Responsive artwork anchor cannot be reset by a numeric frame action");
+      layer.anchor = strictEnum(change.value, STUDIO_LAYER_ANCHORS, "layer anchor");
+      return;
+    }
+    const frame = layer.frames[change.preset] ?? (layer.frames[change.preset] = {});
+    if (responsiveLayouts && change.value === null) {
+      if (!Object.hasOwn(RESPONSIVE_ARTWORK_FIELDS, change.property)) {
+        throw new Error("Responsive artwork frame property is invalid");
+      }
+      delete frame[change.property];
+      if (Object.keys(frame).length === 0) delete layer.frames[change.preset];
+      layer.frames = validateResponsiveFrames(
+        layer.frames,
+        responsiveLayouts,
+        RESPONSIVE_ARTWORK_FIELDS,
+        "layer frames",
+      );
+      return;
+    }
     if (change.property === "anchor") frame.anchor = strictEnum(change.value, STUDIO_LAYER_ANCHORS, "layer anchor");
     else if (["focalX", "focalY"].includes(change.property)) frame[change.property] = strictNumber(change.value, change.property, 0, 100);
     else if (["positionX", "positionY"].includes(change.property)) frame[change.property] = strictNumber(change.value, change.property, -100, 100);
     else if (change.property === "scale") frame.scale = strictNumber(change.value, "scale", 0.25, 3);
     else throw new Error("Layer framing property is invalid");
+    if (responsiveLayouts) {
+      layer.frames = validateResponsiveFrames(
+        layer.frames,
+        responsiveLayouts,
+        RESPONSIVE_ARTWORK_FIELDS,
+        "layer frames",
+      );
+    }
     delete layer.legacy;
 }
 
@@ -3152,7 +3280,9 @@ export function mutateStudioSurfaceDocument(document, change) {
   const slot = strictEnum(change.slot, new Set(["base", "appearance", "view", "frame"]), "surface slot");
   const allowedAxis = slot === "appearance" ? new Set(["light", "dark"])
     : slot === "view" ? new Set(["new-chat", "conversation"])
-      : new Set(["standard", "wide"]);
+      : new Set(document.schemaVersion === 5
+        ? validateResponsiveLayouts(document.responsiveLayouts).sets.map(({ id }) => id)
+        : ["standard", "wide"]);
   if (slot === "base" && change.axis !== null) throw new Error("Base surface axis must be null");
   const axis = slot === "base" ? null : strictEnum(change.axis, allowedAxis, "surface axis");
   if (typeof change.property !== "string" || !change.property) throw new Error("Surface property is invalid");
@@ -3179,12 +3309,158 @@ export function mutateStudioSurfaceDocument(document, change) {
   document.interfaceSurfaces = validateInterfaceSurfaces(
     document.interfaceSurfaces,
     "interfaceSurfaces",
-    { sourceRecipe: document.sourceRecipe },
+    {
+      sourceRecipe: document.sourceRecipe,
+      responsiveLayouts: document.schemaVersion === 5 ? document.responsiveLayouts : null,
+    },
   );
 }
 
 export async function setThemeLayer(context) {
   return mutateStudio(context, "set-theme-layer", (document) => mutateStudioLayerDocument(document, context));
+}
+
+function responsiveDocumentFrameMaps(document) {
+  return [
+    ...(document.artworkLayers ?? []).map((layer) => layer.frames),
+    ...["light", "dark"].flatMap((appearance) =>
+      document.newChatGreetingStyle?.[appearance]?.frames
+        ? [document.newChatGreetingStyle[appearance].frames]
+        : []),
+    ...(document.instantPrompts ?? []).flatMap((card) => card.layout?.frames ? [card.layout.frames] : []),
+    ...Object.values(document.interfaceSurfaces ?? {}).flatMap((surface) =>
+      surface?.frame ? [surface.frame] : []),
+  ];
+}
+
+function responsiveTrackForSets(current, sets, mode = current.mode) {
+  const sorted = [...sets].sort((left, right) => left.width - right.width);
+  if (mode === "fluid") {
+    return validateResponsiveLayouts({ mode, axis: "width", sets: sorted, breakpoints: null });
+  }
+  const existing = new Map((current.breakpoints ?? []).map((breakpoint, index) => [
+    current.sets[index + 1]?.id,
+    breakpoint,
+  ]));
+  const breakpoints = sorted.slice(1).map((upper, index) => {
+    const lower = sorted[index];
+    const retained = existing.get(upper.id);
+    return retained > lower.width && retained < upper.width
+      ? retained
+      : Math.round((lower.width + upper.width) * 50) / 100;
+  });
+  return validateResponsiveLayouts({ mode: "step", axis: "width", sets: sorted, breakpoints });
+}
+
+export async function enableResponsiveLayouts(context) {
+  const loaded = await loadStudioInternal(context.editorRoot);
+  assertStudioRevision(loaded, context);
+  await ensureStudioGreetingTracking(loaded, context.configPath);
+  assertBuiltinLayoutSession(context, loaded);
+  if (loaded.currentDocument.schemaVersion === 5) {
+    throw new Error("Responsive layouts are already enabled");
+  }
+  const internal = cloneJson(loaded);
+  const upgrade = (document) => document === null
+    ? null
+    : upgradeStudioDocumentToResponsive(document);
+  for (const property of ["baselineDocument", "currentDocument", "lastValidDocument"]) {
+    internal[property] = upgrade(internal[property]);
+  }
+  for (const property of ["undo", "redo", "appliedUndo", "appliedRedo"]) {
+    internal[property] = internal[property].map(upgrade);
+  }
+  const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
+    greetingPreferences: internal.greetingCurrent,
+    builtinLayoutCapability: internal.editKind === "builtin-layout"
+      ? BUILTIN_STUDIO_LAYOUT_VALIDATION
+      : null,
+  });
+  if (!evaluated.feedback.valid) {
+    throw new Error(`Responsive layout upgrade failed (${evaluated.error ?? "invalid-theme"})`);
+  }
+  internal.revision += 1;
+  internal.feedback = evaluated.feedback;
+  internal.lastValidDocument = cloneJson(internal.currentDocument);
+  await persistStudioInternal(studioPaths(context.editorRoot), internal);
+  const state = withStudioResult(
+    await canonicalStudioState(internal, context.editorRoot, context.configPath),
+    "enable-responsive-layouts",
+    true,
+    null,
+  );
+  return {
+    state,
+    payload: evaluated.bundle.payload,
+    themesChanged: false,
+    configChanged: false,
+    apply: "draft",
+  };
+}
+
+export async function mutateResponsiveLayout(context) {
+  return mutateStudio(context, "mutate-responsive-layout", (document) => {
+    if (document.schemaVersion !== 5) throw new Error("Enable responsive layouts before editing the track");
+    const current = validateResponsiveLayouts(document.responsiveLayouts);
+    const operation = strictEnum(
+      context.operation,
+      new Set(["add", "duplicate", "update", "delete", "mode", "breakpoint"]),
+      "responsive layout operation",
+    );
+    if (operation === "mode") {
+      if (context.id !== null || !["step", "fluid"].includes(context.value)) {
+        throw new Error("Responsive layout mode must be step or fluid");
+      }
+      document.responsiveLayouts = responsiveTrackForSets(current, current.sets, context.value);
+      return;
+    }
+    if (typeof context.id !== "string") throw new Error("Responsive layout set id is required");
+    const index = current.sets.findIndex(({ id }) => id === context.id);
+    if (operation === "breakpoint") {
+      if (current.mode !== "step" || index < 1 || typeof context.value !== "number") {
+        throw new Error("A step breakpoint must target a non-first layout set");
+      }
+      const breakpoints = [...current.breakpoints];
+      breakpoints[index - 1] = context.value;
+      document.responsiveLayouts = validateResponsiveLayouts({
+        ...current,
+        breakpoints,
+      });
+      return;
+    }
+    if (operation === "add") {
+      if (index !== -1) throw new Error("Responsive layout set ids must be unique");
+      document.responsiveLayouts = insertResponsiveLayoutSet(current, context.value);
+      return;
+    }
+    if (index < 0) throw new Error("Responsive layout set was not found");
+    if (operation === "duplicate") {
+      const next = insertResponsiveLayoutSet(current, context.value);
+      for (const frames of responsiveDocumentFrameMaps(document)) {
+        if (Object.hasOwn(frames, context.id)) frames[context.value.id] = cloneJson(frames[context.id]);
+      }
+      document.responsiveLayouts = next;
+      return;
+    }
+    if (operation === "delete") {
+      if (context.value !== null) throw new Error("Responsive layout delete value must be null");
+      if (current.sets.length === 1) throw new Error("A responsive track must keep at least one layout set");
+      for (const frames of responsiveDocumentFrameMaps(document)) delete frames[context.id];
+      document.responsiveLayouts = responsiveTrackForSets(
+        current,
+        current.sets.filter(({ id }) => id !== context.id),
+      );
+      return;
+    }
+    if (!isPlainObject(context.value)
+        || Object.keys(context.value).sort().join(",") !== "height,label,width") {
+      throw new Error("Responsive layout update must contain label, width, and height");
+    }
+    const sets = current.sets.map((set) => set.id === context.id
+      ? { ...set, ...context.value }
+      : set);
+    document.responsiveLayouts = responsiveTrackForSets(current, sets);
+  });
 }
 
 export function mutateStudioMetadataDocument(document, change) {
@@ -3221,6 +3497,9 @@ export function mutateStudioMetadataLocaleDocument(document, change) {
 }
 
 export function mutateStudioInstantPromptDocument(document, change) {
+  const instantPromptValidation = document.schemaVersion === 5
+    ? { responsiveLayouts: document.responsiveLayouts }
+    : {};
   const operation = strictEnum(
     change.operation,
     new Set(["add", "update", "remove", "move", "clear-icon"]),
@@ -3234,7 +3513,22 @@ export function mutateStudioInstantPromptDocument(document, change) {
       throw new Error(`A theme may contain at most ${STUDIO_MAX_INSTANT_PROMPTS} instant prompts`);
     }
     if (change.field !== null || change.locale !== null) throw new Error("Instant prompt add fields must be null");
-    prompts.push(validateInstantPrompts([change.value], "instant prompt add")[0]);
+    const value = cloneJson(change.value);
+    if (document.schemaVersion === 5
+        && value?.layout?.frames?.normal
+        && value?.layout?.frames?.wide
+        && document.responsiveLayouts.sets.some(({ id }) => id === "standard")
+        && document.responsiveLayouts.sets.some(({ id }) => id === "wide")) {
+      value.layout.frames = {
+        standard: value.layout.frames.normal,
+        wide: value.layout.frames.wide,
+      };
+    }
+    prompts.push(validateInstantPrompts(
+      [value],
+      "instant prompt add",
+      instantPromptValidation,
+    )[0]);
     return;
   }
   if (index < 0) throw new Error("Instant prompt was not found");
@@ -3266,7 +3560,21 @@ export function mutateStudioInstantPromptDocument(document, change) {
     if (change.locale !== null) throw new Error("Instant prompt layout locale must be null");
     const candidate = cloneJson(prompts[index]);
     candidate.layout = change.value;
-    prompts[index] = validateInstantPrompts([candidate], "instant prompt layout update")[0];
+    if (document.schemaVersion === 5
+        && candidate.layout?.frames?.normal
+        && candidate.layout?.frames?.wide
+        && document.responsiveLayouts.sets.some(({ id }) => id === "standard")
+        && document.responsiveLayouts.sets.some(({ id }) => id === "wide")) {
+      candidate.layout.frames = {
+        standard: candidate.layout.frames.normal,
+        wide: candidate.layout.frames.wide,
+      };
+    }
+    prompts[index] = validateInstantPrompts(
+      [candidate],
+      "instant prompt layout update",
+      instantPromptValidation,
+    )[0];
     return;
   }
   const locale = strictEnum(change.locale, new Set(STUDIO_METADATA_LOCALES), "instant prompt locale");
@@ -3275,7 +3583,11 @@ export function mutateStudioInstantPromptDocument(document, change) {
   }
   const candidate = cloneJson(prompts[index]);
   candidate[field === "label" ? "labels" : "prompts"][locale] = change.value;
-  prompts[index] = validateInstantPrompts([candidate], "instant prompt update")[0];
+  prompts[index] = validateInstantPrompts(
+    [candidate],
+    "instant prompt update",
+    instantPromptValidation,
+  )[0];
 }
 
 export function assertStudioPatchChanges(changes) {
@@ -3451,7 +3763,7 @@ export async function attachThemeLayerImage(context) {
   );
   const ownedPath = await copyWebpIntoEditor(source, studioPaths(context.editorRoot));
   return mutateStudio(context, "pick-theme-layer-image", (document) => {
-    const frames = Object.fromEntries(Object.entries(STUDIO_FRAME_VIEWPORTS).map(
+    const legacyFrames = Object.fromEntries(Object.entries(STUDIO_FRAME_VIEWPORTS).map(
       ([preset, viewport]) => [
         preset,
         role === "background"
@@ -3459,6 +3771,18 @@ export async function attachThemeLayerImage(context) {
           : { anchor: "center", focalX: 50, focalY: 50, positionX: 0, positionY: 0, scale: 1 },
       ],
     ));
+    const responsive = document.schemaVersion === 5
+      ? validateResponsiveLayouts(document.responsiveLayouts)
+      : null;
+    const frames = responsive
+      ? Object.fromEntries(responsive.sets.map((set) => {
+        const seeded = role === "background"
+          ? studioFrameFromLegacy("center", "cover", image, set, document.backgroundScope)
+          : { focalX: 50, focalY: 50, positionX: 0, positionY: 0, scale: 1 };
+        delete seeded.anchor;
+        return [set.id, seeded];
+      }))
+      : legacyFrames;
     if (index === -1) {
       document.artworkLayers.push({
         id: `layer-${studioHex()}`,
@@ -3471,11 +3795,13 @@ export async function attachThemeLayerImage(context) {
         opacity: 1,
         mask: "none",
         mobile: "reduce",
+        ...(responsive ? { anchor: "center" } : {}),
         frames,
       });
     } else {
       document.artworkLayers[index].path = ownedPath;
       document.artworkLayers[index].role = role;
+      if (responsive) document.artworkLayers[index].anchor = "center";
       if (role === "background") document.artworkLayers[index].frames = frames;
       delete document.artworkLayers[index].legacy;
     }
@@ -3536,7 +3862,10 @@ export async function attachThemeSidebarIdentityMark(context) {
       document.interfaceSurfaces = validateInterfaceSurfaces(
         document.interfaceSurfaces,
         "interfaceSurfaces",
-        { sourceRecipe: document.sourceRecipe },
+        {
+          sourceRecipe: document.sourceRecipe,
+          responsiveLayouts: document.schemaVersion === 5 ? document.responsiveLayouts : null,
+        },
       );
     });
   } catch (error) {
@@ -4811,6 +5140,12 @@ async function executeStudioRequestInternal({
   } else if (request.type === "set-theme-layer") {
     assertStudioRequest(request, ["session", "revision", "index", "preset", "property", "value"]);
     result = await setThemeLayer({ ...context, ...request });
+  } else if (request.type === "enable-responsive-layouts") {
+    assertStudioRequest(request, ["session", "revision"]);
+    result = await enableResponsiveLayouts({ ...context, ...request });
+  } else if (request.type === "mutate-responsive-layout") {
+    assertStudioRequest(request, ["session", "revision", "operation", "id", "value"]);
+    result = await mutateResponsiveLayout({ ...context, ...request });
   } else if (request.type === "apply-theme-patch") {
     assertStudioRequest(request, ["session", "revision", "changes"]);
     result = await applyThemePatch({ ...context, ...request });

@@ -6,6 +6,7 @@
   const STATE_KEY = "__CLAUDE_AURA_EDITOR_OVERLAY__";
   const LAYER_ID = /^layer-[a-f0-9]{32}$/;
   const WIDGET_ID = /^prompt-[a-f0-9]{32}$/;
+  const LAYOUT_ID = /^[a-z][a-z0-9-]{0,31}$/;
   const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const NONCE = /^[a-f0-9]{32}$/;
   const TOKEN_IDS = new Set([
@@ -38,6 +39,33 @@
     && exact(value.frames, ["normal", "wide"])
     && validFrame(value.frames.normal, positionMinimum, positionMaximum, scaleMinimum, scaleMaximum)
     && validFrame(value.frames.wide, positionMinimum, positionMaximum, scaleMinimum, scaleMaximum);
+  const validResponsiveTuple = (value, bounds) => value === null || (
+    Array.isArray(value) && value.length === bounds.length
+    && value.every((entry, index) => entry === null
+      || finite(entry, bounds[index][0], bounds[index][1]))
+  );
+  const validResponsiveTrack = (value) => exact(value, ["mode", "ids", "widths", "breakpoints"])
+    && ["step", "fluid"].includes(value.mode)
+    && Array.isArray(value.ids) && value.ids.length >= 1 && value.ids.length <= 6
+    && value.ids.every((id) => typeof id === "string" && LAYOUT_ID.test(id))
+    && new Set(value.ids).size === value.ids.length
+    && Array.isArray(value.widths) && value.widths.length === value.ids.length
+    && value.widths.every((width, index) => Number.isInteger(width)
+      && width >= 920 && width <= 3840
+      && (index === 0 || width > value.widths[index - 1]))
+    && (value.mode === "fluid"
+      ? value.breakpoints === null
+      : Array.isArray(value.breakpoints) && value.breakpoints.length === value.ids.length - 1
+        && value.breakpoints.every((point, index) => finite(
+          point, value.widths[index] + Number.EPSILON, value.widths[index + 1] - Number.EPSILON,
+        )));
+  const validResponsiveItem = (value, pattern, track, bounds) => (
+    exact(value, ["id", "opacity", "frames"])
+    && typeof value.id === "string" && pattern.test(value.id)
+    && finite(value.opacity, 0, 1)
+    && Array.isArray(value.frames) && value.frames.length === track.ids.length
+    && value.frames.every((frameValue) => validResponsiveTuple(frameValue, bounds))
+  );
   const validGreetingFrame = (value) => exact(value, [
     "fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale",
   ])
@@ -53,20 +81,39 @@
       && validGreetingFrame(value[appearance].standard)
       && validGreetingFrame(value[appearance].wide)
     ));
+  const validResponsiveGreeting = (value, track) => exact(value, ["light", "dark"])
+    && ["light", "dark"].every((appearance) => (
+      Array.isArray(value[appearance]) && value[appearance].length === track.ids.length
+      && value[appearance].every((frameValue) => validResponsiveTuple(frameValue, [
+        [24, 72], [0.9, 1.5], [0.35, 0.9], [-0.45, 0.45], [-0.4, 0.45], [0.5, 1.5],
+      ]))
+    ));
   const validCopy = (value) => exact(value, COPY_KEYS)
     && COPY_KEYS.every((key) => typeof value[key] === "string"
       && value[key].trim() && value[key].length <= 160
       && !/[\u0000-\u001F\u007F]/u.test(value[key]));
   const validConfig = exact(config, [
-    "version", "session", "revision", "nonce", "copy", "greeting", "layers", "widgets",
+    "version", "session", "revision", "nonce", "copy", "responsive", "greeting", "layers", "widgets",
   ]) && config.version === 1 && SESSION_ID.test(config.session)
     && Number.isSafeInteger(config.revision) && config.revision >= 0
-    && NONCE.test(config.nonce) && validCopy(config.copy) && validGreeting(config.greeting)
+    && NONCE.test(config.nonce) && validCopy(config.copy)
+    && (config.responsive === null || validResponsiveTrack(config.responsive))
+    && (config.responsive === null
+      ? validGreeting(config.greeting)
+      : validResponsiveGreeting(config.greeting, config.responsive))
     && Array.isArray(config.layers) && config.layers.length <= 8
-    && config.layers.every((item) => validItem(item, LAYER_ID, -100, 100, 0.25, 3))
+    && config.layers.every((item) => config.responsive === null
+      ? validItem(item, LAYER_ID, -100, 100, 0.25, 3)
+      : validResponsiveItem(item, LAYER_ID, config.responsive, [
+        [-100, 100], [-100, 100], [0, 100], [0, 100], [0.25, 3],
+      ]))
     && new Set(config.layers.map((item) => item.id)).size === config.layers.length
     && Array.isArray(config.widgets) && config.widgets.length <= 12
-    && config.widgets.every((item) => validItem(item, WIDGET_ID, -50, 50, 0.5, 1.75))
+    && config.widgets.every((item) => config.responsive === null
+      ? validItem(item, WIDGET_ID, -50, 50, 0.5, 1.75)
+      : validResponsiveItem(item, WIDGET_ID, config.responsive, [
+        [-50, 50], [-50, 50], [0.5, 1.5], [0.5, 1.75], [-120, 120], [-120, 120],
+      ]))
     && new Set(config.widgets.map((item) => item.id)).size === config.widgets.length;
   if (!validConfig || !document?.documentElement || !document.body) return false;
 
@@ -82,12 +129,23 @@
   const copy = config.copy;
   const layerById = new Map(config.layers.map((item) => [item.id, item]));
   const widgetById = new Map(config.widgets.map((item) => [item.id, item]));
+  const responsive = window.__CLAUDE_AURA_STATE__?.responsiveLayoutResolver ?? null;
+  const sameResponsiveTrack = config.responsive === null
+    ? responsive === null
+    : responsive && responsive.track?.mode === config.responsive.mode
+      && JSON.stringify(responsive.track.ids) === JSON.stringify(config.responsive.ids)
+      && JSON.stringify(responsive.track.widths) === JSON.stringify(config.responsive.widths)
+      && JSON.stringify(responsive.track.breakpoints) === JSON.stringify(config.responsive.breakpoints ?? []);
+  if (!sameResponsiveTrack) return false;
+  const layout = () => responsive?.layoutId?.() ?? null;
   const frame = () => {
+    const activeLayout = layout();
+    if (activeLayout) return activeLayout;
     const active = document.documentElement.getAttribute?.("data-claude-aura-viewport");
     return active === "wide" || (active !== "normal" && window.innerWidth >= 1440)
       ? "wide" : "normal";
   };
-  const greetingFrame = () => frame() === "wide" ? "wide" : "standard";
+  const greetingFrame = () => layout() ?? (frame() === "wide" ? "wide" : "standard");
   const greetingAppearance = () => document.documentElement
     .getAttribute?.("data-claude-aura-effective-mode") === "dark" ? "dark" : "light";
   const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -132,6 +190,23 @@
   };
   const itemGeometry = (item) => {
     const activeFrame = frame();
+    if (config.responsive !== null) {
+      const widget = WIDGET_ID.test(item.id);
+      const fields = widget
+        ? ["positionX", "positionY", "widthRatio", "scale", "offsetX", "offsetY"]
+        : ["positionX", "positionY", "focalX", "focalY", "scale"];
+      const inherited = widget ? [0, 0, 1, 1, 0, 0] : [0, 0, 50, 50, 1];
+      const resolved = responsive.value(item.frames, inherited, fields, Object.fromEntries(
+        fields.map((field) => [field, 2]),
+      )).value;
+      return {
+        opacity: item.opacity,
+        frame: activeFrame,
+        positionX: resolved.positionX,
+        positionY: resolved.positionY,
+        scale: resolved.scale,
+      };
+    }
     const authored = item.frames[activeFrame];
     return {
       opacity: item.opacity,
@@ -144,6 +219,15 @@
   const greetingGeometry = () => {
     const appearance = greetingAppearance();
     const activeFrame = greetingFrame();
+    if (config.responsive !== null) {
+      const resolved = responsive.value(
+        config.greeting[appearance],
+        [34, 1.15, 0.72, 0, 0, 1],
+        ["fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale"],
+        { fontSize: 2, lineHeight: 2, maxWidthRatio: 2, xRatio: 2, yRatio: 2, markScale: 2 },
+      ).value;
+      return { appearance, frame: activeFrame, ...resolved };
+    }
     return {
       appearance,
       frame: activeFrame,

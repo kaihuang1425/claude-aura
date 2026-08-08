@@ -50,6 +50,19 @@ test("interface surfaces resolve sparse values base then appearance then frame",
     standard: { widthRatio: 0.64, offsetXRatio: 0, offsetYRatio: -0.05 },
     wide: { widthRatio: 0.58, offsetXRatio: 0.08, offsetYRatio: -0.08 },
   });
+  assert.deepEqual(promptFrameOverrides({
+    promptBlock: { frame: { standard: { widthRatio: 0.7 } } },
+  }, null, {
+    mode: "step",
+    axis: "width",
+    sets: [
+      { id: "standard", label: "Standard", width: 1180, height: 640 },
+      { id: "wide", label: "Wide", width: 1560, height: 940 },
+    ],
+    breakpoints: [1440],
+  }), {
+    standard: { widthRatio: 0.7 },
+  }, "Responsive prompt geometry must remain sparse");
 });
 
 test("interface surfaces reject arbitrary selectors, slots, values, and unsafe identity references", () => {

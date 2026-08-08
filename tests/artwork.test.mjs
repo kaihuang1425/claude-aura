@@ -310,6 +310,8 @@ test("bundled artwork is isolated, lightweight, pointer-safe, and free of embedd
   assert.match(verifier, /for \(const mode of MODES\)/);
   assert.match(verifier, /new Function\(bundle\.payload\)/);
   assert.match(verifier, /actual Aura on live claude\.ai/);
+  assert.doesNotMatch(verifier, /run-tests\.mjs|runCheckSuite|test-suite/,
+    "verify:cycle must not rerun the separate npm run check gate");
   for (const forbidden of ["claude-dom", "--screenshot", "docs/golden", "dist/verify", "aura-verify-preload"]){
     assert(!verifier.includes(forbidden), `verify:cycle retains forbidden image-fixture hook: ${forbidden}`);
   }

@@ -13,6 +13,7 @@
   const LAYER_ID_PATTERN = /^layer-[a-f0-9]{32}$/;
   const INSTANT_PROMPT_ID_PATTERN = /^prompt-[a-f0-9]{32}$/;
   const INSTANT_PROMPT_ICON_PATTERN = /^artwork\/layer-[a-f0-9]{32}\.webp$/;
+  const RESPONSIVE_LAYOUT_ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/;
   const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const OVERLAY_TOKEN_IDS = Object.freeze(["canvas", "sidebar", "surface", "text", "accent", "border"]);
   const OVERLAY_TARGET_IDS = Object.freeze([
@@ -27,7 +28,8 @@
   const LAUNCHER_ASSET_PATTERN = /^(?:assets\/theme-art\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png|launcher-mark\.png)$/;
   const PREVIEW_PATH_PATTERN = /^\/active\/(?:[a-z0-9][a-z0-9-]{0,63}\/)*[a-z0-9][a-z0-9-]{0,80}\.webp$/;
   const ACTIONS = new Set([
-    "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer", "apply-theme-patch",
+    "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
+    "enable-responsive-layouts", "mutate-responsive-layout", "apply-theme-patch",
     "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer",
     "move-theme-layer", "undo-theme-edit",
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
@@ -217,6 +219,51 @@
   const STAGE_PROMPT_PATHS = Object.freeze([
     "shared.prompt.x", "shared.prompt.y", "shared.prompt.width",
   ]);
+  const RESPONSIVE_CLIENT_FIELDS = Object.freeze({
+    artwork: Object.freeze(["positionX", "positionY", "focalX", "focalY", "scale"]),
+    greeting: Object.freeze(["fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale"]),
+    prompt: Object.freeze(["widthRatio", "offsetXRatio", "offsetYRatio"]),
+    widget: Object.freeze(["positionX", "positionY", "widthRatio", "scale", "offsetX", "offsetY"]),
+  });
+  const RESPONSIVE_CLIENT_DEFAULTS = Object.freeze({
+    artwork: Object.freeze({ positionX: 0, positionY: 0, focalX: 50, focalY: 50, scale: 1 }),
+    greeting: Object.freeze({ fontSize: 34, lineHeight: 1.15, maxWidthRatio: 0.72, xRatio: 0, yRatio: 0, markScale: 1 }),
+    prompt: Object.freeze({ widthRatio: 0.76, offsetXRatio: 0, offsetYRatio: 0 }),
+    widget: Object.freeze({ positionX: 0, positionY: 0, widthRatio: 1, scale: 1, offsetX: 0, offsetY: 0 }),
+  });
+  const RESPONSIVE_CLIENT_PRECISIONS = Object.freeze({
+    artwork: Object.freeze({ positionX: 2, positionY: 2, focalX: 2, focalY: 2, scale: 2 }),
+    greeting: Object.freeze({ fontSize: 2, lineHeight: 2, maxWidthRatio: 2, xRatio: 2, yRatio: 2, markScale: 2 }),
+    prompt: Object.freeze({ widthRatio: 4, offsetXRatio: 4, offsetYRatio: 4 }),
+    widget: Object.freeze({ positionX: 2, positionY: 2, widthRatio: 2, scale: 2, offsetX: 2, offsetY: 2 }),
+  });
+  const RESPONSIVE_RESOLVER = typeof window.CLAUDE_AURA_RESPONSIVE_RESOLVER_FACTORY === "function"
+    ? window.CLAUDE_AURA_RESPONSIVE_RESOLVER_FACTORY()
+    : null;
+
+  function resolveResponsiveClientFrame(layouts, frames, viewportWidth, inherited, family) {
+    if (!layouts || typeof RESPONSIVE_RESOLVER !== "function"
+        || !Object.hasOwn(RESPONSIVE_CLIENT_FIELDS, family)) return null;
+    const ids = layouts.sets.map(({ id }) => id);
+    const result = RESPONSIVE_RESOLVER(
+      {
+        mode: layouts.mode,
+        widths: layouts.sets.map(({ width }) => width),
+        breakpoints: layouts.breakpoints ?? [],
+      },
+      ids.map((id) => frames?.[id] ?? null),
+      viewportWidth,
+      { ...RESPONSIVE_CLIENT_DEFAULTS[family], ...(inherited ?? {}) },
+      RESPONSIVE_CLIENT_PRECISIONS[family],
+    );
+    return {
+      value: result.value,
+      source: result.source,
+      lowerId: result.lowerIndex === null ? null : ids[result.lowerIndex],
+      upperId: result.upperIndex === null ? null : ids[result.upperIndex],
+      t: result.t,
+    };
+  }
   const CONTRAST_TOKEN_MAP = Object.freeze({
     canvas: ["canvas-text"],
     surface: ["surface-text", "muted-text"],
@@ -304,6 +351,12 @@
     const text = value.trim();
     return text || (empty ? "" : null);
   };
+  const truncateText = (value, maximum) => {
+    const text = String(value);
+    if (text.length <= maximum) return text;
+    const truncated = text.slice(0, maximum);
+    return /[\uD800-\uDBFF]$/u.test(truncated) ? truncated.slice(0, -1) : truncated;
+  };
   const format = (template, ...values) => values.reduce(
     (result, value, index) => result.replaceAll(`{${index}}`, String(value)), template);
   const formatBytes = (value) => value >= 1_000_000
@@ -340,7 +393,8 @@
         || !exactShape(value.viewport, ["width", "height", "frame"])
         || !integer(value.viewport.width, 1, 10000)
         || !integer(value.viewport.height, 1, 10000)
-        || !enumValue(value.viewport.frame, ["normal", "wide"])) return null;
+        || typeof value.viewport.frame !== "string"
+        || !RESPONSIVE_LAYOUT_ID_PATTERN.test(value.viewport.frame)) return null;
     const typedTarget = value.kind === "interface"
       ? ["interface.theme", "interface.sidebar", "interface.sidebar-identity", "interface.prompt-block", "interface.greeting"].includes(value.targetId)
       : value.kind === "background"
@@ -383,7 +437,8 @@
           "xRatio", "yRatio", "markScale",
         ])
             || !enumValue(value.geometry.appearance, ["light", "dark"])
-            || !enumValue(value.geometry.frame, ["standard", "wide"])
+            || typeof value.geometry.frame !== "string"
+            || !RESPONSIVE_LAYOUT_ID_PATTERN.test(value.geometry.frame)
             || !inRange(value.geometry.fontSize, 24, 72)
             || !inRange(value.geometry.lineHeight, 0.9, 1.5)
             || !inRange(value.geometry.maxWidthRatio, 0.35, 0.9)
@@ -398,7 +453,8 @@
             || !INSTANT_PROMPT_ID_PATTERN.test(value.itemId)))
           || !exactShape(value.geometry, ["opacity", "frame", "positionX", "positionY", "scale"])
           || !inRange(value.geometry.opacity, 0, 1)
-          || !enumValue(value.geometry.frame, ["normal", "wide"])
+          || typeof value.geometry.frame !== "string"
+          || !RESPONSIVE_LAYOUT_ID_PATTERN.test(value.geometry.frame)
           || !inRange(value.geometry.positionX, background ? -100 : -50, background ? 100 : 50)
           || !inRange(value.geometry.positionY, background ? -100 : -50, background ? 100 : 50)
           || !inRange(value.geometry.scale, background ? 0.25 : 0.5, background ? 3 : 1.75)) return null;
@@ -595,16 +651,56 @@
     return result;
   }
 
-  function normalizeGreeting(value) {
-    if (!exactShape(value, GREETING_STATE_KEYS)
+  function normalizeResponsiveLayouts(value) {
+    if (value === null) return null;
+    if (!exactShape(value, ["mode", "axis", "sets", "breakpoints"])
+        || !enumValue(value.mode, ["step", "fluid"]) || value.axis !== "width"
+        || !Array.isArray(value.sets) || value.sets.length < 1 || value.sets.length > 6) return undefined;
+    const sets = [];
+    for (let index = 0; index < value.sets.length; index += 1) {
+      const set = value.sets[index];
+      if (!exactShape(set, ["id", "label", "width", "height"])
+          || !RESPONSIVE_LAYOUT_ID_PATTERN.test(set.id)
+          || !safeText(set.label, 40)
+          || !integer(set.width, 920, 3840) || !integer(set.height, 620, 2400)
+          || (index && set.width <= value.sets[index - 1].width)) return undefined;
+      sets.push({ ...set, label: set.label.trim() });
+    }
+    if (new Set(sets.map(({ id }) => id)).size !== sets.length) return undefined;
+    if (value.mode === "fluid") {
+      return value.breakpoints === null
+        ? { mode: "fluid", axis: "width", sets, breakpoints: null }
+        : undefined;
+    }
+    if (!Array.isArray(value.breakpoints) || value.breakpoints.length !== sets.length - 1) return undefined;
+    for (let index = 0; index < value.breakpoints.length; index += 1) {
+      if (!inRange(value.breakpoints[index], sets[index].width, sets[index + 1].width)
+          || value.breakpoints[index] === sets[index].width
+          || value.breakpoints[index] === sets[index + 1].width
+          || (index && value.breakpoints[index] <= value.breakpoints[index - 1])) return undefined;
+    }
+    return { mode: "step", axis: "width", sets, breakpoints: [...value.breakpoints] };
+  }
+
+  function normalizeGreeting(value, responsiveLayouts = null) {
+    const stateKeys = responsiveLayouts
+      ? [...GREETING_STATE_KEYS, "responsive", "explicitFrames"]
+      : GREETING_STATE_KEYS;
+    if (!exactShape(value, stateKeys)
         || typeof value.native !== "boolean"
         || typeof value.compactMarkAvailable !== "boolean"
+        || (responsiveLayouts && value.responsive !== true)
         || !exactShape(value.frames, ["light", "dark"])) return null;
     const frames = {};
+    const frameIds = responsiveLayouts
+      ? responsiveLayouts.sets.map(({ id }) => id)
+      : ["standard", "wide"];
+    const explicitFrames = responsiveLayouts ? {} : null;
+    if (responsiveLayouts && !exactShape(value.explicitFrames, ["light", "dark"])) return null;
     for (const appearance of ["light", "dark"]) {
-      if (!exactShape(value.frames[appearance], ["standard", "wide"])) return null;
+      if (!exactShape(value.frames[appearance], frameIds)) return null;
       frames[appearance] = {};
-      for (const frame of ["standard", "wide"]) {
+      for (const frame of frameIds) {
         const candidate = value.frames[appearance][frame];
         if (!exactShape(candidate, GREETING_FRAME_KEYS)
             || typeof candidate.italic !== "boolean"
@@ -618,10 +714,25 @@
         if (!value.compactMarkAvailable && candidate.markSource === "compact") return null;
         frames[appearance][frame] = { ...candidate };
       }
+      if (responsiveLayouts) {
+        if (!plainRecord(value.explicitFrames[appearance])
+            || Object.keys(value.explicitFrames[appearance]).some((id) => !frameIds.includes(id))) return null;
+        explicitFrames[appearance] = {};
+        for (const [id, leaf] of Object.entries(value.explicitFrames[appearance])) {
+          if (!plainRecord(leaf) || Object.keys(leaf).length === 0
+              || Object.keys(leaf).some((field) => !RESPONSIVE_CLIENT_FIELDS.greeting.includes(field))) return null;
+          for (const [field, frameValue] of Object.entries(leaf)) {
+            const bounds = GREETING_NUMERIC_FIELDS[field];
+            if (!bounds || !inRange(frameValue, bounds[0], bounds[1])) return null;
+          }
+          explicitFrames[appearance][id] = { ...leaf };
+        }
+      }
     }
     return {
       native: value.native,
       compactMarkAvailable: value.compactMarkAvailable,
+      ...(responsiveLayouts ? { responsive: true, explicitFrames } : {}),
       frames,
     };
   }
@@ -785,13 +896,13 @@
     return "uncertain";
   };
 
-  function normalizeShared(value) {
+  function normalizeShared(value, responsiveLayouts = null) {
     const keys = ["fontUi", "fontDisplay", "radius", "blur", "shadow", "backgroundScope", "prompt", "greeting", "inherited"];
     const inheritedKeys = ["fontUi", "fontDisplay", "radius", "shadow"];
     if (!exactShape(value, keys) || !exactShape(value.prompt, ["native", "width", "x", "y"])
         || !exactShape(value.inherited, inheritedKeys)
         || inheritedKeys.some((key) => typeof value.inherited[key] !== "boolean")) return null;
-    const greeting = normalizeGreeting(value.greeting);
+    const greeting = normalizeGreeting(value.greeting, responsiveLayouts);
     if (!greeting || !enumValue(value.fontUi, FONT_UI_IDS) || !enumValue(value.fontDisplay, FONT_DISPLAY_IDS)
         || !inRange(value.radius, 0, 32) || !inRange(value.blur, 0, 40)
         || !enumValue(value.shadow, SHADOW_IDS) || !enumValue(value.backgroundScope, BACKGROUND_SCOPE_IDS)
@@ -1003,7 +1114,7 @@
     return result;
   };
 
-  function normalizeInterfaceSurfaces(value) {
+  function normalizeInterfaceSurfaces(value, responsiveLayouts = null) {
     if (value === null) return null;
     if (!plainRecord(value) || Object.keys(value).length === 0
         || Object.keys(value).some((key) => !Object.hasOwn(INTERFACE_SURFACE_CLIENT_SPECS, key))) return undefined;
@@ -1027,8 +1138,11 @@
         }
       }
       if (Object.hasOwn(wrapper, "frame")) {
+        const frameIds = responsiveLayouts
+          ? responsiveLayouts.sets.map(({ id }) => id)
+          : ["standard", "wide"];
         if (!spec.frame || !plainRecord(wrapper.frame) || Object.keys(wrapper.frame).length === 0
-            || Object.keys(wrapper.frame).some((axis) => !["standard", "wide"].includes(axis))) return undefined;
+            || Object.keys(wrapper.frame).some((axis) => !frameIds.includes(axis))) return undefined;
         normalized.frame = Object.create(null);
         for (const [axis, leaf] of Object.entries(wrapper.frame)) {
           normalized.frame[axis] = normalizeInterfaceLeaf(leaf, spec.frame);
@@ -1065,10 +1179,10 @@
     return { ...value };
   }
 
-  function normalizeLayer(value, expectedIndex) {
+  function normalizeLayer(value, expectedIndex, responsiveLayouts = null) {
     const keys = [
       "id", "index", "role", "appearance", "context", "viewport", "visible", "opacity", "mask", "mobile",
-      "filters", "bytes", "previewUrl", "frames",
+      ...(responsiveLayouts ? ["anchor"] : []), "filters", "bytes", "previewUrl", "frames",
     ];
     if (!exactShape(value, keys) || !LAYER_ID_PATTERN.test(value.id)
         || value.index !== expectedIndex || !integer(value.index, 0, 7)
@@ -1076,9 +1190,27 @@
         || !enumValue(value.context, CONTEXT_IDS) || !enumValue(value.viewport, VIEWPORT_IDS)
         || typeof value.visible !== "boolean" || !inRange(value.opacity, 0, 1)
         || !enumValue(value.mask, MASK_IDS) || !enumValue(value.mobile, MOBILE_IDS)
-        || !integer(value.bytes, 0, 400_000) || !exactShape(value.frames, ["normal", "wide"])) return null;
+        || (responsiveLayouts && !enumValue(value.anchor, ANCHOR_IDS))
+        || !integer(value.bytes, 0, 400_000) || !plainRecord(value.frames)) return null;
     const filters = normalizeLayerFilters(value.filters);
     const previewUrl = normalizePreviewUrl(value.previewUrl);
+    if (responsiveLayouts) {
+      const frameIds = responsiveLayouts.sets.map(({ id }) => id);
+      if (Object.keys(value.frames).some((id) => !frameIds.includes(id))) return null;
+      const frames = Object.create(null);
+      const ranges = {
+        focalX: [0, 100], focalY: [0, 100], positionX: [-100, 100], positionY: [-100, 100], scale: [0.25, 3],
+      };
+      for (const [id, frame] of Object.entries(value.frames)) {
+        if (!plainRecord(frame) || Object.keys(frame).length === 0
+            || Object.keys(frame).some((field) => !Object.hasOwn(ranges, field))) return null;
+        if (Object.entries(frame).some(([field, frameValue]) => !inRange(frameValue, ...ranges[field]))) return null;
+        frames[id] = { ...frame };
+      }
+      if (filters === undefined || previewUrl === undefined) return null;
+      return { ...value, filters, previewUrl, frames };
+    }
+    if (!exactShape(value.frames, ["normal", "wide"])) return null;
     const normal = normalizeFrame(value.frames.normal);
     const wide = normalizeFrame(value.frames.wide);
     if (filters === undefined || previewUrl === undefined || !normal || !wide) return null;
@@ -1106,7 +1238,7 @@
     return { labels, descriptions };
   }
 
-  function normalizeInstantPrompt(value) {
+  function normalizeInstantPrompt(value, responsiveLayouts = null) {
     if (!exactShape(value, ["id", "labels", "prompts", "icon", "iconPreviewUrl", "layout"])
         || !INSTANT_PROMPT_ID_PATTERN.test(value.id)
         || !plainRecord(value.labels) || !plainRecord(value.prompts)) return null;
@@ -1131,7 +1263,29 @@
     if (iconPreviewUrl === undefined || (value.icon === null) !== (iconPreviewUrl === null)) return null;
     if (!exactShape(value.layout, ["opacity", "frames"])
         || !inRange(value.layout.opacity, 0, 1)
-        || !exactShape(value.layout.frames, ["normal", "wide"])) return null;
+        || !plainRecord(value.layout.frames)) return null;
+    if (responsiveLayouts) {
+      const ids = responsiveLayouts.sets.map(({ id }) => id);
+      const ranges = {
+        positionX: [INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX],
+        positionY: [INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX],
+        widthRatio: [0.5, 1.5], scale: [INSTANT_PROMPT_SCALE_MIN, INSTANT_PROMPT_SCALE_MAX],
+        offsetX: [-120, 120], offsetY: [-120, 120],
+      };
+      if (Object.keys(value.layout.frames).some((id) => !ids.includes(id))) return null;
+      const frames = Object.create(null);
+      for (const [id, frame] of Object.entries(value.layout.frames)) {
+        if (!plainRecord(frame) || Object.keys(frame).length === 0
+            || Object.keys(frame).some((field) => !Object.hasOwn(ranges, field))
+            || Object.entries(frame).some(([field, frameValue]) => !inRange(frameValue, ...ranges[field]))) return null;
+        frames[id] = { ...frame };
+      }
+      return {
+        id: value.id, labels, prompts, icon: value.icon, iconPreviewUrl,
+        layout: { opacity: value.layout.opacity, frames },
+      };
+    }
+    if (!exactShape(value.layout.frames, ["normal", "wide"])) return null;
     const normalizeLayoutFrame = (frame) => exactShape(frame, ["positionX", "positionY", "scale"])
       && inRange(frame.positionX, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX)
       && inRange(frame.positionY, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX)
@@ -1219,7 +1373,7 @@
       "active", "id", "sourceId", "source", "isNew", "session", "revision", "dirty", "canUndo", "canRedo",
       "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
       "launcherStylePreviewUrl", "interfaceSurfaces", "interfaceStyle", "identityPreviewUrl",
-      "identityStylePreviewUrl", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
+      "identityStylePreviewUrl", "responsiveLayouts", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
     ];
     const activeOptional = [...optional, "editKind"];
     if (!exactShape(value, required, activeOptional) || !ID_PATTERN.test(value.id)
@@ -1234,6 +1388,8 @@
     if (editKind === null && value.source === "builtin" && !value.isNew) return undefined;
     const label = safeText(value.label, 80);
     if (!label || !exactShape(value.tokens, ["light", "dark"])) return undefined;
+    const responsiveLayouts = normalizeResponsiveLayouts(value.responsiveLayouts);
+    if (responsiveLayouts === undefined) return undefined;
     const metadata = normalizeMetadata(value.metadata);
     const light = normalizeModeTokens(value.tokens.light);
     const dark = normalizeModeTokens(value.tokens.dark);
@@ -1242,14 +1398,14 @@
     const launcherStyle = normalizeLauncher(value.launcherStyle);
     const launcherPreviewUrl = normalizeLauncherPreviewUrl(value.launcherPreviewUrl);
     const launcherStylePreviewUrl = normalizeLauncherPreviewUrl(value.launcherStylePreviewUrl);
-    const interfaceSurfaces = normalizeInterfaceSurfaces(value.interfaceSurfaces);
-    const interfaceStyle = normalizeInterfaceSurfaces(value.interfaceStyle);
+    const interfaceSurfaces = normalizeInterfaceSurfaces(value.interfaceSurfaces, responsiveLayouts);
+    const interfaceStyle = normalizeInterfaceSurfaces(value.interfaceStyle, responsiveLayouts);
     const identityPreviewUrl = normalizeIdentityPreviewUrl(value.identityPreviewUrl);
     const identityStylePreviewUrl = normalizeIdentityPreviewUrl(value.identityStylePreviewUrl);
-    const shared = normalizeShared(value.shared);
+    const shared = normalizeShared(value.shared, responsiveLayouts);
     const greetingPreferences = normalizeGreetingPreferences(value.greetingPreferences);
     if (!Array.isArray(value.instantPrompts) || value.instantPrompts.length > MAX_INSTANT_PROMPTS) return undefined;
-    const instantPrompts = value.instantPrompts.map(normalizeInstantPrompt);
+    const instantPrompts = value.instantPrompts.map((prompt) => normalizeInstantPrompt(prompt, responsiveLayouts));
     if (!metadata || !light || !dark || !studioStyle || !launcher || !launcherStyle
         || !launcherPreviewUrl || !launcherStylePreviewUrl
         || interfaceSurfaces === undefined || interfaceStyle === undefined
@@ -1258,7 +1414,7 @@
         || instantPrompts.some((prompt) => !prompt)
         || new Set(instantPrompts.map((prompt) => prompt.id)).size !== instantPrompts.length
         || !Array.isArray(value.layers) || value.layers.length > 8) return undefined;
-    const layers = value.layers.map(normalizeLayer);
+    const layers = value.layers.map((layer, index) => normalizeLayer(layer, index, responsiveLayouts));
     const feedback = normalizeFeedback(value.feedback);
     if (layers.some((layer) => !layer) || new Set(layers.map((layer) => layer.id)).size !== layers.length
         || !feedback) return undefined;
@@ -1279,6 +1435,7 @@
       interfaceStyle,
       identityPreviewUrl,
       identityStylePreviewUrl,
+      responsiveLayouts,
       shared,
       greetingPreferences,
       instantPrompts,
@@ -1471,6 +1628,23 @@
     const reviewPanel = editor.querySelector('[data-editor-workflow-page="review"]');
     const switchSupportedPreviewButton = document.getElementById("editor-switch-supported-preview");
     const stageRoot = document.getElementById("editor-stage");
+    const responsiveLayoutPanel = document.getElementById("responsive-layout-panel");
+    const responsiveLayoutEnable = document.getElementById("responsive-layout-enable");
+    const responsiveLayoutTrack = document.getElementById("responsive-layout-track");
+    const responsiveLayoutAdd = document.getElementById("responsive-layout-add");
+    const responsiveLayoutStatus = document.getElementById("responsive-layout-status");
+    const responsivePreviewing = document.getElementById("responsive-previewing");
+    const responsiveEditing = document.getElementById("responsive-editing");
+    const responsiveBetween = document.getElementById("responsive-between");
+    const responsiveSource = document.getElementById("responsive-source");
+    const responsiveLayoutAdvanced = document.getElementById("responsive-layout-advanced");
+    const responsiveLayoutName = document.getElementById("responsive-layout-name");
+    const responsiveLayoutWidth = document.getElementById("responsive-layout-width");
+    const responsiveLayoutHeight = document.getElementById("responsive-layout-height");
+    const responsiveLayoutMode = document.getElementById("responsive-layout-mode");
+    const responsiveLayoutDuplicate = document.getElementById("responsive-layout-duplicate");
+    const responsiveLayoutDelete = document.getElementById("responsive-layout-delete");
+    const responsiveTargetReset = document.getElementById("responsive-target-reset");
     const windowEditorPanel = document.querySelector(".window-editor-panel");
     const windowEditButton = document.getElementById("stage-window-edit");
     const windowEditStopButton = document.getElementById("stage-window-edit-stop");
@@ -1526,6 +1700,8 @@
       widgets: "widgets.app-identity",
     };
     let stageViewport = "normal";
+    let editingLayoutId = null;
+    let pendingResponsiveSelectionId = null;
     let stageContext = "new-chat";
     let stageSelection = null;
     let stagePreviewSize = [...STAGE_SIZES.normal];
@@ -1770,13 +1946,28 @@
       const base = mutationBase();
       if (base) post({ type: "pick-sidebar-identity-mark", ...base });
     };
-    const greetingFrameId = (viewport = stageViewport) => viewport === "wide" ? "wide" : "standard";
+    const responsiveActive = () => Boolean(state?.responsiveLayouts);
+    const responsiveSet = (id = editingLayoutId) => state?.responsiveLayouts?.sets
+      .find((set) => set.id === id) ?? null;
+    const responsiveEditExact = () => {
+      const set = responsiveSet();
+      return Boolean(set && set.width === stagePreviewSize[0] && set.height === stagePreviewSize[1]);
+    };
+    const stageFrameId = (viewport = stageViewport) => responsiveActive()
+      ? editingLayoutId
+      : viewport;
+    const frameDisplayLabel = (id = stageFrameId()) => responsiveActive()
+      ? responsiveSet(id)?.label ?? id ?? ""
+      : tr(id === "wide" ? "frameWide" : "frameStandard");
+    const greetingFrameId = (viewport = stageViewport) => responsiveActive()
+      ? editingLayoutId
+      : viewport === "wide" ? "wide" : "standard";
     const greetingFramePrefix = (
       appearance = selectedMode,
       frame = greetingFrameId(),
     ) => `shared.greeting.frames.${appearance}.${frame}.`;
     const greetingScopeFromFieldPath = (fieldPath) => {
-      const match = /^shared\.greeting\.frames\.(light|dark)\.(standard|wide)\./.exec(
+      const match = /^shared\.greeting\.frames\.(light|dark)\.([a-z][a-z0-9-]{0,31})\./.exec(
         String(fieldPath ?? ""),
       );
       return match
@@ -1787,9 +1978,21 @@
       appearance = selectedMode,
       frame = greetingFrameId(),
     ) => {
-      const confirmed = state?.shared?.greeting?.frames?.[appearance]?.[frame] ?? null;
+      const confirmedFrames = state?.shared?.greeting?.frames?.[appearance];
+      const confirmed = responsiveActive()
+        ? confirmedFrames?.[frame] ?? confirmedFrames?.[state.responsiveLayouts.sets[0].id] ?? null
+        : confirmedFrames?.[frame] ?? null;
       if (!confirmed) return null;
-      const draft = { ...confirmed };
+      const numeric = responsiveActive()
+        ? resolveResponsiveClientFrame(
+          state.responsiveLayouts,
+          state.shared.greeting.explicitFrames?.[appearance] ?? {},
+          stagePreviewSize[0],
+          RESPONSIVE_CLIENT_DEFAULTS.greeting,
+          "greeting",
+        )?.value ?? RESPONSIVE_CLIENT_DEFAULTS.greeting
+        : confirmed;
+      const draft = { ...confirmed, ...numeric };
       const prefix = greetingFramePrefix(appearance, frame);
       for (const field of GREETING_FRAME_KEYS) {
         const path = `${prefix}${field}`;
@@ -1797,6 +2000,27 @@
       }
       return draft;
     };
+    const activeArtworkFrame = (layer) => responsiveActive()
+      ? {
+        anchor: layer.anchor,
+        ...(resolveResponsiveClientFrame(
+          state.responsiveLayouts,
+          layer.frames,
+          stagePreviewSize[0],
+          RESPONSIVE_CLIENT_DEFAULTS.artwork,
+          "artwork",
+        )?.value ?? RESPONSIVE_CLIENT_DEFAULTS.artwork),
+      }
+      : layer.frames[stageViewport];
+    const activeInstantPromptFrame = (prompt) => responsiveActive()
+      ? resolveResponsiveClientFrame(
+        state.responsiveLayouts,
+        prompt.layout.frames,
+        stagePreviewSize[0],
+        RESPONSIVE_CLIENT_DEFAULTS.widget,
+        "widget",
+      )?.value ?? RESPONSIVE_CLIENT_DEFAULTS.widget
+      : prompt.layout.frames[stageViewport];
     const themeChangeKey = (change) => change.kind === "token"
       ? `token:${change.mode}:${change.token}`
       : change.kind === "layer"
@@ -2452,7 +2676,7 @@
     const normalizeInspectorField = (field) => {
       const token = /^tokens\.(?:light|dark)\.(.+)$/.exec(field ?? "");
       if (token) return `tokens.${selectedMode}.${token[1]}`;
-      const greeting = /^shared\.greeting\.frames\.(?:light|dark)\.(?:standard|wide)\.(.+)$/.exec(field ?? "");
+      const greeting = /^shared\.greeting\.frames\.(?:light|dark)\.[a-z][a-z0-9-]{0,31}\.(.+)$/.exec(field ?? "");
       if (greeting) return `shared.greeting.frames.${selectedMode}.${greetingFrameId()}.${greeting[1]}`;
       const layer = /^layers\[\d+](.*)$/.exec(field ?? "");
       if (layer) {
@@ -2529,17 +2753,17 @@
       contextApplies.textContent = inspectorTarget === "background.layer"
         ? layerScopeLabel(selectedLayer)
         : inspectorTarget === "widgets.instant-prompts"
-          ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr("frameStandard")} + ${tr("frameWide")}`
+          ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${responsiveActive() ? frameDisplayLabel() : `${tr("frameStandard")} + ${tr("frameWide")}`}`
         : inspectorTarget === "interface.sidebar"
           ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
         : inspectorTarget === "interface.sidebar-identity"
           ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
         : inspectorTarget === "interface.prompt-block"
           ? inspectorField === "shared.prompt" || inspectorField.startsWith("shared.prompt.")
-            ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr(greetingFrameId() === "wide" ? "frameWide" : "frameStandard")}`
+            ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${frameDisplayLabel(greetingFrameId())}`
             : `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
           : inspectorTarget === "interface.greeting"
-            ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} / ${tr("contextNewChat")} / ${tr(greetingFrameId() === "wide" ? "frameWide" : "frameStandard")}`
+            ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} / ${tr("contextNewChat")} / ${frameDisplayLabel(greetingFrameId())}`
             : tokenMode
             ? `${tr(tokenMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
             : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
@@ -2547,17 +2771,21 @@
         ? tr(hasPersonalWordmark?.() ? "wordmarkSaved" : "themeOriginalSource")
         : fieldUsesThemeOriginal(inspectorField)
           ? tr("themeOriginalSource") : tr("customizedSource");
-      const fieldFrame = /^layers\[\d+]\.frames\.(normal|wide)\./.exec(inspectorField)?.[1]
-        ?? /^shared\.greeting\.frames\.(?:light|dark)\.(standard|wide)\./.exec(inspectorField)?.[1]
+      const fieldFrame = /^layers\[\d+]\.frames\.([a-z][a-z0-9-]{0,31})\./.exec(inspectorField)?.[1]
+        ?? /^shared\.greeting\.frames\.(?:light|dark)\.([a-z][a-z0-9-]{0,31})\./.exec(inspectorField)?.[1]
         ?? ((inspectorField === "shared.prompt" || inspectorField.startsWith("shared.prompt."))
           ? greetingFrameId() : null)
         ?? null;
       contextFrameRow.hidden = !fieldFrame;
-      const editFrameLabel = tr(fieldFrame === "wide" ? "frameWide" : "frameStandard");
-      const previewFrameLabel = tr(stageViewport === "wide" ? "frameWide" : "frameStandard");
-      const preset = Object.values(STAGE_SIZES).some(
-        ([width, height]) => width === stagePreviewSize[0] && height === stagePreviewSize[1],
-      );
+      const editFrameLabel = frameDisplayLabel(fieldFrame);
+      const previewFrameLabel = responsiveActive()
+        ? `${stagePreviewSize[0]}×${stagePreviewSize[1]}`
+        : tr(stageViewport === "wide" ? "frameWide" : "frameStandard");
+      const preset = responsiveActive()
+        ? responsiveEditExact()
+        : Object.values(STAGE_SIZES).some(
+          ([width, height]) => width === stagePreviewSize[0] && height === stagePreviewSize[1],
+        );
       contextFrame.textContent = preset
         ? editFrameLabel
         : `${editFrameLabel} · ${format(tr("customFrameUses"), previewFrameLabel)}`;
@@ -2888,6 +3116,9 @@
       stageSelection = null;
       selectedLayerId = null;
       selectedInstantPromptId = null;
+      editingLayoutId = null;
+      pendingResponsiveSelectionId = null;
+      renderedResponsiveSignature = null;
       renderedLayerSignature = null;
       renderedInstantPromptSignature = null;
       stageHiddenLayers.clear();
@@ -3086,14 +3317,42 @@
     });
     const promptStateValue = (key) => {
       const property = promptFrameProperty[key];
-      const saved = state?.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()]?.[property];
-      if (saved !== undefined) return saved;
-      return state?.shared?.prompt?.native
+      const inherited = state?.shared?.prompt?.native
         ? measuredNativePrompt()[key]
         : statePath(`shared.prompt.${key}`);
+      if (responsiveActive()) {
+        const base = {
+          widthRatio: key === "width" ? inherited : (state.shared.prompt.native ? measuredNativePrompt().width : state.shared.prompt.width),
+          offsetXRatio: key === "x" ? inherited : (state.shared.prompt.native ? measuredNativePrompt().x : state.shared.prompt.x),
+          offsetYRatio: key === "y" ? inherited : (state.shared.prompt.native ? measuredNativePrompt().y : state.shared.prompt.y),
+        };
+        return resolveResponsiveClientFrame(
+          state.responsiveLayouts,
+          state.interfaceSurfaces?.promptBlock?.frame ?? {},
+          stagePreviewSize[0],
+          base,
+          "prompt",
+        )?.value?.[property] ?? inherited;
+      }
+      const saved = state?.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()]?.[property];
+      return saved !== undefined ? saved : inherited;
     };
     const stageValue = (path) => {
       if (stageOverrides.has(path)) return stageOverrides.get(path);
+      if (responsiveActive()) {
+        const layerFrame = /^layers\[(\d+)]\.frames\.[a-z][a-z0-9-]{0,31}\.(anchor|focalX|focalY|positionX|positionY|scale)$/.exec(path);
+        if (layerFrame) {
+          const layer = state.layers[Number(layerFrame[1])];
+          return layer ? activeArtworkFrame(layer)?.[layerFrame[2]] : undefined;
+        }
+        const greetingFrame = /^shared\.greeting\.frames\.(light|dark)\.[a-z][a-z0-9-]{0,31}\.([a-zA-Z]+)$/.exec(path);
+        if (greetingFrame) return activeGreetingFrame(greetingFrame[1])?.[greetingFrame[2]];
+        const widgetFrame = /^instantPrompts\[(\d+)]\.layout\.frames\.[a-z][a-z0-9-]{0,31}\.([a-zA-Z]+)$/.exec(path);
+        if (widgetFrame) {
+          const prompt = state.instantPrompts[Number(widgetFrame[1])];
+          return prompt ? activeInstantPromptFrame(prompt)?.[widgetFrame[2]] : undefined;
+        }
+      }
       const prompt = /^shared\.prompt\.(width|x|y)$/.exec(path);
       return prompt ? promptStateValue(prompt[1]) : statePath(path);
     };
@@ -3152,7 +3411,7 @@
     };
 
     const messageForStagePath = (path, value) => {
-      const layer = /^layers\[(\d+)]\.frames\.(normal|wide)\.(positionX|positionY|scale)$/.exec(path);
+      const layer = /^layers\[(\d+)]\.frames\.([a-z][a-z0-9-]{0,31})\.(positionX|positionY|scale)$/.exec(path);
       if (layer) {
         const rounded = layer[3] === "scale"
           ? Math.round(value * 10000) / 10000
@@ -3201,7 +3460,7 @@
       if (selection.kind === "instant-prompt") {
         const index = state?.instantPrompts?.findIndex((prompt) => prompt.id === selection.id) ?? -1;
         if (index < 0) return [];
-        const prefix = `instantPrompts[${index}].layout.frames.${viewport}.`;
+        const prefix = `instantPrompts[${index}].layout.frames.${responsiveActive() ? editingLayoutId : viewport}.`;
         return [
           `instantPrompts[${index}].layout.opacity`,
           `${prefix}positionX`,
@@ -3210,10 +3469,12 @@
         ];
       }
       const index = layerIndexForId(selection.id);
-      return index < 0 ? [] : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${viewport}.${property}`);
+      const frameId = responsiveActive() ? editingLayoutId : viewport;
+      return index < 0 || !frameId ? []
+        : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${frameId}.${property}`);
     };
     const commitStagePaths = (paths) => {
-      const widgetPath = /^instantPrompts\[(\d+)]\.layout\.(?:opacity|frames\.(normal|wide)\.(?:positionX|positionY|scale))$/;
+      const widgetPath = /^instantPrompts\[(\d+)]\.layout\.(?:opacity|frames\.([a-z][a-z0-9-]{0,31})\.(?:positionX|positionY|scale))$/;
       const widgetIndexes = new Set(paths.map((path) => widgetPath.exec(path)?.[1]).filter(Boolean));
       if (widgetIndexes.size) {
         for (const rawIndex of widgetIndexes) {
@@ -3234,6 +3495,7 @@
             if (path.endsWith(".opacity")) layout.opacity = value;
             else {
               const property = path.split(".").at(-1);
+              layout.frames[match[2]] ??= {};
               layout.frames[match[2]][property] = value;
             }
             changed = true;
@@ -3253,7 +3515,7 @@
       }
       const greetingScopes = new Map();
       for (const path of paths) {
-        const match = /^shared\.greeting\.frames\.(light|dark)\.(standard|wide)\.(xRatio|yRatio|maxWidthRatio|fontSize)$/.exec(path);
+        const match = /^shared\.greeting\.frames\.(light|dark)\.([a-z][a-z0-9-]{0,31})\.(xRatio|yRatio|maxWidthRatio|fontSize)$/.exec(path);
         if (!match) continue;
         const key = `${match[1]}:${match[2]}`;
         if (!greetingScopes.has(key)) {
@@ -3702,10 +3964,13 @@
       const [widgetViewportWidth, widgetViewportHeight] = stageLogicalSize();
       stageInstantPromptRail.replaceChildren(...promptCards.map((prompt) => {
         const promptIndex = state.instantPrompts.findIndex((entry) => entry.id === prompt.id);
-        const layoutPrefix = `instantPrompts[${promptIndex}].layout.frames.${stageViewport}.`;
+        const layoutPrefix = `instantPrompts[${promptIndex}].layout.frames.${stageFrameId()}.`;
         const positionX = Number(stageValue(`${layoutPrefix}positionX`)) || 0;
         const positionY = Number(stageValue(`${layoutPrefix}positionY`)) || 0;
         const widgetScale = Number(stageValue(`${layoutPrefix}scale`)) || 1;
+        const widgetWidth = Number(stageValue(`${layoutPrefix}widthRatio`)) || 1;
+        const widgetOffsetX = Number(stageValue(`${layoutPrefix}offsetX`)) || 0;
+        const widgetOffsetY = Number(stageValue(`${layoutPrefix}offsetY`)) || 0;
         const widgetOpacity = Number(stageValue(`instantPrompts[${promptIndex}].layout.opacity`));
         const ticket = document.createElement("button");
         ticket.type = "button";
@@ -3718,9 +3983,10 @@
           ? instantPromptPreviewState : "default";
         ticket.setAttribute("aria-pressed", String(prompt.id === selectedInstantPromptId));
         ticket.disabled = stageContext !== "new-chat";
-        ticket.style.setProperty("--stage-widget-x", `${widgetViewportWidth * positionX / 100}px`);
-        ticket.style.setProperty("--stage-widget-y", `${widgetViewportHeight * positionY / 100}px`);
+        ticket.style.setProperty("--stage-widget-x", `${(widgetViewportWidth * positionX / 100) + widgetOffsetX}px`);
+        ticket.style.setProperty("--stage-widget-y", `${(widgetViewportHeight * positionY / 100) + widgetOffsetY}px`);
         ticket.style.setProperty("--stage-widget-scale", String(widgetScale));
+        ticket.style.setProperty("--stage-widget-width", String(widgetWidth));
         ticket.style.opacity = String(Number.isFinite(widgetOpacity) ? widgetOpacity : 1);
         if (prompt.iconPreviewUrl) {
           const icon = document.createElement("img");
@@ -3791,6 +4057,12 @@
         for (const node of chrome) node.hidden = true;
         return;
       }
+      if (responsiveActive() && !responsiveEditExact()) {
+        stageRing.hidden = true;
+        stageOpacityWrap.hidden = true;
+        for (const node of chrome) node.hidden = true;
+        return;
+      }
       const frameRect = stageFrame.getBoundingClientRect();
       const rect = target.getBoundingClientRect();
       const left = rect.left - frameRect.left;
@@ -3818,11 +4090,11 @@
       setRect(stageEdges[2], clampX(left + 12, barLength), clampY(top + rect.height - 4, 8), barLength, 8);
       setRect(stageEdges[3], clampX(left - 4, 8), clampY(top + 12, sideLength), 8, sideLength);
       const selectionIndex = stageSelection.kind === "layer" ? layerIndexForId(stageSelection.id) : -1;
-      const framePrefix = selectionIndex >= 0 ? `layers[${selectionIndex}].frames.${stageViewport}.` : "";
+      const framePrefix = selectionIndex >= 0 ? `layers[${selectionIndex}].frames.${stageFrameId()}.` : "";
       const widgetIndex = stageSelection.kind === "instant-prompt"
         ? state.instantPrompts.findIndex((promptCard) => promptCard.id === stageSelection.id) : -1;
       const widgetPrefix = widgetIndex >= 0
-        ? `instantPrompts[${widgetIndex}].layout.frames.${stageViewport}.` : "";
+        ? `instantPrompts[${widgetIndex}].layout.frames.${stageFrameId()}.` : "";
       const positionX = Number(prompt
         ? stageValue("shared.prompt.x") * 100
         : greeting ? stageValue(`${greetingStagePrefix()}xRatio`) * 100
@@ -3984,7 +4256,7 @@
       for (const [id, entry] of stageLayerNodes) {
         const index = layerIndexForId(id);
         if (index < 0) continue;
-        const framePath = (property) => `layers[${index}].frames.${stageViewport}.${property}`;
+        const framePath = (property) => `layers[${index}].frames.${stageFrameId()}.${property}`;
         const frameNumber = (property) => Number(stageValue(framePath(property)));
         const anchor = ANCHOR_POINTS[stageValue(framePath("anchor"))] ?? ANCHOR_POINTS.center;
         const opacity = Number(stageValue(`layers[${index}].opacity`));
@@ -4065,14 +4337,18 @@
               (prompt) => prompt.id === ticket.dataset.instantPromptId,
             );
             if (index < 0) continue;
-            const prefix = `instantPrompts[${index}].layout.frames.${stageViewport}.`;
+            const prefix = `instantPrompts[${index}].layout.frames.${stageFrameId()}.`;
             const x = Number(stageValue(`${prefix}positionX`)) || 0;
             const y = Number(stageValue(`${prefix}positionY`)) || 0;
             const widgetScale = Number(stageValue(`${prefix}scale`)) || 1;
+            const widgetWidth = Number(stageValue(`${prefix}widthRatio`)) || 1;
+            const widgetOffsetX = Number(stageValue(`${prefix}offsetX`)) || 0;
+            const widgetOffsetY = Number(stageValue(`${prefix}offsetY`)) || 0;
             const opacity = Number(stageValue(`instantPrompts[${index}].layout.opacity`));
-            ticket.style.setProperty("--stage-widget-x", `${logicalWidth * x / 100}px`);
-            ticket.style.setProperty("--stage-widget-y", `${logicalHeight * y / 100}px`);
+            ticket.style.setProperty("--stage-widget-x", `${(logicalWidth * x / 100) + widgetOffsetX}px`);
+            ticket.style.setProperty("--stage-widget-y", `${(logicalHeight * y / 100) + widgetOffsetY}px`);
             ticket.style.setProperty("--stage-widget-scale", String(widgetScale));
+            ticket.style.setProperty("--stage-widget-width", String(widgetWidth));
             ticket.style.opacity = String(Number.isFinite(opacity) ? opacity : 1);
           }
         }
@@ -4182,6 +4458,7 @@
     const renderStage = () => {
       if (!state || stageDrag) return;
       clearSettledStageOverrides();
+      renderResponsiveLayouts();
       ensureStageStructure();
       applyStageLayout();
       renderStageMatrix();
@@ -4213,7 +4490,7 @@
           if (card) card.open = true;
         }
         syncSelectedLayerCards();
-        inspectorField = `layers[${layer.index}].frames.${stageViewport}.positionX`;
+        inspectorField = `layers[${layer.index}].frames.${stageFrameId()}.positionX`;
         setInspectorTarget("background.layer");
         if (reveal && card) requestAnimationFrame(() => {
           revealWithinInspector(card.querySelector("summary") ?? card);
@@ -4273,7 +4550,8 @@
       windowEditorPanel.dataset.state = error ? "error" : active ? "active" : pending ? "pending" : "idle";
       windowEditButton.hidden = active || pending;
       windowEditStopButton.hidden = !active && !pending;
-      windowEditButton.disabled = !state || overlayTransportBusy();
+      windowEditButton.disabled = !state || overlayTransportBusy()
+        || (responsiveActive() && !responsiveEditExact());
       windowEditStopButton.disabled = !state;
       windowEditorStatus.textContent = tr(overlayStatusKey);
       const resolved = overlaySelection?.status === "found";
@@ -4304,7 +4582,8 @@
     };
     const startWindowEdit = () => {
       const base = mutationBase();
-      if (!base || overlayTransportBusy() || overlayState?.active || overlayState?.pending) return false;
+      if (!base || overlayTransportBusy() || overlayState?.active || overlayState?.pending
+          || (responsiveActive() && !responsiveEditExact())) return false;
       if (!send({ type: "start-window-edit", ...base, copy: overlayCopy() })) {
         resetOverlayUi({ unavailable: true });
         return false;
@@ -4327,7 +4606,8 @@
       if (selection.status !== "found") return;
       if (selection.targetId === "interface.greeting") {
         selectedMode = selection.geometry.appearance;
-        stageViewport = selection.geometry.frame === "wide" ? "wide" : "normal";
+        if (responsiveActive()) editingLayoutId = selection.geometry.frame;
+        else stageViewport = selection.geometry.frame === "wide" ? "wide" : "normal";
         syncModeInputs();
         reflectStageViewport();
         reflectTokens();
@@ -4357,9 +4637,20 @@
       const geometry = selection.geometry;
       if (!geometry || !state) return false;
       const greeting = selection.targetId === "interface.greeting";
-      const frame = greeting ? (geometry.frame === "wide" ? "wide" : "normal") : geometry.frame;
-      stageViewport = frame;
-      stagePreviewSize = [selection.viewport.width, selection.viewport.height];
+      const responsiveSetForFrame = responsiveActive()
+        ? state.responsiveLayouts.sets.find(({ id }) => id === geometry.frame)
+        : null;
+      if (responsiveActive() && !responsiveSetForFrame) return false;
+      const frame = responsiveSetForFrame
+        ? geometry.frame
+        : greeting ? (geometry.frame === "wide" ? "wide" : "normal") : geometry.frame;
+      if (responsiveSetForFrame) {
+        editingLayoutId = geometry.frame;
+        stagePreviewSize = [responsiveSetForFrame.width, responsiveSetForFrame.height];
+      } else {
+        stageViewport = frame;
+        stagePreviewSize = [selection.viewport.width, selection.viewport.height];
+      }
       reflectStageViewport();
       setPreviewInputValues(...stagePreviewSize);
       if (greeting) {
@@ -4432,6 +4723,7 @@
           const layout = structuredClone(state.instantPrompts[index].layout);
           layout.opacity = geometry.opacity;
           layout.frames[frame] = {
+            ...(layout.frames[frame] ?? {}),
             positionX: geometry.positionX,
             positionY: geometry.positionY,
             scale: geometry.scale,
@@ -4565,7 +4857,7 @@
         const input = stageInputFor(path);
         if (!input || input.type !== "range") continue;
         const prompt = path.startsWith("shared.prompt.");
-        const greeting = /^shared\.greeting\.frames\.(?:light|dark)\.(?:standard|wide)\.(.+)$/.exec(path)?.[1] ?? null;
+        const greeting = /^shared\.greeting\.frames\.(?:light|dark)\.[a-z][a-z0-9-]{0,31}\.(.+)$/.exec(path)?.[1] ?? null;
         input.value = String(prompt ? Math.round(value * 100) : value);
         const exact = input.parentElement?.querySelector(
           ".layer-exact-value, .prompt-exact-value, .greeting-exact-value",
@@ -4601,6 +4893,10 @@
         itemNode.focus?.();
       }
       if (!selection || !stageSelectionAllowed(selection)) return;
+      if (responsiveActive() && !responsiveEditExact()) {
+        announce(tr("responsivePreviewOnly"));
+        return;
+      }
       const [logicalWidth, logicalHeight] = stageLogicalSize();
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
       const scopeRect = backgroundScopeRect(
@@ -4614,7 +4910,7 @@
       if (selection.kind === "layer") stageLayerNodes.get(selection.id)?.wrap.classList.add("is-active");
       const gestureAppearance = selectedMode;
       const gestureFrame = greetingFrameId();
-      const gestureViewport = stageViewport;
+      const gestureViewport = stageFrameId();
       const gesturePaths = stageItemPaths(selection, {
         appearance: gestureAppearance,
         frame: gestureFrame,
@@ -4634,13 +4930,13 @@
       if (selection.kind === "layer") {
         const index = layerIndexForId(selection.id);
         if (index >= 0) {
-          inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
+          inspectorField = `layers[${index}].frames.${stageFrameId()}.${handleKind === "scale" ? "scale" : "positionX"}`;
         }
       } else if (selection.kind === "prompt") {
         inspectorField = "shared.prompt";
       } else if (selection.kind === "instant-prompt") {
         const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.id);
-        inspectorField = `instantPrompts[${index}].layout.frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
+        inspectorField = `instantPrompts[${index}].layout.frames.${stageFrameId()}.${handleKind === "scale" ? "scale" : "positionX"}`;
       } else {
         inspectorField = `${greetingStagePrefix()}xRatio`;
       }
@@ -4821,6 +5117,13 @@
         selectStageItem(selection, { reveal: true });
         return;
       }
+      if (responsiveActive() && !responsiveEditExact()) {
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          announce(tr("responsivePreviewOnly"));
+        }
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         const paths = stageItemPaths(selection);
@@ -4849,7 +5152,7 @@
       if (selection.kind === "instant-prompt") {
         const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.id);
         if (index < 0) return;
-        const prefix = `instantPrompts[${index}].layout.frames.${stageViewport}.`;
+        const prefix = `instantPrompts[${index}].layout.frames.${stageFrameId()}.`;
         if (handleKind === "scale" && scaleDirection) {
           adjust(
             `${prefix}scale`,
@@ -4872,7 +5175,7 @@
       } else if (selection.kind === "layer") {
         const index = layerIndexForId(selection.id);
         if (index < 0) return;
-        const prefix = `layers[${index}].frames.${stageViewport}.`;
+        const prefix = `layers[${index}].frames.${stageFrameId()}.`;
         if (handleKind === "scale" && scaleDirection) {
           adjust(`${prefix}scale`, scaleDirection * (event.shiftKey ? 0.2 : 0.05), 0.25, 3);
         } else if (handleKind === "move") {
@@ -4930,13 +5233,13 @@
       if (selection.kind === "layer") {
         const index = layerIndexForId(selection.id);
         if (index >= 0) {
-          inspectorField = `layers[${index}].frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
+          inspectorField = `layers[${index}].frames.${stageFrameId()}.${handleKind === "scale" ? "scale" : "positionX"}`;
         }
       } else if (selection.kind === "prompt") {
         inspectorField = "shared.prompt";
       } else if (selection.kind === "instant-prompt") {
         const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.id);
-        inspectorField = `instantPrompts[${index}].layout.frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
+        inspectorField = `instantPrompts[${index}].layout.frames.${stageFrameId()}.${handleKind === "scale" ? "scale" : "positionX"}`;
       } else {
         inspectorField = `${greetingStagePrefix()}xRatio`;
       }
@@ -5017,8 +5320,317 @@
       return false;
     };
 
+    const stageViewportChoice = stageViewportInputs[0]?.closest("fieldset") ?? null;
+    let renderedResponsiveSignature = null;
+    const responsiveFrameMapForSelection = () => {
+      if (!responsiveActive()) return null;
+      if (stageSelection?.kind === "layer" || inspectorTarget === "background.layer") {
+        const layer = layerForId(stageSelection?.kind === "layer" ? stageSelection.id : selectedLayerId);
+        return layer ? { frames: layer.frames, inherited: RESPONSIVE_CLIENT_DEFAULTS.artwork, family: "artwork" } : null;
+      }
+      if (stageSelection?.kind === "greeting" || inspectorTarget === "interface.greeting") {
+        return {
+          frames: state.shared.greeting.explicitFrames?.[selectedMode] ?? {},
+          inherited: RESPONSIVE_CLIENT_DEFAULTS.greeting,
+          family: "greeting",
+        };
+      }
+      if (stageSelection?.kind === "instant-prompt" || inspectorTarget === "widgets.instant-prompts") {
+        const id = stageSelection?.kind === "instant-prompt" ? stageSelection.id : selectedInstantPromptId;
+        const prompt = state.instantPrompts.find((item) => item.id === id);
+        return prompt ? { frames: prompt.layout.frames, inherited: RESPONSIVE_CLIENT_DEFAULTS.widget, family: "widget", prompt } : null;
+      }
+      if (stageSelection?.kind === "prompt" || inspectorTarget === "interface.prompt-block") {
+        return {
+          frames: state.interfaceSurfaces?.promptBlock?.frame ?? {},
+          inherited: {
+            widthRatio: state.shared.prompt.width,
+            offsetXRatio: state.shared.prompt.x,
+            offsetYRatio: state.shared.prompt.y,
+          },
+          family: "prompt",
+        };
+      }
+      return null;
+    };
+    const responsiveSelectionResolution = () => {
+      const target = responsiveFrameMapForSelection();
+      return target
+        ? resolveResponsiveClientFrame(
+          state.responsiveLayouts,
+          target.frames,
+          stagePreviewSize[0],
+          target.inherited,
+          target.family,
+        )
+        : null;
+    };
+    const selectResponsiveLayout = (id, { resizeAura = true } = {}) => {
+      const set = responsiveSet(id);
+      if (!set) return false;
+      editingLayoutId = set.id;
+      stagePreviewSize = [set.width, set.height];
+      stageViewport = set.width >= 1440 ? "wide" : "normal";
+      setPreviewInputValues(set.width, set.height);
+      renderedResponsiveSignature = null;
+      renderedLayerSignature = null;
+      renderedInstantPromptSignature = null;
+      reflectStageViewport();
+      selectStageMirror();
+      if (resizeAura) sendPreviewSize(`${set.width}x${set.height}`, stagePreviewSize);
+      refreshInspectorContext();
+      reflectShared();
+      reflectSurfaceControls();
+      reflectGreeting();
+      renderLayers();
+      renderInstantPromptEditor();
+      renderStage();
+      return true;
+    };
+    const syncResponsiveSelection = ({ entering = false } = {}) => {
+      if (!responsiveActive()) {
+        editingLayoutId = null;
+        pendingResponsiveSelectionId = null;
+        renderedResponsiveSignature = null;
+        return;
+      }
+      const sets = state.responsiveLayouts.sets;
+      const pending = pendingResponsiveSelectionId
+        ? sets.find(({ id }) => id === pendingResponsiveSelectionId)
+        : null;
+      const retained = sets.find(({ id }) => id === editingLayoutId);
+      const exact = sets.find(({ width, height }) => (
+        width === stagePreviewSize[0] && height === stagePreviewSize[1]
+      ));
+      const next = pending ?? retained ?? (entering ? exact : null)
+        ?? sets.find(({ id }) => id === "standard") ?? sets[0];
+      editingLayoutId = next.id;
+      if (pending) pendingResponsiveSelectionId = null;
+      renderedResponsiveSignature = null;
+    };
+    const nextResponsiveLayoutId = () => {
+      const used = new Set(state?.responsiveLayouts?.sets.map(({ id }) => id) ?? []);
+      for (let number = 1; number <= 99; number += 1) {
+        const id = `layout-${number}`;
+        if (!used.has(id)) return id;
+      }
+      return null;
+    };
+    const postResponsiveMutation = (operation, id, value, selectId = null) => {
+      const base = mutationBase();
+      if (!base) return false;
+      if (selectId) pendingResponsiveSelectionId = selectId;
+      if (post({ type: "mutate-responsive-layout", ...base, operation, id, value })) return true;
+      if (selectId) pendingResponsiveSelectionId = null;
+      return false;
+    };
+    const responsiveTargetHasExplicitFrame = () => {
+      const target = responsiveFrameMapForSelection();
+      return Boolean(target && editingLayoutId && Object.keys(target.frames?.[editingLayoutId] ?? {}).length);
+    };
+    const resetResponsiveTarget = () => {
+      if (!responsiveActive() || !responsiveEditExact() || !responsiveTargetHasExplicitFrame()) return false;
+      const frame = editingLayoutId;
+      if (stageSelection?.kind === "layer" || inspectorTarget === "background.layer") {
+        const layer = layerForId(stageSelection?.kind === "layer" ? stageSelection.id : selectedLayerId);
+        if (!layer) return false;
+        queueThemeChanges(RESPONSIVE_CLIENT_FIELDS.artwork.map((property) => ({
+          kind: "layer", layerId: layer.id, preset: frame, property, value: null,
+        })), { immediate: true });
+      } else if (stageSelection?.kind === "greeting" || inspectorTarget === "interface.greeting") {
+        queueThemeChange({
+          kind: "greeting", operation: "reset-frame", appearance: selectedMode,
+          frame, value: null,
+        }, { immediate: true });
+      } else if (stageSelection?.kind === "instant-prompt" || inspectorTarget === "widgets.instant-prompts") {
+        const target = responsiveFrameMapForSelection();
+        if (!target?.prompt) return false;
+        const layout = structuredClone(target.prompt.layout);
+        delete layout.frames[frame];
+        queueThemeChange({
+          kind: "instant-prompt", operation: "update", id: target.prompt.id,
+          field: "layout", locale: null, value: layout,
+        }, { immediate: true });
+      } else if (stageSelection?.kind === "prompt" || inspectorTarget === "interface.prompt-block") {
+        queueThemeChanges(RESPONSIVE_CLIENT_FIELDS.prompt.map((property) => ({
+          kind: "surface", target: "promptBlock", slot: "frame", axis: frame,
+          property, value: null,
+        })), { immediate: true });
+      } else return false;
+      announce(tr("responsiveTargetResetDone"));
+      return true;
+    };
+    const renderResponsiveLayouts = () => {
+      if (!responsiveLayoutPanel) return;
+      const active = responsiveActive();
+      const builtIn = isBuiltInLayoutEdit();
+      responsiveLayoutPanel.hidden = builtIn;
+      if (stageViewportChoice) {
+        stageViewportChoice.hidden = active;
+        stageViewportChoice.inert = active;
+      }
+      if (builtIn) return;
+      responsiveLayoutEnable.hidden = active;
+      responsiveLayoutEnable.disabled = active || isBlockingAction();
+      responsiveLayoutTrack.hidden = !active;
+      responsiveLayoutStatus.hidden = !active;
+      responsiveLayoutAdvanced.hidden = !active;
+      if (!active) {
+        responsiveLayoutTrack.replaceChildren();
+        responsiveLayoutAdd.hidden = true;
+        return;
+      }
+      const layouts = state.responsiveLayouts;
+      const selected = responsiveSet() ?? layouts.sets[0];
+      const exactAny = layouts.sets.find(({ width, height }) => (
+        width === stagePreviewSize[0] && height === stagePreviewSize[1]
+      ));
+      const signature = JSON.stringify([layouts, editingLayoutId, Boolean(pendingAction)]);
+      if (signature !== renderedResponsiveSignature) {
+        renderedResponsiveSignature = signature;
+        const nodes = [];
+        layouts.sets.forEach((set, index) => {
+          if (layouts.mode === "step" && index > 0) {
+            const breakpoint = document.createElement("label");
+            breakpoint.className = "responsive-layout-breakpoint advanced-only";
+            const copy = document.createElement("span");
+            copy.textContent = format(tr("layoutBreakpointBefore"), set.label);
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = String(layouts.sets[index - 1].width + 1);
+            input.max = String(set.width - 1);
+            input.step = "1";
+            input.value = String(layouts.breakpoints[index - 1]);
+            input.disabled = Boolean(pendingAction);
+            input.addEventListener("change", () => {
+              const value = Math.round(input.valueAsNumber);
+              if (!integer(value, Number(input.min), Number(input.max))) {
+                input.value = String(layouts.breakpoints[index - 1]);
+                return;
+              }
+              postResponsiveMutation("breakpoint", set.id, value);
+            });
+            breakpoint.append(copy, input);
+            nodes.push(breakpoint);
+          }
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "responsive-layout-set";
+          button.dataset.layoutId = set.id;
+          button.setAttribute("aria-pressed", String(set.id === editingLayoutId));
+          button.disabled = Boolean(pendingAction);
+          const label = document.createElement("strong");
+          label.textContent = set.label;
+          const dimensions = document.createElement("span");
+          dimensions.textContent = `${set.width}×${set.height}`;
+          button.append(label, dimensions);
+          button.addEventListener("click", () => selectResponsiveLayout(set.id));
+          nodes.push(button);
+        });
+        responsiveLayoutTrack.replaceChildren(...nodes);
+      }
+      responsiveLayoutAdd.hidden = Boolean(exactAny) || layouts.sets.length >= 6;
+      responsiveLayoutAdd.disabled = Boolean(pendingAction);
+      responsivePreviewing.textContent = exactAny
+        ? `${exactAny.label} · ${stagePreviewSize[0]}×${stagePreviewSize[1]}`
+        : `${stagePreviewSize[0]}×${stagePreviewSize[1]}`;
+      responsiveEditing.textContent = `${selected.label} · ${selected.width}×${selected.height}`;
+      const resolution = responsiveSelectionResolution();
+      const lower = layouts.sets.find(({ id }) => id === resolution?.lowerId);
+      const upper = layouts.sets.find(({ id }) => id === resolution?.upperId);
+      responsiveBetween.textContent = resolution?.source === "interpolated" && lower && upper
+        ? format(tr("betweenLayouts"), lower.label, upper.label, Math.round(resolution.t * 100))
+        : tr("betweenNone");
+      responsiveSource.textContent = tr(resolution?.source === "explicit"
+        ? "sourceExplicit"
+        : resolution?.source === "interpolated" ? "sourceInterpolated" : "sourceInherited");
+      responsiveLayoutName.value = selected.label;
+      responsiveLayoutWidth.value = String(selected.width);
+      responsiveLayoutHeight.value = String(selected.height);
+      responsiveLayoutMode.value = layouts.mode;
+      for (const input of [responsiveLayoutName, responsiveLayoutWidth, responsiveLayoutHeight, responsiveLayoutMode]) {
+        input.disabled = Boolean(pendingAction);
+      }
+      responsiveLayoutDuplicate.disabled = Boolean(pendingAction) || layouts.sets.length >= 6;
+      responsiveLayoutDelete.disabled = Boolean(pendingAction) || layouts.sets.length <= 1;
+      responsiveTargetReset.disabled = Boolean(pendingAction)
+        || !responsiveEditExact() || !responsiveTargetHasExplicitFrame();
+      responsiveLayoutPanel.dataset.previewOnly = String(!responsiveEditExact());
+    };
+
+    responsiveLayoutEnable?.addEventListener("click", () => {
+      const base = mutationBase();
+      if (!base) return;
+      pendingResponsiveSelectionId = "standard";
+      if (!post({ type: "enable-responsive-layouts", ...base })) pendingResponsiveSelectionId = null;
+    });
+    responsiveLayoutAdd?.addEventListener("click", () => {
+      if (!responsiveActive() || state.responsiveLayouts.sets.length >= 6) return;
+      const id = nextResponsiveLayoutId();
+      if (!id) return;
+      postResponsiveMutation("add", id, {
+        id,
+        label: format(tr("layoutDefaultName"), state.responsiveLayouts.sets.length + 1),
+        width: stagePreviewSize[0],
+        height: stagePreviewSize[1],
+      }, id);
+    });
+    const postResponsiveSetUpdate = () => {
+      const selected = responsiveSet();
+      if (!selected) return;
+      const label = responsiveLayoutName.value.trim();
+      const width = Math.round(responsiveLayoutWidth.valueAsNumber);
+      const height = Math.round(responsiveLayoutHeight.valueAsNumber);
+      if (!label || label.length > 40 || !integer(width, 920, 3840) || !integer(height, 620, 2400)) {
+        renderResponsiveLayouts();
+        announce(tr("responsiveLayoutInvalid"), "error");
+        return;
+      }
+      postResponsiveMutation("update", selected.id, { label, width, height });
+    };
+    responsiveLayoutName?.addEventListener("change", postResponsiveSetUpdate);
+    responsiveLayoutWidth?.addEventListener("change", postResponsiveSetUpdate);
+    responsiveLayoutHeight?.addEventListener("change", postResponsiveSetUpdate);
+    responsiveLayoutMode?.addEventListener("change", () => {
+      if (responsiveActive()) postResponsiveMutation("mode", null, responsiveLayoutMode.value);
+    });
+    responsiveLayoutDuplicate?.addEventListener("click", () => {
+      const selected = responsiveSet();
+      const id = nextResponsiveLayoutId();
+      if (!selected || !id || state.responsiveLayouts.sets.length >= 6) return;
+      const used = new Set(state.responsiveLayouts.sets.map(({ width }) => width));
+      let width = selected.width + 20;
+      while (width <= 3840 && used.has(width)) width += 1;
+      if (width > 3840) {
+        width = selected.width - 20;
+        while (width >= 920 && used.has(width)) width -= 1;
+      }
+      if (width < 920 || width > 3840) return;
+      postResponsiveMutation("duplicate", selected.id, {
+        id,
+        label: truncateText(format(tr("layoutCopyName"), selected.label), 40),
+        width,
+        height: selected.height,
+      }, id);
+    });
+    responsiveLayoutDelete?.addEventListener("click", () => {
+      const selected = responsiveSet();
+      if (!selected || state.responsiveLayouts.sets.length <= 1) return;
+      const fallback = state.responsiveLayouts.sets.find(({ id }) => id !== selected.id);
+      showConfirm({
+        titleText: tr("deleteLayout"),
+        bodyText: format(tr("deleteLayoutConfirm"), selected.label),
+        actionText: tr("deleteLayout"),
+        destructive: true,
+        opener: responsiveLayoutDelete,
+        callback: () => postResponsiveMutation("delete", selected.id, null, fallback?.id ?? null),
+      });
+    });
+    responsiveTargetReset?.addEventListener("click", resetResponsiveTarget);
+
     stageViewportInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
+      if (responsiveActive()) return;
       stageViewport = input.value;
       stagePreviewSize = [...STAGE_SIZES[stageViewport]];
       setPreviewInputValues(...stagePreviewSize);
@@ -5389,7 +6001,7 @@
         }
         node.holder.dataset.mask = layer.mask;
         node.holder.style.opacity = String(layer.opacity);
-        const frameValues = layer.frames[stageViewport];
+        const frameValues = activeArtworkFrame(layer);
         const anchor = ANCHOR_POINTS[frameValues.anchor] ?? ANCHOR_POINTS.center;
         node.image.style.left = `calc(${anchor[0]}% + ${frameValues.positionX}%)`;
         node.image.style.top = `calc(${anchor[1]}% + ${frameValues.positionY}%)`;
@@ -5417,7 +6029,7 @@
         return;
       }
       if (!matrixCells.length) buildMatrixCells();
-      const [logicalWidth, logicalHeight] = STAGE_SIZES[stageViewport];
+      const [logicalWidth, logicalHeight] = stagePreviewSize;
       const hostWidth = matrixHost.clientWidth;
       const cellWidth = hostWidth > 40 ? Math.max(60, (hostWidth - 30) / 4) : 132;
       const cellScale = cellWidth / logicalWidth;
@@ -5456,7 +6068,7 @@
         block.style.borderRadius = `${state.shared.radius}px`;
         if (context === "new-chat") {
           const rect = promptRect(logicalWidth, logicalHeight,
-            state.shared.prompt.width, state.shared.prompt.x, state.shared.prompt.y);
+            promptStateValue("width"), promptStateValue("x"), promptStateValue("y"));
           block.style.left = `${rect.left}px`;
           block.style.top = `${rect.top}px`;
           block.style.width = `${rect.width}px`;
@@ -5678,7 +6290,7 @@
       if (promptResetInheritedButton) {
         const frame = state.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()] ?? {};
         promptResetInheritedButton.disabled = !Object.keys(frame).some((property) => promptFrameProperties.has(property))
-          || Boolean(pendingAction);
+          || Boolean(pendingAction) || (responsiveActive() && !responsiveEditExact());
       }
     };
 
@@ -5735,7 +6347,8 @@
       }
     };
     const syncGreetingFrameControls = () => {
-      const locked = isBuiltInLayoutEdit() || isBlockingAction() || greetingStyleLocked;
+      const locked = isBuiltInLayoutEdit() || isBlockingAction() || greetingStyleLocked
+        || (responsiveActive() && !responsiveEditExact());
       const native = greetingUsesNativeLayout();
       if (greetingEnableInput) greetingEnableInput.disabled = locked;
       for (const input of greetingInputs) input.disabled = locked || native;
@@ -6160,7 +6773,9 @@
         labels,
         prompts,
         icon: null,
-        layout: defaultInstantPromptLayout(),
+        layout: responsiveActive()
+          ? { opacity: 1, frames: {} }
+          : defaultInstantPromptLayout(),
       };
     };
     const requestInstantPromptIcon = (id) => {
@@ -6179,6 +6794,9 @@
         normalizedLocale,
         conversation,
         isBuiltInLayoutEdit(),
+        state.responsiveLayouts,
+        editingLayoutId,
+        stagePreviewSize,
       ]);
       if (signature === renderedInstantPromptSignature) return;
       renderedInstantPromptSignature = signature;
@@ -6295,6 +6913,50 @@
           localeGroup.append(localeTitle, labelField, promptField);
           body.appendChild(localeGroup);
         }
+        if (responsiveActive()) {
+          const frame = activeInstantPromptFrame(prompt);
+          const fieldset = document.createElement("fieldset");
+          fieldset.className = "instant-prompt-layout-fields advanced-only";
+          fieldset.disabled = conversation || !responsiveEditExact();
+          const legend = document.createElement("legend");
+          legend.textContent = format(tr("instantPromptLayoutFor"), frameDisplayLabel());
+          fieldset.appendChild(legend);
+          const definitions = [
+            ["positionX", "positionX", -50, 50, 1],
+            ["positionY", "positionY", -50, 50, 1],
+            ["widthRatio", "instantPromptWidth", 0.5, 1.5, 0.05],
+            ["scale", "scale", 0.5, 1.75, 0.05],
+            ["offsetX", "instantPromptOffsetX", -120, 120, 1],
+            ["offsetY", "instantPromptOffsetY", -120, 120, 1],
+          ];
+          for (const [property, labelKey, minimum, maximum, step] of definitions) {
+            const field = document.createElement("label");
+            field.className = "editor-field";
+            const label = document.createElement("span");
+            label.textContent = tr(labelKey);
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = String(minimum);
+            input.max = String(maximum);
+            input.step = String(step);
+            input.value = String(frame[property]);
+            input.dataset.editorField = `instantPrompts[${index}].layout.frames.${editingLayoutId}.${property}`;
+            input.addEventListener("change", () => {
+              const value = input.valueAsNumber;
+              if (!inRange(value, minimum, maximum)) {
+                input.value = String(frame[property]);
+                return;
+              }
+              const layout = structuredClone(prompt.layout);
+              layout.frames[editingLayoutId] ??= {};
+              layout.frames[editingLayoutId][property] = value;
+              instantPromptChange(prompt, "update", { field: "layout", value: layout });
+            });
+            field.append(label, input);
+            fieldset.appendChild(field);
+          }
+          body.appendChild(fieldset);
+        }
         const actions = document.createElement("div");
         actions.className = "instant-prompt-card-actions";
         const actionButton = (key, handler, disabled = false) => {
@@ -6360,7 +7022,7 @@
         : `layers[${layer.index}].frames.${preset}.${property}`;
       for (const [value, key] of values) select.appendChild(option(value, tr(key)));
       select.value = String(stageValue(select.dataset.editorField)
-        ?? (preset === "shared" ? layer[property] : layer.frames[preset][property]));
+        ?? (preset === "shared" ? layer[property] : activeArtworkFrame(layer)?.[property]));
       select.addEventListener("change", () => {
         setStageOverride(select.dataset.editorField, select.value);
         queueLayerChange(layer.index, preset, property, select.value);
@@ -6436,13 +7098,16 @@
     };
 
     const renderFrame = (layer, preset, disabled = false) => {
-      const frame = layer.frames[preset];
+      const frame = responsiveActive() ? activeArtworkFrame(layer) : layer.frames[preset];
       const fieldset = document.createElement("fieldset");
       fieldset.className = "layer-preset advanced-only";
-      fieldset.disabled = disabled;
-      fieldset.dataset.gated = String(disabled);
+      const locked = disabled || (responsiveActive() && !responsiveEditExact());
+      fieldset.disabled = locked;
+      fieldset.dataset.gated = String(locked);
       const legend = document.createElement("legend");
-      legend.textContent = tr(preset === "normal" ? "normalPreset" : "widePreset");
+      legend.textContent = responsiveActive()
+        ? responsiveSet(preset)?.label ?? preset
+        : tr(preset === "normal" ? "normalPreset" : "widePreset");
       const grid = document.createElement("div");
       grid.className = "layer-grid";
       grid.append(
@@ -6474,9 +7139,12 @@
         for (const property of LAYER_SIGNATURE_SHARED) {
           parts.push(stageValue(`layers[${i}].${property}`) ?? layer[property]);
         }
-        for (const preset of ["normal", "wide"]) {
+        const presets = responsiveActive()
+          ? [editingLayoutId]
+          : ["normal", "wide"];
+        for (const preset of presets.filter(Boolean)) {
           for (const property of LAYER_SIGNATURE_FRAME) {
-            parts.push(stageValue(`layers[${i}].frames.${preset}.${property}`) ?? layer.frames[preset][property]);
+            parts.push(stageValue(`layers[${i}].frames.${preset}.${property}`) ?? activeArtworkFrame(layer)?.[property]);
           }
         }
         for (const [property, neutral] of Object.entries({
@@ -6624,6 +7292,7 @@
         copyWide.textContent = tr("copyFramingToWide");
         copyWide.disabled = gated;
         copyWide.dataset.layerStateEdit = "";
+        copyWide.hidden = responsiveActive();
         copyWide.dataset.editorFocus = `layer-${layer.id}-copy-wide`;
         copyWide.addEventListener("click", () => copyLayerFraming(layer.index, "normal", "wide"));
         const copyNormal = document.createElement("button");
@@ -6632,6 +7301,7 @@
         copyNormal.textContent = tr("copyFramingToNormal");
         copyNormal.disabled = gated;
         copyNormal.dataset.layerStateEdit = "";
+        copyNormal.hidden = responsiveActive();
         copyNormal.dataset.editorFocus = `layer-${layer.id}-copy-normal`;
         copyNormal.addEventListener("click", () => copyLayerFraming(layer.index, "wide", "normal"));
         actions.append(replace, up, down, copyWide, copyNormal, remove);
@@ -6705,8 +7375,11 @@
         const meta = document.createElement("p");
         meta.className = "layer-meta advanced-only";
         meta.textContent = format(tr("imageBytes"), formatBytes(layer.bytes));
+        const frameEditors = responsiveActive()
+          ? [renderFrame(layer, editingLayoutId, gated)]
+          : [renderFrame(layer, "normal", gated), renderFrame(layer, "wide", gated)];
         body.append(inspectorTitle, sharedGrid, filterGrid, placementScope, actions,
-          renderFrame(layer, "normal", gated), renderFrame(layer, "wide", gated), meta);
+          ...frameEditors, meta);
         card.append(cardSummary, body);
         layerList.appendChild(card);
       }
@@ -6879,6 +7552,7 @@
         || coalescedChanges.size || changeFlushTimer || stageKeyTimer || stageKeyPaths.size);
       const blocked = deferredChanges.size > 0 || uncertainChanges.size > 0;
       const builtInLayout = isBuiltInLayoutEdit();
+      const responsiveGeometryLocked = responsiveActive() && !responsiveEditExact();
       const localGreetingWork = !builtInLayout
         && (greetingPreferenceDraftDirty || greetingPreferenceInputDirty);
       const localMetadataWork = !builtInLayout && metadataInputDirty;
@@ -6916,6 +7590,9 @@
       if (greetingResetButton) greetingResetButton.disabled = builtInLayout || busy || blocked;
       syncGreetingWordControls();
       syncGreetingFrameControls();
+      for (const input of [...promptInputs, ...promptExactInputs]) {
+        input.disabled = isBlockingAction() || blocked || responsiveGeometryLocked;
+      }
       addLayerButton.dataset.layerStructure = "";
       for (const button of editor.querySelectorAll("[data-layer-structure]")) {
         button.disabled = builtInLayout || busy || blocked
@@ -6942,6 +7619,7 @@
       reflectCardPreview();
       renderInstantPromptEditor();
       renderLayers(focusKey);
+      renderResponsiveLayouts();
       syncBuiltInLayoutPresentation();
       renderFeedback();
       reflectButtonStates();
@@ -7268,6 +7946,7 @@
         for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
       }
       state = normalized;
+      syncResponsiveSelection({ entering });
       reconcileUncertainChanges(normalized);
       if (pickedLayerId) selectedLayerId = pickedLayerId;
       syncBuiltInLayoutPresentation({ entering });

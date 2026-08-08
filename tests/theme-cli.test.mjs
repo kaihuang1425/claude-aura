@@ -1154,7 +1154,7 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
       },
     };
     const studioDocument = {
-      schemaVersion: STUDIO_THEME_SCHEMA_VERSION,
+      schemaVersion: 4,
       id: studioThemeId,
       labels: { en: "Studio Eight", "zh-CN": "工作室八层主题", "zh-HKTW": "工作室八層主題" },
       descriptions: {
@@ -1172,7 +1172,7 @@ test("theme-cli scaffolds a complete starter kit and validates it", async () => 
     };
     await fs.writeFile(path.join(studioDirectory, "theme.json"), `${JSON.stringify(studioDocument, null, 2)}\n`, "utf8");
     const studioKit = await readThemeKit(studioDirectory);
-    assert.equal(studioKit.schemaVersion, STUDIO_THEME_SCHEMA_VERSION);
+    assert.equal(studioKit.schemaVersion, 4);
     assert.equal(studioKit.metadata.backgroundScope, "sidebar");
     assert.equal(studioKit.metadata.artworkLayers.length, STUDIO_MAX_LAYERS);
     assert.equal(new Set(studioKit.metadata.artworkLayers.map((layer) => layer.path)).size, 1,

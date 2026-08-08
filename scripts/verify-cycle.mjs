@@ -2,10 +2,7 @@
 // Non-image verification for the production renderer. This command never
 // opens a fixture, launches a browser, or writes visual artifacts. Visual
 // review belongs exclusively to the real Aura WebView2 window on claude.ai.
-import { spawnSync } from "node:child_process";
-import path from "node:path";
 import {
-  PROJECT_ROOT,
   DEFAULT_CONFIG,
   buildPayload,
   listThemes,
@@ -19,38 +16,8 @@ function record(gate, pass, detail = "") {
   console.log(`${pass ? "PASS" : "FAIL"}  ${gate}${detail ? `  ${detail}` : ""}`);
 }
 
-function runCheckSuite() {
-  const syntaxTargets = [
-    "scripts/injector.mjs",
-    "scripts/theme-core.mjs",
-    "scripts/webview-cli.mjs",
-    "assets/renderer-inject.js",
-  ];
-  for (const file of syntaxTargets) {
-    const check = spawnSync(process.execPath, ["--check", path.join(PROJECT_ROOT, file)], {
-      cwd: PROJECT_ROOT,
-      encoding: "utf8",
-    });
-    if (check.status !== 0) {
-      process.stderr.write(check.stdout ?? "");
-      process.stderr.write(check.stderr ?? "");
-      return false;
-    }
-  }
-  const suite = spawnSync(process.execPath, [path.join(PROJECT_ROOT, "tests", "run-tests.mjs")], {
-    cwd: PROJECT_ROOT,
-    encoding: "utf8",
-    timeout: 300_000,
-  });
-  if (suite.status !== 0) {
-    process.stderr.write(suite.stdout ?? "");
-    process.stderr.write(suite.stderr ?? "");
-    return false;
-  }
-  return true;
-}
-
-record("test-suite", runCheckSuite());
+// `npm run check` owns syntax and the complete test suite. Keeping this command
+// payload-only avoids running that same gate twice in the required release flow.
 
 for (const theme of await listThemes({ locale: "en" })) {
   for (const mode of MODES) {

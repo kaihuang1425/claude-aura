@@ -785,7 +785,8 @@ test("Studio-generated metadata preserves every theme descriptor", async () => {
     }, `${theme.name} Studio metadata differs from the validated registry theme`);
   }
   const packageJson = JSON.parse(await fs.readFile(path.join(PROJECT_ROOT, "package.json"), "utf8"));
-  assert.equal(packageJson.scripts["studio:build"], "node scripts/build-studio-themes.mjs");
+  assert.equal(packageJson.scripts["studio:build"],
+    "node scripts/build-studio-themes.mjs && node scripts/build-responsive-resolver.mjs");
   assert.equal(packageJson.scripts["preview:build"], undefined);
   assert.equal(packageJson.scripts["preview:serve"], undefined);
 });
@@ -867,11 +868,14 @@ test("release and installers exclude unsafe composite references and binary patc
     /^import "[.]\/desktop-cdp[.]test[.]mjs";$/m,
     "The shipped aggregate runner statically imports the source-only Desktop suite");
   assert.match(aggregateRunner,
-    /sourceOnlyAuraCodeDiagnosticInputs[\s\S]{0,500}?existsSync[\s\S]{0,200}?await import[(]"[.]\/aura-code-popup-diagnostic[.]test[.]mjs"[)]/,
+    /sourceOnlyAuraCodeDiagnosticInputs[\s\S]{0,500}?existsSync[\s\S]{0,200}?suiteFiles\.push\("aura-code-popup-diagnostic\.test\.mjs"\)/,
     "The repository runner does not conditionally register its source-only Aura Code diagnostic suite");
   assert.match(aggregateRunner,
-    /sourceOnlyDesktopTestInputs[\s\S]{0,700}?existsSync[\s\S]{0,200}?await import[(]"[.]\/desktop-cdp[.]test[.]mjs"[)]/,
+    /sourceOnlyDesktopTestInputs[\s\S]{0,700}?existsSync[\s\S]{0,200}?suiteFiles\.push\("desktop-cdp\.test\.mjs"\)/,
     "The repository runner does not conditionally register its source-only Desktop suite");
+  assert.match(aggregateRunner,
+    /EXCLUSIVE_SUITES = new Set\(\["platform\.test\.mjs"\]\)[\s\S]{0,700}?MAX_PARALLEL_SUITES/,
+    "The bounded runner must keep shared release generation exclusive");
   assert.match(windowsInstall, /function New-AuraInstallStage/);
   assert.match(windowsInstall, /Get-FileHash[\s\S]{0,220}?SHA256/,
     "Windows installs must verify every staged application file");

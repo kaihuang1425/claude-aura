@@ -667,7 +667,8 @@ visual acceptance.
 For WO-26, review a migrated legacy `step` theme plus an explicitly opted-in
 theme containing at least Compact, Standard, Laptop, and Wide saved layout
 sets. Record every exact set width, every adjacent midpoint, every step
-breakpoint, below-first and above-last widths, and representative height-only
+breakpoint immediately below and at activation, below-first and above-last
+widths, and representative height-only
 changes. Record the resolved values from theme core, Studio, renderer, and
 overlay in the manifest and confirm they agree.
 
@@ -681,6 +682,17 @@ cleanup. Confirm categorical asset, anchor, text, page, visibility, mask, and
 interaction values never interpolate, incompatible data leaves the last-valid
 payload active with a named reason, and navigation/resizing leaves no
 cross-fade, duplicate, or ghosted surface.
+
+Each WO-26 manifest entry records schema version, responsive mode, ordered set
+IDs and reference dimensions, step breakpoints when present, actual preview
+dimensions, Editing-layout ID, target ID, explicit frame IDs, lower/upper
+resolver IDs, interpolation percentage, provenance, resolved numeric tuple,
+editor session/revision, and Undo count. Keep the core, Studio, renderer, and
+overlay results side by side. Record no conversation text, page selector,
+local asset path, or account data. Repeat representative cases with keyboard,
+reduced motion, forced colours, Original look, save, and restart. If the owner
+skips this live pass, label it **skipped — unpassed**; mechanical agreement is
+not visual acceptance.
 
 For WO-28, select **Widgets → Loading screen** and customize one temporary
 theme from its inherited permanent profile. Exercise Quick and Advanced,

@@ -3,6 +3,7 @@ import {
   STUDIO_FONT_UI_STACKS,
   STUDIO_SHADOWS,
 } from "./constants.mjs";
+import { validateResponsiveLayouts } from "./responsive-layouts.mjs";
 
 const HEX = /^#[0-9A-F]{6}$/u;
 const DIGEST = /^[a-f0-9]{64}$/u;
@@ -140,7 +141,7 @@ function normalizeAxis(value, keys, fields, label) {
   return Object.fromEntries(present.map((key) => [key, normalizeLeaf(value[key], fields, `${label}.${key}`)]));
 }
 
-function normalizeWrapper(value, spec, label) {
+function normalizeWrapper(value, spec, label, frameIds = FRAMES) {
   const slots = exactSubset(value, ["base", "appearance", "view", "frame"], label);
   const result = {};
   for (const slot of slots) {
@@ -151,7 +152,7 @@ function normalizeWrapper(value, spec, label) {
     } else if (slot === "view") {
       result.view = normalizeAxis(value.view, VIEWS, spec.view, `${label}.view`);
     } else {
-      result.frame = normalizeAxis(value.frame, FRAMES, spec.frame, `${label}.frame`);
+      result.frame = normalizeAxis(value.frame, frameIds, spec.frame, `${label}.frame`);
     }
   }
   return result;
@@ -171,12 +172,19 @@ export function resolveInterfaceSurface(wrapper, {
   };
 }
 
-export function validateInterfaceSurfaces(value, label = "interfaceSurfaces", { sourceRecipe = null } = {}) {
+export function validateInterfaceSurfaces(
+  value,
+  label = "interfaceSurfaces",
+  { sourceRecipe = null, responsiveLayouts = null } = {},
+) {
   if (value === null || value === undefined) return null;
+  const frameIds = responsiveLayouts
+    ? validateResponsiveLayouts(responsiveLayouts).sets.map(({ id }) => id)
+    : FRAMES;
   const keys = exactSubset(value, Object.keys(INTERFACE_SURFACE_SPECS), label);
   const result = Object.fromEntries(keys.map((key) => [
     key,
-    normalizeWrapper(value[key], INTERFACE_SURFACE_SPECS[key], `${label}.${key}`),
+    normalizeWrapper(value[key], INTERFACE_SURFACE_SPECS[key], `${label}.${key}`, frameIds),
   ]));
   const identity = result.sidebarIdentity;
   if (identity) {
@@ -301,9 +309,16 @@ export function renderInterfaceSurfacesCss(interfaceSurfaces) {
   return css.filter(Boolean).join("\n");
 }
 
-export function promptFrameOverrides(interfaceSurfaces, fallback) {
+export function promptFrameOverrides(interfaceSurfaces, fallback, responsiveLayouts = null) {
   const wrapper = interfaceSurfaces?.promptBlock;
   if (!wrapper?.frame) return null;
+  if (responsiveLayouts) {
+    const frames = {};
+    for (const { id } of validateResponsiveLayouts(responsiveLayouts).sets) {
+      if (Object.hasOwn(wrapper.frame, id)) frames[id] = { ...wrapper.frame[id] };
+    }
+    return frames;
+  }
   const base = fallback ?? { widthRatio: 0.64, offsetXRatio: 0, offsetYRatio: 0 };
   const frames = {};
   for (const frame of FRAMES) {

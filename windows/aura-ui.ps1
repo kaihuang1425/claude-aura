@@ -5660,15 +5660,119 @@ function Test-AuraUiStudioExactProperties {
   return $true
 }
 
+function Assert-AuraUiStudioResponsiveLayouts {
+  param([AllowNull()][object]$Layouts)
+  if ($null -eq $Layouts) { return @() }
+  if ($Layouts -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Layouts -Names @('mode', 'axis', 'sets', 'breakpoints')) -or
+      $Layouts.mode -isnot [string] -or $Layouts.mode -cnotin @('step', 'fluid') -or
+      $Layouts.axis -cne 'width') {
+    throw 'Aura Studio responsive layouts have an invalid shape.'
+  }
+  $sets = @($Layouts.sets)
+  if ($sets.Count -lt 1 -or $sets.Count -gt 6) {
+    throw 'Aura Studio responsive layouts require between one and six sets.'
+  }
+  $ids = [Collections.Generic.List[string]]::new()
+  $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+  $widths = [Collections.Generic.List[int]]::new()
+  foreach ($set in $sets) {
+    if ($set -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $set -Names @('id', 'label', 'width', 'height')) -or
+        $set.id -isnot [string] -or $set.id -cnotmatch '^[a-z][a-z0-9-]{0,31}$' -or
+        -not $seen.Add([string]$set.id) -or
+        -not (Test-AuraUiStudioMetadataText -Value $set.label -Maximum 40) -or
+        -not $set.label.Trim()) {
+      throw 'Aura Studio responsive layout set metadata is invalid.'
+    }
+    $width = ConvertTo-AuraUiStudioInteger -Value $set.width -Minimum 920 -Maximum 3840 -Label 'Responsive layout width'
+    [void](ConvertTo-AuraUiStudioInteger -Value $set.height -Minimum 620 -Maximum 2400 -Label 'Responsive layout height')
+    if ($widths.Count -gt 0 -and $width -le $widths[$widths.Count - 1]) {
+      throw 'Aura Studio responsive layout widths must be strictly increasing.'
+    }
+    [void]$ids.Add([string]$set.id)
+    [void]$widths.Add($width)
+  }
+  if ($Layouts.mode -ceq 'fluid') {
+    if ($null -ne $Layouts.breakpoints) {
+      throw 'Aura Studio fluid responsive layouts require null breakpoints.'
+    }
+  } else {
+    if ($null -eq $Layouts.breakpoints) {
+      throw 'Aura Studio step responsive layouts require breakpoints.'
+    }
+    $breakpoints = @($Layouts.breakpoints)
+    if ($breakpoints.Count -ne $sets.Count - 1) {
+      throw 'Aura Studio responsive layout breakpoint count is invalid.'
+    }
+    $previous = $null
+    for ($index = 0; $index -lt $breakpoints.Count; $index++) {
+      $breakpoint = ConvertTo-AuraUiStudioNumber -Value $breakpoints[$index] `
+        -Minimum 920 -Maximum 3840 -Label 'Responsive layout breakpoint'
+      if ($breakpoint -le $widths[$index] -or $breakpoint -ge $widths[$index + 1] -or
+          ($null -ne $previous -and $breakpoint -le $previous)) {
+        throw 'Aura Studio responsive layout breakpoint is outside its adjacent sets.'
+      }
+      $previous = $breakpoint
+    }
+  }
+  return $ids.ToArray()
+}
+
+function Assert-AuraUiStudioResponsiveFrameMap {
+  param(
+    [Parameter(Mandatory = $true)][object]$Frames,
+    [Parameter(Mandatory = $true)][string[]]$LayoutIds,
+    [Parameter(Mandatory = $true)][hashtable]$Bounds,
+    [Parameter(Mandatory = $true)][string]$Label
+  )
+  if ($Frames -isnot [System.Management.Automation.PSCustomObject]) {
+    throw "$Label must be an object."
+  }
+  $frameProperties = @($Frames.PSObject.Properties)
+  if ($frameProperties.Count -gt $LayoutIds.Count) { throw "$Label contains too many frames." }
+  foreach ($frameProperty in $frameProperties) {
+    if ($LayoutIds -cnotcontains [string]$frameProperty.Name -or
+        $frameProperty.Value -isnot [System.Management.Automation.PSCustomObject]) {
+      throw "$Label contains an unknown layout set."
+    }
+    $fields = @($frameProperty.Value.PSObject.Properties)
+    if ($fields.Count -lt 1 -or $fields.Count -gt $Bounds.Count) {
+      throw "$Label contains an empty or oversized frame."
+    }
+    foreach ($field in $fields) {
+      if (-not $Bounds.ContainsKey([string]$field.Name)) {
+        throw "$Label contains an unsupported field."
+      }
+      $range = $Bounds[[string]$field.Name]
+      [void](ConvertTo-AuraUiStudioNumber -Value $field.Value `
+        -Minimum ([double]$range[0]) -Maximum ([double]$range[1]) `
+        -Label "$Label $($field.Name)")
+    }
+  }
+}
+
 function Assert-AuraUiStudioInstantPromptLayout {
-  param([Parameter(Mandatory = $true)][object]$Layout)
+  param(
+    [Parameter(Mandatory = $true)][object]$Layout,
+    [string[]]$ResponsiveLayoutIds = @()
+  )
   if ($Layout -isnot [System.Management.Automation.PSCustomObject] -or
       -not (Test-AuraUiStudioExactProperties -Message $Layout -Names @('opacity', 'frames')) -or
-      $Layout.frames -isnot [System.Management.Automation.PSCustomObject] -or
-      -not (Test-AuraUiStudioExactProperties -Message $Layout.frames -Names @('normal', 'wide'))) {
+      $Layout.frames -isnot [System.Management.Automation.PSCustomObject]) {
     throw 'Aura Studio instant prompt layout has an invalid shape.'
   }
   [void](ConvertTo-AuraUiStudioNumber -Value $Layout.opacity -Minimum 0 -Maximum 1 -Label 'Instant prompt opacity')
+  if ($ResponsiveLayoutIds.Count -gt 0) {
+    Assert-AuraUiStudioResponsiveFrameMap -Frames $Layout.frames -LayoutIds $ResponsiveLayoutIds -Label 'Instant prompt frames' -Bounds @{
+      positionX = @(-50, 50); positionY = @(-50, 50); widthRatio = @(0.35, 1)
+      scale = @(0.5, 1.75); offsetX = @(-320, 320); offsetY = @(-240, 240)
+    }
+    return
+  }
+  if (-not (Test-AuraUiStudioExactProperties -Message $Layout.frames -Names @('normal', 'wide'))) {
+    throw 'Aura Studio instant prompt layout has an invalid legacy frame shape.'
+  }
   foreach ($frameName in @('normal', 'wide')) {
     $frame = $Layout.frames.$frameName
     if ($frame -isnot [System.Management.Automation.PSCustomObject] -or
@@ -5877,6 +5981,7 @@ function ConvertTo-AuraUiStudioEditorState {
     'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
     'launcherPreviewUrl', 'launcherStylePreviewUrl', 'interfaceSurfaces', 'interfaceStyle',
     'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
+    'responsiveLayouts',
     'lastAction', 'actionSucceeded', 'error')
   $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($name in $actual) {
@@ -5891,7 +5996,8 @@ function ConvertTo-AuraUiStudioEditorState {
       'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
       'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
       'launcherPreviewUrl', 'launcherStylePreviewUrl', 'interfaceSurfaces', 'interfaceStyle',
-      'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback')
+      'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
+      'responsiveLayouts')
     foreach ($name in $required) {
       if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
     }
@@ -5982,6 +6088,7 @@ function ConvertTo-AuraUiStudioEditorState {
         throw "Aura Studio editor state has an invalid $name."
       }
     }
+    $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts -Layouts $State.responsiveLayouts)
     $instantPrompts = @($State.instantPrompts)
     if ($instantPrompts.Count -gt 12) { throw 'Aura Studio editor state contains too many instant prompts.' }
     $instantPromptIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -6034,7 +6141,8 @@ function ConvertTo-AuraUiStudioEditorState {
       } elseif ($null -ne $instantPrompt.iconPreviewUrl) {
         throw 'Aura Studio editor state has an unexpected instant prompt icon preview.'
       }
-      Assert-AuraUiStudioInstantPromptLayout -Layout $instantPrompt.layout
+      Assert-AuraUiStudioInstantPromptLayout -Layout $instantPrompt.layout `
+        -ResponsiveLayoutIds $responsiveLayoutIds
     }
     $layers = @($State.layers)
     if ($layers.Count -gt 8) { throw 'Aura Studio editor state contains too many layers.' }
@@ -6047,6 +6155,18 @@ function ConvertTo-AuraUiStudioEditorState {
           -not $layerIds.Add($layer.id)) {
         throw 'Aura Studio editor state has an invalid or duplicate layer identity.'
       }
+      if ($responsiveLayoutIds.Count -gt 0) {
+        if ($layer.anchor -isnot [string] -or $layer.anchor -cnotin @(
+            'top-left', 'top', 'top-right', 'left', 'center', 'right',
+            'bottom-left', 'bottom', 'bottom-right')) {
+          throw 'Aura Studio responsive layer has an invalid anchor.'
+        }
+        Assert-AuraUiStudioResponsiveFrameMap -Frames $layer.frames `
+          -LayoutIds $responsiveLayoutIds -Label 'Artwork layer frames' -Bounds @{
+            focalX = @(0, 100); focalY = @(0, 100); positionX = @(-100, 100)
+            positionY = @(-100, 100); scale = @(0.25, 3)
+          }
+      }
     }
     if ($State.feedback -isnot [System.Management.Automation.PSCustomObject]) {
       throw 'Aura Studio editor state has invalid feedback.'
@@ -6058,6 +6178,7 @@ function ConvertTo-AuraUiStudioEditorState {
   if ($null -ne $State.PSObject.Properties['lastAction'] -and $null -ne $State.lastAction -and
       ($State.lastAction -isnot [string] -or $State.lastAction -cnotin @(
         'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+        'enable-responsive-layouts', 'mutate-responsive-layout',
         'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
         'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
         'delete-user-theme', 'set-greeting-phrases', 'reset-greeting'))) {
@@ -6337,8 +6458,58 @@ function ConvertTo-AuraUiEditorOverlayGreetingFrame {
   }
 }
 
+function ConvertTo-AuraUiEditorOverlayResponsiveFrames {
+  param(
+    [Parameter(Mandatory = $true)][object]$Frames,
+    [Parameter(Mandatory = $true)][string[]]$LayoutIds,
+    [Parameter(Mandatory = $true)][string[]]$Fields
+  )
+  $result = [Collections.Generic.List[object]]::new()
+  foreach ($layoutId in $LayoutIds) {
+    $property = $Frames.PSObject.Properties[$layoutId]
+    if ($null -eq $property) {
+      [void]$result.Add($null)
+      continue
+    }
+    $tuple = [object[]]::new($Fields.Count)
+    for ($index = 0; $index -lt $Fields.Count; $index++) {
+      $field = $property.Value.PSObject.Properties[$Fields[$index]]
+      $tuple[$index] = if ($null -ne $field) { [double]$field.Value } else { $null }
+    }
+    [void]$result.Add($tuple)
+  }
+  return ,$result.ToArray()
+}
+
 function ConvertTo-AuraUiEditorOverlayGreeting {
-  param([Parameter(Mandatory = $true)][object]$Value)
+  param(
+    [Parameter(Mandatory = $true)][object]$Value,
+    [string[]]$ResponsiveLayoutIds = @()
+  )
+  if ($ResponsiveLayoutIds.Count -gt 0) {
+    if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $Value `
+          -Names @('native', 'compactMarkAvailable', 'responsive', 'explicitFrames', 'frames')) -or
+        $Value.native -isnot [bool] -or $Value.compactMarkAvailable -isnot [bool] -or
+        $Value.responsive -ne $true -or
+        $Value.explicitFrames -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $Value.explicitFrames -Names @('light', 'dark'))) {
+      throw 'Aura window editor responsive greeting has an invalid shape.'
+    }
+    $result = [ordered]@{}
+    foreach ($appearance in @('light', 'dark')) {
+      $frames = $Value.explicitFrames.$appearance
+      Assert-AuraUiStudioResponsiveFrameMap -Frames $frames -LayoutIds $ResponsiveLayoutIds `
+        -Label 'Greeting frames' -Bounds @{
+          fontSize = @(24, 72); lineHeight = @(0.9, 1.5); maxWidthRatio = @(0.35, 0.9)
+          xRatio = @(-0.45, 0.45); yRatio = @(-0.4, 0.45); markScale = @(0.5, 1.5)
+        }
+      $result[$appearance] = ConvertTo-AuraUiEditorOverlayResponsiveFrames `
+        -Frames $frames -LayoutIds $ResponsiveLayoutIds `
+        -Fields @('fontSize', 'lineHeight', 'maxWidthRatio', 'xRatio', 'yRatio', 'markScale')
+    }
+    return $result
+  }
   if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
       -not (Test-AuraUiStudioExactProperties -Message $Value `
         -Names @('native', 'compactMarkAvailable', 'frames')) -or
@@ -6403,13 +6574,36 @@ function New-AuraUiEditorOverlaySource {
   $script:EditorOverlayRevision = ConvertTo-AuraUiStudioInteger `
     -Value $revision -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision'
   Assert-AuraUiEditorOverlayCopy -Copy $script:EditorOverlayCopy
-  $greeting = ConvertTo-AuraUiEditorOverlayGreeting `
-    -Value $script:StudioEditorState.shared.greeting
-  $layers = @($script:StudioEditorState.layers | ForEach-Object {
+  $responsiveLayouts = Get-AuraUiPropertyValue `
+    -InputObject $script:StudioEditorState -Names @('responsiveLayouts')
+  $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts -Layouts $responsiveLayouts)
+  $responsiveConfiguration = if ($responsiveLayoutIds.Count -gt 0) {
     [ordered]@{
-      id = [string]$_.id
-      opacity = [double]$_.opacity
-      frames = [ordered]@{
+      mode = [string]$responsiveLayouts.mode
+      ids = $responsiveLayoutIds
+      widths = @($responsiveLayouts.sets | ForEach-Object { [int]$_.width })
+      breakpoints = if ($responsiveLayouts.mode -ceq 'fluid') {
+        $null
+      } else {
+        @($responsiveLayouts.breakpoints | ForEach-Object { [double]$_ })
+      }
+    }
+  } else { $null }
+  $greeting = ConvertTo-AuraUiEditorOverlayGreeting `
+    -Value $script:StudioEditorState.shared.greeting `
+    -ResponsiveLayoutIds $responsiveLayoutIds
+  $layers = @($script:StudioEditorState.layers | ForEach-Object {
+    $frames = if ($responsiveLayoutIds.Count -gt 0) {
+      Assert-AuraUiStudioResponsiveFrameMap -Frames $_.frames `
+        -LayoutIds $responsiveLayoutIds -Label 'Artwork layer frames' -Bounds @{
+          positionX = @(-100, 100); positionY = @(-100, 100); focalX = @(0, 100)
+          focalY = @(0, 100); scale = @(0.25, 3)
+        }
+      ConvertTo-AuraUiEditorOverlayResponsiveFrames -Frames $_.frames `
+        -LayoutIds $responsiveLayoutIds `
+        -Fields @('positionX', 'positionY', 'focalX', 'focalY', 'scale')
+    } else {
+      [ordered]@{
         normal = [ordered]@{
           positionX = [double]$_.frames.normal.positionX
           positionY = [double]$_.frames.normal.positionY
@@ -6422,13 +6616,21 @@ function New-AuraUiEditorOverlaySource {
         }
       }
     }
-  })
-  $widgets = @($script:StudioEditorState.instantPrompts | ForEach-Object {
-    Assert-AuraUiStudioInstantPromptLayout -Layout $_.layout
     [ordered]@{
       id = [string]$_.id
-      opacity = [double]$_.layout.opacity
-      frames = [ordered]@{
+      opacity = [double]$_.opacity
+      frames = $frames
+    }
+  })
+  $widgets = @($script:StudioEditorState.instantPrompts | ForEach-Object {
+    Assert-AuraUiStudioInstantPromptLayout -Layout $_.layout `
+      -ResponsiveLayoutIds $responsiveLayoutIds
+    $frames = if ($responsiveLayoutIds.Count -gt 0) {
+      ConvertTo-AuraUiEditorOverlayResponsiveFrames -Frames $_.layout.frames `
+        -LayoutIds $responsiveLayoutIds `
+        -Fields @('positionX', 'positionY', 'widthRatio', 'scale', 'offsetX', 'offsetY')
+    } else {
+      [ordered]@{
         normal = [ordered]@{
           positionX = [double]$_.layout.frames.normal.positionX
           positionY = [double]$_.layout.frames.normal.positionY
@@ -6441,6 +6643,11 @@ function New-AuraUiEditorOverlaySource {
         }
       }
     }
+    [ordered]@{
+      id = [string]$_.id
+      opacity = [double]$_.layout.opacity
+      frames = $frames
+    }
   })
   $script:EditorOverlayNonce = [Guid]::NewGuid().ToString('N').ToLowerInvariant()
   $configuration = [ordered]@{
@@ -6449,6 +6656,7 @@ function New-AuraUiEditorOverlaySource {
     revision = [long]$script:EditorOverlayRevision
     nonce = [string]$script:EditorOverlayNonce
     copy = $script:EditorOverlayCopy
+    responsive = $responsiveConfiguration
     greeting = $greeting
     layers = $layers
     widgets = $widgets
@@ -6605,10 +6813,13 @@ function Update-AuraUiEditorOverlay {
 
 function Assert-AuraUiEditorOverlayViewport {
   param([Parameter(Mandatory = $true)][object]$Viewport)
+  $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts `
+    -Layouts (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('responsiveLayouts')))
+  $allowedFrames = if ($responsiveLayoutIds.Count -gt 0) { $responsiveLayoutIds } else { @('normal', 'wide') }
   if ($Viewport -isnot [System.Management.Automation.PSCustomObject] -or
       -not (Test-AuraUiStudioExactProperties -Message $Viewport `
         -Names @('width', 'height', 'frame')) -or
-      $Viewport.frame -isnot [string] -or $Viewport.frame -cnotin @('normal', 'wide')) {
+      $Viewport.frame -isnot [string] -or $Viewport.frame -cnotin $allowedFrames) {
     throw 'Aura window editor viewport is invalid.'
   }
   [void](ConvertTo-AuraUiStudioInteger -Value $Viewport.width -Minimum 1 -Maximum 10000 -Label 'Aura window editor viewport width')
@@ -6617,6 +6828,9 @@ function Assert-AuraUiEditorOverlayViewport {
 
 function Assert-AuraUiEditorOverlayGreetingGeometry {
   param([Parameter(Mandatory = $true)][object]$Geometry)
+  $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts `
+    -Layouts (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('responsiveLayouts')))
+  $allowedFrames = if ($responsiveLayoutIds.Count -gt 0) { $responsiveLayoutIds } else { @('standard', 'wide') }
   if ($Geometry -isnot [System.Management.Automation.PSCustomObject] -or
       -not (Test-AuraUiStudioExactProperties -Message $Geometry -Names @(
         'appearance', 'frame', 'fontSize', 'lineHeight', 'maxWidthRatio',
@@ -6624,7 +6838,7 @@ function Assert-AuraUiEditorOverlayGreetingGeometry {
       $Geometry.appearance -isnot [string] -or
       $Geometry.appearance -cnotin @('light', 'dark') -or
       $Geometry.frame -isnot [string] -or
-      $Geometry.frame -cnotin @('standard', 'wide')) {
+      $Geometry.frame -cnotin $allowedFrames) {
     throw 'Aura window editor greeting geometry is invalid.'
   }
   [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.fontSize `
@@ -6742,10 +6956,13 @@ function Assert-AuraUiEditorOverlaySelection {
     throw 'Aura window editor widget target is invalid.'
   }
   $geometry = $Selection.geometry
+  $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts `
+    -Layouts (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('responsiveLayouts')))
+  $allowedFrames = if ($responsiveLayoutIds.Count -gt 0) { $responsiveLayoutIds } else { @('normal', 'wide') }
   if ($geometry -isnot [System.Management.Automation.PSCustomObject] -or
       -not (Test-AuraUiStudioExactProperties -Message $geometry `
         -Names @('opacity', 'frame', 'positionX', 'positionY', 'scale')) -or
-      $geometry.frame -isnot [string] -or $geometry.frame -cnotin @('normal', 'wide')) {
+      $geometry.frame -isnot [string] -or $geometry.frame -cnotin $allowedFrames) {
     throw 'Aura window editor geometry is invalid.'
   }
   [void](ConvertTo-AuraUiStudioNumber -Value $geometry.opacity -Minimum 0 -Maximum 1 -Label 'Aura window editor opacity')
@@ -6895,6 +7112,12 @@ function Invoke-AuraUiSetThemeToken {
 }
 
 function Invoke-AuraUiSetThemeLayer {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiResponsiveLayoutAction {
   param([Parameter(Mandatory = $true)][object]$Request)
   Assert-AuraUiStudioEditorSession -Request $Request
   return Invoke-AuraUiStudioEditorRequest -Request $Request
@@ -7330,6 +7553,7 @@ function Send-AuraUiStudioState {
       'set-personal-wordmark', 'clear-personal-wordmark', 'set-personal-wordmark-framing',
       'export-terminal-themes',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+      'enable-responsive-layouts', 'mutate-responsive-layout',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')][string]$Action = '',
@@ -9178,6 +9402,55 @@ function Assert-AuraUiStudioEditorMessage {
   [void](ConvertTo-AuraUiStudioInteger -Value $Message.revision -Minimum 0 -Maximum 2147483647 -Label 'Editor revision')
 
   switch -CaseSensitive ($type) {
+    'enable-responsive-layouts' {
+      return
+    }
+    'mutate-responsive-layout' {
+      if ($Message.operation -isnot [string] -or
+          $Message.operation -cnotin @('add', 'duplicate', 'update', 'delete', 'mode', 'breakpoint')) {
+        throw 'Aura Studio responsive layout operation is invalid.'
+      }
+      if ($Message.operation -ceq 'mode') {
+        if ($null -ne $Message.id -or $Message.value -isnot [string] -or
+            $Message.value -cnotin @('step', 'fluid')) {
+          throw 'Aura Studio responsive layout mode is invalid.'
+        }
+        return
+      }
+      if ($Message.id -isnot [string] -or $Message.id -cnotmatch '^[a-z][a-z0-9-]{0,31}$') {
+        throw 'Aura Studio responsive layout id is invalid.'
+      }
+      if ($Message.operation -ceq 'delete') {
+        if ($null -ne $Message.value) { throw 'Aura Studio responsive layout delete value must be null.' }
+        return
+      }
+      if ($Message.operation -ceq 'breakpoint') {
+        [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 920 -Maximum 3840 -Label 'Responsive layout breakpoint')
+        return
+      }
+      $names = if ($Message.operation -ceq 'update') {
+        @('label', 'width', 'height')
+      } else {
+        @('id', 'label', 'width', 'height')
+      }
+      if ($Message.value -isnot [System.Management.Automation.PSCustomObject] -or
+          -not (Test-AuraUiStudioExactProperties -Message $Message.value -Names $names) -or
+          -not (Test-AuraUiStudioMetadataText -Value $Message.value.label -Maximum 40) -or
+          -not $Message.value.label.Trim()) {
+        throw 'Aura Studio responsive layout set value is invalid.'
+      }
+      if ($Message.operation -cne 'update' -and
+          ($Message.value.id -isnot [string] -or $Message.value.id -cnotmatch '^[a-z][a-z0-9-]{0,31}$')) {
+        throw 'Aura Studio responsive layout set value has an invalid id.'
+      }
+      if ($Message.operation -ceq 'add' -and
+          -not [string]::Equals([string]$Message.id, [string]$Message.value.id, [StringComparison]::Ordinal)) {
+        throw 'Aura Studio responsive layout add ids do not match.'
+      }
+      [void](ConvertTo-AuraUiStudioInteger -Value $Message.value.width -Minimum 920 -Maximum 3840 -Label 'Responsive layout width')
+      [void](ConvertTo-AuraUiStudioInteger -Value $Message.value.height -Minimum 620 -Maximum 2400 -Label 'Responsive layout height')
+      return
+    }
     'set-theme-token' {
       if ($Message.mode -isnot [string] -or
           $Message.mode -cnotin @('light', 'dark', 'shared', 'mode-copy') -or
@@ -9254,7 +9527,14 @@ function Assert-AuraUiStudioEditorMessage {
     }
     'set-theme-layer' {
       [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
-      if ($Message.preset -isnot [string] -or $Message.preset -cnotin @('shared', 'normal', 'wide', 'filters') -or
+      $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts `
+        -Layouts (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('responsiveLayouts')))
+      $allowedPresets = if ($responsiveLayoutIds.Count -gt 0) {
+        @('shared', 'filters') + $responsiveLayoutIds
+      } else {
+        @('shared', 'normal', 'wide', 'filters')
+      }
+      if ($Message.preset -isnot [string] -or $Message.preset -cnotin $allowedPresets -or
           $Message.property -isnot [string]) {
         throw 'Aura Studio layer preset or property is invalid.'
       }
@@ -9307,17 +9587,23 @@ function Assert-AuraUiStudioEditorMessage {
       }
       switch -CaseSensitive ($Message.property) {
         'anchor' {
+          if ($responsiveLayoutIds.Count -gt 0) {
+            throw 'Responsive artwork anchor belongs to the shared layer.'
+          }
           if ($Message.value -isnot [string] -or $Message.value -cnotin @(
               'top-left', 'top', 'top-right', 'left', 'center', 'right',
               'bottom-left', 'bottom', 'bottom-right')) { throw 'Theme layer anchor is invalid.' }
           break
         }
-        'focalX' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 100 -Label 'Theme layer focal x'); break }
-        'focalY' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 100 -Label 'Theme layer focal y'); break }
-        'positionX' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -100 -Maximum 100 -Label 'Theme layer x'); break }
-        'positionY' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -100 -Maximum 100 -Label 'Theme layer y'); break }
-        'scale' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.25 -Maximum 3 -Label 'Theme layer scale'); break }
+        'focalX' { if ($null -ne $Message.value) { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 100 -Label 'Theme layer focal x') }; break }
+        'focalY' { if ($null -ne $Message.value) { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 100 -Label 'Theme layer focal y') }; break }
+        'positionX' { if ($null -ne $Message.value) { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -100 -Maximum 100 -Label 'Theme layer x') }; break }
+        'positionY' { if ($null -ne $Message.value) { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -100 -Maximum 100 -Label 'Theme layer y') }; break }
+        'scale' { if ($null -ne $Message.value) { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.25 -Maximum 3 -Label 'Theme layer scale') }; break }
         default { throw 'Aura Studio framing property is not allowed.' }
+      }
+      if ($null -eq $Message.value -and $responsiveLayoutIds.Count -eq 0) {
+        throw 'Legacy artwork frame values cannot be reset individually.'
       }
       break
     }
@@ -9325,6 +9611,8 @@ function Assert-AuraUiStudioEditorMessage {
       if ($Message.changes -isnot [System.Array]) {
         throw 'Aura Studio theme patches must supply a changes array.'
       }
+      $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts `
+        -Layouts (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('responsiveLayouts')))
       $changes = @($Message.changes)
       if ($changes.Count -lt 1 -or $changes.Count -gt 16) {
         throw 'Aura Studio theme patches must contain between 1 and 16 changes.'
@@ -9428,7 +9716,8 @@ function Assert-AuraUiStudioEditorMessage {
                       $card.icon -cnotmatch '^artwork/layer-[a-f0-9]{32}\.webp$'))) {
                 throw 'Aura Studio instant prompt card is invalid.'
               }
-              Assert-AuraUiStudioInstantPromptLayout -Layout $card.layout
+              Assert-AuraUiStudioInstantPromptLayout -Layout $card.layout `
+                -ResponsiveLayoutIds $responsiveLayoutIds
               break
             }
             if ($change.operation -ceq 'update') {
@@ -9436,7 +9725,8 @@ function Assert-AuraUiStudioEditorMessage {
                 if ($null -ne $change.locale) {
                   throw 'Aura Studio instant prompt layout locale must be null.'
                 }
-                Assert-AuraUiStudioInstantPromptLayout -Layout $change.value
+                Assert-AuraUiStudioInstantPromptLayout -Layout $change.value `
+                  -ResponsiveLayoutIds $responsiveLayoutIds
                 break
               }
               if ($change.field -isnot [string] -or $change.field -cnotin @('label', 'prompt') -or
@@ -9464,21 +9754,28 @@ function Assert-AuraUiStudioEditorMessage {
             break
           }
           'greeting' {
-            # One gesture sends one complete bounded Light/Dark + Standard/Wide
-            # frame. The host validates that exact wire shape before Node sees it.
+            # One gesture sends one complete bounded Light/Dark frame. Legacy
+            # drafts name Standard/Wide; responsive drafts use registered ids.
             if (-not (Test-AuraUiStudioExactProperties -Message $change `
                   -Names @('kind', 'operation', 'appearance', 'frame', 'value')) -or
                 $change.operation -isnot [string] -or
-                $change.operation -cnotin @('set-frame', 'reset') -or
+                $change.operation -cnotin @('set-frame', 'reset-frame', 'reset') -or
                 $change.appearance -isnot [string] -or
                 $change.appearance -cnotin @('light', 'dark') -or
                 $change.frame -isnot [string] -or
-                $change.frame -cnotin @('standard', 'wide')) {
+                $change.frame -cnotin $(if ($responsiveLayoutIds.Count -gt 0) {
+                  $responsiveLayoutIds
+                } else {
+                  @('standard', 'wide')
+                })) {
               throw 'Aura Studio greeting patches have an invalid shape.'
             }
-            if ($change.operation -ceq 'reset') {
+            if ($change.operation -cin @('reset-frame', 'reset')) {
               if ($null -ne $change.value) {
                 throw 'Aura Studio greeting reset must carry a null value.'
+              }
+              if ($change.operation -ceq 'reset-frame' -and $responsiveLayoutIds.Count -eq 0) {
+                throw 'Aura Studio greeting frame reset requires responsive layouts.'
               }
               break
             }
@@ -9539,8 +9836,13 @@ function Assert-AuraUiStudioEditorMessage {
               }
             } else {
               if ($change.target -cne 'promptBlock' -or
-                  $change.axis -isnot [string] -or $change.axis -cnotin @('standard', 'wide')) {
-                throw 'Aura Studio frame surface patches require a prompt Standard or Wide frame.'
+                  $change.axis -isnot [string] -or
+                  $change.axis -cnotin $(if ($responsiveLayoutIds.Count -gt 0) {
+                    $responsiveLayoutIds
+                  } else {
+                    @('standard', 'wide')
+                  })) {
+                throw 'Aura Studio frame surface patches require a registered prompt frame.'
               }
             }
             $surfaceProperties = switch -CaseSensitive ($change.target) {
@@ -9742,6 +10044,8 @@ function Get-AuraUiStudioMessage {
     'begin-theme-edit' { 'type'; 'theme'; 'reset'; break }
     'set-theme-token' { 'type'; 'session'; 'revision'; 'mode'; 'token'; 'value'; break }
     'set-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'preset'; 'property'; 'value'; break }
+    'enable-responsive-layouts' { 'type'; 'session'; 'revision'; break }
+    'mutate-responsive-layout' { 'type'; 'session'; 'revision'; 'operation'; 'id'; 'value'; break }
     'apply-theme-patch' { 'type'; 'session'; 'revision'; 'changes'; break }
     'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; 'appearance'; 'context'; break }
     'pick-instant-prompt-icon' { 'type'; 'session'; 'revision'; 'id'; break }
@@ -9798,6 +10102,7 @@ function Get-AuraUiStudioMessage {
   }
   if ($type -in @(
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+      'enable-responsive-layouts', 'mutate-responsive-layout',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
       'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme',
       'set-greeting-phrases', 'reset-greeting')) {
@@ -9981,6 +10286,8 @@ function Invoke-AuraUiStudioMessage {
     'begin-theme-edit' { [void](Invoke-AuraUiBeginThemeEdit -Request $message); break }
     'set-theme-token' { [void](Invoke-AuraUiSetThemeToken -Request $message); break }
     'set-theme-layer' { [void](Invoke-AuraUiSetThemeLayer -Request $message); break }
+    'enable-responsive-layouts' { [void](Invoke-AuraUiResponsiveLayoutAction -Request $message); break }
+    'mutate-responsive-layout' { [void](Invoke-AuraUiResponsiveLayoutAction -Request $message); break }
     'apply-theme-patch' { [void](Invoke-AuraUiApplyThemePatch -Request $message); break }
     'pick-theme-layer-image' {
       [void](Invoke-AuraUiPickThemeLayerImage -Request $message -Owner $script:StudioForm)
@@ -10286,6 +10593,8 @@ $script:StudioMessageTypes = @(
   'begin-theme-edit',
   'set-theme-token',
   'set-theme-layer',
+  'enable-responsive-layouts',
+  'mutate-responsive-layout',
   'apply-theme-patch',
   'pick-theme-layer-image',
   'pick-theme-launcher-mark',
@@ -11542,6 +11851,7 @@ public static class AuraUiAsyncDispatch {
                       'set-personal-wordmark-framing',
                       'export-terminal-themes',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+                      'enable-responsive-layouts', 'mutate-responsive-layout',
                       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
@@ -11563,6 +11873,7 @@ public static class AuraUiAsyncDispatch {
                   Send-AuraUiStudioState -Status "$($script:UiCopy.studioPreferencesNotSaved)" -Tone error
                 } elseif ($failedAction -in @(
                     'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
+                    'enable-responsive-layouts', 'mutate-responsive-layout',
                     'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                     'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                     'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {

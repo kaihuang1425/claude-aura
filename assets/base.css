@@ -431,6 +431,7 @@ html.claude-aura [data-claude-aura-instant-prompt-card] {
   --aura-widget-x: 0vw;
   --aura-widget-y: 0vh;
   --aura-widget-scale: 1;
+  --aura-widget-width: 1;
   appearance: none;
   min-block-size: 34px;
   max-inline-size: min(100%, 260px);
@@ -454,6 +455,10 @@ html.claude-aura [data-claude-aura-instant-prompt-card] {
   transition: transform var(--aura-transition-duration) ease,
     border-color var(--aura-transition-duration) ease,
     background-color var(--aura-transition-duration) ease;
+}
+
+html.claude-aura [data-claude-aura-instant-prompt-card][data-claude-aura-widget-responsive] {
+  inline-size: min(100%, calc(180px * var(--aura-widget-width)));
 }
 
 html.claude-aura [data-claude-aura-instant-prompt-card] > img {

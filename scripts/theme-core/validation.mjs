@@ -48,7 +48,6 @@ import {
   STUDIO_METADATA_LOCALES,
   STUDIO_RECIPE_CONTROL_OVERRIDES,
   STUDIO_SHADOWS,
-  STUDIO_THEME_SCHEMA_VERSION,
   SUPPORTED_LOCALES,
   THEME_ID_PATTERN,
   USER_ARTWORK_PATH_PATTERN,
@@ -59,6 +58,13 @@ import {
   validateInterfaceSurfaces,
   validateLayerFilters,
 } from "./surface-overrides.mjs";
+import {
+  RESPONSIVE_ARTWORK_FIELDS,
+  RESPONSIVE_GREETING_FIELDS,
+  RESPONSIVE_INSTANT_PROMPT_FIELDS,
+  validateResponsiveFrames,
+  validateResponsiveLayouts,
+} from "./responsive-layouts.mjs";
 
 // Internal-only capability used by the source-checkout built-in layout editor.
 // It is deliberately not re-exported by scripts/theme-core.mjs, so ordinary
@@ -1109,9 +1115,53 @@ export function validateNewChatGreetingStyle(value, label) {
   };
 }
 
+function validateResponsiveGreetingBase(value, label) {
+  assertExactKeys(value, [
+    "font", "color", "weight", "italic", "letterSpacing", "align", "decoration", "markSource",
+  ], label);
+  if (typeof value.italic !== "boolean") throw new Error(`${label}.italic must be a boolean`);
+  if (!GREETING_FONT_WEIGHTS.has(value.weight)) throw new Error(`${label}.weight has an unsupported value`);
+  if (typeof value.letterSpacing !== "number" || !Number.isFinite(value.letterSpacing)
+      || value.letterSpacing < -0.06 || value.letterSpacing > 0.12) {
+    throw new Error(`${label}.letterSpacing must be a number between -0.06 and 0.12`);
+  }
+  return {
+    font: strictEnum(value.font, GREETING_FONT_CATEGORIES, `${label}.font`),
+    color: strictEnum(value.color, GREETING_COLOR_ROLES, `${label}.color`),
+    weight: value.weight,
+    italic: value.italic,
+    letterSpacing: Math.round(value.letterSpacing * 1000) / 1000,
+    align: strictEnum(value.align, GREETING_ALIGNMENTS, `${label}.align`),
+    decoration: strictEnum(value.decoration, GREETING_DECORATIONS, `${label}.decoration`),
+    markSource: strictEnum(value.markSource, GREETING_MARK_SOURCES, `${label}.markSource`),
+  };
+}
+
+export function validateResponsiveGreetingStyle(value, label, responsiveLayouts) {
+  if (value === null || value === undefined) return null;
+  assertExactKeys(value, ["light", "dark"], label);
+  return Object.fromEntries(["light", "dark"].map((appearance) => {
+    const appearanceLabel = `${label}.${appearance}`;
+    assertExactKeys(value[appearance], ["base", "frames"], appearanceLabel);
+    return [appearance, {
+      base: validateResponsiveGreetingBase(value[appearance].base, `${appearanceLabel}.base`),
+      frames: validateResponsiveFrames(
+        value[appearance].frames,
+        responsiveLayouts,
+        RESPONSIVE_GREETING_FIELDS,
+        `${appearanceLabel}.frames`,
+      ),
+    }];
+  }));
+}
+
 // WO-19 portable instant prompts. Cards carry stable identities and localized
 // copy, but no user history, account data, send action, or remote resource.
-export function validateInstantPrompts(value, label = "instantPrompts") {
+export function validateInstantPrompts(
+  value,
+  label = "instantPrompts",
+  { responsiveLayouts = null } = {},
+) {
   if (value === null || value === undefined) return [];
   if (!Array.isArray(value) || value.length > STUDIO_MAX_INSTANT_PROMPTS) {
     throw new Error(`${label} must contain at most ${STUDIO_MAX_INSTANT_PROMPTS} cards`);
@@ -1166,8 +1216,22 @@ export function validateInstantPrompts(value, label = "instantPrompts") {
         && (typeof card.icon !== "string" || !STUDIO_ARTWORK_PATH_PATTERN.test(card.icon))) {
       throw new Error(`${cardLabel}.icon must be null or artwork/layer-<32 lowercase hex>.webp`);
     }
-    const sourceLayout = card.layout ?? DEFAULT_INSTANT_PROMPT_LAYOUT;
+    const sourceLayout = card.layout ?? (responsiveLayouts
+      ? { opacity: 1, frames: {} }
+      : DEFAULT_INSTANT_PROMPT_LAYOUT);
     assertExactKeys(sourceLayout, ["opacity", "frames"], `${cardLabel}.layout`);
+    if (responsiveLayouts) {
+      const layout = {
+        opacity: strictNumber(sourceLayout.opacity, `${cardLabel}.layout.opacity`, 0, 1),
+        frames: validateResponsiveFrames(
+          sourceLayout.frames,
+          responsiveLayouts,
+          RESPONSIVE_INSTANT_PROMPT_FIELDS,
+          `${cardLabel}.layout.frames`,
+        ),
+      };
+      return { id: card.id, labels, prompts, icon: card.icon, layout };
+    }
     assertExactKeys(sourceLayout.frames, ["normal", "wide"], `${cardLabel}.layout.frames`);
     const validateFrame = (frame, frameLabel) => {
       assertExactKeys(frame, ["positionX", "positionY", "scale"], frameLabel);
@@ -1248,13 +1312,23 @@ export function validateStudioLegacyLayer(value, label) {
   };
 }
 
-export function validateStudioLayer(value, label, { builtinLayoutCapability = null } = {}) {
+export function validateStudioLayer(
+  value,
+  label,
+  { builtinLayoutCapability = null, responsiveLayouts = null } = {},
+) {
   if (!isPlainObject(value)) throw new Error(`${label} must be an object`);
   const allowed = new Set([
     "id", "path", "role", "appearance", "context", "viewport", "visible", "opacity",
-    "mask", "mobile", "frames", "filters", "legacy",
+    "mask", "mobile", "anchor", "frames", "filters", "legacy",
   ]);
   if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error(`${label} has an unsupported property`);
+  if (!responsiveLayouts && Object.hasOwn(value, "anchor")) {
+    throw new Error(`${label}.anchor requires schema-v5 responsive layouts`);
+  }
+  if (responsiveLayouts && Object.hasOwn(value, "legacy")) {
+    throw new Error(`${label}.legacy is not supported by schema-v5 responsive layouts`);
+  }
   if (typeof value.id !== "string" || !STUDIO_LAYER_ID_PATTERN.test(value.id)) {
     throw new Error(`${label}.id must be layer- followed by 32 lowercase hexadecimal characters`);
   }
@@ -1262,7 +1336,7 @@ export function validateStudioLayer(value, label, { builtinLayoutCapability = nu
     throw new Error(`${label}.path must be artwork/layer-<32 lowercase hex>.webp`);
   }
   if (!isPlainObject(value.frames)) throw new Error(`${label}.frames must be an object`);
-  assertExactKeys(value.frames, ["normal", "wide"], `${label}.frames`);
+  if (!responsiveLayouts) assertExactKeys(value.frames, ["normal", "wide"], `${label}.frames`);
   if (typeof value.visible !== "boolean") throw new Error(`${label}.visible must be true or false`);
   return {
     id: value.id,
@@ -1284,10 +1358,20 @@ export function validateStudioLayer(value, label, { builtinLayoutCapability = nu
     ...(validateLayerFilters(value.filters, `${label}.filters`) === null
       ? {}
       : { filters: validateLayerFilters(value.filters, `${label}.filters`) }),
-    frames: {
-      normal: validateStudioFrame(value.frames.normal, `${label}.frames.normal`),
-      wide: validateStudioFrame(value.frames.wide, `${label}.frames.wide`),
-    },
+    ...(responsiveLayouts ? {
+      anchor: strictEnum(value.anchor, STUDIO_LAYER_ANCHORS, `${label}.anchor`),
+      frames: validateResponsiveFrames(
+        value.frames,
+        responsiveLayouts,
+        RESPONSIVE_ARTWORK_FIELDS,
+        `${label}.frames`,
+      ),
+    } : {
+      frames: {
+        normal: validateStudioFrame(value.frames.normal, `${label}.frames.normal`),
+        wide: validateStudioFrame(value.frames.wide, `${label}.frames.wide`),
+      },
+    }),
     ...(value.legacy === undefined ? {} : { legacy: validateStudioLegacyLayer(value.legacy, `${label}.legacy`) }),
   };
 }
@@ -1331,7 +1415,7 @@ export function validateStudioThemeKitDocument(
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
     "$comment", "schemaVersion", "id", "labels", "descriptions", "swatches", "preview",
-    "studioPreview", "newChatLayout", "newChatGreetingStyle", "interfaceSurfaces", "instantPrompts", "backgroundScope", "artworkLayers",
+    "studioPreview", "newChatLayout", "newChatGreetingStyle", "interfaceSurfaces", "instantPrompts", "responsiveLayouts", "backgroundScope", "artworkLayers",
     "sourceRecipe", "controlOverrides", "theme",
   ]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`${source} has an unsupported property`);
@@ -1341,6 +1425,15 @@ export function validateStudioThemeKitDocument(
   if (!STUDIO_KIT_SCHEMA_VERSIONS.has(raw.schemaVersion)) {
     throw new Error(`${source} must use schemaVersion ${[...STUDIO_KIT_SCHEMA_VERSIONS].join(" or ")}`);
   }
+  if (raw.schemaVersion < 5 && Object.hasOwn(raw, "responsiveLayouts")) {
+    throw new Error(`${source}.responsiveLayouts requires schemaVersion 5`);
+  }
+  if (raw.schemaVersion === 5 && !Object.hasOwn(raw, "responsiveLayouts")) {
+    throw new Error(`${source}.responsiveLayouts is required for schemaVersion 5`);
+  }
+  const responsiveLayouts = raw.schemaVersion === 5
+    ? validateResponsiveLayouts(raw.responsiveLayouts, `${source}.responsiveLayouts`)
+    : null;
   if (typeof raw.id !== "string" || !THEME_ID_PATTERN.test(raw.id)) {
     throw new Error(`${source}.id must be lowercase kebab-case`);
   }
@@ -1366,7 +1459,7 @@ export function validateStudioThemeKitDocument(
   const artworkLayers = raw.artworkLayers.map((layer, index) => validateStudioLayer(
     layer,
     `${source}.artworkLayers[${index}]`,
-    { builtinLayoutCapability },
+    { builtinLayoutCapability, responsiveLayouts },
   ));
   if (new Set(artworkLayers.map((layer) => layer.id)).size !== artworkLayers.length) {
     throw new Error(`${source}.artworkLayers ids must be unique`);
@@ -1399,7 +1492,7 @@ export function validateStudioThemeKitDocument(
   const interfaceSurfaces = validateInterfaceSurfaces(
     raw.interfaceSurfaces ?? null,
     `${source}.interfaceSurfaces`,
-    { sourceRecipe },
+    { sourceRecipe, responsiveLayouts },
   );
   validateStudioThemeControls(theme, `${source}.theme`);
   const localized = raw.schemaVersion >= 4
@@ -1409,7 +1502,7 @@ export function validateStudioThemeKitDocument(
       descriptions: validateLocalizedMap(raw.descriptions, `${source}.descriptions`, 220),
     };
   return {
-    schemaVersion: STUDIO_THEME_SCHEMA_VERSION,
+    schemaVersion: raw.schemaVersion,
     id: raw.id,
     labels: localized.labels,
     descriptions: localized.descriptions,
@@ -1418,9 +1511,16 @@ export function validateStudioThemeKitDocument(
     studioPreview: null,
     studioPreviewFrame: null,
     newChatLayout: validateNewChatLayout(raw.newChatLayout, `${source}.newChatLayout`),
-    newChatGreetingStyle: validateNewChatGreetingStyle(raw.newChatGreetingStyle ?? null, `${source}.newChatGreetingStyle`),
+    newChatGreetingStyle: responsiveLayouts
+      ? validateResponsiveGreetingStyle(
+        raw.newChatGreetingStyle ?? null,
+        `${source}.newChatGreetingStyle`,
+        responsiveLayouts,
+      )
+      : validateNewChatGreetingStyle(raw.newChatGreetingStyle ?? null, `${source}.newChatGreetingStyle`),
     interfaceSurfaces,
-    instantPrompts: validateInstantPrompts(raw.instantPrompts, `${source}.instantPrompts`),
+    instantPrompts: validateInstantPrompts(raw.instantPrompts, `${source}.instantPrompts`, { responsiveLayouts }),
+    ...(responsiveLayouts ? { responsiveLayouts } : {}),
     backgroundScope: strictEnum(
       raw.backgroundScope,
       new Set(["sidebar", "content", "full-window"]),

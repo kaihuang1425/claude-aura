@@ -47,6 +47,21 @@ export {
   layerFilterCss,
 } from "./theme-core/surface-overrides.mjs";
 export {
+  RESPONSIVE_LAYOUT_ID_PATTERN,
+  RESPONSIVE_LAYOUT_LIMITS,
+  LEGACY_RESPONSIVE_LAYOUTS,
+  RESPONSIVE_ARTWORK_FIELDS,
+  RESPONSIVE_GREETING_FIELDS,
+  RESPONSIVE_PROMPT_FIELDS,
+  RESPONSIVE_INSTANT_PROMPT_FIELDS,
+  validateResponsiveLayouts,
+  validateResponsiveFrames,
+  createResponsiveResolver,
+  resolveResponsiveFrame,
+  insertResponsiveLayoutSet,
+  upgradeStudioDocumentToResponsive,
+} from "./theme-core/responsive-layouts.mjs";
+export {
   readThemeKit,
   readThemeRegistry,
   listThemes,
@@ -91,6 +106,8 @@ export {
   beginThemeEdit,
   setThemeToken,
   setThemeLayer,
+  enableResponsiveLayouts,
+  mutateResponsiveLayout,
   applyThemePatch,
   setGreetingPhrases,
   resetGreeting,

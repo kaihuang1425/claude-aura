@@ -1,4 +1,4 @@
-export function createInstantPromptController(document, window, settings = {}) {
+export function createInstantPromptController(document, window, settings = {}, responsive = null) {
   const BLOCK_ATTRIBUTE = "data-claude-aura-instant-prompts";
   const CARD_ATTRIBUTE = "data-claude-aura-instant-prompt-card";
   const directChildWithin = (ancestor, descendant) => {
@@ -39,6 +39,56 @@ export function createInstantPromptController(document, window, settings = {}) {
   const artworkUrls = Array.isArray(settings.u) ? settings.u : [];
   let block = null;
   let editor = null;
+  const layoutValues = (layout) => {
+    if (responsive?.["track"] && Array.isArray(layout) && layout.length === 2
+        && Array.isArray(layout[1])) {
+      const resolved = responsive["value"](
+        layout[1],
+        [0, 0, 1, 1, 0, 0],
+        ["positionX", "positionY", "width", "scale", "offsetX", "offsetY"],
+        { positionX: 2, positionY: 2, width: 2, scale: 2, offsetX: 2, offsetY: 2 },
+      );
+      return {
+        responsive: true,
+        opacity: layout[0],
+        ...resolved["value"],
+        source: resolved["source"],
+      };
+    }
+    const frame = window.innerWidth >= 1440 ? "wide" : "normal";
+    const offset = frame === "wide" ? 4 : 1;
+    const values = Array.isArray(layout) && layout.length === 7
+      ? layout : [1, 0, 0, 1, 0, 0, 1];
+    return {
+      responsive: false,
+      frame,
+      opacity: values[0],
+      positionX: values[offset],
+      positionY: values[offset + 1],
+      width: 1,
+      scale: values[offset + 2],
+      offsetX: 0,
+      offsetY: 0,
+      source: "explicit",
+    };
+  };
+
+  const applyLayout = (button, layout) => {
+    const values = layoutValues(layout);
+    button.setAttribute("data-claude-aura-widget-frame", values.responsive ? "responsive" : values.frame);
+    if (values.responsive) {
+      button.setAttribute("data-claude-aura-widget-responsive", values.source);
+    } else button.removeAttribute?.("data-claude-aura-widget-responsive");
+    button.style?.setProperty?.("--aura-widget-opacity", String(values.opacity));
+    button.style?.setProperty?.("--aura-widget-x", values.responsive
+      ? `calc(${values.positionX}vw + ${values.offsetX}px)`
+      : `${values.positionX}vw`);
+    button.style?.setProperty?.("--aura-widget-y", values.responsive
+      ? `calc(${values.positionY}vh + ${values.offsetY}px)`
+      : `${values.positionY}vh`);
+    button.style?.setProperty?.("--aura-widget-width", String(values.width));
+    button.style?.setProperty?.("--aura-widget-scale", String(values.scale));
+  };
 
   const clear = () => {
     if (block) block.removeEventListener("click", onClick);
@@ -65,15 +115,7 @@ export function createInstantPromptController(document, window, settings = {}) {
       const button = document.createElement("button");
       button.setAttribute("type", "button");
       button.setAttribute(CARD_ATTRIBUTE, id);
-      const frame = window.innerWidth >= 1440 ? "wide" : "normal";
-      const offset = frame === "wide" ? 4 : 1;
-      const values = Array.isArray(layout) && layout.length === 7
-        ? layout : [1, 0, 0, 1, 0, 0, 1];
-      button.setAttribute("data-claude-aura-widget-frame", frame);
-      button.style?.setProperty?.("--aura-widget-opacity", String(values[0]));
-      button.style?.setProperty?.("--aura-widget-x", `${values[offset]}vw`);
-      button.style?.setProperty?.("--aura-widget-y", `${values[offset + 1]}vh`);
-      button.style?.setProperty?.("--aura-widget-scale", String(values[offset + 2]));
+      applyLayout(button, layout);
       if (Number.isInteger(iconIndex) && typeof artworkUrls[iconIndex] === "string") {
         const icon = document.createElement("img");
         icon.setAttribute("src", artworkUrls[iconIndex]);
@@ -103,17 +145,9 @@ export function createInstantPromptController(document, window, settings = {}) {
     }
     editor = found.editor;
     if (!block) block = build();
-    const frame = window.innerWidth >= 1440 ? "wide" : "normal";
-    const offset = frame === "wide" ? 4 : 1;
     for (const button of block.children ?? []) {
       const card = cards.find((entry) => entry?.[0] === button.getAttribute?.(CARD_ATTRIBUTE));
-      const values = Array.isArray(card?.[4]) && card[4].length === 7
-        ? card[4] : [1, 0, 0, 1, 0, 0, 1];
-      button.setAttribute?.("data-claude-aura-widget-frame", frame);
-      button.style?.setProperty?.("--aura-widget-opacity", String(values[0]));
-      button.style?.setProperty?.("--aura-widget-x", `${values[offset]}vw`);
-      button.style?.setProperty?.("--aura-widget-y", `${values[offset + 1]}vh`);
-      button.style?.setProperty?.("--aura-widget-scale", String(values[offset + 2]));
+      applyLayout(button, card?.[4]);
     }
     if (block.parentElement !== group || group.children?.[0] !== block) {
       group.insertBefore(block, shellChild);

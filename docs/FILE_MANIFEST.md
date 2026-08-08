@@ -15,6 +15,7 @@ offline-preview files and comparison screenshots are not deliverables.
 
 - `studio/app.js`
 - `studio/crop-math.js`
+- `studio/responsive-resolver.js`
 - `studio/editor.css`
 - `studio/editor.js`
 - `studio/generated-themes.js`
@@ -309,6 +310,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/build-installer-assets.mjs`
 - `scripts/build-installer.mjs`
 - `scripts/build-launcher-assets.mjs`
+- `scripts/build-responsive-resolver.mjs`
 - `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
 - `scripts/convert-theme-assets.mjs`
@@ -328,6 +330,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/theme-core/greeting.mjs`
 - `scripts/theme-core/instant-prompts.mjs`
 - `scripts/theme-core/registry.mjs`
+- `scripts/theme-core/responsive-layouts.mjs`
 - `scripts/theme-core/studio.mjs`
 - `scripts/theme-core/surface-overrides.mjs`
 - `scripts/theme-core/terminal.mjs`
@@ -353,6 +356,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/platform.test.mjs`
 - `tests/prompt-shelf.test.mjs`
 - `tests/prepaint.test.mjs`
+- `tests/responsive-layouts.test.mjs`
 - `tests/run-tests.mjs`
 - `tests/studio-editor.test.mjs`
 - `tests/surface-overrides.test.mjs`

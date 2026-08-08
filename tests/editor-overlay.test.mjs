@@ -1,6 +1,7 @@
 import vm from "node:vm";
 import { test, runIfMain } from "./support/harness.mjs";
 import { PROJECT_ROOT, assert, fs, path } from "./support/context.mjs";
+import { createResponsiveResolver } from "../scripts/theme-core.mjs";
 
 const SESSION = "01234567-89ab-4cde-8fab-0123456789ab";
 const LAYER_ID = "layer-0123456789abcdef0123456789abcdef";
@@ -143,6 +144,7 @@ const overlayConfig = (copy) => ({
   revision: 7,
   nonce: "0123456789abcdef0123456789abcdef",
   copy,
+  responsive: null,
   greeting: {
     light: { standard: { ...GREETING_GEOMETRY }, wide: { ...GREETING_GEOMETRY, xRatio: 0.08 } },
     dark: { standard: { ...GREETING_GEOMETRY, fontSize: 36 }, wide: { ...GREETING_GEOMETRY, fontSize: 38 } },
@@ -164,6 +166,40 @@ const overlayConfig = (copy) => ({
     },
   }],
 });
+
+const installResponsiveRuntime = (window, descriptor) => {
+  const track = {
+    mode: descriptor.mode,
+    ids: [...descriptor.ids],
+    widths: [...descriptor.widths],
+    breakpoints: descriptor.breakpoints ?? [],
+  };
+  const resolve = createResponsiveResolver();
+  const asObject = (tuple, fields) => tuple
+    ? Object.fromEntries(fields.flatMap((field, index) => (
+      typeof tuple[index] === "number" ? [[field, tuple[index]]] : []
+    )))
+    : null;
+  const value = (frames, inherited, fields, precisions = {}) => resolve(
+    track,
+    frames.map((frame) => asObject(frame, fields)),
+    window.innerWidth,
+    asObject(inherited, fields),
+    precisions,
+  );
+  const layoutId = () => {
+    let selected = 0;
+    let distance = Infinity;
+    track.widths.forEach((width, index) => {
+      const next = Math.abs(window.innerWidth - width);
+      if (next < distance) selected = index, distance = next;
+    });
+    return track.ids[selected];
+  };
+  window.__CLAUDE_AURA_STATE__ = {
+    responsiveLayoutResolver: { track, value, layoutId },
+  };
+};
 
 test("live editor overlay validates configuration, authenticates messages, and leaves no residue", async () => {
   const source = await fs.readFile(path.join(PROJECT_ROOT, "assets", "editor-overlay.js"), "utf8");
@@ -299,6 +335,86 @@ test("live greeting handles emit one bounded real-frame commit through an overla
   assert(resize.payload.geometry.lineHeight > move.payload.geometry.lineHeight);
   assert(resize.payload.geometry.maxWidthRatio > move.payload.geometry.maxWidthRatio);
   assert(resize.payload.geometry.markScale > move.payload.geometry.markScale);
+  harness.window.__CLAUDE_AURA_EDITOR_OVERLAY__.stop("done", false);
+});
+
+test("live overlay resolves responsive sparse geometry through the renderer resolver", async () => {
+  const source = await fs.readFile(path.join(PROJECT_ROOT, "assets", "editor-overlay.js"), "utf8");
+  const harness = overlayHarness();
+  harness.window.innerWidth = 1370;
+  const descriptor = {
+    mode: "fluid",
+    ids: ["standard", "wide"],
+    widths: [1180, 1560],
+    breakpoints: null,
+  };
+  installResponsiveRuntime(harness.window, descriptor);
+  const canvas = new MockElement("main");
+  canvas.setAttribute("data-claude-aura-main-canvas", "true");
+  canvas.rect = { left: 280, top: 80, width: 900, height: 700 };
+  const greeting = new MockElement("h1");
+  greeting.setAttribute("data-claude-aura-greeting", "native");
+  greeting.rect = { left: 500, top: 260, width: 360, height: 58 };
+  canvas.appendChild(greeting);
+  harness.document.body.appendChild(canvas);
+  harness.document.elementFromPoint = () => greeting;
+  const copy = Object.fromEntries([
+    "title", "pick", "done", "move", "scale", "opacity", "keyboard",
+    "selected", "missing", "ambiguous",
+  ].map((key) => [key, key]));
+  const config = {
+    version: 1,
+    session: SESSION,
+    revision: 9,
+    nonce: "abcdef0123456789abcdef0123456789",
+    copy,
+    responsive: descriptor,
+    greeting: {
+      light: [
+        [34, 1.1, 0.7, -0.2, 0, 1],
+        [44, 1.3, 0.82, 0.2, 0.1, 1.2],
+      ],
+      dark: [
+        [36, 1.1, 0.7, -0.2, 0, 1],
+        [46, 1.3, 0.82, 0.2, 0.1, 1.2],
+      ],
+    },
+    layers: [{
+      id: LAYER_ID,
+      opacity: 0.8,
+      frames: [[-10, 0, 50, 50, 1], [10, 4, 60, 55, 1.2]],
+    }],
+    widgets: [{
+      id: WIDGET_ID,
+      opacity: 1,
+      frames: [[0, 0, 1, 1, 0, 0], [10, 4, 1.2, 1.25, 8, -4]],
+    }],
+  };
+  assert.equal(vm.runInNewContext(
+    source.replace("__AURA_EDITOR_OVERLAY_CONFIG__", JSON.stringify(config)),
+    {
+      document: harness.document,
+      window: harness.window,
+      requestAnimationFrame: (callback) => { callback(); return 1; },
+      cancelAnimationFrame() {},
+    },
+  ), true);
+  assert.equal(harness.messages[0].payload.viewport.frame, "standard");
+  const root = harness.document.getElementById("claude-aura-editor-overlay");
+  const [, pickCover, , bar] = root.shadowRoot.children;
+  bar.children[1].dispatch("click");
+  pickCover.dispatch("pointerdown", { clientX: 650, clientY: 290 });
+  const geometry = harness.messages.at(-1).payload.geometry;
+  assert.deepEqual(JSON.parse(JSON.stringify(geometry)), {
+    appearance: "light",
+    frame: "standard",
+    fontSize: 39,
+    lineHeight: 1.2,
+    maxWidthRatio: 0.76,
+    xRatio: 0,
+    yRatio: 0.05,
+    markScale: 1.1,
+  });
   harness.window.__CLAUDE_AURA_EDITOR_OVERLAY__.stop("done", false);
 });
 

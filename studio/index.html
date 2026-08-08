@@ -370,6 +370,41 @@
                 <input id="stage-real-height" type="number" min="620" max="2400" step="10" value="640" inputmode="numeric"></label>
               <span class="stage-size-live" data-editor-i18n="sizeUpdatesLive">Updates live</span>
             </div>
+            <section id="responsive-layout-panel" class="responsive-layout-panel" aria-labelledby="responsive-layout-title">
+              <div class="responsive-layout-heading">
+                <div>
+                  <strong id="responsive-layout-title" data-editor-i18n="responsiveLayoutsTitle">Responsive layouts</strong>
+                  <span class="help" data-editor-i18n="responsiveLayoutsHelp">Save exact window sizes, then let numeric placement follow the width.</span>
+                </div>
+                <button type="button" id="responsive-layout-enable" class="ghost-button" data-editor-i18n="enableResponsiveLayouts">Enable responsive layouts</button>
+              </div>
+              <div id="responsive-layout-track" class="responsive-layout-track" role="toolbar" data-editor-i18n-aria-label="responsiveLayoutTrack" aria-label="Saved layout sets"></div>
+              <button type="button" id="responsive-layout-add" class="ghost-button" data-editor-i18n="addLayoutHere" hidden>Add layout set here</button>
+              <dl id="responsive-layout-status" class="responsive-layout-status" hidden>
+                <div><dt data-editor-i18n="previewingLabel">Previewing</dt><dd id="responsive-previewing"></dd></div>
+                <div><dt data-editor-i18n="editingLayoutLabel">Editing layout</dt><dd id="responsive-editing"></dd></div>
+                <div><dt data-editor-i18n="betweenLabel">Between</dt><dd id="responsive-between"></dd></div>
+                <div><dt data-editor-i18n="sourceLabel">Source</dt><dd id="responsive-source"></dd></div>
+              </dl>
+              <div id="responsive-layout-advanced" class="responsive-layout-advanced advanced-only" hidden>
+                <label><span data-editor-i18n="layoutNameLabel">Layout name</span>
+                  <input id="responsive-layout-name" type="text" maxlength="40"></label>
+                <label><span data-editor-i18n="layoutWidthLabel">Reference width</span>
+                  <input id="responsive-layout-width" type="number" min="920" max="3840" step="1"></label>
+                <label><span data-editor-i18n="layoutHeightLabel">Reference height</span>
+                  <input id="responsive-layout-height" type="number" min="620" max="2400" step="1"></label>
+                <label><span data-editor-i18n="layoutModeLabel">Width behavior</span>
+                  <select id="responsive-layout-mode">
+                    <option value="step" data-editor-i18n="layoutModeStep">Step at breakpoints</option>
+                    <option value="fluid" data-editor-i18n="layoutModeFluid">Fluid numeric morph</option>
+                  </select></label>
+                <div class="responsive-layout-actions">
+                  <button type="button" id="responsive-layout-duplicate" class="ghost-button" data-editor-i18n="duplicateLayout">Duplicate</button>
+                  <button type="button" id="responsive-layout-delete" class="ghost-button danger-button" data-editor-i18n="deleteLayout">Delete</button>
+                  <button type="button" id="responsive-target-reset" class="ghost-button" data-editor-i18n="resetLayoutTarget">Reset target to inherited</button>
+                </div>
+              </div>
+            </section>
             <input type="checkbox" id="stage-backdrop" checked disabled hidden aria-hidden="true">
           </div>
           <p id="editor-mode-help" class="sr-only" data-editor-i18n="modeHelp">Light and Dark can use different colors and images.</p>
@@ -1311,6 +1346,7 @@
 <script src="locales/zh-HKTW.js"></script>
 <script src="generated-themes.js"></script>
 <script src="crop-math.js"></script>
+<script src="responsive-resolver.js"></script>
 <script src="editor.js"></script>
 <script src="app.js"></script>
 </body>

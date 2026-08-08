@@ -9,7 +9,7 @@
     "set-personal-wordmark", "clear-personal-wordmark", "set-personal-wordmark-framing",
     "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-desktop",
     "import-theme", "export-terminal-themes", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
-    "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer", "move-theme-layer",
+    "enable-responsive-layouts", "mutate-responsive-layout", "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer", "move-theme-layer",
     "undo-theme-edit", "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
     "start-window-edit", "stop-window-edit",

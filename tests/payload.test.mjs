@@ -1802,6 +1802,50 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
   assert.equal(composer["data-aura-role"], undefined,
     "A bottom-anchored ambiguous composer must retain native presentation");
 
+  // A sparse schema-v5 prompt frame inherits geometry from the live native
+  // composer. The payload must preserve a null base instead of inventing a
+  // legacy 0.64/0/0 placement, and the renderer must resolve the missing axes
+  // from the measured native rectangle without emitting NaN transforms.
+  composerBaseTop = 300;
+  composerEditors = [editor];
+  hasConversationMessage = false;
+  window.innerWidth = 1200;
+  window.innerHeight = 800;
+  mainRect = { left: 220, top: 0, right: 1200, bottom: 800, width: 980, height: 800 };
+  promptRoot.style.removeProperty("translate");
+  const responsivePromptBase = await compileTheme({ config: { ...DEFAULT_CONFIG, theme: "default" } });
+  const responsivePromptBundle = await buildPayloadFromCompiled({
+    ...responsivePromptBase,
+    settings: {
+      ...responsivePromptBase.settings,
+      digest: "responsive-native-prompt",
+      responsiveLayouts: {
+        mode: "step",
+        axis: "width",
+        sets: [
+          { id: "standard", label: "Standard", width: 1180, height: 640 },
+          { id: "wide", label: "Wide", width: 1560, height: 940 },
+        ],
+        breakpoints: [1440],
+      },
+      newChatLayout: null,
+      promptFrames: { standard: { widthRatio: 0.7 } },
+    },
+  });
+  assert.deepEqual(readPayloadSettings(responsivePromptBundle.payload).n,
+    [null, [[0.7, null, null], null]],
+    "Responsive prompt packing invented a legacy base or filled sparse axes");
+  const injectResponsivePrompt = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    responsivePromptBundle.payload,
+  );
+  injectResponsivePrompt(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(promptRoot["data-claude-aura-prompt"], "authored");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "686px");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-x"), "0px");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-y"), "0px");
+
   // Exercise Studio's schema-v2 gates as one atomic scene. Reinjecting or
   // switching mode/context/viewport must reuse one backdrop and reveal only
   // the mutually compatible layers.

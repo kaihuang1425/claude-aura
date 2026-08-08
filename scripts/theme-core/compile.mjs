@@ -44,6 +44,7 @@ import {
   promptFrameOverrides,
   renderInterfaceSurfacesCss,
 } from "./surface-overrides.mjs";
+import { createResponsiveResolver } from "./responsive-layouts.mjs";
 
 // Marks the strippable WO-21 greeting subsystem inside the renderer template, and the
 // nested custom-phrases sub-block that native-greeting-only themes do not need.
@@ -65,6 +66,7 @@ const BUILTIN_WORDMARK_PATTERN = /\/\*__AURA_BUILTIN_WORDMARK_START__\*\/[\s\S]*
 const WORDMARK_MARKER_PATTERN = /\/\*__AURA_(?:PERSONAL|BUILTIN)_WORDMARK_(?:START|END)__\*\//g;
 const INSTANT_PROMPTS_BLOCK_PATTERN = /\/\*__AURA_INSTANT_PROMPTS_START__\*\/[\s\S]*?\/\*__AURA_INSTANT_PROMPTS_END__\*\//g;
 const INSTANT_PROMPTS_CSS_PATTERN = /\/\*__AURA_INSTANT_PROMPTS_CSS_START__\*\/[\s\S]*?\/\*__AURA_INSTANT_PROMPTS_CSS_END__\*\//;
+const RESPONSIVE_BLOCK_PATTERN = /\/\*__AURA_RESPONSIVE_START__\*\/[\s\S]*?\/\*__AURA_RESPONSIVE_END__\*\//g;
 
 const WALLPAPER_VARIABLES = Object.freeze({
   gradient: "--aura-wallpaper-gradient",
@@ -189,10 +191,53 @@ function greetingDeclarationDiff(frame, inherited = null) {
     .join(";");
 }
 
-export function renderGreetingCss(style) {
+function responsiveGreetingBaseDeclarations(base) {
+  const color = base.color === "accent" ? "hsl(var(--aura-accent-primary))" : "hsl(var(--aura-text-primary))";
+  return new Map([
+    ["font-family", STUDIO_FONT_DISPLAY_STACKS[base.font]],
+    ["color", color],
+    ["font-size", "var(--aura-responsive-greeting-font-size,34px)"],
+    ["font-weight", String(base.weight)],
+    ["font-style", base.italic ? "italic" : "normal"],
+    ["letter-spacing", `${base.letterSpacing}em`],
+    ["line-height", "var(--aura-responsive-greeting-line-height,1.15)"],
+    ["text-align", base.align],
+    ["--aura-greeting-max-ratio", "var(--aura-responsive-greeting-max-ratio,.72)"],
+    ["--aura-greeting-x", "var(--aura-responsive-greeting-x,0)"],
+    ["--aura-greeting-y", "var(--aura-responsive-greeting-y,0)"],
+    ["--aura-greeting-native-opacity", base.markSource === "native" ? "1" : "0"],
+    ["--aura-greeting-compact-opacity", base.markSource === "compact" ? "1" : "0"],
+    ["--aura-greeting-mark-scale", "var(--aura-responsive-greeting-mark-scale,1)"],
+    ["text-decoration", base.decoration === "underline" ? "underline" : "none"],
+    ["border-bottom", base.decoration === "hairline" ? "1px solid currentColor" : "0"],
+    ["text-shadow", base.decoration === "glow"
+      ? "0 0 18px hsl(var(--aura-accent-primary)/.35)"
+      : "none"],
+  ]);
+}
+
+export function renderGreetingCss(style, responsiveLayouts = null) {
   if (!style) return "";
   const node = "[data-claude-aura-greeting]";
   const dark = ':root[data-claude-aura-effective-mode="dark"] ';
+  if (responsiveLayouts) {
+    const light = responsiveGreetingBaseDeclarations(style.light.base);
+    const darkFrame = responsiveGreetingBaseDeclarations(style.dark.base);
+    const rules = [
+      `${node}{pointer-events:none;min-width:0;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;${[...light].map(([property, value]) => `${property}:${value}`).join(";")}}`,
+    ];
+    const darkDiff = [...darkFrame]
+      .filter(([property, value]) => light.get(property) !== value)
+      .map(([property, value]) => `${property}:${value}`).join(";");
+    if (darkDiff) rules.push(`${dark}${node}{${darkDiff}}`);
+    rules.push(
+      `${node}[data-claude-aura-greeting="decoration"],${node}[data-claude-aura-greeting="native-mark"]{border:0;text-decoration:none;text-shadow:none}`,
+      `${node} [data-claude-aura-greeting-mark="native"]{opacity:var(--aura-greeting-native-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
+      `${node} [data-claude-aura-greeting-mark="compact"]{opacity:var(--aura-greeting-compact-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
+      `@media(forced-colors:active){${node}{text-shadow:none;border-bottom:0}}`,
+    );
+    return rules.join("\n");
+  }
   const wide = ':root[data-claude-aura-viewport="wide"] ';
   const both = ':root[data-claude-aura-effective-mode="dark"][data-claude-aura-viewport="wide"] ';
   const base = greetingFrameDeclarations(style.light.standard);
@@ -368,9 +413,12 @@ export function expandRendererCss(source, dictionary = []) {
 }
 
 function greetingUsesCompactMark(style) {
-  return Boolean(style && ["light", "dark"].some((appearance) =>
-    ["standard", "wide"].some((viewport) =>
-      style[appearance][viewport].mark.source === "compact")));
+  return Boolean(style && ["light", "dark"].some((appearance) => (
+    style[appearance]?.base
+      ? style[appearance].base.markSource === "compact"
+      : ["standard", "wide"].some((viewport) =>
+        style[appearance][viewport].mark.source === "compact")
+  )));
 }
 
 export function hasRegisteredGreetingCompactMark(theme) {
@@ -1072,7 +1120,7 @@ export async function compileTheme({
     renderThemeModes(theme),
     renderThemePrimitives(theme),
   ].join("\n\n");
-  const greetingCss = renderGreetingCss(theme.newChatGreetingStyle);
+  const greetingCss = renderGreetingCss(theme.newChatGreetingStyle, theme.responsiveLayouts);
   const interfaceCss = renderInterfaceSurfacesCss(theme.interfaceSurfaces);
   // Personal avatar overlay rules ride along only when an avatar is set, so the
   // common payload carries none of their bytes (the reserve ceiling is tight).
@@ -1120,6 +1168,7 @@ export async function compileTheme({
           context: layer.context,
           viewport: layer.viewport,
           visible: layer.visible,
+          ...(layer.anchor ? { anchor: layer.anchor } : {}),
           frames: cloneJson(layer.frames),
           legacy: Boolean(layer.legacy),
         } : {}),
@@ -1143,8 +1192,13 @@ export async function compileTheme({
       }
       : null,
     backgroundScope: theme.backgroundScope ?? "full-window",
+    responsiveLayouts: theme.responsiveLayouts ? cloneJson(theme.responsiveLayouts) : null,
     newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,
-    promptFrames: promptFrameOverrides(theme.interfaceSurfaces, theme.newChatLayout),
+    promptFrames: promptFrameOverrides(
+      theme.interfaceSurfaces,
+      theme.newChatLayout,
+      theme.responsiveLayouts,
+    ),
     instantPrompts,
     reduceMotion: config.reduceMotion,
   };
@@ -1171,6 +1225,12 @@ export async function compileTheme({
   if (newChatGreetingStyle || greetingRuntime) {
     settingsBase.greeting = {
       style: newChatGreetingStyle,
+      responsive: theme.responsiveLayouts && newChatGreetingStyle
+        ? {
+          light: cloneJson(newChatGreetingStyle.light.frames),
+          dark: cloneJson(newChatGreetingStyle.dark.frames),
+        }
+        : null,
       phrases: greetingRuntime?.phrases ?? null,
       phraseDigest: greetingRuntime?.phraseDigest ?? null,
       shuffle: greetingRuntime?.shuffle ?? null,
@@ -1228,6 +1288,9 @@ export async function buildPayloadFromCompiled(compiled, {
   if (!Array.isArray(compiled.settings.instantPrompts) || compiled.settings.instantPrompts.length === 0) {
     rendererSource = rendererSource.replace(INSTANT_PROMPTS_BLOCK_PATTERN, "");
   }
+  if (!compiled.settings.responsiveLayouts) {
+    rendererSource = rendererSource.replace(RESPONSIVE_BLOCK_PATTERN, "");
+  }
   // Gates 3 and 4 remain open. Keep production payloads inert even if the
   // dormant registry is edited; activation requires a separate reviewed change.
   const codeAdapterFactory = createInertCodeAdapter;
@@ -1245,6 +1308,7 @@ export async function buildPayloadFromCompiled(compiled, {
     )
     .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`)
     .replace("__AURA_INSTANT_PROMPTS_FACTORY__", `(${createInstantPromptController.toString()})`)
+    .replace("__AURA_RESPONSIVE_FACTORY__", `(${createResponsiveResolver.toString()})`)
     .replace(
       "__AURA_CODE_SIGNATURES__",
       JSON.stringify(experimentalCode?.descriptor ?? null),
@@ -1286,6 +1350,16 @@ export async function buildPayloadFromCompiled(compiled, {
     ? "s"
     : runtimeSettings.backgroundScope === "content" ? "c" : "f";
   delete runtimeSettings.backgroundScope;
+  const responsiveSetIds = runtimeSettings.responsiveLayouts?.sets?.map(({ id }) => id) ?? null;
+  if (responsiveSetIds) {
+    runtimeSettings.R = [
+      runtimeSettings.responsiveLayouts.mode === "fluid" ? "f" : "s",
+      responsiveSetIds,
+      runtimeSettings.responsiveLayouts.sets.map(({ width }) => width),
+      runtimeSettings.responsiveLayouts.breakpoints ?? [],
+    ];
+  }
+  delete runtimeSettings.responsiveLayouts;
   // WO-21: ship the compiled greeting as compact `g` — `p` = effective phrase list
   // (host-owned custom wording), `s` = 1 flags theme-owned styling (delivered as CSS).
   // Only present when there is something to render, so a native theme is unchanged.
@@ -1303,6 +1377,13 @@ export async function buildPayloadFromCompiled(compiled, {
       }
     }
     if (runtimeSettings.greeting.style) compact.s = 1;
+    if (responsiveSetIds && runtimeSettings.greeting.responsive) {
+      const greetingFields = ["fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale"];
+      compact.r = ["light", "dark"].map((appearance) => responsiveSetIds.map((id) => {
+        const frame = runtimeSettings.greeting.responsive[appearance]?.[id];
+        return frame ? greetingFields.map((field) => frame[field]) : null;
+      }));
+    }
     if (typeof runtimeSettings.greeting.markDataUrl === "string"
         && runtimeSettings.greeting.markDataUrl) {
       compact.m = runtimeSettings.greeting.markDataUrl;
@@ -1391,7 +1472,19 @@ export async function buildPayloadFromCompiled(compiled, {
         compact.i = layer.id;
         if (layer.context !== "all") compact.t = layer.context[0];
         if (layer.viewport !== "all") compact.v = layer.viewport[0];
-        if (!layer.legacy) {
+        if (responsiveSetIds && layer.frames) {
+          if (layer.anchor !== "center") compact.h = anchorKeys[layer.anchor];
+          compact.n = responsiveSetIds.map((id) => {
+            const frame = layer.frames[id];
+            return frame ? [
+              frame.positionX,
+              frame.positionY,
+              frame.focalX,
+              frame.focalY,
+              frame.scale,
+            ] : null;
+          });
+        } else if (!layer.legacy) {
           if (layer.frames.normal.anchor !== "center") compact.h = anchorKeys[layer.frames.normal.anchor];
           if (layer.frames.wide.anchor !== layer.frames.normal.anchor) compact.z = anchorKeys[layer.frames.wide.anchor];
           compact.n = [
@@ -1431,13 +1524,26 @@ export async function buildPayloadFromCompiled(compiled, {
       }
       const normal = card.layout?.frames?.normal;
       const wide = card.layout?.frames?.wide;
-      const layout = normal && wide ? [
+      const layout = responsiveSetIds ? [
+        card.layout?.opacity ?? 1,
+        responsiveSetIds.map((id) => {
+          const frame = card.layout?.frames?.[id];
+          return frame ? [
+            frame.positionX,
+            frame.positionY,
+            frame.widthRatio,
+            frame.scale,
+            frame.offsetX,
+            frame.offsetY,
+          ] : null;
+        }),
+      ] : normal && wide ? [
         card.layout.opacity,
         normal.positionX, normal.positionY, normal.scale,
         wide.positionX, wide.positionY, wide.scale,
       ] : [1, 0, 0, 1, 0, 0, 1];
       const compact = [card.id, card.label, card.prompt, iconIndex];
-      if (layout.some((value, index) => value !== [1, 0, 0, 1, 0, 0, 1][index])) {
+      if (responsiveSetIds || layout.some((value, index) => value !== [1, 0, 0, 1, 0, 0, 1][index])) {
         compact.push(layout);
       }
       return compact;
@@ -1445,7 +1551,22 @@ export async function buildPayloadFromCompiled(compiled, {
     if (urls.length) runtimeSettings.u = urls;
   }
   delete runtimeSettings.instantPrompts;
-  if (runtimeSettings.promptFrames) {
+  if (responsiveSetIds) {
+    const base = runtimeSettings.newChatLayout
+      ? [
+        runtimeSettings.newChatLayout.widthRatio,
+        runtimeSettings.newChatLayout.offsetXRatio,
+        runtimeSettings.newChatLayout.offsetYRatio,
+      ]
+      : null;
+    const frameMap = runtimeSettings.promptFrames ?? {};
+    const frames = responsiveSetIds.map((id) => frameMap[id]
+      ? [frameMap[id].widthRatio, frameMap[id].offsetXRatio, frameMap[id].offsetYRatio]
+      : null);
+    if (base || frames.some(Boolean)) runtimeSettings.n = [base, frames];
+    delete runtimeSettings.promptFrames;
+    delete runtimeSettings.newChatLayout;
+  } else if (runtimeSettings.promptFrames) {
     const frames = runtimeSettings.promptFrames;
     runtimeSettings.n = [frames.standard, frames.wide].map((layout) => [
       layout.widthRatio, layout.offsetXRatio, layout.offsetYRatio,
