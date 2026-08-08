@@ -2274,7 +2274,7 @@
 
   const openCropEditor = ({
     kind, theme = null, imageUrl, crop, defaultCrop = DEFAULT_CROP, positionSupported = true,
-    background = "transparent",
+    background = "transparent", staged = false,
   }, opener) => {
     if (!imageUrl) { setStatus(t("previewUnavailable"), "error"); return; }
     cropReturnFocus = opener;
@@ -2287,6 +2287,7 @@
       resetCrop,
       draft: normalizeCrop(crop, resetCrop, maximumZoom),
       background: normalizeAvatarBackground(background),
+      staged: staged === true,
     };
     // Offer the backdrop swatches only where they change something: an avatar
     // whose source actually has see-through pixels.

@@ -342,6 +342,12 @@ test("Studio and the Windows host keep personal wordmark mutations exact and tra
   assert.match(studio,
     /cropImage\.src = imageUrl;\s*if \(cropImage\.complete && cropImage\.naturalWidth\) finishCropImageLoad\(\)/,
     "A cached wordmark preview must unlock Save without waiting for a second load event");
+  assert.match(studio,
+    /const openCropEditor = \(\{[\s\S]{0,220}?background = "transparent", staged = false,[\s\S]{0,700}?staged: staged === true/,
+    "The shared crop editor must retain whether a wordmark source is still staged");
+  assert.match(studio,
+    /const abandonWordmarkDraft = cropContext\?\.kind === "wordmark"[\s\S]{0,180}?cropContext\.staged[\s\S]{0,120}?cropDialog\.returnValue !== "saved"/,
+    "Closing an unsaved staged wordmark editor must cancel the host draft");
   assert.match(mechanism, /\[IO\.Directory\]::Move\(\$transactionDirectory,\s*\$publishedDirectory\)/,
     "A baked generation must publish atomically before config changes");
   assert.match(mechanism, /Restore-AuraUiPersonalWordmarkConfig -PreviousValue \$previousValue[\s\S]{0,800}?configuration could not be committed/,
