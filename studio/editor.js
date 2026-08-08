@@ -16,11 +16,11 @@
   const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const OVERLAY_TOKEN_IDS = Object.freeze(["canvas", "sidebar", "surface", "text", "accent", "border"]);
   const OVERLAY_TARGET_IDS = Object.freeze([
-    "interface.theme", "interface.new-chat-area", "interface.greeting",
+    "interface.theme", "interface.sidebar", "interface.sidebar-identity", "interface.prompt-block", "interface.greeting",
     "background.layer", "widgets.instant-prompts",
   ]);
   const OVERLAY_INTERFACE_ITEMS = Object.freeze([
-    "interface.sidebar", "interface.composer", "interface.card", "interface.dialog",
+    "interface.sidebar", "interface.sidebar-identity", "interface.composer", "interface.card", "interface.dialog",
     "interface.canvas", "interface.greeting",
   ]);
   const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
@@ -28,7 +28,7 @@
   const PREVIEW_PATH_PATTERN = /^\/active\/(?:[a-z0-9][a-z0-9-]{0,63}\/)*[a-z0-9][a-z0-9-]{0,80}\.webp$/;
   const ACTIONS = new Set([
     "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer", "apply-theme-patch",
-    "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon", "remove-theme-layer",
+    "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer",
     "move-theme-layer", "undo-theme-edit",
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
@@ -235,7 +235,7 @@
     focus: ["accent", "canvas"],
   });
   const BUILTIN_LAYOUT_TARGETS = new Set([
-    "interface.new-chat-area", "interface.greeting", "background.layer",
+    "interface.prompt-block", "interface.greeting", "background.layer",
   ]);
   const BUILTIN_LAYOUT_LAYER_PROPERTIES = new Set([
     "anchor", "focalX", "focalY", "positionX", "positionY", "scale",
@@ -342,7 +342,7 @@
         || !integer(value.viewport.height, 1, 10000)
         || !enumValue(value.viewport.frame, ["normal", "wide"])) return null;
     const typedTarget = value.kind === "interface"
-      ? ["interface.theme", "interface.new-chat-area", "interface.greeting"].includes(value.targetId)
+      ? ["interface.theme", "interface.sidebar", "interface.sidebar-identity", "interface.prompt-block", "interface.greeting"].includes(value.targetId)
       : value.kind === "background"
         ? value.targetId === "background.layer"
         : value.targetId === "widgets.instant-prompts";
@@ -368,9 +368,13 @@
         || !inRange(value.rect.height, 0.01, 10000)) return null;
     if (value.kind === "interface") {
       const greeting = value.targetId === "interface.greeting";
-      if (!["interface.theme", "interface.new-chat-area", "interface.greeting"].includes(value.targetId)
+      if (!["interface.theme", "interface.sidebar", "interface.sidebar-identity", "interface.prompt-block", "interface.greeting"].includes(value.targetId)
           || !OVERLAY_INTERFACE_ITEMS.includes(value.itemId)
-          || (value.targetId === "interface.new-chat-area" && value.itemId !== "interface.composer")
+          || (value.targetId === "interface.sidebar" && value.itemId !== "interface.sidebar")
+          || (value.targetId === "interface.sidebar-identity" && value.itemId !== "interface.sidebar-identity")
+          || (value.targetId === "interface.prompt-block" && value.itemId !== "interface.composer")
+          || (value.targetId === "interface.theme"
+            && !["interface.card", "interface.dialog", "interface.canvas"].includes(value.itemId))
           || (greeting && value.itemId !== "interface.greeting")
           || (!greeting && value.itemId === "interface.greeting")) return null;
       if (greeting) {
@@ -431,6 +435,7 @@
   }
 
   const CAPABILITY_BRANCHES = Object.freeze(["interface", "background", "widgets"]);
+  const REGISTERED_VIEW_IDS = Object.freeze(["new-chat", "conversation", "code"]);
   const CAPABILITY_VIEWS = Object.freeze(["new-chat", "conversation"]);
   const CAPABILITY_AXES = Object.freeze(["appearance", "view", "frame"]);
   const CAPABILITY_CAPTURE_GEOMETRY = Object.freeze([
@@ -440,14 +445,14 @@
     "picker", "stage-prompt", "stage-greeting", "stage-layer", "stage-instant-prompt",
   ]);
   const CAPABILITY_TARGETS = Object.freeze({
-    "interface.theme": Object.freeze({ branch: "interface", labelKey: "targetInterfaceTheme" }),
-    "interface.sidebar-wordmark": Object.freeze({ branch: "interface", labelKey: "wordmarkTitle" }),
-    "interface.new-chat-area": Object.freeze({ branch: "interface", labelKey: "targetNewChatArea" }),
-    "interface.greeting": Object.freeze({ branch: "interface", labelKey: "targetGreeting" }),
-    "background.canvas": Object.freeze({ branch: "background", labelKey: "branchBackground" }),
-    "background.layer": Object.freeze({ branch: "background", labelKey: "targetBackgroundLayer" }),
-    "widgets.app-identity": Object.freeze({ branch: "widgets", labelKey: "targetAppIdentity" }),
-    "widgets.instant-prompts": Object.freeze({ branch: "widgets", labelKey: "instantPromptsTitle" }),
+    "interface.theme": Object.freeze({ branch: "interface", surfaceId: "overall", labelKey: "targetOverallInterface" }),
+    "interface.sidebar": Object.freeze({ branch: "interface", surfaceId: "sidebar", labelKey: "targetSidebar" }),
+    "interface.sidebar-identity": Object.freeze({ branch: "interface", surfaceId: "sidebar-identity", labelKey: "targetSidebarIdentity" }),
+    "interface.prompt-block": Object.freeze({ branch: "interface", surfaceId: "prompt-block", labelKey: "targetPromptBlock" }),
+    "interface.greeting": Object.freeze({ branch: "interface", surfaceId: "greeting", labelKey: "targetGreeting" }),
+    "background.layer": Object.freeze({ branch: "background", surfaceId: "background-layer", labelKey: "targetBackgroundLayer" }),
+    "widgets.app-identity": Object.freeze({ branch: "widgets", surfaceId: "aura-launcher", labelKey: "targetAppIdentity" }),
+    "widgets.instant-prompts": Object.freeze({ branch: "widgets", surfaceId: "quick-prompts", labelKey: "instantPromptsTitle" }),
   });
 
   function normalizeCapabilityRegistry(value) {
@@ -456,9 +461,10 @@
     const ids = new Set();
     for (const entry of value) {
       if (!exactShape(entry, [
-        "id", "branch", "views", "axes", "captureGeometry", "selectionBehavior",
+        "id", "surfaceId", "branch", "views", "axes", "captureGeometry", "selectionBehavior",
       ]) || !Object.hasOwn(CAPABILITY_TARGETS, entry.id)
           || CAPABILITY_TARGETS[entry.id].branch !== entry.branch
+          || CAPABILITY_TARGETS[entry.id].surfaceId !== entry.surfaceId
           || !CAPABILITY_BRANCHES.includes(entry.branch)
           || !Array.isArray(entry.views) || !entry.views.length
           || !Array.isArray(entry.axes)
@@ -472,6 +478,7 @@
       ids.add(entry.id);
       normalized.push(Object.freeze({
         id: entry.id,
+        surfaceId: entry.surfaceId,
         branch: entry.branch,
         views: Object.freeze([...entry.views]),
         axes: Object.freeze([...entry.axes]),
@@ -486,6 +493,7 @@
   const EDITOR_CAPABILITY_REGISTRY = normalizeCapabilityRegistry([
     {
       id: "interface.theme",
+      surfaceId: "overall",
       branch: "interface",
       views: ["new-chat", "conversation"],
       axes: ["appearance"],
@@ -493,23 +501,35 @@
       selectionBehavior: "picker",
     },
     {
-      id: "interface.sidebar-wordmark",
+      id: "interface.sidebar",
+      surfaceId: "sidebar",
       branch: "interface",
       views: ["new-chat", "conversation"],
-      axes: [],
+      axes: ["appearance"],
+      captureGeometry: "full-canvas",
+      selectionBehavior: "picker",
+    },
+    {
+      id: "interface.sidebar-identity",
+      surfaceId: "sidebar-identity",
+      branch: "interface",
+      views: ["new-chat", "conversation"],
+      axes: ["appearance"],
       captureGeometry: "local-preview",
       selectionBehavior: "picker",
     },
     {
-      id: "interface.new-chat-area",
+      id: "interface.prompt-block",
+      surfaceId: "prompt-block",
       branch: "interface",
-      views: ["new-chat"],
-      axes: [],
+      views: ["new-chat", "conversation"],
+      axes: ["appearance", "frame"],
       captureGeometry: "new-chat-area",
       selectionBehavior: "stage-prompt",
     },
     {
       id: "interface.greeting",
+      surfaceId: "greeting",
       branch: "interface",
       views: ["new-chat"],
       axes: ["appearance", "frame"],
@@ -517,15 +537,8 @@
       selectionBehavior: "stage-greeting",
     },
     {
-      id: "background.canvas",
-      branch: "background",
-      views: ["new-chat", "conversation"],
-      axes: ["appearance", "view"],
-      captureGeometry: "full-canvas",
-      selectionBehavior: "picker",
-    },
-    {
       id: "background.layer",
+      surfaceId: "background-layer",
       branch: "background",
       views: ["new-chat", "conversation"],
       axes: ["appearance", "view", "frame"],
@@ -534,6 +547,7 @@
     },
     {
       id: "widgets.app-identity",
+      surfaceId: "aura-launcher",
       branch: "widgets",
       views: ["new-chat", "conversation"],
       axes: [],
@@ -542,6 +556,7 @@
     },
     {
       id: "widgets.instant-prompts",
+      surfaceId: "quick-prompts",
       branch: "widgets",
       views: ["new-chat"],
       axes: ["appearance", "view"],
@@ -860,6 +875,187 @@
     return null;
   }
 
+  function normalizeIdentityPreviewUrl(value) {
+    if (value === null) return null;
+    if (typeof value !== "string") return undefined;
+    return /^https:\/\/aura\.editor\/active\/identity-[a-f0-9]{64}\.png$/.test(value)
+      ? value
+      : undefined;
+  }
+
+  const INTERFACE_SURFACE_CLIENT_SPECS = Object.freeze({
+    sidebar: Object.freeze({
+      base: Object.freeze({
+        surface: ["color"], primaryText: ["color"], secondaryText: ["color"], selectedSurface: ["color"],
+        indicator: ["color"], font: ["enum", FONT_UI_IDS], primaryActionSurface: ["color"],
+        primaryActionForeground: ["color"], rowHoverSurface: ["color"], rowPressedSurface: ["color"],
+        selectedRowSurface: ["color"], sectionLabel: ["color"], sectionRule: ["color"], footerSurface: ["color"],
+        rowRadius: ["number", 0, 28], spacing: ["enum", ["compact", "comfortable"]],
+      }),
+      appearance: true,
+    }),
+    sidebarIdentity: Object.freeze({
+      base: Object.freeze({
+        mode: ["enum", ["native", "inherited-builtin", "styled-label", "local-mark"]],
+        font: ["enum", FONT_DISPLAY_IDS], weight: ["enum", GREETING_WEIGHT_IDS],
+        fontSize: ["number", 12, 32], letterSpacing: ["number", -0.08, 0.2], color: ["color"],
+        markSize: ["number", 24, 72], markTreatment: ["enum", ["original", "foreground", "accent"]],
+        markDigest: ["digest"],
+      }),
+      appearance: true,
+    }),
+    promptBlock: Object.freeze({
+      base: Object.freeze({
+        surface: ["color"], foreground: ["color"], placeholder: ["color"], border: ["color"], focus: ["color"],
+        font: ["enum", FONT_UI_IDS], radius: ["number", 0, 40], borderWidth: ["number", 0, 3],
+        blurPx: ["number", 0, 32], shadow: ["enum", SHADOW_IDS],
+        editorInset: ["enum", ["transparent", "compact", "comfortable"]], toolbarSurface: ["color"],
+        controlForeground: ["color"], controlResting: ["color"], controlHover: ["color"],
+        controlPressed: ["color"], controlSelected: ["color"], controlDisabled: ["color"],
+      }),
+      appearance: true,
+      frame: Object.freeze({
+        widthRatio: ["number", 0.4, 0.96], offsetXRatio: ["number", -0.35, 0.35],
+        offsetYRatio: ["number", -0.3, 0.3],
+      }),
+    }),
+  });
+  const SURFACE_CONTROL_DEFS = Object.freeze({
+    sidebar: Object.freeze([
+      ["surface", "sidebarSurface", "color"],
+      ["primaryText", "sidebarPrimaryLabel", "color"],
+      ["secondaryText", "sidebarSecondaryLabel", "color", true],
+      ["selectedSurface", "sidebarSelectedSurface", "color", true],
+      ["indicator", "sidebarSelectionIndicator", "color", true],
+      ["font", "interfaceFont", "select", false, [
+        ["system-sans", "fontSystemSans"], ["humanist-sans", "fontHumanistSans"], ["rounded-sans", "fontRoundedSans"],
+      ]],
+      ["primaryActionSurface", "sidebarPrimaryActionSurface", "color", true],
+      ["primaryActionForeground", "sidebarPrimaryActionText", "color", true],
+      ["rowHoverSurface", "sidebarRowHover", "color", true],
+      ["rowPressedSurface", "sidebarRowPressed", "color", true],
+      ["selectedRowSurface", "sidebarSelectedRow", "color", true],
+      ["sectionLabel", "sidebarSectionLabel", "color", true],
+      ["sectionRule", "sidebarSectionRule", "color", true],
+      ["footerSurface", "sidebarFooterSurface", "color", true],
+      ["rowRadius", "sidebarRowRadius", "number", false, [0, 28, 1]],
+      ["spacing", "sidebarSpacing", "select", false, [["compact", "spacingCompact"], ["comfortable", "spacingComfortable"]]],
+    ]),
+    sidebarIdentity: Object.freeze([
+      ["mode", "identityMode", "select", false, [
+        ["native", "identityNative"], ["inherited-builtin", "identityInheritedBuiltIn"],
+        ["styled-label", "identityStyledLabel"], ["local-mark", "identityLocalMark"],
+      ]],
+      ["font", "identityFont", "select", false, [
+        ["system-sans", "fontSystemSans"], ["humanist-sans", "fontHumanistSans"],
+        ["rounded-sans", "fontRoundedSans"], ["editorial-serif", "fontEditorialSerif"],
+      ]],
+      ["weight", "identityWeight", "select", true, [300, 400, 500, 600, 650, 700].map((value) => [value, String(value)])],
+      ["fontSize", "identitySize", "number", false, [12, 32, 1]],
+      ["letterSpacing", "identityTracking", "number", true, [-0.08, 0.2, 0.005]],
+      ["color", "identityColor", "color"],
+      ["markSize", "identityMarkSize", "number", false, [24, 72, 1]],
+      ["markTreatment", "identityMarkTreatment", "select", true, [
+        ["original", "treatmentOriginal"], ["foreground", "treatmentForeground"], ["accent", "treatmentAccent"],
+      ]],
+    ]),
+    promptBlock: Object.freeze([
+      ["surface", "promptSurface", "color"],
+      ["foreground", "promptForeground", "color"],
+      ["placeholder", "promptPlaceholder", "color", true],
+      ["border", "promptBorder", "color"],
+      ["focus", "promptFocus", "color", true],
+      ["font", "interfaceFont", "select", false, [
+        ["system-sans", "fontSystemSans"], ["humanist-sans", "fontHumanistSans"], ["rounded-sans", "fontRoundedSans"],
+      ]],
+      ["radius", "cornerRadius", "number", false, [0, 40, 1]],
+      ["borderWidth", "promptBorderWidth", "number", true, [0, 3, 0.5]],
+      ["blurPx", "surfaceBlur", "number", true, [0, 32, 1]],
+      ["shadow", "softShadow", "select", false, [["none", "shadowNone"], ["soft", "shadowSoft"], ["elevated", "shadowElevated"]]],
+      ["editorInset", "promptEditorInset", "select", true, [
+        ["transparent", "insetTransparent"], ["compact", "spacingCompact"], ["comfortable", "spacingComfortable"],
+      ]],
+      ["toolbarSurface", "promptToolbarSurface", "color", true],
+      ["controlForeground", "promptControlForeground", "color", true],
+      ["controlResting", "promptControlResting", "color", true],
+      ["controlHover", "promptControlHover", "color", true],
+      ["controlPressed", "promptControlPressed", "color", true],
+      ["controlSelected", "promptControlSelected", "color", true],
+      ["controlDisabled", "promptControlDisabled", "color", true],
+    ]),
+  });
+
+  const normalizeInterfaceLeaf = (value, fields) => {
+    if (!plainRecord(value) || Object.keys(value).length === 0
+        || Object.keys(value).some((key) => !Object.hasOwn(fields, key))) return null;
+    const result = Object.create(null);
+    for (const [key, fieldValue] of Object.entries(value)) {
+      const [kind, constraint, maximum] = fields[key];
+      if (kind === "color") {
+        if (typeof fieldValue !== "string" || !COLOR_PATTERN.test(fieldValue)) return null;
+      } else if (kind === "digest") {
+        if (typeof fieldValue !== "string" || !/^[a-f0-9]{64}$/.test(fieldValue)) return null;
+      } else if (kind === "enum") {
+        if (!constraint.includes(fieldValue)) return null;
+      } else if (!inRange(fieldValue, constraint, maximum)) return null;
+      result[key] = fieldValue;
+    }
+    return result;
+  };
+
+  function normalizeInterfaceSurfaces(value) {
+    if (value === null) return null;
+    if (!plainRecord(value) || Object.keys(value).length === 0
+        || Object.keys(value).some((key) => !Object.hasOwn(INTERFACE_SURFACE_CLIENT_SPECS, key))) return undefined;
+    const result = Object.create(null);
+    for (const [surfaceId, wrapper] of Object.entries(value)) {
+      const spec = INTERFACE_SURFACE_CLIENT_SPECS[surfaceId];
+      if (!plainRecord(wrapper) || Object.keys(wrapper).length === 0
+          || Object.keys(wrapper).some((slot) => !["base", "appearance", "frame"].includes(slot))) return undefined;
+      const normalized = Object.create(null);
+      if (Object.hasOwn(wrapper, "base")) {
+        normalized.base = normalizeInterfaceLeaf(wrapper.base, spec.base);
+        if (!normalized.base) return undefined;
+      }
+      if (Object.hasOwn(wrapper, "appearance")) {
+        if (!spec.appearance || !plainRecord(wrapper.appearance) || Object.keys(wrapper.appearance).length === 0
+            || Object.keys(wrapper.appearance).some((axis) => !["light", "dark"].includes(axis))) return undefined;
+        normalized.appearance = Object.create(null);
+        for (const [axis, leaf] of Object.entries(wrapper.appearance)) {
+          normalized.appearance[axis] = normalizeInterfaceLeaf(leaf, spec.base);
+          if (!normalized.appearance[axis]) return undefined;
+        }
+      }
+      if (Object.hasOwn(wrapper, "frame")) {
+        if (!spec.frame || !plainRecord(wrapper.frame) || Object.keys(wrapper.frame).length === 0
+            || Object.keys(wrapper.frame).some((axis) => !["standard", "wide"].includes(axis))) return undefined;
+        normalized.frame = Object.create(null);
+        for (const [axis, leaf] of Object.entries(wrapper.frame)) {
+          normalized.frame[axis] = normalizeInterfaceLeaf(leaf, spec.frame);
+          if (!normalized.frame[axis]) return undefined;
+        }
+      }
+      result[surfaceId] = normalized;
+    }
+    return result;
+  }
+
+  function normalizeLayerFilters(value) {
+    if (value === null) return null;
+    const ranges = Object.freeze({
+      hueDeg: [-180, 180], saturation: [0, 2], brightness: [0.5, 1.5],
+      contrast: [0.5, 1.5], blurPx: [0, 24],
+    });
+    if (!plainRecord(value) || Object.keys(value).length === 0
+        || Object.keys(value).some((key) => !Object.hasOwn(ranges, key))) return undefined;
+    const result = Object.create(null);
+    for (const [key, filterValue] of Object.entries(value)) {
+      if (!inRange(filterValue, ...ranges[key])) return undefined;
+      result[key] = filterValue;
+    }
+    return result;
+  }
+
   function normalizeFrame(value) {
     const keys = ["anchor", "focalX", "focalY", "positionX", "positionY", "scale"];
     if (!exactShape(value, keys) || !enumValue(value.anchor, ANCHOR_IDS)
@@ -872,7 +1068,7 @@
   function normalizeLayer(value, expectedIndex) {
     const keys = [
       "id", "index", "role", "appearance", "context", "viewport", "visible", "opacity", "mask", "mobile",
-      "bytes", "previewUrl", "frames",
+      "filters", "bytes", "previewUrl", "frames",
     ];
     if (!exactShape(value, keys) || !LAYER_ID_PATTERN.test(value.id)
         || value.index !== expectedIndex || !integer(value.index, 0, 7)
@@ -881,11 +1077,12 @@
         || typeof value.visible !== "boolean" || !inRange(value.opacity, 0, 1)
         || !enumValue(value.mask, MASK_IDS) || !enumValue(value.mobile, MOBILE_IDS)
         || !integer(value.bytes, 0, 400_000) || !exactShape(value.frames, ["normal", "wide"])) return null;
+    const filters = normalizeLayerFilters(value.filters);
     const previewUrl = normalizePreviewUrl(value.previewUrl);
     const normal = normalizeFrame(value.frames.normal);
     const wide = normalizeFrame(value.frames.wide);
-    if (previewUrl === undefined || !normal || !wide) return null;
-    return { ...value, previewUrl, frames: { normal, wide } };
+    if (filters === undefined || previewUrl === undefined || !normal || !wide) return null;
+    return { ...value, filters, previewUrl, frames: { normal, wide } };
   }
 
   function normalizeMetadata(value) {
@@ -1021,7 +1218,8 @@
     const required = [
       "active", "id", "sourceId", "source", "isNew", "session", "revision", "dirty", "canUndo", "canRedo",
       "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
-      "launcherStylePreviewUrl", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
+      "launcherStylePreviewUrl", "interfaceSurfaces", "interfaceStyle", "identityPreviewUrl",
+      "identityStylePreviewUrl", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
     ];
     const activeOptional = [...optional, "editKind"];
     if (!exactShape(value, required, activeOptional) || !ID_PATTERN.test(value.id)
@@ -1044,12 +1242,19 @@
     const launcherStyle = normalizeLauncher(value.launcherStyle);
     const launcherPreviewUrl = normalizeLauncherPreviewUrl(value.launcherPreviewUrl);
     const launcherStylePreviewUrl = normalizeLauncherPreviewUrl(value.launcherStylePreviewUrl);
+    const interfaceSurfaces = normalizeInterfaceSurfaces(value.interfaceSurfaces);
+    const interfaceStyle = normalizeInterfaceSurfaces(value.interfaceStyle);
+    const identityPreviewUrl = normalizeIdentityPreviewUrl(value.identityPreviewUrl);
+    const identityStylePreviewUrl = normalizeIdentityPreviewUrl(value.identityStylePreviewUrl);
     const shared = normalizeShared(value.shared);
     const greetingPreferences = normalizeGreetingPreferences(value.greetingPreferences);
     if (!Array.isArray(value.instantPrompts) || value.instantPrompts.length > MAX_INSTANT_PROMPTS) return undefined;
     const instantPrompts = value.instantPrompts.map(normalizeInstantPrompt);
     if (!metadata || !light || !dark || !studioStyle || !launcher || !launcherStyle
-        || !launcherPreviewUrl || !launcherStylePreviewUrl || !shared || !greetingPreferences
+        || !launcherPreviewUrl || !launcherStylePreviewUrl
+        || interfaceSurfaces === undefined || interfaceStyle === undefined
+        || identityPreviewUrl === undefined || identityStylePreviewUrl === undefined
+        || !shared || !greetingPreferences
         || instantPrompts.some((prompt) => !prompt)
         || new Set(instantPrompts.map((prompt) => prompt.id)).size !== instantPrompts.length
         || !Array.isArray(value.layers) || value.layers.length > 8) return undefined;
@@ -1070,6 +1275,10 @@
       launcherStyle,
       launcherPreviewUrl,
       launcherStylePreviewUrl,
+      interfaceSurfaces,
+      interfaceStyle,
+      identityPreviewUrl,
+      identityStylePreviewUrl,
       shared,
       greetingPreferences,
       instantPrompts,
@@ -1163,11 +1372,21 @@
     const radiusInput = document.getElementById("editor-radius");
     const inheritedRadiusNote = document.getElementById("editor-radius-inherited");
     const nativePromptNote = document.getElementById("editor-prompt-native");
+    const promptResetInheritedButton = document.getElementById("editor-prompt-reset-inherited");
     const launcherInputs = [...document.querySelectorAll("[data-editor-launcher]")];
     const launcherTextInputs = [...document.querySelectorAll("[data-editor-launcher-text]")];
     const launcherPreview = document.getElementById("editor-launcher-preview");
     const launcherMark = document.getElementById("editor-launcher-mark");
     const replaceLauncherMarkButton = document.getElementById("editor-launcher-replace");
+    const surfaceControlHosts = Object.freeze({
+      sidebar: document.getElementById("editor-sidebar-surface-controls"),
+      sidebarIdentity: document.getElementById("editor-sidebar-identity-controls"),
+      promptBlock: document.getElementById("editor-prompt-surface-controls"),
+    });
+    const sidebarIdentityPreview = document.querySelector(".editor-sidebar-identity-preview");
+    const sidebarIdentityImage = document.getElementById("editor-sidebar-identity-image");
+    const sidebarIdentityLabel = document.getElementById("editor-sidebar-identity-label");
+    const replaceSidebarIdentityButton = document.getElementById("editor-sidebar-identity-replace");
     const instantPromptList = document.getElementById("editor-instant-prompt-list");
     const instantPromptEmpty = document.getElementById("editor-instant-prompt-empty");
     const addInstantPromptButton = document.getElementById("editor-instant-prompt-add");
@@ -1303,7 +1522,7 @@
     let inspectorField = null;
     const targetByBranch = {
       interface: "interface.theme",
-      background: "background.canvas",
+      background: "background.layer",
       widgets: "widgets.app-identity",
     };
     let stageViewport = "normal";
@@ -1415,7 +1634,7 @@
     // sending it — the editor looks alive while silently discarding work.
     const PENDING_WATCHDOG_MS = 12000;
     const WATCHDOG_EXEMPT_ACTIONS = new Set([
-      "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon",
+      "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon",
     ]);
     const clearPendingWatchdog = () => {
       if (!pendingWatchdog) return;
@@ -1547,6 +1766,10 @@
       const base = mutationBase();
       if (base) post({ type: "pick-theme-launcher-mark", ...base });
     };
+    const requestSidebarIdentityMark = () => {
+      const base = mutationBase();
+      if (base) post({ type: "pick-sidebar-identity-mark", ...base });
+    };
     const greetingFrameId = (viewport = stageViewport) => viewport === "wide" ? "wide" : "standard";
     const greetingFramePrefix = (
       appearance = selectedMode,
@@ -1584,6 +1807,8 @@
           ? change.operation === "reset"
             ? "greeting:reset"
             : `greeting:set-frame:${change.appearance}:${change.frame}`
+          : change.kind === "surface"
+            ? `surface:${change.target}:${change.slot}:${change.axis ?? "shared"}:${change.property}`
           : change.kind === "metadata-locale"
             ? `metadata-locale:${change.locale}`
             : `metadata:${change.field}:${change.locale}`;
@@ -1785,6 +2010,244 @@
       const layerId = state?.layers?.[index]?.id;
       if (layerId) queueThemeChange({ kind: "layer", layerId, preset, property, value });
     };
+    const promptFrameProperties = new Set(["widthRatio", "offsetXRatio", "offsetYRatio"]);
+    const surfaceScope = (target, property) => promptFrameProperties.has(property)
+      ? { slot: "frame", axis: greetingFrameId() }
+      : { slot: "appearance", axis: selectedMode };
+    const surfaceFieldPath = (target, property, scope = surfaceScope(target, property)) => (
+      `interfaceSurfaces.${target}.${scope.slot}.${scope.axis ?? "base"}.${property}`
+    );
+    const surfaceLeaf = (target, scope) => scope.slot === "base"
+      ? state?.interfaceSurfaces?.[target]?.base
+      : state?.interfaceSurfaces?.[target]?.[scope.slot]?.[scope.axis];
+    const surfaceExplicit = (target, property, scope = surfaceScope(target, property)) => {
+      const path = surfaceFieldPath(target, property, scope);
+      if (stageOverrides.has(path)) return stageOverrides.get(path) !== null;
+      return Object.hasOwn(surfaceLeaf(target, scope) ?? {}, property);
+    };
+    const surfaceFallback = (target, property) => {
+      const mode = state?.tokens?.[selectedMode] ?? {};
+      const values = {
+        sidebar: {
+          surface: mode.sidebar, primaryText: mode.text, secondaryText: mode.text,
+          selectedSurface: mode.surface, indicator: mode.accent, font: state?.shared?.fontUi,
+          primaryActionSurface: mode.accent, primaryActionForeground: mode.canvas,
+          rowHoverSurface: mode.surface, rowPressedSurface: mode.border, selectedRowSurface: mode.surface,
+          sectionLabel: mode.text, sectionRule: mode.border, footerSurface: mode.sidebar,
+          rowRadius: state?.shared?.radius ?? 12, spacing: "comfortable",
+        },
+        sidebarIdentity: {
+          mode: state?.sourceId && state.sourceId !== state.id ? "inherited-builtin" : "native",
+          font: state?.shared?.fontDisplay ?? "system-sans", weight: 600, fontSize: 20,
+          letterSpacing: 0, color: mode.text, markSize: 36, markTreatment: "original",
+        },
+        promptBlock: {
+          surface: mode.surface, foreground: mode.text, placeholder: mode.text, border: mode.border,
+          focus: mode.accent, font: state?.shared?.fontUi ?? "system-sans",
+          radius: state?.shared?.radius ?? 16, borderWidth: 1, blurPx: state?.shared?.blur ?? 0,
+          shadow: state?.shared?.shadow ?? "soft", editorInset: "transparent",
+          toolbarSurface: mode.surface, controlForeground: mode.text, controlResting: mode.surface,
+          controlHover: mode.border, controlPressed: mode.accent, controlSelected: mode.accent,
+          controlDisabled: mode.border,
+          widthRatio: state?.shared?.prompt?.width ?? 0.76,
+          offsetXRatio: state?.shared?.prompt?.x ?? 0,
+          offsetYRatio: state?.shared?.prompt?.y ?? 0,
+        },
+      };
+      return values[target]?.[property];
+    };
+    const surfaceValue = (target, property) => {
+      const wrapper = state?.interfaceSurfaces?.[target] ?? {};
+      let value = wrapper.base?.[property];
+      const apply = (scope) => {
+        const path = surfaceFieldPath(target, property, scope);
+        if (stageOverrides.has(path)) {
+          const staged = stageOverrides.get(path);
+          if (staged !== null) value = staged;
+          return;
+        }
+        const leaf = surfaceLeaf(target, scope);
+        if (Object.hasOwn(leaf ?? {}, property)) value = leaf[property];
+      };
+      apply({ slot: "appearance", axis: selectedMode });
+      if (promptFrameProperties.has(property)) apply({ slot: "frame", axis: greetingFrameId() });
+      return value ?? surfaceFallback(target, property);
+    };
+    const stageSurfaceValue = (target, property, value) => {
+      const scope = surfaceScope(target, property);
+      const path = surfaceFieldPath(target, property, scope);
+      setStageOverride(path, value);
+      inspectorField = path;
+      refreshInspectorContext();
+      reflectSurfaceControls();
+      renderStage();
+    };
+    const queueSurfaceChange = (target, property, value) => {
+      const scope = surfaceScope(target, property);
+      stageSurfaceValue(target, property, value);
+      queueThemeChange({
+        kind: "surface", target, slot: scope.slot, axis: scope.axis ?? null, property, value,
+      }, { immediate: true });
+    };
+    const surfaceControlNodes = new Map();
+    const createSurfaceControls = () => {
+      for (const [target, definitions] of Object.entries(SURFACE_CONTROL_DEFS)) {
+        const host = surfaceControlHosts[target];
+        if (!host) continue;
+        const controls = definitions.map(([property, labelKey, kind, advanced = false, options = null]) => {
+          const root = document.createElement("div");
+          root.className = `surface-control${advanced ? " advanced-only" : ""}`;
+          root.dataset.surfaceTarget = target;
+          root.dataset.surfaceProperty = property;
+          const head = document.createElement("div");
+          head.className = "surface-control-head";
+          const label = document.createElement("label");
+          label.textContent = tr(labelKey);
+          const controlId = `editor-surface-${target.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}-${property}`;
+          label.htmlFor = controlId;
+          head.append(label);
+          let input;
+          let textInput = null;
+          if (kind === "color") {
+            const pair = document.createElement("div");
+            pair.className = "surface-color-inputs";
+            input = document.createElement("input");
+            input.type = "color";
+            input.id = controlId;
+            textInput = document.createElement("input");
+            textInput.type = "text";
+            textInput.maxLength = 7;
+            textInput.spellcheck = false;
+            textInput.inputMode = "text";
+            textInput.setAttribute("aria-label", `${tr(labelKey)} HEX`);
+            pair.append(input, textInput);
+            root.append(head, pair);
+          } else if (kind === "number") {
+            input = document.createElement("input");
+            input.type = "number";
+            input.id = controlId;
+            input.min = String(options[0]);
+            input.max = String(options[1]);
+            input.step = String(options[2]);
+            input.inputMode = "decimal";
+            root.append(head, input);
+          } else {
+            input = document.createElement("select");
+            input.id = controlId;
+            for (const [value, optionLabelKey] of options) {
+              const option = document.createElement("option");
+              option.value = String(value);
+              option.textContent = /^\d+$/.test(optionLabelKey) ? optionLabelKey : tr(optionLabelKey);
+              input.append(option);
+            }
+            root.append(head, input);
+          }
+          input.dataset.editorSurface = `${target}.${property}`;
+          input.dataset.editorFocus = `surface-${target}-${property}`;
+          const provenance = document.createElement("div");
+          provenance.className = "surface-control-provenance";
+          const source = document.createElement("span");
+          const reset = document.createElement("button");
+          reset.type = "button";
+          reset.className = "surface-control-reset";
+          reset.textContent = tr("resetToInherited");
+          provenance.append(source, reset);
+          root.append(provenance);
+          const numericOption = kind === "select" && options.some(([value]) => typeof value === "number");
+          const read = (control = input) => kind === "number" || numericOption
+            ? control.valueAsNumber ?? Number(control.value)
+            : String(control.value);
+          const preview = (control = input) => {
+            let value = read(control);
+            if (kind === "color") value = String(control.value).toUpperCase();
+            if ((kind === "number" && !inRange(value, Number(input.min), Number(input.max)))
+                || (kind === "color" && !COLOR_PATTERN.test(value))) return false;
+            stageSurfaceValue(target, property, value);
+            return true;
+          };
+          input.addEventListener("input", () => {
+            if (textInput) textInput.value = input.value.toUpperCase();
+            preview();
+          });
+          input.addEventListener("change", () => {
+            if (!preview()) { reflectSurfaceControls(); return; }
+            queueSurfaceChange(target, property, kind === "color" ? input.value.toUpperCase() : read());
+          });
+          textInput?.addEventListener("change", () => {
+            const value = textInput.value.trim().toUpperCase();
+            const valid = COLOR_PATTERN.test(value);
+            textInput.toggleAttribute("aria-invalid", !valid);
+            if (!valid) return;
+            input.value = value;
+            queueSurfaceChange(target, property, value);
+          });
+          root.addEventListener("focusin", () => {
+            inspectorField = surfaceFieldPath(target, property);
+            refreshInspectorContext();
+          });
+          reset.addEventListener("click", () => queueSurfaceChange(target, property, null));
+          surfaceControlNodes.set(`${target}.${property}`, { root, input, textInput, source, reset, kind, options });
+          return root;
+        });
+        host.replaceChildren(...controls);
+      }
+    };
+    const reflectSurfaceControls = () => {
+      if (!state) return;
+      for (const [key, nodes] of surfaceControlNodes) {
+        const [target, property] = key.split(".");
+        const value = surfaceValue(target, property);
+        const explicit = surfaceExplicit(target, property);
+        nodes.root.dataset.source = explicit ? "override" : "inherited";
+        nodes.source.textContent = tr(explicit ? "customizedSource" : "themeOriginalSource");
+        nodes.reset.disabled = !explicit || Boolean(pendingAction);
+        nodes.input.dataset.editorField = surfaceFieldPath(target, property);
+        if (nodes.kind === "color") {
+          nodes.input.value = value;
+          nodes.textInput.value = value;
+          nodes.textInput.removeAttribute("aria-invalid");
+          nodes.textInput.dataset.editorField = surfaceFieldPath(target, property);
+        } else {
+          nodes.input.value = String(value);
+        }
+        if (target === "sidebarIdentity" && property === "mode") {
+          const inherited = nodes.input.querySelector('option[value="inherited-builtin"]');
+          const local = nodes.input.querySelector('option[value="local-mark"]');
+          if (inherited) inherited.disabled = state.sourceId === state.id;
+          if (local) local.disabled = !state.identityPreviewUrl
+            && !state.interfaceSurfaces?.sidebarIdentity?.base?.markDigest
+            && !state.interfaceSurfaces?.sidebarIdentity?.appearance?.[selectedMode]?.markDigest;
+        }
+      }
+      const identityMode = surfaceValue("sidebarIdentity", "mode");
+      const identityFont = surfaceValue("sidebarIdentity", "font");
+      const identityTreatment = surfaceValue("sidebarIdentity", "markTreatment");
+      const identityColor = surfaceValue("sidebarIdentity", "color");
+      const localMark = identityMode === "local-mark" && Boolean(state.identityPreviewUrl);
+      if (sidebarIdentityImage) {
+        sidebarIdentityImage.hidden = !localMark;
+        if (localMark && sidebarIdentityImage.src !== state.identityPreviewUrl) {
+          sidebarIdentityImage.src = state.identityPreviewUrl;
+        }
+        sidebarIdentityImage.style.width = `${surfaceValue("sidebarIdentity", "markSize")}px`;
+        sidebarIdentityImage.style.height = `${surfaceValue("sidebarIdentity", "markSize")}px`;
+        sidebarIdentityImage.style.filter = identityTreatment === "original" ? "none" : "grayscale(1)";
+        sidebarIdentityImage.style.opacity = identityTreatment === "original" ? "1" : ".86";
+      }
+      if (sidebarIdentityLabel) {
+        sidebarIdentityLabel.hidden = localMark;
+        sidebarIdentityLabel.style.fontFamily = ({
+          "system-sans": "system-ui, sans-serif", "humanist-sans": "Segoe UI, sans-serif",
+          "rounded-sans": "ui-rounded, Segoe UI, sans-serif", "editorial-serif": "Georgia, serif",
+        })[identityFont];
+        sidebarIdentityLabel.style.fontWeight = String(surfaceValue("sidebarIdentity", "weight"));
+        sidebarIdentityLabel.style.fontSize = `${surfaceValue("sidebarIdentity", "fontSize")}px`;
+        sidebarIdentityLabel.style.letterSpacing = `${surfaceValue("sidebarIdentity", "letterSpacing")}em`;
+        sidebarIdentityLabel.style.color = identityColor;
+      }
+      if (sidebarIdentityPreview) sidebarIdentityPreview.dataset.mode = identityMode;
+    };
+    createSurfaceControls();
     const requeueInFlightChanges = () => {
       for (const change of inFlightChanges) {
         const key = themeChangeKey(change);
@@ -1861,7 +2324,7 @@
       widgets: "appIdentityHelp",
     })[branch] ?? "branchInterfaceHelp";
     const stageSelectionTarget = (selection) => selection?.kind === "prompt"
-      ? "interface.new-chat-area"
+      ? "interface.prompt-block"
       : selection?.kind === "greeting" ? "interface.greeting"
       : selection?.kind === "layer" ? "background.layer"
       : selection?.kind === "instant-prompt" ? "widgets.instant-prompts" : null;
@@ -1948,14 +2411,23 @@
           || /^shared\.(fontUi|fontDisplay|radius|blur|shadow)$/.test(field)) {
         return "interface.theme";
       }
-      if (field === "personalWordmark") return "interface.sidebar-wordmark";
+      if (field === "personalWordmark") return "interface.sidebar-identity";
+      if (field === "interfaceSurfaces.sidebar" || field.startsWith("interfaceSurfaces.sidebar.")) {
+        return "interface.sidebar";
+      }
+      if (field === "interfaceSurfaces.sidebarIdentity" || field.startsWith("interfaceSurfaces.sidebarIdentity.")) {
+        return "interface.sidebar-identity";
+      }
+      if (field === "interfaceSurfaces.promptBlock" || field.startsWith("interfaceSurfaces.promptBlock.")) {
+        return "interface.prompt-block";
+      }
       if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
-        return "interface.new-chat-area";
+        return "interface.prompt-block";
       }
       if (field === "shared.greeting" || field.startsWith("shared.greeting.")) {
         return "interface.greeting";
       }
-      if (field === "shared.backgroundScope") return "background.canvas";
+      if (field === "shared.backgroundScope") return "background.layer";
       if (field === "layers" || field.startsWith("layers[")) return "background.layer";
       if (field === "launcher" || field.startsWith("launcher.")) return "widgets.app-identity";
       if (field === "instantPrompts" || field.startsWith("instantPrompts[")) return "widgets.instant-prompts";
@@ -1963,10 +2435,10 @@
     };
     const defaultInspectorField = (target) => {
       if (target === "interface.theme") return `tokens.${selectedMode}.canvas`;
-      if (target === "interface.sidebar-wordmark") return "personalWordmark";
-      if (target === "interface.new-chat-area") return "shared.prompt";
+      if (target === "interface.sidebar") return "interfaceSurfaces.sidebar";
+      if (target === "interface.sidebar-identity") return "interfaceSurfaces.sidebarIdentity";
+      if (target === "interface.prompt-block") return "interfaceSurfaces.promptBlock";
       if (target === "interface.greeting") return "shared.greeting";
-      if (target === "background.canvas") return "shared.backgroundScope";
       if (target === "background.layer") {
         const index = state?.layers?.findIndex((layer) => layer.id === selectedLayerId) ?? -1;
         return index >= 0 ? `layers[${index}]` : "layers";
@@ -1999,7 +2471,18 @@
     const fieldUsesThemeOriginal = (field) => {
       if (!state) return true;
       if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
-        return state.shared.prompt.native && !hasStageOverridePrefix("shared.prompt");
+        const frame = state.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()] ?? {};
+        return state.shared.prompt.native && Object.keys(frame).length === 0
+          && !hasStageOverridePrefix("shared.prompt");
+      }
+      if (field.startsWith("interfaceSurfaces.")) {
+        const match = /^interfaceSurfaces\.(sidebar|sidebarIdentity|promptBlock)\.(base|appearance|frame)\.(?:([^.]*)\.)?([^.]*)$/.exec(field);
+        if (!match) return true;
+        const [, target, slot, axis, property] = match;
+        return !surfaceExplicit(target, property, {
+          slot,
+          axis: slot === "base" ? null : axis,
+        });
       }
       if (field === "shared.greeting" || field.startsWith("shared.greeting.")) {
         return state.shared.greeting.native;
@@ -2046,22 +2529,28 @@
       contextApplies.textContent = inspectorTarget === "background.layer"
         ? layerScopeLabel(selectedLayer)
         : inspectorTarget === "widgets.instant-prompts"
-          ? `${tr("allModesScope")} 繚 ${tr("contextNewChat")} 繚 ${tr("frameStandard")} + ${tr("frameWide")}`
-        : inspectorTarget === "interface.sidebar-wordmark"
-          ? `${tr("allModesScope")} · ${tr("allPagesScope")}`
-        : inspectorTarget === "interface.new-chat-area"
           ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr("frameStandard")} + ${tr("frameWide")}`
+        : inspectorTarget === "interface.sidebar"
+          ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
+        : inspectorTarget === "interface.sidebar-identity"
+          ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
+        : inspectorTarget === "interface.prompt-block"
+          ? inspectorField === "shared.prompt" || inspectorField.startsWith("shared.prompt.")
+            ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr(greetingFrameId() === "wide" ? "frameWide" : "frameStandard")}`
+            : `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
           : inspectorTarget === "interface.greeting"
             ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} / ${tr("contextNewChat")} / ${tr(greetingFrameId() === "wide" ? "frameWide" : "frameStandard")}`
             : tokenMode
             ? `${tr(tokenMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
             : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
-      contextSource.textContent = inspectorTarget === "interface.sidebar-wordmark"
+      contextSource.textContent = inspectorTarget === "interface.sidebar-identity" && inspectorField === "personalWordmark"
         ? tr(hasPersonalWordmark?.() ? "wordmarkSaved" : "themeOriginalSource")
         : fieldUsesThemeOriginal(inspectorField)
           ? tr("themeOriginalSource") : tr("customizedSource");
       const fieldFrame = /^layers\[\d+]\.frames\.(normal|wide)\./.exec(inspectorField)?.[1]
         ?? /^shared\.greeting\.frames\.(?:light|dark)\.(standard|wide)\./.exec(inspectorField)?.[1]
+        ?? ((inspectorField === "shared.prompt" || inspectorField.startsWith("shared.prompt."))
+          ? greetingFrameId() : null)
         ?? null;
       contextFrameRow.hidden = !fieldFrame;
       const editFrameLabel = tr(fieldFrame === "wide" ? "frameWide" : "frameStandard");
@@ -2233,7 +2722,7 @@
       }
       for (const section of editor.querySelectorAll(
         '[data-editor-targets~="interface.theme"],'
-        + '[data-editor-targets~="background.canvas"],'
+        + '[data-editor-targets~="background.layer"],'
         + '[data-editor-targets~="widgets.app-identity"],'
         + '[data-editor-targets~="widgets.instant-prompts"],'
         + ".editor-guide-section, .editor-add-artwork, .layer-shared-controls",
@@ -2251,13 +2740,13 @@
         input.checked = input.value === "advanced";
       }
       if (entering || !BUILTIN_LAYOUT_TARGETS.has(targetByBranch.interface)) {
-        targetByBranch.interface = "interface.new-chat-area";
+        targetByBranch.interface = "interface.prompt-block";
       }
       targetByBranch.background = "background.layer";
       if (entering || !targetAllowedInCurrentEdit(inspectorTarget)
           || (inspectorTarget === "background.layer" && !state?.layers?.length)) {
         inspectorField = "shared.prompt";
-        setInspectorTarget("interface.new-chat-area");
+        setInspectorTarget("interface.prompt-block");
         stageSelection = { kind: "prompt" };
       } else {
         syncTargetPicker();
@@ -2271,7 +2760,7 @@
     };
     setInspectorTarget(inspectorTarget);
     const reflectStageSelectionForTarget = (target) => {
-      if (target === "interface.new-chat-area") {
+      if (target === "interface.prompt-block") {
         stageSelection = { kind: "prompt" };
       } else if (target === "interface.greeting") {
         stageSelection = { kind: "greeting" };
@@ -2405,7 +2894,7 @@
       stageLayersUserToggled = false;
       setStageLayersCollapsed(true);
       targetByBranch.interface = "interface.theme";
-      targetByBranch.background = "background.canvas";
+      targetByBranch.background = "background.layer";
       targetByBranch.widgets = "widgets.app-identity";
       setInspectorTarget("interface.theme");
       stageMirror = null;
@@ -2592,9 +3081,17 @@
         y: 0,
       };
     };
-    const promptStateValue = (key) => state?.shared?.prompt?.native
-      ? measuredNativePrompt()[key]
-      : statePath(`shared.prompt.${key}`);
+    const promptFrameProperty = Object.freeze({
+      width: "widthRatio", x: "offsetXRatio", y: "offsetYRatio",
+    });
+    const promptStateValue = (key) => {
+      const property = promptFrameProperty[key];
+      const saved = state?.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()]?.[property];
+      if (saved !== undefined) return saved;
+      return state?.shared?.prompt?.native
+        ? measuredNativePrompt()[key]
+        : statePath(`shared.prompt.${key}`);
+    };
     const stageValue = (path) => {
       if (stageOverrides.has(path)) return stageOverrides.get(path);
       const prompt = /^shared\.prompt\.(width|x|y)$/.exec(path);
@@ -2602,11 +3099,9 @@
     };
     const setStageOverride = (path, value) => { if (path) stageOverrides.set(path, value); };
     const seedNativePromptOverrides = () => {
-      if (!state?.shared?.prompt?.native) return;
-      const seed = measuredNativePrompt();
       for (const key of ["width", "x", "y"]) {
         const path = `shared.prompt.${key}`;
-        if (!stageOverrides.has(path)) setStageOverride(path, seed[key]);
+        if (!stageOverrides.has(path)) setStageOverride(path, promptStateValue(key));
       }
     };
     const dropStageWork = () => {
@@ -2645,9 +3140,14 @@
           kind: "layer", layerId: state?.layers?.[message.index]?.id, preset: message.preset,
           property: message.property, value: message.value,
         }
-        : {
-          kind: "token", mode: message.mode, token: message.token, value: message.value,
-        }).filter((change) => change.kind !== "layer" || change.layerId);
+        : message.type === "set-theme-surface"
+          ? {
+            kind: "surface", target: message.target, slot: message.slot, axis: message.axis,
+            property: message.property, value: message.value,
+          }
+          : {
+            kind: "token", mode: message.mode, token: message.token, value: message.value,
+          }).filter((change) => change.kind !== "layer" || change.layerId);
       queueThemeChanges(changes, { immediate: true });
     };
 
@@ -2661,10 +3161,18 @@
       }
       const prompt = /^shared\.prompt\.(width|x|y)$/.exec(path);
       if (prompt) {
+        if (isBuiltInLayoutEdit()) {
+          return {
+            type: "set-theme-token", mode: "shared", token: STAGE_PROMPT_TOKENS[prompt[1]],
+            value: roundPromptRatio(value),
+          };
+        }
         return {
-          type: "set-theme-token",
-          mode: "shared",
-          token: STAGE_PROMPT_TOKENS[prompt[1]],
+          type: "set-theme-surface",
+          target: "promptBlock",
+          slot: "frame",
+          axis: greetingFrameId(),
+          property: promptFrameProperty[prompt[1]],
           value: roundPromptRatio(value),
         };
       }
@@ -3430,6 +3938,7 @@
       const colorPreview = captureActive && (invalidColorDraft
         || [...stageOverrides.keys()].some((path) =>
           (path.startsWith(`tokens.${selectedMode}.`)
+            || path.startsWith("interfaceSurfaces.")
             || path === "shared.radius" || path === "shared.blur" || path === "shared.shadow")
             && String(stageOverrides.get(path)) !== String(statePath(path))));
       stageFrame.dataset.colorPreview = colorPreview ? "true" : "";
@@ -3461,14 +3970,17 @@
       stageContentScopeZone.style.top = "0";
       stageContentScopeZone.style.width = `${mainMetrics.width}px`;
       stageContentScopeZone.style.height = `${logicalHeight}px`;
-      const sidebarColor = tokenValue("sidebar") ?? "#808080";
+      const sidebarColor = surfaceValue("sidebar", "surface") ?? tokenValue("sidebar") ?? "#808080";
       const sidebarAlpha = Number(tokenValue("sidebarAlpha")) || 1;
       stageSidebarEl.style.width = `${mainMetrics.left}px`;
       stageSidebarEl.style.background = scope !== "content"
         ? `color-mix(in srgb, ${sidebarColor} ${Math.round(sidebarAlpha * 100)}%, transparent)`
         : sidebarColor;
       stageSidebarEl.style.backdropFilter = scope !== "content" && blur ? `blur(${Math.min(blur, 32)}px)` : "";
-      stageSidebarEl.style.borderRight = `1px solid ${tokenValue("border") ?? "transparent"}`;
+      stageSidebarEl.style.color = surfaceValue("sidebar", "primaryText") ?? tokenValue("text") ?? "#000000";
+      stageSidebarEl.style.fontFamily = STAGE_FONT_STACKS[surfaceValue("sidebar", "font")]
+        ?? STAGE_FONT_STACKS["system-sans"];
+      stageSidebarEl.style.borderRight = `1px solid ${surfaceValue("sidebar", "indicator") ?? tokenValue("border") ?? "transparent"}`;
       for (const [id, entry] of stageLayerNodes) {
         const index = layerIndexForId(id);
         if (index < 0) continue;
@@ -3484,6 +3996,16 @@
         entry.item.style.top = `calc(${anchor[1]}% + ${frameNumber("positionY") || 0}%)`;
         entry.item.style.transform = `translate(${-focalX}%, ${-focalY}%) scale(${frameNumber("scale") || 1})`;
         entry.item.style.transformOrigin = `${focalX}% ${focalY}%`;
+        const filterValue = (property, neutral) => (
+          stageValue(`layers[${index}].filters.${property}`) ?? layer.filters?.[property] ?? neutral
+        );
+        entry.item.style.filter = [
+          `hue-rotate(${filterValue("hueDeg", 0)}deg)`,
+          `saturate(${filterValue("saturation", 1)})`,
+          `brightness(${filterValue("brightness", 1)})`,
+          `contrast(${filterValue("contrast", 1)})`,
+          `blur(${filterValue("blurPx", 0)}px)`,
+        ].join(" ");
       }
       const surface = `color-mix(in srgb, ${tokenValue("surface") ?? "#ffffff"} ${Math.round((Number(tokenValue("surfaceAlpha")) || 1) * 100)}%, transparent)`;
       const mainLeft = STAGE_SIDEBAR_WIDTH;
@@ -3494,6 +4016,18 @@
         node.style.borderRadius = `${radius}px`;
         node.style.boxShadow = shadow;
         node.style.backdropFilter = blur ? `blur(${Math.min(blur, 32)}px)` : "";
+      };
+      const applyPromptSurface = (node) => {
+        const promptBlur = Number(surfaceValue("promptBlock", "blurPx")) || 0;
+        const promptShadow = STAGE_SHADOWS[surfaceValue("promptBlock", "shadow")] ?? "none";
+        node.style.background = surfaceValue("promptBlock", "surface") ?? surface;
+        node.style.color = surfaceValue("promptBlock", "foreground") ?? tokenValue("text") ?? "#000000";
+        node.style.border = `${surfaceValue("promptBlock", "borderWidth") ?? 1}px solid ${surfaceValue("promptBlock", "border") ?? tokenValue("border") ?? "transparent"}`;
+        node.style.borderRadius = `${surfaceValue("promptBlock", "radius") ?? radius}px`;
+        node.style.boxShadow = promptShadow;
+        node.style.backdropFilter = promptBlur ? `blur(${Math.min(promptBlur, 32)}px)` : "";
+        node.style.fontFamily = STAGE_FONT_STACKS[surfaceValue("promptBlock", "font")]
+          ?? STAGE_FONT_STACKS["system-sans"];
       };
       if (stageContext === "new-chat") {
         const realPrompt = captureActive ? stageMirror?.geometry?.prompt : null;
@@ -3516,12 +4050,11 @@
             Number(stageValue("shared.prompt.x")) || 0,
             Number(stageValue("shared.prompt.y")) || 0);
         }
-        applySurface(stagePromptEl);
+        applyPromptSurface(stagePromptEl);
         stagePromptEl.style.left = `${rect.left}px`;
         stagePromptEl.style.top = `${rect.top}px`;
         stagePromptEl.style.width = `${rect.width}px`;
         stagePromptEl.style.height = `${rect.height}px`;
-        stagePromptEl.style.color = tokenValue("text") ?? "#000000";
         if (!stageInstantPromptRail.hidden) {
           stageInstantPromptRail.style.left = `${rect.left}px`;
           stageInstantPromptRail.style.top = `${Math.max(8, rect.top - 44)}px`;
@@ -3614,7 +4147,7 @@
           node.style.width = `${mainWidth * widthRatio}px`;
           node.style.height = `${logicalHeight * heightRatio}px`;
         }
-        applySurface(stageComposerEl);
+        applyPromptSurface(stageComposerEl);
         stageComposerEl.style.left = `${mainLeft + (mainWidth * 0.14)}px`;
         stageComposerEl.style.width = `${mainWidth * 0.72}px`;
         stageComposerEl.style.height = "110px";
@@ -3688,7 +4221,7 @@
         announce(format(tr("stageSelectedAnnounce"), format(tr("layerNumber"), layer.index + 1)));
       } else if (selection?.kind === "prompt") {
         inspectorField = "shared.prompt";
-        setInspectorTarget("interface.new-chat-area", { reveal });
+        setInspectorTarget("interface.prompt-block", { reveal });
         announce(format(tr("stageSelectedAnnounce"), tr("stagePromptTag")));
       } else if (selection?.kind === "greeting") {
         inspectorField = `${greetingStagePrefix()}xRatio`;
@@ -4000,8 +4533,8 @@
         return false;
       }
       const target = isBuiltInLayoutEdit()
-        ? (inspectorBranch === "interface" ? "interface.new-chat-area" : "background.layer")
-        : (inspectorBranch === "interface" ? "interface.theme" : "background.canvas");
+        ? (inspectorBranch === "interface" ? "interface.prompt-block" : "background.layer")
+        : (inspectorBranch === "interface" ? "interface.theme" : "background.layer");
       if (!targetAllowedInCurrentEdit(target)
           || (target === "background.layer" && !state?.layers?.length)) return false;
       if (target === "background.layer" && !selectedLayerId) {
@@ -4494,6 +5027,8 @@
       sendPreviewSize(input.value === "wide" ? "wide" : "launch", stagePreviewSize);
       refreshInspectorContext();
       selectStageMirror();
+      reflectShared();
+      reflectSurfaceControls();
       reflectGreeting();
       renderStage();
     }));
@@ -5136,8 +5671,14 @@
         if (output) output.value = `${Math.round(value * 100)}%`;
       }
       if (nativePromptNote) {
-        nativePromptNote.hidden = !values.prompt.native
+        const frameOverride = state.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()] ?? null;
+        nativePromptNote.hidden = !values.prompt.native || Boolean(frameOverride)
           || STAGE_PROMPT_PATHS.some((path) => stageOverrides.has(path));
+      }
+      if (promptResetInheritedButton) {
+        const frame = state.interfaceSurfaces?.promptBlock?.frame?.[greetingFrameId()] ?? {};
+        promptResetInheritedButton.disabled = !Object.keys(frame).some((property) => promptFrameProperties.has(property))
+          || Boolean(pendingAction);
       }
     };
 
@@ -5840,13 +6381,14 @@
       range.min = String(min);
       range.max = String(max);
       range.step = String(step);
-      range.value = String(stageValue(preset === "shared"
+      const fieldPath = preset === "shared"
         ? `layers[${layer.index}].${property}`
-        : `layers[${layer.index}].frames.${preset}.${property}`) ?? value);
+        : preset === "filters"
+          ? `layers[${layer.index}].filters.${property}`
+          : `layers[${layer.index}].frames.${preset}.${property}`;
+      range.value = String(stageValue(fieldPath) ?? value);
       range.dataset.editorFocus = `layer-${layer.id}-${preset}-${property}`;
-      range.dataset.editorField = preset === "shared"
-        ? `layers[${layer.index}].${property}`
-        : `layers[${layer.index}].frames.${preset}.${property}`;
+      range.dataset.editorField = fieldPath;
       const exact = document.createElement("input");
       exact.type = "number";
       exact.className = "layer-exact-value";
@@ -5936,6 +6478,11 @@
           for (const property of LAYER_SIGNATURE_FRAME) {
             parts.push(stageValue(`layers[${i}].frames.${preset}.${property}`) ?? layer.frames[preset][property]);
           }
+        }
+        for (const [property, neutral] of Object.entries({
+          hueDeg: 0, saturation: 1, brightness: 1, contrast: 1, blurPx: 0,
+        })) {
+          parts.push(stageValue(`layers[${i}].filters.${property}`) ?? layer.filters?.[property] ?? neutral);
         }
       }
       return parts.join("");
@@ -6115,6 +6662,37 @@
         visible.append(visibleInput, document.createTextNode(tr("layerVisible")));
         sharedGrid.appendChild(visible);
 
+        const filterGrid = document.createElement("div");
+        filterGrid.className = "layer-grid layer-filter-controls advanced-only";
+        const filterTitle = document.createElement("h4");
+        filterTitle.className = "layer-inspector-title";
+        filterTitle.textContent = tr("backgroundFilters");
+        const filterHelp = document.createElement("p");
+        filterHelp.className = "help";
+        filterHelp.textContent = tr("backgroundFiltersHelp");
+        const filters = layer.filters ?? {};
+        filterGrid.append(
+          filterTitle,
+          filterHelp,
+          layerRange({ layer, preset: "filters", property: "hueDeg", labelKey: "filterHue", min: -180, max: 180, step: 1, value: filters.hueDeg ?? 0, display: (v) => `${Math.round(v)}°` }),
+          layerRange({ layer, preset: "filters", property: "saturation", labelKey: "filterSaturation", min: 0, max: 2, step: 0.05, value: filters.saturation ?? 1, display: (v) => `${Math.round(v * 100)}%` }),
+          layerRange({ layer, preset: "filters", property: "brightness", labelKey: "filterBrightness", min: 0.5, max: 1.5, step: 0.05, value: filters.brightness ?? 1, display: (v) => `${Math.round(v * 100)}%` }),
+          layerRange({ layer, preset: "filters", property: "contrast", labelKey: "filterContrast", min: 0.5, max: 1.5, step: 0.05, value: filters.contrast ?? 1, display: (v) => `${Math.round(v * 100)}%` }),
+          layerRange({ layer, preset: "filters", property: "blurPx", labelKey: "filterBlur", min: 0, max: 24, step: 1, value: filters.blurPx ?? 0, display: (v) => `${Math.round(v)} px` }),
+        );
+        const resetFilters = document.createElement("button");
+        resetFilters.type = "button";
+        resetFilters.className = "ghost-button";
+        resetFilters.textContent = tr("resetFilters");
+        resetFilters.disabled = !layer.filters;
+        resetFilters.addEventListener("click", () => queueThemeChanges(
+          ["hueDeg", "saturation", "brightness", "contrast", "blurPx"].map((property) => ({
+            kind: "layer", layerId: layer.id, preset: "filters", property, value: null,
+          })),
+          { immediate: true },
+        ));
+        filterGrid.append(resetFilters);
+
         const placementScope = document.createElement("p");
         placementScope.className = "help layer-placement-scope";
         const appearanceScope = appearance === "all" ? tr("appearanceBoth") : appearanceLabel;
@@ -6127,7 +6705,7 @@
         const meta = document.createElement("p");
         meta.className = "layer-meta advanced-only";
         meta.textContent = format(tr("imageBytes"), formatBytes(layer.bytes));
-        body.append(inspectorTitle, sharedGrid, placementScope, actions,
+        body.append(inspectorTitle, sharedGrid, filterGrid, placementScope, actions,
           renderFrame(layer, "normal", gated), renderFrame(layer, "wide", gated), meta);
         card.append(cardSummary, body);
         layerList.appendChild(card);
@@ -6162,8 +6740,8 @@
       const target = field === "greetingPreferences" ? "interface.greeting"
         : field.startsWith("launcher.") ? "widgets.app-identity"
         : field.startsWith("layers[") || field.startsWith("budget.layer") ? "background.layer"
-          : field === "shared.backgroundScope" ? "background.canvas"
-            : field.startsWith("shared.prompt.") ? "interface.new-chat-area"
+          : field === "shared.backgroundScope" ? "background.layer"
+            : field.startsWith("shared.prompt.") ? "interface.prompt-block"
               : "interface.theme";
       setInspectorTarget(target);
       return direct;
@@ -6327,6 +6905,14 @@
       if (replaceLauncherMarkButton) {
         replaceLauncherMarkButton.disabled = builtInLayout || busy || blocked;
       }
+      if (replaceSidebarIdentityButton) {
+        replaceSidebarIdentityButton.disabled = builtInLayout || busy || blocked;
+      }
+      for (const { input, textInput, reset } of surfaceControlNodes.values()) {
+        input.disabled = builtInLayout || busy || blocked;
+        if (textInput) textInput.disabled = builtInLayout || busy || blocked;
+        if (builtInLayout || busy || blocked) reset.disabled = true;
+      }
       if (greetingResetButton) greetingResetButton.disabled = builtInLayout || busy || blocked;
       syncGreetingWordControls();
       syncGreetingFrameControls();
@@ -6348,6 +6934,7 @@
       validPill.dataset.state = state.feedback.valid ? "valid" : "invalid";
       syncModeInputs();
       reflectTokens();
+      reflectSurfaceControls();
       reflectShared();
       reflectGreeting();
       reflectLauncher();
@@ -6398,10 +6985,14 @@
         }
         const successMessage = settledAction === "pick-theme-launcher-mark"
           ? tr("launcherMarkImported")
+          : settledAction === "pick-sidebar-identity-mark"
+            ? tr("sidebarIdentityMarkImported")
           : settledAction === "pick-instant-prompt-icon"
             ? tr("instantPromptIconImported") : tr("editorReady");
         const failureMessage = settledAction === "pick-theme-launcher-mark"
           ? tr(actionError === "identity-apply-failed" ? "launcherMarkApplyFailed" : "launcherMarkFailed")
+          : settledAction === "pick-sidebar-identity-mark"
+            ? tr("sidebarIdentityMarkFailed")
           : settledAction === "pick-instant-prompt-icon"
             ? tr("instantPromptIconFailed") : tr("editorActionFailed");
         announce(succeeded ? successMessage : failureMessage, succeeded ? "ok" : "error");
@@ -6724,6 +7315,7 @@
       syncModeInputs();
       selectStageMirror();
       reflectTokens();
+      reflectSurfaceControls();
       reflectGreeting();
       refreshInspectorContext();
       renderStage();
@@ -6884,6 +7476,7 @@
       }
     }
     replaceLauncherMarkButton?.addEventListener("click", requestLauncherMark);
+    replaceSidebarIdentityButton?.addEventListener("click", requestSidebarIdentityMark);
     scopeInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
       setBackgroundScope(input.value);
@@ -6930,6 +7523,21 @@
         }
         commitStagePaths(STAGE_PROMPT_PATHS);
       });
+    });
+    promptResetInheritedButton?.addEventListener("click", () => {
+      const axis = greetingFrameId();
+      const mapping = Object.entries(promptFrameProperty);
+      for (const [key, property] of mapping) {
+        setStageOverride(`interfaceSurfaces.promptBlock.frame.${axis}.${property}`, null);
+        setStageOverride(`shared.prompt.${key}`, state.shared.prompt[key]);
+      }
+      inspectorField = "shared.prompt";
+      queueThemeChanges(mapping.map(([, property]) => ({
+        kind: "surface", target: "promptBlock", slot: "frame", axis, property, value: null,
+      })), { immediate: true });
+      reflectShared();
+      refreshInspectorContext();
+      renderStage();
     });
     const clearGreetingFrameOverrides = () => {
       for (const path of [...stageOverrides.keys()]) {
@@ -7526,7 +8134,9 @@
       isActive: () => Boolean(state),
       normalizeEditorState,
       normalizeStudioStyle,
+      normalizeInterfaceSurfaces,
       capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
+      registeredViews: REGISTERED_VIEW_IDS,
     });
   }
 
@@ -7534,6 +8144,7 @@
     createController,
     normalizeEditorState,
     normalizeStudioStyle,
+    normalizeInterfaceSurfaces,
     normalizeOverlayMessage,
     normalizeOverlaySelection,
     normalizeOverlayState,
@@ -7548,5 +8159,6 @@
     greetingResyncCaughtUp,
     patchResyncDecision,
     capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
+    registeredViews: REGISTERED_VIEW_IDS,
   });
 })();

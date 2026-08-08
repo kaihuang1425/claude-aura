@@ -40,6 +40,10 @@ import {
   createInertCodeAdapter,
 } from "./code-adapter.mjs";
 import { createInstantPromptController } from "./instant-prompts.mjs";
+import {
+  promptFrameOverrides,
+  renderInterfaceSurfacesCss,
+} from "./surface-overrides.mjs";
 
 // Marks the strippable WO-21 greeting subsystem inside the renderer template, and the
 // nested custom-phrases sub-block that native-greeting-only themes do not need.
@@ -239,41 +243,128 @@ const RUNTIME_SETTING_ALIASES = Object.freeze([
   ["avatarDataUrl", "A"],
 ]);
 
-export const RENDERER_CSS_DICTIONARY = Object.freeze([
-  "html.claude-aura",
-  "[data-claude-aura-",
-  "hsl(var(--aura-",
-  "var(--aura-",
-  "!important",
-  "#claude-aura-backdrop",
-  "background-",
-  "border-",
-]);
-const RENDERER_CSS_SENTINEL_START = 0xE000;
+const RENDERER_CSS_SENTINEL_START = 0x0100;
+const RENDERER_CSS_DICTIONARY_LIMIT = 512;
+const RENDERER_CSS_CACHE_LIMIT = 24;
+const rendererCssCompressionCache = new Map();
+
+function rememberRendererCssCompression(source, result) {
+  if (rendererCssCompressionCache.size >= RENDERER_CSS_CACHE_LIMIT) {
+    rendererCssCompressionCache.delete(rendererCssCompressionCache.keys().next().value);
+  }
+  const remembered = Object.freeze(result.compressed
+    ? { ...result, dictionary: Object.freeze(result.dictionary) }
+    : result);
+  rendererCssCompressionCache.set(source, remembered);
+  return remembered;
+}
+
+function rendererCssTokens(source) {
+  const tokens = [];
+  for (let index = 0; index < source.length;) {
+    const character = source[index];
+    if (character === '"' || character === "'") {
+      let end = index + 1;
+      while (end < source.length) {
+        if (source[end] === "\\") {
+          end += 2;
+        } else if (source[end] === character) {
+          end += 1;
+          break;
+        } else {
+          end += 1;
+        }
+      }
+      tokens.push(source.slice(index, end));
+      index = end;
+      continue;
+    }
+    const word = /^[A-Za-z0-9_#.%\-]+/.exec(source.slice(index));
+    if (word) {
+      tokens.push(word[0]);
+      index += word[0].length;
+      continue;
+    }
+    tokens.push(character);
+    index += 1;
+  }
+  return tokens;
+}
+
+function rendererCssJsonContentBytes(value) {
+  return Buffer.byteLength(JSON.stringify(value), "utf8") - 2;
+}
 
 export function compressRendererCss(source) {
   if (typeof source !== "string") throw new TypeError("Renderer CSS must be a string");
-  const sentinels = RENDERER_CSS_DICTIONARY.map((_, index) =>
-    String.fromCharCode(RENDERER_CSS_SENTINEL_START + index));
-  if (sentinels.some((sentinel) => source.includes(sentinel))) {
-    return { css: source, compressed: false };
+  const cached = rendererCssCompressionCache.get(source);
+  if (cached) return cached;
+  const sentinelEnd = RENDERER_CSS_SENTINEL_START + RENDERER_CSS_DICTIONARY_LIMIT;
+  if (source.includes("\u0000") || [...source].some((character) => {
+    const code = character.charCodeAt(0);
+    return code >= RENDERER_CSS_SENTINEL_START && code < sentinelEnd;
+  })) {
+    return rememberRendererCssCompression(source, { css: source, compressed: false });
   }
-  const css = RENDERER_CSS_DICTIONARY.reduce(
-    (result, entry, index) => result.replaceAll(entry, sentinels[index]),
-    source,
-  );
-  return Buffer.byteLength(css, "utf8") < Buffer.byteLength(source, "utf8")
-    ? { css, compressed: true }
-    : { css: source, compressed: false };
+  let tokens = rendererCssTokens(source);
+  const dictionary = [];
+  while (dictionary.length < RENDERER_CSS_DICTIONARY_LIMIT) {
+    const pairs = new Map();
+    for (let index = 0; index + 1 < tokens.length; index += 1) {
+      const key = `${tokens[index]}\u0000${tokens[index + 1]}`;
+      pairs.set(key, (pairs.get(key) ?? 0) + 1);
+    }
+    let best = null;
+    for (const [key, rawCount] of pairs) {
+      const separator = key.indexOf("\u0000");
+      const left = key.slice(0, separator);
+      const right = key.slice(separator + 1);
+      const count = left === right ? Math.floor(rawCount / 2) : rawCount;
+      if (count < 2) continue;
+      const entry = left + right;
+      const sentinel = String.fromCharCode(RENDERER_CSS_SENTINEL_START + dictionary.length);
+      const gain = count * (
+        rendererCssJsonContentBytes(entry) - rendererCssJsonContentBytes(sentinel)
+      ) - Buffer.byteLength(JSON.stringify(entry), "utf8") - 1;
+      if (gain > 0 && (!best || gain > best.gain || (gain === best.gain && key < best.key))) {
+        best = { entry, gain, key, left, right, sentinel };
+      }
+    }
+    if (!best) break;
+    const next = [];
+    for (let index = 0; index < tokens.length;) {
+      if (index + 1 < tokens.length
+          && tokens[index] === best.left
+          && tokens[index + 1] === best.right) {
+        next.push(best.sentinel);
+        index += 2;
+      } else {
+        next.push(tokens[index]);
+        index += 1;
+      }
+    }
+    tokens = next;
+    dictionary.push(best.entry);
+  }
+  const css = tokens.join("");
+  const compressedBytes = Buffer.byteLength(JSON.stringify(css), "utf8")
+    + Buffer.byteLength(JSON.stringify(dictionary), "utf8") + 5;
+  if (dictionary.length === 0 || compressedBytes >= Buffer.byteLength(JSON.stringify(source), "utf8")) {
+    return rememberRendererCssCompression(source, { css: source, compressed: false });
+  }
+  return rememberRendererCssCompression(source, { css, compressed: true, dictionary });
 }
 
-export function expandRendererCss(source) {
+export function expandRendererCss(source, dictionary = []) {
   if (typeof source !== "string") throw new TypeError("Renderer CSS must be a string");
-  return source.replace(
-    /[\uE000-\uE007]/gu,
-    (sentinel) =>
-      RENDERER_CSS_DICTIONARY[sentinel.charCodeAt(0) - RENDERER_CSS_SENTINEL_START],
-  );
+  if (!Array.isArray(dictionary) || dictionary.some((entry) => typeof entry !== "string")) {
+    throw new TypeError("Renderer CSS dictionary must be an array of strings");
+  }
+  let css = source;
+  for (let index = dictionary.length - 1; index >= 0; index -= 1) {
+    css = css.replaceAll(String.fromCharCode(RENDERER_CSS_SENTINEL_START + index), dictionary[index]);
+  }
+  return css;
 }
 
 function greetingUsesCompactMark(style) {
@@ -982,13 +1073,14 @@ export async function compileTheme({
     renderThemePrimitives(theme),
   ].join("\n\n");
   const greetingCss = renderGreetingCss(theme.newChatGreetingStyle);
+  const interfaceCss = renderInterfaceSurfacesCss(theme.interfaceSurfaces);
   // Personal avatar overlay rules ride along only when an avatar is set, so the
   // common payload carries none of their bytes (the reserve ceiling is tight).
   const avatarCss = avatar ? AVATAR_OVERLAY_CSS : "";
   const activeBaseCss = instantPrompts.length
     ? baseCss
     : baseCss.replace(INSTANT_PROMPTS_CSS_PATTERN, "");
-  const css = `${variableCss}\n\n${activeBaseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${greetingCss ? `\n${greetingCss}\n` : ""}${avatarCss ? `\n${avatarCss}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
+  const css = `${variableCss}\n\n${activeBaseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${greetingCss ? `\n${greetingCss}\n` : ""}${interfaceCss ? `\n${interfaceCss}\n` : ""}${avatarCss ? `\n${avatarCss}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
     .replace(/^[ \t]+/gm, "");
   const settingsBase = {
     version: AURA_VERSION,
@@ -1019,6 +1111,7 @@ export async function compileTheme({
         mobile: layer.mobile,
         opacity: layer.opacity,
         mask: layer.mask,
+        ...(layer.filters ? { filters: cloneJson(layer.filters) } : {}),
         role: layer.role,
         ...(layer.appearance ? { appearance: layer.appearance } : {}),
         contextOverrides: layer.contextOverrides ?? layer.legacy?.contextOverrides ?? null,
@@ -1038,10 +1131,20 @@ export async function compileTheme({
         darkDataUrl: brandWordmark.darkDataUrl,
         minWidth: brandWordmark.minWidth,
         width: brandWordmark.width,
+        kind: brandWordmark.kind,
+        lightMinWidth: brandWordmark.lightMinWidth,
+        lightWidth: brandWordmark.lightWidth,
+        darkMinWidth: brandWordmark.darkMinWidth,
+        darkWidth: brandWordmark.darkWidth,
+        lightKind: brandWordmark.lightKind,
+        darkKind: brandWordmark.darkKind,
+        lightTreatment: brandWordmark.lightTreatment,
+        darkTreatment: brandWordmark.darkTreatment,
       }
       : null,
     backgroundScope: theme.backgroundScope ?? "full-window",
     newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,
+    promptFrames: promptFrameOverrides(theme.interfaceSurfaces, theme.newChatLayout),
     instantPrompts,
     reduceMotion: config.reduceMotion,
   };
@@ -1219,12 +1322,19 @@ export async function buildPayloadFromCompiled(compiled, {
   }
   if (runtimeSettings.brandWordmark) {
     const wordmark = runtimeSettings.brandWordmark;
+    const kinds = [wordmark.lightKind ?? wordmark.kind, wordmark.darkKind ?? wordmark.kind]
+      .map((kind) => kind === "local" ? "m" : "w");
+    const treatments = [wordmark.lightTreatment, wordmark.darkTreatment]
+      .map((treatment) => treatment === "foreground" ? "f" : treatment === "accent" ? "a" : "o");
     runtimeSettings.b = [
       wordmark.lightDataUrl,
       wordmark.darkDataUrl,
-      wordmark.minWidth,
-      wordmark.width,
+      [wordmark.lightMinWidth ?? wordmark.minWidth, wordmark.lightWidth ?? wordmark.width],
+      [wordmark.darkMinWidth ?? wordmark.minWidth, wordmark.darkWidth ?? wordmark.width],
     ];
+    if (kinds.includes("m") || treatments.some((treatment) => treatment !== "o")) {
+      runtimeSettings.b.push(kinds, treatments);
+    }
     delete runtimeSettings.brandWordmark;
   }
   if (runtimeSettings.personalWordmark) {
@@ -1257,6 +1367,13 @@ export async function buildPayloadFromCompiled(compiled, {
       if (layer.mobile !== "reduce") compact.m = layer.mobile[0];
       if (layer.opacity !== null) compact.o = layer.opacity;
       if (layer.mask === "none") compact.k = "n";
+      if (layer.filters) compact.f = [
+        layer.filters.hueDeg ?? 0,
+        layer.filters.saturation ?? 1,
+        layer.filters.brightness ?? 1,
+        layer.filters.contrast ?? 1,
+        layer.filters.blurPx ?? 0,
+      ];
       if (layer.role !== "decoration") compact.r = layer.role[0];
       if (layer.appearance && layer.appearance !== "all") compact.a = layer.appearance[0];
       if (layer.contextOverrides) {
@@ -1328,11 +1445,19 @@ export async function buildPayloadFromCompiled(compiled, {
     if (urls.length) runtimeSettings.u = urls;
   }
   delete runtimeSettings.instantPrompts;
-  if (runtimeSettings.newChatLayout) {
+  if (runtimeSettings.promptFrames) {
+    const frames = runtimeSettings.promptFrames;
+    runtimeSettings.n = [frames.standard, frames.wide].map((layout) => [
+      layout.widthRatio, layout.offsetXRatio, layout.offsetYRatio,
+    ]);
+    delete runtimeSettings.promptFrames;
+    delete runtimeSettings.newChatLayout;
+  } else if (runtimeSettings.newChatLayout) {
     const layout = runtimeSettings.newChatLayout;
     runtimeSettings.n = [layout.widthRatio, layout.offsetXRatio, layout.offsetYRatio];
     delete runtimeSettings.newChatLayout;
   }
+  delete runtimeSettings.promptFrames;
   pruneRuntimeSettingDefaults(runtimeSettings);
   compactRuntimeSettings(runtimeSettings);
   let compactCss = "";
@@ -1400,7 +1525,7 @@ export async function buildPayloadFromCompiled(compiled, {
   compactCss = compactCss.trim();
   const compressedCss = compressRendererCss(compactCss);
   compactCss = compressedCss.css;
-  if (compressedCss.compressed) runtimeSettings.C = 1;
+  if (compressedCss.compressed) runtimeSettings.C = compressedCss.dictionary;
   // Conditional markers and explanatory comments have done their build-time
   // job. Do not carry them into every injected payload.
   template = template.replace(/\/\*[\s\S]*?\*\//g, "");

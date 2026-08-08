@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "Ein Theme mit dem Namen {0} ist bereits installiert.",
   "chooseThemeLayerImageTitle": "Theme-Grafik auswählen",
   "chooseThemeLauncherMarkTitle": "App-Marke auswählen",
+  "chooseSidebarIdentityMarkTitle": "Symbol der Seitenleisten-Identität auswählen",
   "themeCopyReady": "Theme-Kopie ist zur Anpassung bereit.",
   "themeEditReady": "Theme-Editor ist bereit.",
   "themeLayerImageImported": "Grafik wurde importiert.",

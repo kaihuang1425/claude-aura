@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "已安裝名為{0}的主題。",
   "chooseThemeLayerImageTitle": "選擇主題圖片",
   "chooseThemeLauncherMarkTitle": "選擇 App 識別圖",
+  "chooseSidebarIdentityMarkTitle": "選擇側邊欄識別圖示",
   "themeCopyReady": "主題副本已可自訂。",
   "themeEditReady": "主題編輯器已就緒。",
   "themeLayerImageImported": "圖片已匯入。",

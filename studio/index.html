@@ -686,7 +686,25 @@
         </div>
       </section>
 
-      <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.sidebar-wordmark" data-personal-wordmark-panel aria-labelledby="editor-personal-wordmark-title">
+      <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.sidebar" aria-labelledby="editor-sidebar-surface-title">
+        <h2 id="editor-sidebar-surface-title" data-editor-i18n="targetSidebar">Sidebar</h2>
+        <p class="help" data-editor-i18n="sidebarSurfaceHelp">Style Claude's existing sidebar roles without replacing its controls or structure.</p>
+        <div id="editor-sidebar-surface-controls" class="surface-control-grid"></div>
+      </section>
+
+      <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.sidebar-identity" aria-labelledby="editor-sidebar-identity-title">
+        <h2 id="editor-sidebar-identity-title" data-editor-i18n="targetSidebarIdentity">Sidebar identity</h2>
+        <p class="help" data-editor-i18n="sidebarIdentityHelp">Keep Claude's link, accessible name, and visible label while changing only its local visual treatment.</p>
+        <div class="editor-sidebar-identity-preview" role="img" data-editor-i18n-aria-label="sidebarIdentityPreview" aria-label="Sidebar identity preview">
+          <img id="editor-sidebar-identity-image" alt="" draggable="false" hidden>
+          <span id="editor-sidebar-identity-label">Claude</span>
+        </div>
+        <button type="button" id="editor-sidebar-identity-replace" class="ghost-button" data-editor-i18n="replaceSidebarIdentityMark">Choose local mark</button>
+        <p class="help" data-editor-i18n="sidebarIdentityAssetHelp">Static transparent PNG, exactly 96 × 96 px and smaller than 400 KB.</p>
+        <div id="editor-sidebar-identity-controls" class="surface-control-grid"></div>
+      </section>
+
+      <section class="editor-section advanced-only" data-editor-branch="interface" data-editor-targets="interface.sidebar-identity" data-personal-wordmark-panel aria-labelledby="editor-personal-wordmark-title">
         <h2 id="editor-personal-wordmark-title" data-i18n="wordmarkTitle">Sidebar wordmark</h2>
         <p class="lede" data-i18n="wordmarkLede">Customize the logo shown at the top of Claude's expanded sidebar. It stays on this device and keeps Claude's original link and accessible name.</p>
         <div id="editor-personal-wordmark-current" class="personal-wordmark-current" data-personal-wordmark-current hidden>
@@ -779,7 +797,7 @@
         <p id="editor-instant-prompt-empty" class="editor-layer-empty" data-editor-i18n="instantPromptEmpty">No instant prompts yet. Add one to create a reusable prompt ticket.</p>
       </section>
 
-      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="editor-background-title">
+      <section id="editor-background-scope-section" class="editor-section" data-editor-branch="background" data-editor-targets="background.layer" aria-labelledby="editor-background-title">
         <h2 id="editor-background-title" data-editor-i18n="themeBackground">Theme background</h2>
         <fieldset class="editor-inline-fieldset">
           <legend data-editor-i18n="backgroundScope">Background scope</legend>
@@ -790,7 +808,7 @@
         <p id="background-scope-help" class="help"></p>
       </section>
 
-      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="editor-layers-title">
+      <section class="editor-section" data-editor-branch="background" data-editor-targets="background.layer" aria-labelledby="editor-layers-title">
         <div class="editor-section-head">
           <div>
             <h2 id="editor-layers-title" data-editor-i18n="artworkLayers">Images</h2>
@@ -813,7 +831,13 @@
         <div id="editor-layer-list" class="editor-layer-list"></div>
       </section>
 
-      <section class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface.new-chat-area" aria-labelledby="editor-prompt-title">
+      <section class="editor-section editor-prompt-material" data-editor-branch="interface" data-editor-targets="interface.prompt-block" aria-labelledby="editor-prompt-material-title">
+        <h2 id="editor-prompt-material-title" data-editor-i18n="targetPromptBlock">Prompt block</h2>
+        <p class="help" data-editor-i18n="promptBlockHelp">Style the native prompt shell, editor, toolbar, and supported controls. Conversation keeps its native position.</p>
+        <div id="editor-prompt-surface-controls" class="surface-control-grid"></div>
+      </section>
+
+      <section class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface.prompt-block" aria-labelledby="editor-prompt-title">
         <h2 id="editor-prompt-title" data-editor-i18n="promptPlacement">New chat area</h2>
         <p class="help" data-editor-i18n="promptPlacementHelp">Drag it in the preview or use these controls. Light and Dark share this position; Conversation composers never move.</p>
         <p id="editor-prompt-native" class="editor-inherited-note" data-editor-i18n="nativePromptHelp" hidden>Using Claude's current layout. Your first adjustment adopts the measured live size and position.</p>
@@ -839,6 +863,9 @@
               <input id="editor-prompt-y-exact" class="prompt-exact-value" type="number" min="-30" max="30" step="1" inputmode="decimal" aria-labelledby="editor-prompt-y-label" data-editor-prompt-exact="y" data-editor-focus="prompt-y-exact" data-editor-field="shared.prompt.y">
             </span>
           </div>
+        </div>
+        <div class="editor-greeting-reset-row">
+          <button type="button" id="editor-prompt-reset-inherited" class="ghost-button" data-editor-i18n="resetToInherited">Reset to inherited</button>
         </div>
       </section>
 
@@ -956,7 +983,7 @@
         </div>
       </section>
 
-      <section class="editor-section editor-prompt-unavailable" data-editor-branch="interface" data-editor-targets="interface.new-chat-area" aria-labelledby="editor-conversation-layout-title" hidden>
+      <section class="editor-section editor-prompt-unavailable" data-editor-branch="interface" data-editor-targets="interface.prompt-block" aria-labelledby="editor-conversation-layout-title" hidden>
         <h2 id="editor-conversation-layout-title" data-editor-i18n="conversationLayout">Conversation layout</h2>
         <p class="help" data-editor-i18n="conversationLayoutHelp">Conversation uses Claude's live composer position. Choose New chat above to edit the movable new-chat area.</p>
         <button type="button" id="editor-switch-supported-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
@@ -968,7 +995,7 @@
         <button type="button" id="editor-greeting-switch-preview" class="ghost-button" data-editor-i18n="switchPreview">Switch preview</button>
       </section>
 
-      <section class="editor-section editor-guide-section advanced-only" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="asset-guide-title">
+      <section class="editor-section editor-guide-section advanced-only" data-editor-branch="background" data-editor-targets="background.layer" aria-labelledby="asset-guide-title">
         <h2 id="asset-guide-title" data-editor-i18n="assetGuide">Asset and safe-zone guide</h2>
         <p class="editor-guide-notice" data-editor-i18n="guideOnlyNotice">Guide only — this is not a Claude preview. Review the saved theme in the actual Aura window.</p>
         <figure class="asset-guide" aria-describedby="asset-guide-caption">

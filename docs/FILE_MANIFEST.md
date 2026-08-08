@@ -329,6 +329,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/theme-core/instant-prompts.mjs`
 - `scripts/theme-core/registry.mjs`
 - `scripts/theme-core/studio.mjs`
+- `scripts/theme-core/surface-overrides.mjs`
 - `scripts/theme-core/terminal.mjs`
 - `scripts/theme-core/validation.mjs`
 - `scripts/verify-cycle.mjs`
@@ -354,6 +355,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/prepaint.test.mjs`
 - `tests/run-tests.mjs`
 - `tests/studio-editor.test.mjs`
+- `tests/surface-overrides.test.mjs`
 - `tests/support/context.mjs`
 - `tests/support/harness.mjs`
 - `tests/terminal-theme.test.mjs`

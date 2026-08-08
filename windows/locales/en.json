@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "A theme named {0} is already installed.",
   "chooseThemeLayerImageTitle": "Choose theme artwork",
   "chooseThemeLauncherMarkTitle": "Choose app mark",
+  "chooseSidebarIdentityMarkTitle": "Choose sidebar identity mark",
   "themeCopyReady": "Theme copy is ready to customize.",
   "themeEditReady": "Theme editor is ready.",
   "themeLayerImageImported": "Artwork was imported.",

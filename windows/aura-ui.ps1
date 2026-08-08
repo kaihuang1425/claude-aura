@@ -5836,6 +5836,10 @@ function Assert-AuraUiStudioEditorPublicValue {
         $text -cnotmatch '^https://aura\.(assets/(default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)/launcher-mark\.png|editor/active/launcher-[a-f0-9]{64}\.png)$') {
       throw 'Aura Studio editor state contains an invalid launcher preview URL.'
     }
+    if ($Name -cin @('identityPreviewUrl', 'identityStylePreviewUrl') -and
+        $text -cnotmatch '^https://aura\.editor/active/identity-[a-f0-9]{64}\.png$') {
+      throw 'Aura Studio editor state contains an invalid sidebar identity preview URL.'
+    }
     return
   }
   if ($Value -is [System.Collections.IEnumerable] -and
@@ -5871,7 +5875,8 @@ function ConvertTo-AuraUiStudioEditorState {
   $allowed = @(
     'active', 'id', 'sourceId', 'source', 'isNew', 'editKind', 'session', 'revision', 'dirty',
     'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
-    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
+    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'interfaceSurfaces', 'interfaceStyle',
+    'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
     'lastAction', 'actionSucceeded', 'error')
   $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($name in $actual) {
@@ -5885,7 +5890,8 @@ function ConvertTo-AuraUiStudioEditorState {
     $required = @(
       'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
       'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
-      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback')
+      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'interfaceSurfaces', 'interfaceStyle',
+      'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback')
     foreach ($name in $required) {
       if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
     }
@@ -5960,6 +5966,19 @@ function ConvertTo-AuraUiStudioEditorState {
     foreach ($name in @('launcherPreviewUrl', 'launcherStylePreviewUrl')) {
       if ($State.$name -isnot [string] -or
           $State.$name -cnotmatch '^https://aura\.(assets/(default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)/launcher-mark\.png|editor/active/launcher-[a-f0-9]{64}\.png)$') {
+        throw "Aura Studio editor state has an invalid $name."
+      }
+    }
+    foreach ($name in @('identityPreviewUrl', 'identityStylePreviewUrl')) {
+      if ($null -ne $State.$name -and
+          ($State.$name -isnot [string] -or
+            $State.$name -cnotmatch '^https://aura\.editor/active/identity-[a-f0-9]{64}\.png$')) {
+        throw "Aura Studio editor state has an invalid $name."
+      }
+    }
+    foreach ($name in @('interfaceSurfaces', 'interfaceStyle')) {
+      if ($null -ne $State.$name -and
+          $State.$name -isnot [System.Management.Automation.PSCustomObject]) {
         throw "Aura Studio editor state has an invalid $name."
       }
     }
@@ -6039,7 +6058,7 @@ function ConvertTo-AuraUiStudioEditorState {
   if ($null -ne $State.PSObject.Properties['lastAction'] -and $null -ne $State.lastAction -and
       ($State.lastAction -isnot [string] -or $State.lastAction -cnotin @(
         'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-        'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
+        'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
         'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
         'delete-user-theme', 'set-greeting-phrases', 'reset-greeting'))) {
     throw 'Aura Studio editor state has an invalid last action.'
@@ -6196,6 +6215,7 @@ function Get-AuraUiStudioEditorStatus {
       'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageFailed)" }
       'pick-instant-prompt-icon' { return "$($script:UiCopy.themeLayerImageFailed)" }
       'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
+      'pick-sidebar-identity-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
       default { return "$($script:UiCopy.themeEditFailed)" }
     }
   }
@@ -6205,6 +6225,7 @@ function Get-AuraUiStudioEditorStatus {
     'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageImported)" }
     'pick-instant-prompt-icon' { return "$($script:UiCopy.themeLayerImageImported)" }
     'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
+    'pick-sidebar-identity-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
     'save-theme-edit' { return "$($script:UiCopy.themeEditSaved)" }
     'discard-theme-edit' { return "$($script:UiCopy.themeEditDiscarded)" }
     'delete-user-theme' { return "$($script:UiCopy.themeDeleted)" }
@@ -6631,13 +6652,16 @@ function Assert-AuraUiEditorOverlaySelection {
       $Selection.kind -cnotin @('interface', 'background', 'widget') -or
       $Selection.targetId -isnot [string] -or
       $Selection.targetId -cnotin @(
-        'interface.theme', 'interface.new-chat-area', 'interface.greeting', 'background.layer',
+        'interface.theme', 'interface.sidebar', 'interface.sidebar-identity', 'interface.prompt-block',
+        'interface.greeting', 'background.layer',
         'widgets.instant-prompts')) {
     throw 'Aura window editor selection has an invalid shape.'
   }
   $typedTarget = switch -CaseSensitive ($Selection.kind) {
     'interface' {
-      $Selection.targetId -in @('interface.theme', 'interface.new-chat-area', 'interface.greeting')
+      $Selection.targetId -in @(
+        'interface.theme', 'interface.sidebar', 'interface.sidebar-identity',
+        'interface.prompt-block', 'interface.greeting')
       break
     }
     'background' { $Selection.targetId -ceq 'background.layer'; break }
@@ -6683,13 +6707,18 @@ function Assert-AuraUiEditorOverlaySelection {
       Assert-AuraUiEditorOverlayGreetingGeometry -Geometry $Selection.geometry
       return
     }
-    if ($Selection.targetId -cnotin @('interface.theme', 'interface.new-chat-area') -or
+    if ($Selection.targetId -cnotin @(
+          'interface.theme', 'interface.sidebar', 'interface.sidebar-identity', 'interface.prompt-block') -or
         $Selection.itemId -isnot [string] -or
         $Selection.itemId -cnotin @(
-          'interface.sidebar', 'interface.composer', 'interface.card',
+          'interface.sidebar', 'interface.sidebar-identity', 'interface.composer', 'interface.card',
           'interface.dialog', 'interface.canvas') -or
-        ($Selection.targetId -ceq 'interface.new-chat-area' -and
-          $Selection.itemId -cne 'interface.composer') -or
+        ($Selection.targetId -ceq 'interface.theme' -and
+          $Selection.itemId -cnotin @('interface.card', 'interface.dialog', 'interface.canvas')) -or
+        ($Selection.targetId -ceq 'interface.sidebar' -and $Selection.itemId -cne 'interface.sidebar') -or
+        ($Selection.targetId -ceq 'interface.sidebar-identity' -and
+          $Selection.itemId -cne 'interface.sidebar-identity') -or
+        ($Selection.targetId -ceq 'interface.prompt-block' -and $Selection.itemId -cne 'interface.composer') -or
         $null -ne $Selection.geometry) {
       throw 'Aura window editor interface target is invalid.'
     }
@@ -6998,6 +7027,51 @@ function Invoke-AuraUiPickThemeLauncherMark {
   }
 }
 
+function Invoke-AuraUiPickThemeSidebarIdentityMark {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  Assert-AuraUiStudioEditorSession -Request $Request
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  $targetPath = $null
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseSidebarIdentityMarkTitle)"
+    $dialog.Filter = 'PNG (*.png)|*.png'
+    $dialog.CheckFileExists = $true
+    $dialog.Multiselect = $false
+    $dialog.RestoreDirectory = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      $script:StudioEditorState['lastAction'] = 'pick-sidebar-identity-mark'
+      $script:StudioEditorState['actionSucceeded'] = $true
+      $script:StudioEditorState['error'] = 'picker-cancelled'
+      Send-AuraUiStudioState -Action 'pick-sidebar-identity-mark' -ActionSucceeded $true
+      return $false
+    }
+    $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
+    if ($sourceItem.PSIsContainer -or
+        ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $sourceItem.Length -le 0 -or $sourceItem.Length -ge 400000) {
+      throw 'The selected sidebar identity must be a regular PNG file smaller than 400 KB.'
+    }
+    $targetPath = Join-Path $StudioEditorImportRoot ('identity-{0}.png' -f [Guid]::NewGuid().ToString('N'))
+    [IO.File]::Copy($sourceItem.FullName, $targetPath, $false)
+    return Invoke-AuraUiStudioEditorRequest -Request $Request -AssetPath $targetPath
+  } finally {
+    $dialog.Dispose()
+    if ($targetPath -and (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+      try {
+        $target = Get-Item -LiteralPath $targetPath -Force
+        if (($target.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
+            [string]::Equals($target.DirectoryName, [IO.Path]::GetFullPath($StudioEditorImportRoot), [StringComparison]::OrdinalIgnoreCase)) {
+          [IO.File]::Delete($target.FullName)
+        }
+      } catch { Write-AuraUiLog -Message "Studio sidebar identity import cleanup failed: $($_.Exception.Message)" }
+    }
+  }
+}
+
 function Invoke-AuraUiRemoveThemeLayer {
   param([Parameter(Mandatory = $true)][object]$Request)
   Assert-AuraUiStudioEditorSession -Request $Request
@@ -7256,7 +7330,7 @@ function Send-AuraUiStudioState {
       'set-personal-wordmark', 'clear-personal-wordmark', 'set-personal-wordmark-framing',
       'export-terminal-themes',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
+      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')][string]$Action = '',
     [bool]$ActionSucceeded = $true,
@@ -9180,9 +9254,23 @@ function Assert-AuraUiStudioEditorMessage {
     }
     'set-theme-layer' {
       [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
-      if ($Message.preset -isnot [string] -or $Message.preset -cnotin @('shared', 'normal', 'wide') -or
+      if ($Message.preset -isnot [string] -or $Message.preset -cnotin @('shared', 'normal', 'wide', 'filters') -or
           $Message.property -isnot [string]) {
         throw 'Aura Studio layer preset or property is invalid.'
+      }
+      if ($Message.preset -ceq 'filters') {
+        if ($Message.property -cnotin @('hueDeg', 'saturation', 'brightness', 'contrast', 'blurPx')) {
+          throw 'Aura Studio layer filter property is invalid.'
+        }
+        if ($null -eq $Message.value) { return }
+        switch -CaseSensitive ($Message.property) {
+          'hueDeg' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum -180 -Maximum 180 -Label 'Theme layer hue'); break }
+          'saturation' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 2 -Label 'Theme layer saturation'); break }
+          'brightness' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.5 -Maximum 1.5 -Label 'Theme layer brightness'); break }
+          'contrast' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0.5 -Maximum 1.5 -Label 'Theme layer contrast'); break }
+          'blurPx' { [void](ConvertTo-AuraUiStudioNumber -Value $Message.value -Minimum 0 -Maximum 24 -Label 'Theme layer blur'); break }
+        }
+        return
       }
       if ($Message.preset -ceq 'shared') {
         switch -CaseSensitive ($Message.property) {
@@ -9241,6 +9329,7 @@ function Assert-AuraUiStudioEditorMessage {
       if ($changes.Count -lt 1 -or $changes.Count -gt 16) {
         throw 'Aura Studio theme patches must contain between 1 and 16 changes.'
       }
+      $surfacePatchTarget = $null
       foreach ($change in $changes) {
         if ($change -isnot [System.Management.Automation.PSCustomObject] -or
             $change.kind -isnot [string]) {
@@ -9427,6 +9516,96 @@ function Assert-AuraUiStudioEditorMessage {
             [void](ConvertTo-AuraUiStudioNumber -Value $value.markScale -Minimum 0.5 -Maximum 1.5 -Label 'Greeting mark size')
             break
           }
+          'surface' {
+            if (-not (Test-AuraUiStudioExactProperties -Message $change `
+                  -Names @('kind', 'target', 'slot', 'axis', 'property', 'value')) -or
+                $change.target -isnot [string] -or
+                $change.target -cnotin @('sidebar', 'sidebarIdentity', 'promptBlock') -or
+                $change.slot -isnot [string] -or
+                $change.slot -cnotin @('base', 'appearance', 'frame') -or
+                $change.property -isnot [string]) {
+              throw 'Aura Studio interface surface patches have an invalid shape.'
+            }
+            if ($null -ne $surfacePatchTarget -and
+                -not [string]::Equals([string]$surfacePatchTarget, [string]$change.target, [StringComparison]::Ordinal)) {
+              throw 'Aura Studio theme patches may edit only one interface surface.'
+            }
+            $surfacePatchTarget = [string]$change.target
+            if ($change.slot -ceq 'base') {
+              if ($null -ne $change.axis) { throw 'Aura Studio shared surface patches require a null axis.' }
+            } elseif ($change.slot -ceq 'appearance') {
+              if ($change.axis -isnot [string] -or $change.axis -cnotin @('light', 'dark')) {
+                throw 'Aura Studio appearance surface patches require Light or Dark.'
+              }
+            } else {
+              if ($change.target -cne 'promptBlock' -or
+                  $change.axis -isnot [string] -or $change.axis -cnotin @('standard', 'wide')) {
+                throw 'Aura Studio frame surface patches require a prompt Standard or Wide frame.'
+              }
+            }
+            $surfaceProperties = switch -CaseSensitive ($change.target) {
+              'sidebar' { @(
+                'surface', 'primaryText', 'secondaryText', 'selectedSurface', 'indicator', 'font',
+                'primaryActionSurface', 'primaryActionForeground', 'rowHoverSurface', 'rowPressedSurface',
+                'selectedRowSurface', 'sectionLabel', 'sectionRule', 'footerSurface', 'rowRadius', 'spacing') }
+              'sidebarIdentity' { @(
+                'mode', 'font', 'weight', 'fontSize', 'letterSpacing', 'color', 'markSize',
+                'markTreatment', 'markDigest') }
+              'promptBlock' { @(
+                'surface', 'foreground', 'placeholder', 'border', 'focus', 'font', 'radius', 'borderWidth',
+                'blurPx', 'shadow', 'editorInset', 'toolbarSurface', 'controlForeground', 'controlResting',
+                'controlHover', 'controlPressed', 'controlSelected', 'controlDisabled',
+                'widthRatio', 'offsetXRatio', 'offsetYRatio') }
+            }
+            if ($change.property -cnotin $surfaceProperties) {
+              throw 'Aura Studio interface surface property is not allowed.'
+            }
+            if ($change.slot -ceq 'frame' -and
+                $change.property -cnotin @('widthRatio', 'offsetXRatio', 'offsetYRatio')) {
+              throw 'Aura Studio prompt frame property is not allowed.'
+            }
+            if ($change.slot -cne 'frame' -and
+                $change.property -cin @('widthRatio', 'offsetXRatio', 'offsetYRatio')) {
+              throw 'Aura Studio prompt geometry belongs to a named frame.'
+            }
+            if ($null -eq $change.value) { break }
+            if ($change.property -cmatch '(?i)(surface|text|foreground|indicator|label|rule|color|placeholder|border|focus|resting|hover|pressed|selected|disabled)$') {
+              if ($change.value -isnot [string] -or $change.value -cnotmatch '^#[0-9A-F]{6}$') {
+                throw 'Aura Studio interface colours must be uppercase six-digit hex values.'
+              }
+              break
+            }
+            switch -CaseSensitive ($change.property) {
+              'font' {
+                if ($change.value -isnot [string] -or
+                    $change.value -cnotin @('system-sans', 'humanist-sans', 'rounded-sans', 'editorial-serif')) {
+                  throw 'Aura Studio interface font is invalid.'
+                }
+              }
+              'spacing' { if ($change.value -cnotin @('compact', 'comfortable')) { throw 'Aura Studio sidebar spacing is invalid.' } }
+              'mode' { if ($change.value -cnotin @('native', 'inherited-builtin', 'styled-label', 'local-mark')) { throw 'Aura Studio sidebar identity mode is invalid.' } }
+              'markTreatment' { if ($change.value -cnotin @('original', 'foreground', 'accent')) { throw 'Aura Studio sidebar identity treatment is invalid.' } }
+              'shadow' { if ($change.value -cnotin @('none', 'soft', 'elevated')) { throw 'Aura Studio prompt shadow is invalid.' } }
+              'editorInset' { if ($change.value -cnotin @('transparent', 'compact', 'comfortable')) { throw 'Aura Studio prompt inset is invalid.' } }
+              'markDigest' { if ($change.value -isnot [string] -or $change.value -cnotmatch '^[a-f0-9]{64}$') { throw 'Aura Studio sidebar identity digest is invalid.' } }
+              'weight' {
+                $weight = ConvertTo-AuraUiStudioInteger -Value $change.value -Minimum 300 -Maximum 700 -Label 'Sidebar identity weight'
+                if ($weight -notin @(300, 400, 500, 600, 650, 700)) { throw 'Aura Studio sidebar identity weight is invalid.' }
+              }
+              'rowRadius' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 0 -Maximum 28 -Label 'Sidebar row radius') }
+              'fontSize' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 12 -Maximum 32 -Label 'Sidebar identity size') }
+              'letterSpacing' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum -0.08 -Maximum 0.2 -Label 'Sidebar identity tracking') }
+              'markSize' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 24 -Maximum 72 -Label 'Sidebar identity mark size') }
+              'radius' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 0 -Maximum 40 -Label 'Prompt radius') }
+              'borderWidth' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 0 -Maximum 3 -Label 'Prompt border width') }
+              'blurPx' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 0 -Maximum 32 -Label 'Prompt blur') }
+              'widthRatio' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum 0.4 -Maximum 0.96 -Label 'Prompt width') }
+              'offsetXRatio' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum -0.35 -Maximum 0.35 -Label 'Prompt horizontal offset') }
+              'offsetYRatio' { [void](ConvertTo-AuraUiStudioNumber -Value $change.value -Minimum -0.3 -Maximum 0.3 -Label 'Prompt vertical offset') }
+              default { throw 'Aura Studio interface surface value is invalid.' }
+            }
+            break
+          }
           default { throw 'Aura Studio theme patch kind is not allowed.' }
         }
       }
@@ -9510,6 +9689,7 @@ function Assert-AuraUiStudioEditorMessage {
       break
     }
     'pick-theme-launcher-mark' { break }
+    'pick-sidebar-identity-mark' { break }
     'remove-theme-layer' {
       [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
       break
@@ -9566,6 +9746,7 @@ function Get-AuraUiStudioMessage {
     'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; 'appearance'; 'context'; break }
     'pick-instant-prompt-icon' { 'type'; 'session'; 'revision'; 'id'; break }
     'pick-theme-launcher-mark' { 'type'; 'session'; 'revision'; break }
+    'pick-sidebar-identity-mark' { 'type'; 'session'; 'revision'; break }
     'remove-theme-layer' { 'type'; 'session'; 'revision'; 'index'; break }
     'move-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'direction'; break }
     'undo-theme-edit' { 'type'; 'session'; 'revision'; break }
@@ -9617,7 +9798,7 @@ function Get-AuraUiStudioMessage {
   }
   if ($type -in @(
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
+      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
       'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme',
       'set-greeting-phrases', 'reset-greeting')) {
     Assert-AuraUiStudioEditorMessage -Message $message
@@ -9811,6 +9992,10 @@ function Invoke-AuraUiStudioMessage {
     }
     'pick-theme-launcher-mark' {
       [void](Invoke-AuraUiPickThemeLauncherMark -Request $message -Owner $script:StudioForm)
+      break
+    }
+    'pick-sidebar-identity-mark' {
+      [void](Invoke-AuraUiPickThemeSidebarIdentityMark -Request $message -Owner $script:StudioForm)
       break
     }
     'remove-theme-layer' { [void](Invoke-AuraUiRemoveThemeLayer -Request $message); break }
@@ -10104,6 +10289,7 @@ $script:StudioMessageTypes = @(
   'apply-theme-patch',
   'pick-theme-layer-image',
   'pick-theme-launcher-mark',
+  'pick-sidebar-identity-mark',
   'pick-instant-prompt-icon',
   'remove-theme-layer',
   'move-theme-layer',
@@ -11356,7 +11542,7 @@ public static class AuraUiAsyncDispatch {
                       'set-personal-wordmark-framing',
                       'export-terminal-themes',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-                      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
+                      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                     $failedAction = [string]$failedMessage.type
@@ -11377,7 +11563,7 @@ public static class AuraUiAsyncDispatch {
                   Send-AuraUiStudioState -Status "$($script:UiCopy.studioPreferencesNotSaved)" -Tone error
                 } elseif ($failedAction -in @(
                     'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-                    'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
+                    'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                     'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                     'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                   $script:StudioEditorState['lastAction'] = $failedAction

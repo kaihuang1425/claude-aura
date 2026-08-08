@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "Motyw o nazwie {0} jest już zainstalowany.",
   "chooseThemeLayerImageTitle": "Wybierz grafikę motywu",
   "chooseThemeLauncherMarkTitle": "Wybierz symbol aplikacji",
+  "chooseSidebarIdentityMarkTitle": "Wybierz znacznik tożsamości paska bocznego",
   "themeCopyReady": "Kopia motywu jest gotowa do dostosowania.",
   "themeEditReady": "Edytor motywu jest gotowy.",
   "themeLayerImageImported": "Import obrazu zakończony.",

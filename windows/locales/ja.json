@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "{0} という名前のテーマはすでにインストールされています。",
   "chooseThemeLayerImageTitle": "テーマアートワークを選択",
   "chooseThemeLauncherMarkTitle": "アプリマークを選択",
+  "chooseSidebarIdentityMarkTitle": "サイドバーの識別マークを選択",
   "themeCopyReady": "テーマのコピー編集用に準備されました。",
   "themeEditReady": "テーマエディターの準備ができました。",
   "themeLayerImageImported": "アートワークをインポートしました。",

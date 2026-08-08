@@ -1,6 +1,7 @@
 // Extracted from theme-core.mjs. Public API is re-exported by scripts/theme-core.mjs.
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { inflateSync } from "node:zlib";
 import {
   ANIMATED_AVIF_BRANDS,
@@ -53,6 +54,11 @@ import {
   USER_ARTWORK_PATH_PATTERN,
   USER_LAUNCHER_ASSET_PATTERN,
 } from "./constants.mjs";
+import {
+  interfaceIdentityDigest,
+  validateInterfaceSurfaces,
+  validateLayerFilters,
+} from "./surface-overrides.mjs";
 
 // Internal-only capability used by the source-checkout built-in layout editor.
 // It is deliberately not re-exported by scripts/theme-core.mjs, so ordinary
@@ -1246,7 +1252,7 @@ export function validateStudioLayer(value, label, { builtinLayoutCapability = nu
   if (!isPlainObject(value)) throw new Error(`${label} must be an object`);
   const allowed = new Set([
     "id", "path", "role", "appearance", "context", "viewport", "visible", "opacity",
-    "mask", "mobile", "frames", "legacy",
+    "mask", "mobile", "frames", "filters", "legacy",
   ]);
   if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error(`${label} has an unsupported property`);
   if (typeof value.id !== "string" || !STUDIO_LAYER_ID_PATTERN.test(value.id)) {
@@ -1275,6 +1281,9 @@ export function validateStudioLayer(value, label, { builtinLayoutCapability = nu
     opacity: strictNumber(value.opacity, `${label}.opacity`, 0, 1),
     mask: strictEnum(value.mask, STUDIO_LAYER_MASKS, `${label}.mask`),
     mobile: strictEnum(value.mobile, STUDIO_LAYER_MOBILE, `${label}.mobile`),
+    ...(validateLayerFilters(value.filters, `${label}.filters`) === null
+      ? {}
+      : { filters: validateLayerFilters(value.filters, `${label}.filters`) }),
     frames: {
       normal: validateStudioFrame(value.frames.normal, `${label}.frames.normal`),
       wide: validateStudioFrame(value.frames.wide, `${label}.frames.wide`),
@@ -1322,7 +1331,7 @@ export function validateStudioThemeKitDocument(
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
     "$comment", "schemaVersion", "id", "labels", "descriptions", "swatches", "preview",
-    "studioPreview", "newChatLayout", "newChatGreetingStyle", "instantPrompts", "backgroundScope", "artworkLayers",
+    "studioPreview", "newChatLayout", "newChatGreetingStyle", "interfaceSurfaces", "instantPrompts", "backgroundScope", "artworkLayers",
     "sourceRecipe", "controlOverrides", "theme",
   ]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`${source} has an unsupported property`);
@@ -1387,6 +1396,11 @@ export function validateStudioThemeKitDocument(
   if (sourceRecipe !== null && theme.variant !== sourceRecipe) {
     throw new Error(`${source}.theme.variant must match sourceRecipe`);
   }
+  const interfaceSurfaces = validateInterfaceSurfaces(
+    raw.interfaceSurfaces ?? null,
+    `${source}.interfaceSurfaces`,
+    { sourceRecipe },
+  );
   validateStudioThemeControls(theme, `${source}.theme`);
   const localized = raw.schemaVersion >= 4
     ? validateStudioLocalizedMaps(raw, source, { allowIncompleteMetadata })
@@ -1405,6 +1419,7 @@ export function validateStudioThemeKitDocument(
     studioPreviewFrame: null,
     newChatLayout: validateNewChatLayout(raw.newChatLayout, `${source}.newChatLayout`),
     newChatGreetingStyle: validateNewChatGreetingStyle(raw.newChatGreetingStyle ?? null, `${source}.newChatGreetingStyle`),
+    interfaceSurfaces,
     instantPrompts: validateInstantPrompts(raw.instantPrompts, `${source}.instantPrompts`),
     backgroundScope: strictEnum(
       raw.backgroundScope,
@@ -1480,6 +1495,11 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
   };
   const newChatLayout = validateNewChatLayout(entry.newChatLayout, `${label}.newChatLayout`);
   const newChatGreetingStyle = validateNewChatGreetingStyle(entry.newChatGreetingStyle ?? null, `${label}.newChatGreetingStyle`);
+  const interfaceSurfaces = validateInterfaceSurfaces(
+    entry.interfaceSurfaces ?? null,
+    `${label}.interfaceSurfaces`,
+    { sourceRecipe: entry.sourceRecipe ?? null },
+  );
   const instantPrompts = validateInstantPrompts(entry.instantPrompts, `${label}.instantPrompts`);
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
   const FRAMED_ARTWORK_LAYER_KEYS = [
@@ -1494,7 +1514,11 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
   const hasFramedArtworkFields = (layer) =>
     FRAMED_ARTWORK_DISCRIMINATORS.some((key) => Object.hasOwn(layer, key));
   const validateBuiltinFramedArtworkLayer = (layer, layerLabel) => {
-    assertExactKeys(layer, FRAMED_ARTWORK_LAYER_KEYS, layerLabel);
+    assertExactKeys(
+      layer,
+      Object.hasOwn(layer, "filters") ? [...FRAMED_ARTWORK_LAYER_KEYS, "filters"] : FRAMED_ARTWORK_LAYER_KEYS,
+      layerLabel,
+    );
     if (!STUDIO_LAYER_ID_PATTERN.test(layer.id)) {
       throw new Error(`${layerLabel}.id must be layer- followed by 32 lowercase hexadecimal characters`);
     }
@@ -1521,6 +1545,9 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
       opacity: strictNumber(layer.opacity, `${layerLabel}.opacity`, 0, 1),
       mask: strictEnum(layer.mask, STUDIO_LAYER_MASKS, `${layerLabel}.mask`),
       mobile: strictEnum(layer.mobile, STUDIO_LAYER_MOBILE, `${layerLabel}.mobile`),
+      ...(validateLayerFilters(layer.filters, `${layerLabel}.filters`) === null
+        ? {}
+        : { filters: validateLayerFilters(layer.filters, `${layerLabel}.filters`) }),
       frames: {
         normal: validateStudioFrame(layer.frames.normal, `${layerLabel}.frames.normal`),
         wide: validateStudioFrame(layer.frames.wide, `${layerLabel}.frames.wide`),
@@ -1644,6 +1671,7 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
     studioPreviewFrame,
     newChatLayout,
     newChatGreetingStyle,
+    interfaceSurfaces,
     instantPrompts,
     artwork,
     artworkLayers,
@@ -1727,6 +1755,21 @@ export async function validateUserThemeArtwork(kitRoot, entry, theme, label) {
     const launcherSizes = await validateUserLauncherFile(
       kitRoot, theme.launcher.asset, `${label}.theme.launcher.asset`);
     sourceTotal += launcherSizes.sourceBytes;
+  }
+  const identityDigest = interfaceIdentityDigest(entry.interfaceSurfaces);
+  if (identityDigest) {
+    const relativePath = "sidebar-identity.png";
+    const identitySizes = await validateUserLauncherFile(
+      kitRoot,
+      relativePath,
+      `${label}.interfaceSurfaces.sidebarIdentity`,
+    );
+    const bytes = await fs.readFile(path.resolve(kitRoot, relativePath));
+    const actualDigest = createHash("sha256").update(bytes).digest("hex");
+    if (actualDigest !== identityDigest) {
+      throw new Error(`${label}.interfaceSurfaces.sidebarIdentity markDigest does not match sidebar-identity.png`);
+    }
+    sourceTotal += identitySizes.sourceBytes;
   }
   if (sourceTotal >= MAX_USER_ARTWORK_TOTAL_BYTES) {
     throw new Error(`${label} source artwork must total less than 1.4 MB`);

@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "{0} adlı bir tema zaten yüklü.",
   "chooseThemeLayerImageTitle": "Tema görselini seçin",
   "chooseThemeLauncherMarkTitle": "Uygulama işaretini seçin",
+  "chooseSidebarIdentityMarkTitle": "Kenar çubuğu kimlik işaretini seçin",
   "themeCopyReady": "Tema kopyası özelleştirmeye hazır.",
   "themeEditReady": "Tema düzenleyici hazır.",
   "themeLayerImageImported": "Görsel içe aktarıldı.",

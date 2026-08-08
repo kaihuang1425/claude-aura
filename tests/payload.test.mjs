@@ -8,6 +8,7 @@ import {
   REQUIRED_SEMANTIC_TOKENS,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
+  STUDIO_LOCALES,
   STUDIO_MAX_LAYERS,
   STUDIO_PREVIEW_MASTERS,
   STUDIO_SHADOWS,
@@ -45,6 +46,38 @@ import {
   createExperimentalCodeAdapter,
   createExperimentalCodeDescriptor,
 } from "../scripts/theme-core/code-adapter.mjs";
+
+test("WO-25 enters schema v4 with the full built-in matrix at or below 57 KB", async () => {
+  const greetingPreferences = {
+    enabled: true,
+    source: "global",
+    displayName: "N".repeat(40),
+    globalPhrases: Array.from(
+      { length: 12 },
+      (_, index) => `${String(index).padStart(2, "0")} ${"x".repeat(117)}`,
+    ),
+    themeOverrides: {},
+    shuffle: null,
+  };
+  let peak = null;
+  let cells = 0;
+  for (const locale of STUDIO_LOCALES) {
+    for (const appearance of ["light", "dark", "system"]) {
+      for (const theme of THEME_IDS) {
+        const bundle = await buildPayload({
+          config: { ...DEFAULT_CONFIG, theme, appearance, greetingPreferences },
+          locale,
+        });
+        const result = { locale, appearance, theme, chromeBytes: bundle.payloadBudget.chromeBytes };
+        if (!peak || result.chromeBytes > peak.chromeBytes) peak = result;
+        cells += 1;
+      }
+    }
+  }
+  assert.equal(cells, STUDIO_LOCALES.length * 3 * THEME_IDS.length);
+  assert(peak.chromeBytes <= 57_000,
+    `${peak.locale}/${peak.appearance}/${peak.theme} enters WO-25 at ${peak.chromeBytes} non-artwork bytes`);
+});
 
 test("production payload keeps the Code adapter inert independently of registry contents", async () => {
   const publicThemeCore = await import("../scripts/theme-core.mjs");
@@ -536,8 +569,8 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.deepEqual(runtimeSettings.b, [
     bundle.settings.brandWordmark.lightDataUrl,
     bundle.settings.brandWordmark.darkDataUrl,
-    136,
-    160,
+    [136, 160],
+    [136, 160],
   ], "The compact renderer channel must retain both appearance assets and their safe width range");
   const inject = new Function(
     "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
@@ -684,6 +717,63 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(timeouts.size, 0);
   assert.equal(mediaListeners.size, 0);
   assert.equal(forcedColorListeners.size, 0);
+
+  const mixedIdentityCompiled = await compileTheme({
+    config: { ...DEFAULT_CONFIG, theme: "korean-idol" },
+  });
+  mixedIdentityCompiled.settings.brandWordmark = {
+    ...mixedIdentityCompiled.settings.brandWordmark,
+    lightMinWidth: 96,
+    lightWidth: 104,
+    darkMinWidth: 36,
+    darkWidth: 60,
+    lightKind: "wordmark",
+    darkKind: "local",
+    lightTreatment: "original",
+    darkTreatment: "accent",
+  };
+  const mixedIdentityBundle = await buildPayloadFromCompiled(mixedIdentityCompiled);
+  assert.deepEqual(readPayloadSettings(mixedIdentityBundle.payload).b, [
+    mixedIdentityCompiled.settings.brandWordmark.lightDataUrl,
+    mixedIdentityCompiled.settings.brandWordmark.darkDataUrl,
+    [96, 104],
+    [36, 60],
+    ["w", "m"],
+    ["o", "a"],
+  ], "The compact identity channel flattened appearance-specific mode, size, or treatment");
+  const injectMixedIdentity = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    mixedIdentityBundle.payload,
+  );
+  mediaDark = false;
+  brandLabelColor = "rgb(34, 33, 65)";
+  injectMixedIdentity(
+    window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout,
+  );
+  const mixedLightMark = brandImages()[0];
+  assert.equal(mixedLightMark.style.getPropertyValue("width"), "104px");
+  assert.equal(mixedLightMark.style.getPropertyValue("aspect-ratio"), "");
+  assert.equal(mixedLightMark.style.getPropertyValue("mask-image"), "");
+
+  brandLabelColor = "rgb(242, 239, 255)";
+  mediaDark = true;
+  for (const listener of mediaListeners) listener({ matches: true });
+  const mixedDarkMark = brandImages()[0];
+  const mixedDarkImage = mixedDarkMark.children[0];
+  assert.equal(mixedDarkMark.style.getPropertyValue("width"), "60px");
+  assert.equal(mixedDarkMark.style.getPropertyValue("aspect-ratio"), "1");
+  assert.equal(mixedDarkMark.style.getPropertyValue("background-color"),
+    "hsl(var(--aura-accent-primary))");
+  assert(mixedDarkMark.style.getPropertyValue("mask-image"),
+    "A foreground/accent identity treatment omitted the standard CSS mask");
+  assert.equal(
+    mixedDarkMark.style.getPropertyValue("-webkit-mask-image"),
+    mixedDarkMark.style.getPropertyValue("mask-image"),
+    "The local identity mask omitted its conservative WebKit fallback",
+  );
+  assert.equal(mixedDarkImage.style.getPropertyValue("opacity"), "0");
+  assert.equal(window.__CLAUDE_AURA_STATE__.cleanup(), true);
+  assert.equal(brandImages().length, 0);
 
   const personalTemporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-wordmark-dom-"));
   try {
@@ -1839,7 +1929,7 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
     "Sidebar scope was not persisted to the renderer");
   assert.equal(document.documentElement.style.getPropertyValue("--aura-main-start"), "220px",
     "Sidebar artwork did not retain the live renderer's measured sidebar boundary");
-  assert(sidebarBundle.payload.includes('[data-art-scope=\\"sidebar\\"]'),
+  assert(document.getElementById("claude-aura-style").textContent.includes('[data-art-scope="sidebar"]'),
     "The sidebar-scoped payload omitted its fail-closed clipping rule");
   assert.equal(studioLayers.length, STUDIO_MAX_LAYERS,
     "Sidebar reinjection duplicated or dropped Studio artwork layers");

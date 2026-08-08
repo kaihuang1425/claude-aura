@@ -81,25 +81,21 @@ test("renderer identifier compaction never rewrites contract literals", () => {
   new Function(stateCompacted);
 });
 
-test("renderer CSS dictionary round-trips exactly and escapes by declining unsafe input", () => {
-  const css = [
-    "html.claude-aura",
-    "[data-claude-aura-greeting]",
-    "hsl(var(--aura-text-primary))",
-    "var(--aura-font-ui)",
-    "!important",
-    "#claude-aura-backdrop",
-    "background-image",
-    "border-color",
-  ].join("{x:1}");
+test("renderer CSS grammar round-trips exactly and escapes by declining unsafe input", () => {
+  const rule = "html.claude-aura [data-claude-aura-greeting]{background-image:none!important;border-color:var(--aura-border)}";
+  const css = Array.from({ length: 24 }, (_, index) => `${rule}/*${index}*/`).join("");
   const compressed = compressRendererCss(css);
-  assert.equal(compressed.compressed, true, "frequent CSS tokens were not dictionary-compressed");
+  const repeated = compressRendererCss(css);
+  assert.equal(compressed.compressed, true, "repeated CSS grammar was not compressed");
+  assert.deepEqual(repeated, compressed, "CSS grammar compression must be deterministic");
   assert(Buffer.byteLength(compressed.css, "utf8") < Buffer.byteLength(css, "utf8"),
-    "dictionary compression increased the CSS payload");
-  assert.equal(expandRendererCss(compressed.css), css, "dictionary CSS did not round-trip byte-for-byte");
-  const unsafe = `${css}\uE000`;
+    "grammar compression increased the CSS payload");
+  assert.equal(expandRendererCss(compressed.css, compressed.dictionary), css,
+    "grammar-compressed CSS did not round-trip byte-for-byte");
+  const unsafe = `${css}\u0100`;
   assert.deepEqual(compressRendererCss(unsafe), { css: unsafe, compressed: false },
     "a literal sentinel must disable compression rather than corrupt authored CSS");
+  assert.throws(() => expandRendererCss(compressed.css, [null]), /array of strings/);
 });
 
 test("an unregistered compact greeting mark is invalid instead of a silent no-op", async () => {

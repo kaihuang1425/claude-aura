@@ -656,6 +656,14 @@ compact target picker and direct selection where supported. Record:
   continuity, keyboard parity, and no Cartesian state tree, third pane, nested
   scroller, or unregistered placeholder.
 
+The adjacent WO-25 manifest entry records the registered surface ID, probe
+status, appearance, Standard/Wide frame, explicit or inherited provenance,
+portable identity digest when present, and the normalized five-value filter
+tuple. It records no local asset path, page selector, account data, or
+conversation content. If the owner skips this live pass, label it **skipped —
+unpassed**; mechanical tests and Studio previews do not convert that label into
+visual acceptance.
+
 For WO-26, review a migrated legacy `step` theme plus an explicitly opted-in
 theme containing at least Compact, Standard, Laptop, and Wide saved layout
 sets. Record every exact set width, every adjacent midpoint, every step

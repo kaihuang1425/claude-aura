@@ -3,15 +3,11 @@
   /*__AURA_CODE_ACTIVE_START__*/
   const $w = __AURA_CODE_WINDOW__, $d = __AURA_CODE_DOCUMENT__;
   /*__AURA_CODE_ACTIVE_END__*/
-  if (settings.C === 1) {
-    const cssDictionary = [
-      "html.claude-aura", "[data-claude-aura-", "hsl(var(--aura-", "var(--aura-",
-      "!important", "#claude-aura-backdrop", "background-", "border-",
-    ];
-    cssText = cssText.replace(
-      /[\uE000-\uE007]/g,
-      (token) => cssDictionary[token.charCodeAt(0) - 0xE000],
-    );
+  if (Array.isArray(settings.C)) {
+    for (let index = settings.C.length - 1; index >= 0; index -= 1) {
+      cssText = cssText.replaceAll(String.fromCharCode(0x0100 + index), settings.C[index]);
+    }
+    delete settings.C;
   }
   const STATE_KEY = "__CLAUDE_AURA_STATE__";
   const STYLE_ID = "claude-aura-style";
@@ -314,8 +310,10 @@
     var width = Number(settings.W[2]) || 160;
     /*__AURA_PERSONAL_WORDMARK_END__*/
     /*__AURA_BUILTIN_WORDMARK_START__*/
-    var min = Number(settings.b[2]) || 136;
-    var width = Number(settings.b[3]) || 160;
+    var am = brandAssetMode(brand);
+    var limits = settings.b[am === "dark" ? 3 : 2] || [];
+    var min = Number(limits[0]) || 136;
+    var width = Number(limits[1]) || 160;
     /*__AURA_BUILTIN_WORDMARK_END__*/
     let host = null;
     let hr = null;
@@ -339,12 +337,15 @@
       native: [brand],
       offset: br.left - hr.left,
       width: Math.min(width, space),
+      /*__AURA_BUILTIN_WORDMARK_START__*/
+      mode: am,
+      /*__AURA_BUILTIN_WORDMARK_END__*/
     };
   };
 
   /*__AURA_BUILTIN_WORDMARK_START__*/
   const brandAssetMode = (target) => {
-    const channels = window.getComputedStyle?.(target.native[0])?.color
+    const channels = window.getComputedStyle?.(target)?.color
       ?.match(/\d+(?:\.\d+)?/g);
     if (!channels || channels.length < 3) return mode();
     const brightness = Number(channels[0]) * 299
@@ -362,7 +363,7 @@
     }
     /*__AURA_PERSONAL_WORDMARK_END__*/
     /*__AURA_BUILTIN_WORDMARK_START__*/
-    if (!settings.b?.[1]) {
+    if (!settings.b?.[0] && !settings.b?.[1]) {
       if (bb) clearBrand();
       return;
     }
@@ -376,7 +377,14 @@
     var am = "personal";
     /*__AURA_PERSONAL_WORDMARK_END__*/
     /*__AURA_BUILTIN_WORDMARK_START__*/
-    var am = brandAssetMode(t);
+    var am = t.mode || brandAssetMode(t.native[0]);
+    /*__AURA_BUILTIN_WORDMARK_END__*/
+    /*__AURA_BUILTIN_WORDMARK_START__*/
+    const currentBrandSource = settings.b[am === "dark" ? 1 : 0];
+    if (!currentBrandSource) {
+      if (bb) clearBrand();
+      return;
+    }
     /*__AURA_BUILTIN_WORDMARK_END__*/
     if (bb?.host === t.host && bb.native?.[0] === t.native[0]
         && bb.mode === am
@@ -396,6 +404,23 @@
     mark.setAttribute(BI, `${settings.version}:${settings.digest}`);
     mark.style.setProperty("inset-inline-start", `${t.offset}px`);
     mark.style.setProperty("width", `${t.width}px`);
+    /*__AURA_BUILTIN_WORDMARK_START__*/
+    const appearanceIndex = am === "dark" ? 1 : 0;
+    if (settings.b[4]?.[appearanceIndex] === "m") mark.style.setProperty("aspect-ratio", "1");
+    const treatment = settings.b[5]?.[appearanceIndex] || "o";
+    if (treatment !== "o") {
+      const mask = `url(${JSON.stringify(source)})`;
+      mark.style.setProperty("background-color", treatment === "a"
+        ? "hsl(var(--aura-accent-primary))" : "currentColor");
+      for (const prefix of ["mask", "-webkit-mask"]) {
+        mark.style.setProperty(`${prefix}-image`, mask);
+        mark.style.setProperty(`${prefix}-repeat`, "no-repeat");
+        mark.style.setProperty(`${prefix}-position`, "center");
+        mark.style.setProperty(`${prefix}-size`, "contain");
+      }
+      im.style.setProperty("opacity", "0");
+    }
+    /*__AURA_BUILTIN_WORDMARK_END__*/
     im.alt = "";
     im.draggable = false;
     im.decoding = "async";
@@ -412,7 +437,7 @@
         if (bb?.token !== token || !mark.isConnected || !im.isConnected || !t.host.isConnected
             || !im.naturalWidth
             /*__AURA_BUILTIN_WORDMARK_START__*/
-            || brandAssetMode(t) !== am
+            || brandAssetMode(t.native[0]) !== am
             /*__AURA_BUILTIN_WORDMARK_END__*/
             || findBrand(sidebar)?.native?.[0] !== t.native[0]) return fail();
         if ((window.getComputedStyle?.(t.host)?.position || "static") === "static") {
@@ -676,7 +701,9 @@
   const applyPromptLayout = (prompt, main) => {
     clearPromptLayout();
     if (!prompt || !main) return;
-    const layout = settings.n;
+    const layout = Array.isArray(settings.n?.[0])
+      ? settings.n[viewport() === "w" ? 1 : 0]
+      : settings.n;
     prompt.setAttribute(PROMPT_MARKER, "native");
     if (!layout) return;
     const mainRect = visibleRect(main);
@@ -1327,6 +1354,9 @@
           if (typeof layer.o === "number") {
             element.style.setProperty("--aura-layer-opacity", String(layer.o));
             element.style.setProperty("opacity", String(layer.o));
+          }
+          if (Array.isArray(layer.f) && layer.f.length === 5) {
+            element.style.setProperty("filter", `hue-rotate(${layer.f[0]}deg) saturate(${layer.f[1]}) brightness(${layer.f[2]}) contrast(${layer.f[3]}) blur(${layer.f[4]}px)`);
           }
           artBindings.push({ element, image: frameImage, layer });
         }

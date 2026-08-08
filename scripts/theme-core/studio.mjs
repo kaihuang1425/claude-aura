@@ -86,6 +86,11 @@ import {
   resolveGreetingPhrases,
   validateGreetingPreferences,
 } from "./greeting.mjs";
+import {
+  interfaceIdentityDigest,
+  validateInterfaceSurfaces,
+  validateLayerFilters,
+} from "./surface-overrides.mjs";
 
 const execStudioFile = promisify(execFile);
 
@@ -106,12 +111,143 @@ export function studioPaths(editorRoot) {
     active,
     artwork: path.join(active, "artwork"),
     launcherMarks: path.join(active, "launcher-marks"),
+    identityMarks: path.join(active, "identity-marks"),
     previewRoot: path.join(root, "preview"),
     previewActive: path.join(root, "preview", "active"),
     imports: path.join(root, "imports"),
     state: path.join(active, STUDIO_STATE_FILENAME),
     theme: path.join(active, THEME_KIT_FILENAME),
   };
+}
+
+async function resolveStudioIdentityMarksDirectory(paths, { create = false } = {}) {
+  const activeStat = await pathKind(paths.active);
+  if (!activeStat?.isDirectory() || activeStat.isSymbolicLink()) {
+    throw new Error("Editor active folder must be a regular directory");
+  }
+  const realActive = await fs.realpath(paths.active);
+  let marksStat = await pathKind(paths.identityMarks);
+  if (!marksStat && create) {
+    await fs.mkdir(paths.identityMarks);
+    marksStat = await fs.lstat(paths.identityMarks);
+  }
+  if (!marksStat?.isDirectory() || marksStat.isSymbolicLink()) {
+    throw new Error("Editor sidebar identity storage must be a regular directory");
+  }
+  const realMarks = await fs.realpath(paths.identityMarks);
+  if (!isPathWithin(realActive, realMarks)) throw new Error("Editor sidebar identity storage escaped the active theme");
+  return { realActive, realMarks };
+}
+
+export async function resolveStoredStudioIdentityMark(paths, digest) {
+  if (typeof digest !== "string" || !/^[a-f0-9]{64}$/u.test(digest)) {
+    throw new Error("Editor sidebar identity digest is invalid");
+  }
+  const { realActive, realMarks } = await resolveStudioIdentityMarksDirectory(paths);
+  const source = path.join(realMarks, `${digest}.png`);
+  const stat = await fs.lstat(source);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size >= MAX_USER_RASTER_ARTWORK_BYTES) {
+    throw new Error("Stored sidebar identity must be a regular PNG smaller than 400 KB");
+  }
+  const realSource = await fs.realpath(source);
+  if (!isPathWithin(realActive, realSource) || !isPathWithin(realMarks, realSource)) {
+    throw new Error("Stored sidebar identity escaped its owned folder");
+  }
+  const bytes = await fs.readFile(realSource);
+  validateLauncherPngBytes(bytes, "Stored sidebar identity");
+  if (crypto.createHash("sha256").update(bytes).digest("hex") !== digest) {
+    throw new Error("Stored sidebar identity digest does not match its contents");
+  }
+  return { digest, path: realSource, bytes };
+}
+
+export async function storeStudioIdentityMark(sourcePath, paths) {
+  const source = path.resolve(sourcePath);
+  if (!isPathWithin(paths.root, source)) throw new Error("The sidebar identity must remain inside editor data");
+  const [realRoot, realSource] = await Promise.all([fs.realpath(paths.root), fs.realpath(source)]);
+  if (!isPathWithin(realRoot, realSource)) throw new Error("The sidebar identity escaped editor data");
+  const stat = await fs.lstat(realSource);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size >= MAX_USER_RASTER_ARTWORK_BYTES) {
+    throw new Error("The sidebar identity must be a regular PNG smaller than 400 KB");
+  }
+  const bytes = await fs.readFile(realSource);
+  validateLauncherPngBytes(bytes, "Studio sidebar identity");
+  const digest = crypto.createHash("sha256").update(bytes).digest("hex");
+  await resolveStudioIdentityMarksDirectory(paths, { create: true });
+  const target = path.join(paths.identityMarks, `${digest}.png`);
+  if (await pathKind(target)) {
+    const stored = await resolveStoredStudioIdentityMark(paths, digest);
+    if (!stored.bytes.equals(bytes)) throw new Error("Stored sidebar identity digest does not match its contents");
+  } else {
+    await atomicWriteStudioBytes(target, bytes);
+    await resolveStoredStudioIdentityMark(paths, digest);
+  }
+  return digest;
+}
+
+export async function materializeStudioIdentityMark(paths, digest) {
+  if (digest === null) return;
+  const stored = await resolveStoredStudioIdentityMark(paths, digest);
+  await atomicWriteStudioBytes(path.join(paths.active, "sidebar-identity.png"), stored.bytes);
+}
+
+async function materializeStudioDocumentIdentity(paths, document) {
+  const digest = interfaceIdentityDigest(document?.interfaceSurfaces);
+  if (digest) await materializeStudioIdentityMark(paths, digest);
+}
+
+function retainedStudioIdentityDigests(internal) {
+  const documents = [
+    internal?.baselineDocument,
+    internal?.currentDocument,
+    internal?.lastValidDocument,
+    ...(internal?.undo ?? []),
+    ...(internal?.redo ?? []),
+    ...(internal?.appliedUndo ?? []).filter(Boolean),
+    ...(internal?.appliedRedo ?? []).filter(Boolean),
+  ];
+  return new Set(documents.flatMap((document) => {
+    const digest = interfaceIdentityDigest(document?.interfaceSurfaces);
+    return digest ? [digest] : [];
+  }));
+}
+
+export async function garbageCollectStudioIdentityMarks(paths, internal) {
+  const marksStat = await pathKind(paths.identityMarks);
+  if (!marksStat) return;
+  const retained = retainedStudioIdentityDigests(internal);
+  const { realMarks } = await resolveStudioIdentityMarksDirectory(paths);
+  for (const entry of await fs.readdir(realMarks, { withFileTypes: true })) {
+    const match = /^([a-f0-9]{64})\.png$/.exec(entry.name);
+    if (!match || retained.has(match[1]) || !entry.isFile() || entry.isSymbolicLink()) continue;
+    const candidate = path.join(realMarks, entry.name);
+    const candidateStat = await pathKind(candidate);
+    if (!candidateStat?.isFile() || candidateStat.isSymbolicLink()) continue;
+    const realCandidate = await fs.realpath(candidate);
+    if (!isPathWithin(realMarks, realCandidate) || path.dirname(realCandidate) !== realMarks) {
+      throw new Error("Stored sidebar identity cleanup escaped its owned folder");
+    }
+    await fs.rm(candidate, { force: true });
+  }
+}
+
+async function collectStudioIdentityMarksAfterCommit(paths, internal) {
+  try {
+    await garbageCollectStudioIdentityMarks(paths, internal);
+  } catch {
+    // The document and editor state are already durable. Cleanup cannot make a
+    // successful revision appear to fail or leave the host on a stale revision.
+  }
+}
+
+async function initializeStudioIdentityTracking(internal, paths) {
+  const current = interfaceIdentityDigest(internal.currentDocument?.interfaceSurfaces);
+  if (current && !(await pathKind(paths.identityMarks))) {
+    const actual = await storeStudioIdentityMark(path.join(paths.active, "sidebar-identity.png"), paths);
+    if (actual !== current) throw new Error("Editor sidebar identity does not match its document digest");
+  }
+  for (const digest of retainedStudioIdentityDigests(internal)) await resolveStoredStudioIdentityMark(paths, digest);
+  if (current) await materializeStudioIdentityMark(paths, current);
 }
 
 function assertStudioLauncherMarkDigest(digest) {
@@ -990,6 +1126,24 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
     internal.lastValidDocument.theme.launcher,
     internal.lastValidLauncherMarkDigest,
   );
+  const identityPreviewUrl = async (sourceDocument) => {
+    const digest = interfaceIdentityDigest(sourceDocument?.interfaceSurfaces);
+    if (!digest) return null;
+    const filename = `identity-${digest}.png`;
+    const stored = await resolveStoredStudioIdentityMark(paths, digest);
+    const target = path.join(paths.previewActive, filename);
+    const existing = await pathKind(target);
+    if (existing && (!existing.isFile() || existing.isSymbolicLink())) {
+      throw new Error("Editor sidebar identity previews must be regular files");
+    }
+    if (!existing || !(await fs.readFile(target)).equals(stored.bytes)) {
+      await atomicWriteStudioBytes(target, stored.bytes);
+    }
+    retained.add(filename);
+    return `https://aura.editor/active/${filename}`;
+  };
+  const currentIdentityPreviewUrl = await identityPreviewUrl(document);
+  const appliedIdentityPreviewUrl = await identityPreviewUrl(internal.lastValidDocument);
   for (const entry of await fs.readdir(paths.previewActive, { withFileTypes: true })) {
     if (entry.isFile() && /^layer-[a-f0-9]{32}\.webp$/.test(entry.name) && !retained.has(entry.name)) {
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
@@ -998,6 +1152,9 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
     }
     if (entry.isFile() && /^launcher-[a-f0-9]{64}\.png$/.test(entry.name) && !retained.has(entry.name)) {
+      await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
+    }
+    if (entry.isFile() && /^identity-[a-f0-9]{64}\.png$/.test(entry.name) && !retained.has(entry.name)) {
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
     }
   }
@@ -1014,6 +1171,7 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       opacity: layer.opacity,
       mask: layer.mask,
       mobile: layer.mobile,
+      filters: layer.filters ? cloneJson(layer.filters) : null,
       bytes: bytes[index],
       previewUrl: `https://aura.editor/active/${preview.filename}?v=${preview.digest}`,
       frames: cloneJson(layer.frames),
@@ -1056,6 +1214,12 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
     launcherStyle: cloneJson(internal.lastValidDocument.theme.launcher),
     launcherPreviewUrl: currentLauncherPreviewUrl,
     launcherStylePreviewUrl: appliedLauncherPreviewUrl,
+    interfaceSurfaces: document.interfaceSurfaces ? cloneJson(document.interfaceSurfaces) : null,
+    interfaceStyle: internal.lastValidDocument.interfaceSurfaces
+      ? cloneJson(internal.lastValidDocument.interfaceSurfaces)
+      : null,
+    identityPreviewUrl: currentIdentityPreviewUrl,
+    identityStylePreviewUrl: appliedIdentityPreviewUrl,
     shared: {
       fontUi: studioFontId(effectiveDocumentTheme.typography.ui, STUDIO_FONT_UI_STACKS, "system-sans"),
       fontDisplay: studioFontId(effectiveDocumentTheme.typography.display, STUDIO_FONT_DISPLAY_STACKS, "system-sans"),
@@ -1119,12 +1283,16 @@ export function studioContrastFeedback(theme) {
   return result;
 }
 
-export async function persistStudioInternal(paths, internal, { collectLauncherMarks = true } = {}) {
+export async function persistStudioInternal(paths, internal, {
+  collectLauncherMarks = true,
+  collectIdentityMarks = true,
+} = {}) {
   await assertStudioActivePaths(paths, { requireActive: true });
   await atomicWriteJson(paths.theme, internal.currentDocument);
   await atomicWriteJson(paths.state, internal);
   await assertStudioActivePaths(paths, { requireActive: true, requireState: true });
   if (collectLauncherMarks) await collectStudioLauncherMarksAfterCommit(paths, internal);
+  if (collectIdentityMarks) await collectStudioIdentityMarksAfterCommit(paths, internal);
 }
 
 async function upgradeStudioLegacyFrames(document, paths) {
@@ -1190,6 +1358,7 @@ async function upgradeStudioSchemaV1Document(raw, label, paths) {
     // Schema v1 predates portable greeting presentation. Personal greeting data
     // is never accepted here and therefore cannot migrate into a theme document.
     newChatGreetingStyle: null,
+    interfaceSurfaces: null,
     instantPrompts: cloneJson(entry.instantPrompts ?? []),
     artwork: entry.artwork ? cloneJson(entry.artwork) : null,
     artworkLayers: entry.artworkLayers ? cloneJson(entry.artworkLayers) : null,
@@ -1274,6 +1443,10 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
       document.instantPrompts = [];
       changed = true;
     }
+    if (!Object.hasOwn(document, "interfaceSurfaces")) {
+      document.interfaceSurfaces = null;
+      changed = true;
+    }
     const normalizedInstantPrompts = validateInstantPrompts(
       document.instantPrompts,
       `editor ${name} theme.instantPrompts`,
@@ -1326,6 +1499,7 @@ export async function loadStudioInternal(editorRoot) {
     internal.redo = Array.isArray(internal.redo) ? internal.redo : [];
     const migrated = await validateAndUpgradeStudioDocuments(internal, paths);
     await initializeStudioLauncherTracking(internal, paths);
+    await initializeStudioIdentityTracking(internal, paths);
     if (migrated) {
       await atomicWriteJson(paths.theme, internal.currentDocument);
       await atomicWriteJson(paths.state, internal);
@@ -2047,6 +2221,7 @@ async function sourceThemeForBuiltinAuthoring(themeId, authority, locale) {
     studioPreviewFrame: entry.studioPreviewFrame ? cloneJson(entry.studioPreviewFrame) : null,
     newChatLayout: entry.newChatLayout ? cloneJson(entry.newChatLayout) : null,
     newChatGreetingStyle: entry.newChatGreetingStyle ? cloneJson(entry.newChatGreetingStyle) : null,
+    interfaceSurfaces: entry.interfaceSurfaces ? cloneJson(entry.interfaceSurfaces) : null,
     instantPrompts: [],
     artwork: entry.artwork ? cloneJson(entry.artwork) : null,
     artworkLayers: entry.artworkLayers ? cloneJson(entry.artworkLayers) : null,
@@ -2095,6 +2270,7 @@ async function studioDocumentFromResolvedSource({
     studioPreview: null,
     newChatLayout: theme.newChatLayout ? cloneJson(theme.newChatLayout) : null,
     newChatGreetingStyle: theme.newChatGreetingStyle ? cloneJson(theme.newChatGreetingStyle) : null,
+    interfaceSurfaces: theme.interfaceSurfaces ? cloneJson(theme.interfaceSurfaces) : null,
     instantPrompts: entry.source === "builtin" ? [] : cloneJson(theme.instantPrompts ?? []),
     backgroundScope: theme.backgroundScope ?? "full-window",
     artworkLayers: [],
@@ -2109,6 +2285,17 @@ async function studioDocumentFromResolvedSource({
     const targetMark = path.resolve(paths.active, theme.launcher.asset);
     if (!isPathWithin(theme.sourceDirectory, sourceMark) || !isPathWithin(paths.active, targetMark)) {
       throw new Error("Theme launcher mark escaped its owned folder");
+    }
+    if (!(reuseActiveFiles && sourceMark === targetMark)) {
+      await fs.copyFile(sourceMark, targetMark, fsConstants.COPYFILE_EXCL);
+    }
+  }
+  const identityDigest = interfaceIdentityDigest(document.interfaceSurfaces);
+  if (entry.source === "user" && identityDigest) {
+    const sourceMark = path.resolve(theme.sourceDirectory, "sidebar-identity.png");
+    const targetMark = path.resolve(paths.active, "sidebar-identity.png");
+    if (!isPathWithin(theme.sourceDirectory, sourceMark) || !isPathWithin(paths.active, targetMark)) {
+      throw new Error("Theme sidebar identity escaped its owned folder");
     }
     if (!(reuseActiveFiles && sourceMark === targetMark)) {
       await fs.copyFile(sourceMark, targetMark, fsConstants.COPYFILE_EXCL);
@@ -2169,6 +2356,7 @@ async function studioDocumentFromResolvedSource({
       opacity: sourceLayer.opacity ?? 1,
       mask: sourceLayer.mask ?? "soft-right",
       mobile: sourceLayer.mobile ?? "reduce",
+      ...(sourceLayer.filters ? { filters: cloneJson(sourceLayer.filters) } : {}),
       frames,
       ...(sourceLayer.legacy ? { legacy: cloneJson(sourceLayer.legacy) } : sourceLayer.frames ? {} : {
         legacy: {
@@ -2276,7 +2464,16 @@ export async function studioFeedback(document, context, bundle) {
     if (!launcherStat.isFile() || launcherStat.isSymbolicLink()) throw new Error("Editor launcher mark must be a regular file");
     launcherBytes = launcherStat.size;
   }
-  const sourceArtworkBytes = [...uniquePaths.values()].reduce((total, value) => total + value, launcherBytes);
+  let identityBytes = 0;
+  if (interfaceIdentityDigest(document.interfaceSurfaces)) {
+    const identityPath = path.resolve(paths.active, "sidebar-identity.png");
+    if (!isPathWithin(paths.active, identityPath)) throw new Error("Editor sidebar identity escaped the active theme folder");
+    const identityStat = await fs.lstat(identityPath);
+    if (!identityStat.isFile() || identityStat.isSymbolicLink()) throw new Error("Editor sidebar identity must be a regular file");
+    identityBytes = identityStat.size;
+  }
+  const sourceArtworkBytes = [...uniquePaths.values()]
+    .reduce((total, value) => total + value, launcherBytes + identityBytes);
   const layers = layerBytes.map((bytes, id) => ({ id, bytes, limit: MAX_USER_RASTER_ARTWORK_BYTES, pass: bytes < MAX_USER_RASTER_ARTWORK_BYTES }));
   const budget = {
     chromeBytes,
@@ -2386,6 +2583,11 @@ export async function beginStudioDocument(document, metadata, context) {
   const launcherMarkDigest = studioDocumentUsesLocalLauncher(document)
     ? await storeStudioLauncherMark(path.join(paths.active, "launcher-mark.png"), paths)
     : null;
+  const identityDigest = interfaceIdentityDigest(document.interfaceSurfaces);
+  if (identityDigest) {
+    const storedDigest = await storeStudioIdentityMark(path.join(paths.active, "sidebar-identity.png"), paths);
+    if (storedDigest !== identityDigest) throw new Error("Theme sidebar identity digest does not match its file");
+  }
   const internal = {
     version: 2,
     locale: normalizeLocale(context.locale),
@@ -2597,6 +2799,7 @@ export async function beginThemeEdit(context) {
     if (existing.launcherMarkDigest !== null) {
       await materializeStudioLauncherMark(studioPaths(context.editorRoot), existing.launcherMarkDigest);
     }
+    await materializeStudioDocumentIdentity(studioPaths(context.editorRoot), existing.currentDocument);
     const evaluated = await evaluateStudioDocument(existing.currentDocument, { ...context, locale }, {
       greetingPreferences: existing.greetingCurrent,
       builtinLayoutCapability: existing.editKind === "builtin-layout"
@@ -2621,6 +2824,7 @@ export async function beginThemeEdit(context) {
       if (existing.lastValidLauncherMarkDigest !== null) {
         await materializeStudioLauncherMark(existingPaths, existing.lastValidLauncherMarkDigest);
       }
+      await materializeStudioDocumentIdentity(existingPaths, existing.lastValidDocument);
       bundle = await compileStudioDocument(existing.lastValidDocument, { ...context, locale }, {
         appearance: "system",
         greetingPreferences: existing.greetingLastValid,
@@ -2632,6 +2836,7 @@ export async function beginThemeEdit(context) {
       if (existing.launcherMarkDigest !== null) {
         await materializeStudioLauncherMark(existingPaths, existing.launcherMarkDigest);
       }
+      await materializeStudioDocumentIdentity(existingPaths, existing.currentDocument);
       await atomicWriteJson(existingPaths.theme, existing.currentDocument);
     }
     if (greetingTrackingInitialized) await persistStudioInternal(existingPaths, existing);
@@ -2742,6 +2947,8 @@ export async function mutateStudio(context, action, mutate) {
     if (internal.launcherMarkDigest === null) throw new Error("Editor launcher mark content is missing");
     await materializeStudioLauncherMark(studioPaths(context.editorRoot), internal.launcherMarkDigest);
   }
+  const identityDigest = interfaceIdentityDigest(candidate.interfaceSurfaces);
+  if (identityDigest) await materializeStudioIdentityMark(studioPaths(context.editorRoot), identityDigest);
   const evaluated = await evaluateStudioDocument(candidate, context, {
     greetingPreferences: candidateGreeting,
     builtinLayoutCapability: internal.editKind === "builtin-layout"
@@ -2886,6 +3093,19 @@ export async function setThemeToken(context) {
 export function mutateStudioLayerDocument(document, change) {
     const index = strictInteger(change.index, "layer index", 0, document.artworkLayers.length - 1);
     const layer = document.artworkLayers[index];
+    if (change.preset === "filters") {
+      const allowed = new Set(["hueDeg", "saturation", "brightness", "contrast", "blurPx"]);
+      if (!allowed.has(change.property)) throw new Error("Layer filter property is invalid");
+      const candidate = { ...(layer.filters ?? {}) };
+      if (change.value === null) delete candidate[change.property];
+      else candidate[change.property] = change.value;
+      const filters = Object.keys(candidate).length
+        ? validateLayerFilters(candidate, "layer filters")
+        : null;
+      if (filters) layer.filters = filters;
+      else delete layer.filters;
+      return;
+    }
     if (change.preset === "shared") {
       const property = change.property;
       if (!["role", "appearance", "context", "viewport", "visible", "opacity", "mask", "mobile"].includes(property)) {
@@ -2914,6 +3134,53 @@ export function mutateStudioLayerDocument(document, change) {
     else if (change.property === "scale") frame.scale = strictNumber(change.value, "scale", 0.25, 3);
     else throw new Error("Layer framing property is invalid");
     delete layer.legacy;
+}
+
+function pruneInterfaceSurfaces(document, target, slot, axis) {
+  const surface = document.interfaceSurfaces?.[target];
+  if (!surface) return;
+  if (slot !== "base" && axis && surface[slot]?.[axis]
+      && Object.keys(surface[slot][axis]).length === 0) delete surface[slot][axis];
+  if (slot !== "base" && surface[slot] && Object.keys(surface[slot]).length === 0) delete surface[slot];
+  if (slot === "base" && surface.base && Object.keys(surface.base).length === 0) delete surface.base;
+  if (Object.keys(surface).length === 0) delete document.interfaceSurfaces[target];
+  if (Object.keys(document.interfaceSurfaces).length === 0) document.interfaceSurfaces = null;
+}
+
+export function mutateStudioSurfaceDocument(document, change) {
+  const target = strictEnum(change.target, new Set(["sidebar", "sidebarIdentity", "promptBlock"]), "surface target");
+  const slot = strictEnum(change.slot, new Set(["base", "appearance", "view", "frame"]), "surface slot");
+  const allowedAxis = slot === "appearance" ? new Set(["light", "dark"])
+    : slot === "view" ? new Set(["new-chat", "conversation"])
+      : new Set(["standard", "wide"]);
+  if (slot === "base" && change.axis !== null) throw new Error("Base surface axis must be null");
+  const axis = slot === "base" ? null : strictEnum(change.axis, allowedAxis, "surface axis");
+  if (typeof change.property !== "string" || !change.property) throw new Error("Surface property is invalid");
+  if (change.value === null) {
+    const leaf = slot === "base"
+      ? document.interfaceSurfaces?.[target]?.base
+      : document.interfaceSurfaces?.[target]?.[slot]?.[axis];
+    if (leaf) delete leaf[change.property];
+    pruneInterfaceSurfaces(document, target, slot, axis);
+    return;
+  }
+  document.interfaceSurfaces ??= {};
+  document.interfaceSurfaces[target] ??= {};
+  let leaf;
+  if (slot === "base") {
+    document.interfaceSurfaces[target].base ??= {};
+    leaf = document.interfaceSurfaces[target].base;
+  } else {
+    document.interfaceSurfaces[target][slot] ??= {};
+    document.interfaceSurfaces[target][slot][axis] ??= {};
+    leaf = document.interfaceSurfaces[target][slot][axis];
+  }
+  leaf[change.property] = change.value;
+  document.interfaceSurfaces = validateInterfaceSurfaces(
+    document.interfaceSurfaces,
+    "interfaceSurfaces",
+    { sourceRecipe: document.sourceRecipe },
+  );
 }
 
 export async function setThemeLayer(context) {
@@ -3022,6 +3289,7 @@ export function assertStudioPatchChanges(changes) {
     "metadata-locale": ["kind", "locale", "enabled"],
     greeting: ["kind", "operation", "appearance", "frame", "value"],
     "instant-prompt": ["kind", "operation", "id", "field", "locale", "value"],
+    surface: ["kind", "target", "slot", "axis", "property", "value"],
   };
   changes.forEach((change, index) => {
     if (!isPlainObject(change) || typeof change.kind !== "string" || !Object.hasOwn(shapes, change.kind)) {
@@ -3081,6 +3349,10 @@ async function reframeStudioBackgroundLayers(
 
 export async function applyThemePatch(context) {
   assertStudioPatchChanges(context.changes);
+  const surfaceTargets = new Set(context.changes
+    .filter((change) => change.kind === "surface")
+    .map((change) => change.target));
+  if (surfaceTargets.size > 1) throw new Error("A theme patch may edit only one surface target");
   return mutateStudio(context, "apply-theme-patch", async (document) => {
     if (document.newChatLayout === null) {
       const promptChanges = context.changes.filter((change) => change.kind === "token"
@@ -3140,6 +3412,7 @@ export async function applyThemePatch(context) {
       else if (change.kind === "greeting") mutateStudioGreetingDocument(document, change);
       else if (change.kind === "metadata") mutateStudioMetadataDocument(document, change);
       else if (change.kind === "metadata-locale") mutateStudioMetadataLocaleDocument(document, change);
+      else if (change.kind === "surface") mutateStudioSurfaceDocument(document, change);
       else mutateStudioInstantPromptDocument(document, change);
     }
   });
@@ -3248,6 +3521,38 @@ export async function attachThemeLauncherMark(context) {
   }
 }
 
+export async function attachThemeSidebarIdentityMark(context) {
+  const paths = studioPaths(context.editorRoot);
+  const digest = await storeStudioIdentityMark(context.assetPath, paths);
+  try {
+    return await mutateStudio(context, "pick-sidebar-identity-mark", (document) => {
+      document.interfaceSurfaces ??= {};
+      document.interfaceSurfaces.sidebarIdentity ??= {};
+      document.interfaceSurfaces.sidebarIdentity.base ??= {};
+      Object.assign(document.interfaceSurfaces.sidebarIdentity.base, {
+        mode: "local-mark",
+        markDigest: digest,
+      });
+      document.interfaceSurfaces = validateInterfaceSurfaces(
+        document.interfaceSurfaces,
+        "interfaceSurfaces",
+        { sourceRecipe: document.sourceRecipe },
+      );
+    });
+  } catch (error) {
+    try {
+      const persisted = await loadStudioInternal(context.editorRoot);
+      if (persisted) await garbageCollectStudioIdentityMarks(paths, persisted);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "The sidebar identity update failed and its unreferenced stored file could not be cleaned up",
+      );
+    }
+    throw error;
+  }
+}
+
 export async function removeThemeLayer(context) {
   return mutateStudio(context, "remove-theme-layer", (document) => {
     const index = strictInteger(context.index, "layer index", 0, document.artworkLayers.length - 1);
@@ -3327,6 +3632,7 @@ export async function travelStudioHistory(context, action, direction) {
     if (internal.launcherMarkDigest === null) throw new Error("Editor launcher mark history is missing");
     await materializeStudioLauncherMark(paths, internal.launcherMarkDigest);
   }
+  await materializeStudioDocumentIdentity(paths, internal.currentDocument);
   const evaluated = await evaluateStudioDocument(internal.currentDocument, context, {
     greetingPreferences: internal.greetingCurrent,
     builtinLayoutCapability: internal.editKind === "builtin-layout"
@@ -3350,6 +3656,7 @@ export async function travelStudioHistory(context, action, direction) {
         }
         await materializeStudioLauncherMark(paths, internal.lastValidLauncherMarkDigest);
       }
+      await materializeStudioDocumentIdentity(paths, internal.lastValidDocument);
       fallbackBundle = await compileStudioDocument(internal.lastValidDocument, context, {
         appearance: "system",
         greetingPreferences: internal.greetingLastValid,
@@ -3361,6 +3668,7 @@ export async function travelStudioHistory(context, action, direction) {
       if (studioDocumentUsesLocalLauncher(internal.currentDocument)) {
         await materializeStudioLauncherMark(paths, internal.launcherMarkDigest);
       }
+      await materializeStudioDocumentIdentity(paths, internal.currentDocument);
       await atomicWriteJson(paths.theme, internal.currentDocument);
     }
   }
@@ -3458,6 +3766,14 @@ export async function stageStudioTheme(document, activeDirectory, stageDirectory
     const target = path.resolve(stageDirectory, document.theme.launcher.asset);
     if (!isPathWithin(activeDirectory, source) || !isPathWithin(stageDirectory, target)) {
       throw new Error("Theme launcher mark escaped its owned folder");
+    }
+    await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
+  }
+  if (interfaceIdentityDigest(document.interfaceSurfaces)) {
+    const source = path.resolve(activeDirectory, "sidebar-identity.png");
+    const target = path.resolve(stageDirectory, "sidebar-identity.png");
+    if (!isPathWithin(activeDirectory, source) || !isPathWithin(stageDirectory, target)) {
+      throw new Error("Theme sidebar identity escaped its owned folder");
     }
     await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
   }
@@ -3861,9 +4177,13 @@ async function saveBuiltinLayoutEdit(context, internal) {
     }
     savedInternal.registrySha256 = finalRegistry.sha256;
     savedInternal.sourceSnapshot = finalSourceSnapshot;
-    await persistStudioInternal(paths, savedInternal, { collectLauncherMarks: false });
+    await persistStudioInternal(paths, savedInternal, {
+      collectLauncherMarks: false,
+      collectIdentityMarks: false,
+    });
     await callStudioFault(context, "after-builtin-editor-state");
     await collectStudioLauncherMarksAfterCommit(paths, savedInternal);
+    await collectStudioIdentityMarksAfterCommit(paths, savedInternal);
     await clearBuiltinTransactionMarker(authority, transaction.transactionId);
     return {
       state: withStudioResult(
@@ -4089,7 +4409,10 @@ export async function saveThemeEdit(context) {
       null,
     );
     editorStateAttempted = true;
-    await persistStudioInternal(paths, savedInternal, { collectLauncherMarks: false });
+    await persistStudioInternal(paths, savedInternal, {
+      collectLauncherMarks: false,
+      collectIdentityMarks: false,
+    });
     await callStudioFault(context, "after-editor-state");
     if (movedExisting) await fs.rm(backup, { recursive: true, force: true });
     completedResult = {
@@ -4178,6 +4501,7 @@ export async function saveThemeEdit(context) {
     throw error;
   }
   await collectStudioLauncherMarksAfterCommit(paths, completedInternal);
+  await collectStudioIdentityMarksAfterCommit(paths, completedInternal);
   return completedResult;
 }
 
@@ -4393,6 +4717,7 @@ async function hydrateStudioDraftInternal({
     if (internal.lastValidLauncherMarkDigest !== null) {
       await materializeStudioLauncherMark(paths, internal.lastValidLauncherMarkDigest);
     }
+    await materializeStudioDocumentIdentity(paths, internal.lastValidDocument);
     bundle = await compileStudioDocument(internal.lastValidDocument, context, {
       appearance: "system",
       greetingPreferences: internal.greetingLastValid,
@@ -4404,6 +4729,7 @@ async function hydrateStudioDraftInternal({
     if (internal.launcherMarkDigest !== null) {
       await materializeStudioLauncherMark(paths, internal.launcherMarkDigest);
     }
+    await materializeStudioDocumentIdentity(paths, internal.currentDocument);
     await atomicWriteJson(paths.theme, internal.currentDocument);
   }
   return {
@@ -4466,7 +4792,7 @@ async function executeStudioRequestInternal({
   };
   await guardBuiltinStudioRequest(context, request);
   const assetRequestTypes = new Set([
-    "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon",
+    "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon",
   ]);
   if (assetPath !== null && !assetRequestTypes.has(request.type)) {
     throw new Error("An asset is allowed only for an editor image picker action");
@@ -4496,6 +4822,10 @@ async function executeStudioRequestInternal({
     assertStudioRequest(request, ["session", "revision"]);
     if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-theme-launcher-mark");
     result = await attachThemeLauncherMark({ ...context, ...request, assetPath });
+  } else if (request.type === "pick-sidebar-identity-mark") {
+    assertStudioRequest(request, ["session", "revision"]);
+    if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-sidebar-identity-mark");
+    result = await attachThemeSidebarIdentityMark({ ...context, ...request, assetPath });
   } else if (request.type === "pick-instant-prompt-icon") {
     assertStudioRequest(request, ["session", "revision", "id"]);
     if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-instant-prompt-icon");

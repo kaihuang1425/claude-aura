@@ -403,7 +403,8 @@ remain their own bounded product surfaces.
 
 Studio saves an edited `theme.json` with `schemaVersion: 4`. Schema v3 carries
 the schema-v2 document forward and adds optional `newChatGreetingStyle`; `null`
-means Claude-native presentation. Schema v4 lets localized metadata use a
+means Claude-native presentation. Schema v4 adds localized metadata, bounded
+interface surfaces, and background filters. Localized metadata may use a
 selected subset of Studio's fifteen interface locales. `labels` and
 `descriptions` must have the same locale keys, `en` must be present, and every
 selected locale must have a completed name and description before Save.
@@ -419,12 +420,32 @@ object forward from schema v1, and adds:
 - `sourceRecipe`: `null` or one of the eight frozen built-in IDs;
 - `controlOverrides`: a unique list containing only `fontUi`, `fontDisplay`,
   `radius`, or `shadow`;
+- `interfaceSurfaces`: `null` or exact sparse wrappers for `sidebar`,
+  `sidebarIdentity`, and `promptBlock`; unsupported properties, selectors,
+  URLs, paths, HTML, CSS strings, and font sources are rejected;
 - `newChatGreetingStyle`: `null` or exact Light/Dark × Standard/Wide greeting
   presentation and frame values;
 - `artworkLayers`: zero to eight entries using app-owned
   `artwork/layer-<32 lowercase hex>.webp` files; and
 - per-layer `role`, `appearance`, `context`, `viewport`, `visible`, `opacity`,
-  `mask`, `mobile`, plus exact `normal` and `wide` frame objects.
+  `mask`, `mobile`, optional bounded `filters`, plus exact `normal` and `wide`
+  frame objects.
+
+Each interface surface uses the sparse wrapper `{ base, appearance, view,
+frame }`, but validation exposes only the axes owned by that surface. Shared
+material belongs in `base`; `appearance` permits only `light` and `dark`; and
+the prompt block alone may use `frame.standard` and `frame.wide` for new-chat
+width and offsets. Resolution is deterministic: base, then appearance, then
+view, then frame. Reset removes the authored leaf, so the inherited token or
+native value becomes visible again. Studio's preview width still maps to the
+frozen Standard/Wide switch and does not create a new stored state.
+
+`sidebar` contains only approved colours, an interface-font category, row
+radius, and compact/comfortable spacing controls. `promptBlock` contains only
+approved material, editor-inset, toolbar/control-state, and bounded
+Standard/Wide geometry controls. The WO-21 greeting remains its own validated
+`newChatGreetingStyle`; schema v4 does not duplicate it inside
+`interfaceSurfaces`.
 
 Every schema version may also carry an optional `theme.launcher` object. If it
 is absent, Aura supplies the complete Default launcher, so older and
@@ -461,23 +482,39 @@ The eight frozen built-ins also have a separate Aura-owned in-page wordmark
 pair at
 `assets/theme-art/<built-in-id>/brand-wordmark-light.png` and
 `brand-wordmark-dark.png`. These complete horizontal `Claude` lockups are
-selected only from Aura's immutable built-in map. They are not copied into a
-duplicated user theme, cannot be supplied or redirected by kit JSON, and are
-not derived from `theme.launcher.asset`. The renderer preserves Claude's
-native interactive wrapper and accessible name, shows one decoded
-`aria-hidden`, pointer-inert wordmark only in a uniquely discovered expanded
-sidebar, and restores the native visual for collapsed or undersized layout,
+selected only from Aura's immutable built-in map. An untouched duplicate
+inherits this pair through `sourceRecipe`; it does not copy or redirect the
+repository assets and they are not derived from `theme.launcher.asset`.
+
+Schema v4 may deliberately add `interfaceSurfaces.sidebarIdentity`. Its modes
+are `native`, `inherited-builtin`, `styled-label`, and `local-mark`. A styled
+label always renders the literal `Claude` with an approved display-font
+category, weight, size, tracking, and Light/Dark colour. A local mark uses one
+static transparent 96×96 `sidebar-identity.png` below 400 KB, addressed in the
+document by its lowercase SHA-256 `markDigest`; the path itself is never a
+page-visible value. Light and Dark may independently select their mode, size,
+and original/foreground/accent treatment, while both appearances share that
+one content-addressed PNG. The mark is portable theme content and is separate
+from the host-owned launcher mark.
+
+The renderer preserves Claude's native interactive wrapper, exact visible
+label, accessible name, destination, focus behavior, hit target, and DOM order.
+It shows one decoded `aria-hidden`, pointer-inert replacement only in a uniquely
+discovered expanded sidebar. Collapsed or undersized layout, missing or
 ambiguous discovery, failed decode, forced colors, cleanup, SPA remount, and
-Original look.
+Original look restore the complete native visual before Aura ownership is
+removed.
 
 Studio can additionally store one **device-level personal wordmark** under
 Aura's local data root. It is not a theme field and never enters a theme kit,
 duplicate, or export. The host retains the validated source and crop sidecar,
 bakes a transparent 344 × 124 PNG, and exposes only that fixed host-generated
 asset to the compiler. A valid personal wordmark takes visual precedence over
-the selected theme's built-in pair; removing it or failing validation restores
-the built-in/native fallback. Original look suppresses both personal and
-built-in replacements. The same conservative renderer discovery, decoded
+both an inherited built-in pair and a portable schema-v4 sidebar identity;
+removing it or failing validation restores the stored theme identity and then
+its native fallback. Original look suppresses every replacement. The personal
+asset, crop state, and host storage never overwrite or serialize the portable
+`sidebar-identity.png`. The same conservative renderer discovery, decoded
 single-overlay rule, native wrapper, and accessible-name protections apply.
 
 `theme.variant` remains separate from the installed theme ID. Schema v1
@@ -513,6 +550,15 @@ are `background`, `hero`, `corner`, or `decoration`. Appearance is `all`,
 `light`, or `dark`; context is `all`, `new-chat`, or `conversation`; viewport
 is `all`, `normal`, or `wide`. In this artwork contract, context `all` means
 both supported chat contexts and excludes the registered Code view.
+
+Advanced background controls may add only
+`filters: { hueDeg?, saturation?, brightness?, contrast?, blurPx? }` to a
+layer. The ranges are -180–180 degrees, 0–2 saturation, 0.5–1.5 brightness,
+0.5–1.5 contrast, and 0–24 CSS px blur. Neutral values are removed from the
+saved sparse object. The runtime emits the fixed order hue, saturation,
+brightness, contrast, then blur; no raw filter string is accepted. Filters
+follow the layer's existing appearance, context, viewport, visibility,
+forced-colors, reduced-motion, failure, and Original-look lifecycle.
 
 For a legacy layer, those two frame objects are dormant compatibility seeds
 until the first framing edit. Studio computes them from the actual WebP

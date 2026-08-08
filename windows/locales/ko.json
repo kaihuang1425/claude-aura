@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "이름이 {0}인 테마가 이미 설치되어 있습니다.",
   "chooseThemeLayerImageTitle": "테마 아트워크 선택",
   "chooseThemeLauncherMarkTitle": "앱 마크 선택",
+  "chooseSidebarIdentityMarkTitle": "사이드바 아이덴티티 마크 선택",
   "themeCopyReady": "테마 사본이 편집 준비되었습니다.",
   "themeEditReady": "테마 편집기가 준비되었습니다.",
   "themeLayerImageImported": "아트워크를 가져왔습니다.",

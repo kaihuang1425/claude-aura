@@ -84,7 +84,7 @@ function readInstalledCss(payload) {
   assert(encodedCss, "Renderer payload lost its installed stylesheet");
   const settings = readPayloadSettings(payload);
   const css = JSON.parse(encodedCss);
-  return settings.C === 1 ? expandRendererCss(css) : css;
+  return Array.isArray(settings.C) ? expandRendererCss(css, settings.C) : css;
 }
 
 function testPngCrc32(bytes) {
@@ -2476,6 +2476,8 @@ test("WO-21 migrates every legacy Studio slot and keeps personal greetings out o
         `Migration omitted ${label}.newChatGreetingStyle`);
       assert.equal(document.newChatGreetingStyle, null,
         `Migration invented greeting presentation in ${label}`);
+      assert.equal(document.interfaceSurfaces, null,
+        `Migration invented interface overrides in ${label}`);
     }
     for (const [label, values, expectedLength] of [
       ["personal undo", migrated.greetingUndo, migrated.undo.length],
@@ -2564,6 +2566,143 @@ test("WO-21 migrates every legacy Studio slot and keeps personal greetings out o
       /greetingPreferences is host-owned/,
       "Schema-v1 validation accepted host-owned greeting preferences",
     );
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("WO-25 preserves portable identity history and sparse background filters", async () => {
+  const temporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-wo25-studio-"));
+  const userThemesDir = path.join(temporary, "user-themes");
+  const editorRoot = path.join(temporary, "editor");
+  const importsRoot = path.join(editorRoot, "imports");
+  const configPath = path.join(temporary, "config.json");
+  try {
+    await Promise.all([
+      fs.mkdir(userThemesDir, { recursive: true }),
+      fs.mkdir(importsRoot, { recursive: true }),
+    ]);
+    await writeConfig(configPath, { ...DEFAULT_CONFIG });
+    const request = (message, options = {}) => executeStudioRequest({
+      request: message,
+      configPath,
+      userThemesDir,
+      editorRoot,
+      locale: "en",
+      ...options,
+    });
+    const action = (result, type, values = {}) => ({
+      type,
+      session: result.state.session,
+      revision: result.state.revision,
+      ...values,
+    });
+
+    let result = await request({ type: "create-theme-copy", theme: "default" });
+    const paths = studioPaths(editorRoot);
+    let activeDocument = JSON.parse(await fs.readFile(paths.theme, "utf8"));
+    assert.equal(activeDocument.interfaceSurfaces, null,
+      "An untouched built-in duplicate created a portable identity override");
+    await assert.rejects(fs.stat(path.join(paths.active, "sidebar-identity.png")), { code: "ENOENT" });
+
+    const revisionBeforeMixedPatch = result.state.revision;
+    await assert.rejects(request(action(result, "apply-theme-patch", {
+      changes: [
+        {
+          kind: "surface", target: "sidebar", slot: "appearance", axis: "light",
+          property: "surface", value: "#FAFAFA",
+        },
+        {
+          kind: "surface", target: "promptBlock", slot: "appearance", axis: "light",
+          property: "surface", value: "#FFFFFF",
+        },
+      ],
+    })), /only one surface target/,
+    "One gesture edited more than one interface surface");
+    assert.equal(JSON.parse(await fs.readFile(paths.state, "utf8")).revision, revisionBeforeMixedPatch,
+      "A rejected multi-surface patch advanced Studio history");
+
+    const markSources = ["default", "korean-prestige"];
+    const markImports = [];
+    const markDigests = [];
+    for (const themeId of markSources) {
+      const target = path.join(importsRoot, `${themeId}.png`);
+      const bytes = await fs.readFile(path.join(
+        PROJECT_ROOT, "assets", "theme-art", themeId, "launcher-mark.png",
+      ));
+      await fs.writeFile(target, bytes);
+      markImports.push(target);
+      markDigests.push(crypto.createHash("sha256").update(bytes).digest("hex"));
+    }
+    assert.notEqual(markDigests[0], markDigests[1], "Identity history fixtures must have distinct digests");
+
+    result = await request(action(result, "pick-sidebar-identity-mark"), { assetPath: markImports[0] });
+    assert.equal(result.state.interfaceSurfaces.sidebarIdentity.base.markDigest, markDigests[0]);
+    assert.equal(result.state.identityPreviewUrl,
+      `https://aura.editor/active/identity-${markDigests[0]}.png`);
+    result = await request(action(result, "pick-sidebar-identity-mark"), { assetPath: markImports[1] });
+    assert.equal(result.state.interfaceSurfaces.sidebarIdentity.base.markDigest, markDigests[1]);
+    assert.deepEqual((await fs.readdir(paths.identityMarks)).sort(),
+      markDigests.map((digest) => `${digest}.png`).sort(),
+    "Both content-addressed marks must remain while Undo can reach them");
+
+    result = await request(action(result, "undo-theme-edit"));
+    assert.equal(result.state.interfaceSurfaces.sidebarIdentity.base.markDigest, markDigests[0]);
+    assert.equal(crypto.createHash("sha256").update(
+      await fs.readFile(path.join(paths.active, "sidebar-identity.png")),
+    ).digest("hex"), markDigests[0], "Undo did not restore the matching portable identity bytes");
+    result = await request(action(result, "redo-theme-edit"));
+    assert.equal(result.state.interfaceSurfaces.sidebarIdentity.base.markDigest, markDigests[1]);
+
+    result = await request(action(result, "save-theme-edit"));
+    const installedDirectory = path.join(userThemesDir, result.state.id);
+    const installedDocument = JSON.parse(await fs.readFile(path.join(installedDirectory, "theme.json"), "utf8"));
+    assert.equal(installedDocument.schemaVersion, STUDIO_THEME_SCHEMA_VERSION);
+    assert.equal(installedDocument.interfaceSurfaces.sidebarIdentity.base.markDigest, markDigests[1]);
+    assert.equal(crypto.createHash("sha256").update(
+      await fs.readFile(path.join(installedDirectory, "sidebar-identity.png")),
+    ).digest("hex"), markDigests[1], "Save paired the identity document with the wrong PNG");
+    assert.deepEqual((await fs.readdir(paths.identityMarks)).sort(), [`${markDigests[1]}.png`],
+      "Saving cleared history but retained an unreachable identity asset");
+    await readThemeKit(installedDirectory);
+
+    result = await request({ type: "create-theme-copy", theme: "anime-twilight" });
+    assert(result.state.layers.length > 0, "The WO-25 filter fixture lost its artwork layer");
+    const authoredFilters = {
+      hueDeg: -12,
+      saturation: 0.9,
+      brightness: 1.05,
+      contrast: 1.1,
+      blurPx: 2,
+    };
+    for (const [property, value] of Object.entries(authoredFilters)) {
+      result = await request(action(result, "set-theme-layer", {
+        index: 0, preset: "filters", property, value,
+      }));
+    }
+    assert.deepEqual(result.state.layers[0].filters, authoredFilters,
+      "Studio state changed the bounded filter values");
+    assert.deepEqual(readPayloadSettings(result.payload).artLayers[0].f,
+      [-12, 0.9, 1.05, 1.1, 2],
+    "The renderer payload changed the fixed filter order");
+    const filterRevision = result.state.revision;
+    await assert.rejects(request(action(result, "set-theme-layer", {
+      index: 0, preset: "filters", property: "blurPx", value: 25,
+    })), /between 0 and 24/);
+    assert.equal(JSON.parse(await fs.readFile(paths.state, "utf8")).revision, filterRevision,
+      "A rejected filter value advanced Studio history");
+    for (const [property, value] of Object.entries({
+      hueDeg: 0, saturation: 1, brightness: 1, contrast: 1, blurPx: 0,
+    })) {
+      result = await request(action(result, "set-theme-layer", {
+        index: 0, preset: "filters", property, value,
+      }));
+    }
+    activeDocument = JSON.parse(await fs.readFile(paths.theme, "utf8"));
+    assert.equal(Object.hasOwn(activeDocument.artworkLayers[0], "filters"), false,
+      "All-neutral filters were saved instead of being pruned");
+    assert.equal(Object.hasOwn(readPayloadSettings(result.payload).artLayers[0], "f"), false,
+      "All-neutral filters reached the compact renderer payload");
   } finally {
     await fs.rm(temporary, { recursive: true, force: true });
   }

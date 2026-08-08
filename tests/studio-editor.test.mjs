@@ -606,6 +606,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "apply-theme-patch",
     "pick-theme-layer-image",
     "pick-theme-launcher-mark",
+    "pick-sidebar-identity-mark",
     "pick-instant-prompt-icon",
     "remove-theme-layer",
     "move-theme-layer",
@@ -716,6 +717,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "apply-theme-patch": ["type", "session", "revision", "changes"],
     "pick-theme-layer-image": ["type", "session", "revision", "index", "role", "appearance", "context"],
     "pick-theme-launcher-mark": ["type", "session", "revision"],
+    "pick-sidebar-identity-mark": ["type", "session", "revision"],
     "pick-instant-prompt-icon": ["type", "session", "revision", "id"],
     "remove-theme-layer": ["type", "session", "revision", "index"],
     "move-theme-layer": ["type", "session", "revision", "index", "direction"],
@@ -787,6 +789,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     metadata: ["kind", "field", "locale", "value"],
     "metadata-locale": ["kind", "locale", "enabled"],
     greeting: ["kind", "operation", "appearance", "frame", "value"],
+    surface: ["kind", "target", "slot", "axis", "property", "value"],
   })) {
     const kindBlock = patchValidation.match(new RegExp(`'${kind}'\\s*\\{([\\s\\S]*?)(?=\\n\\s*'|\\n\\s*default)`))?.[1] ?? "";
     for (const property of exactProperties) {
@@ -1043,7 +1046,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Source must not make every target Customized because an unrelated field is dirty");
   assert.match(inspectorContextBlock, /const tokenMode[\s\S]*?contextApplies\.textContent/,
     "Applies-to text must derive the active color mode from the selected field");
-  for (const target of ["background.layer", "interface.new-chat-area", "interface.greeting"]) {
+  for (const target of ["background.layer", "interface.prompt-block", "interface.greeting"]) {
     assert(inspectorContextBlock.includes(`inspectorTarget === "${target}"`),
       `Applies-to text does not describe ${target}`);
   }
@@ -1057,8 +1060,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /stageOverrides\.get\(`layers\[\$\{layer\.index}]\.\$\{property}`\) \?\? layer\[property\]/,
     "Layer Applies to must reflect a staged scope immediately, including while host sync is deferred");
   assert.match(inspectorContextBlock,
-    /const fieldFrame\s*=\s*\/\^layers[\s\S]{0,300}?shared\\\.greeting\\\.frames[\s\S]{0,180}?contextFrameRow\.hidden\s*=\s*!fieldFrame/,
-    "Only a responsive image or greeting-frame property may show the Standard or Wide edit target");
+    /const fieldFrame\s*=\s*\/\^layers[\s\S]{0,300}?shared\\\.greeting\\\.frames[\s\S]{0,260}?inspectorField === "shared\.prompt"[\s\S]{0,180}?contextFrameRow\.hidden\s*=\s*!fieldFrame/,
+    "Only responsive image, prompt, or greeting-frame properties may show the Standard or Wide edit target");
   assert.match(inspectorContextBlock,
     /const editFrameLabel[\s\S]{0,140}?const previewFrameLabel\s*=\s*tr\(stageViewport[\s\S]{0,320}?editFrameLabel[\s\S]{0,120}?customFrameUses"\), previewFrameLabel/,
     "A custom preview must name its resolved saved set without replacing the field's edit target");
@@ -1193,9 +1196,19 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The launcher picker must be host-owned, PNG-only, size-bounded, copied into app data, and cleaned up");
   assert.match(ui, /Invoke-AuraUiPickThemeLauncherMark[\s\S]{0,500}?UiCopy\.chooseThemeLauncherMarkTitle/,
     "The mark picker must identify its purpose instead of reusing generic artwork copy");
-  assert.equal((ui.match(/StudioEditorState\['error'\]\s*=\s*'picker-cancelled'/g) ?? []).length, 2,
-    "Closing either host-owned image picker must be acknowledged as neutral cancellation");
+  const requestSidebarIdentityMarkBlock = studioEditor.match(
+    /const requestSidebarIdentityMark\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\n\s*};/,
+  )?.[0] ?? "";
+  assert.match(requestSidebarIdentityMarkBlock,
+    /const base = mutationBase\(\);[\s\S]{0,120}?post\(\{ type: "pick-sidebar-identity-mark", \.\.\.base \}\)/,
+    "Portable sidebar identity replacement must use its exact host-owned picker action");
+  assert.match(ui,
+    /function Invoke-AuraUiPickThemeSidebarIdentityMark[\s\S]{0,500}?UiCopy\.chooseSidebarIdentityMarkTitle[\s\S]{0,300}?PNG \(\*\.png\)\|\*\.png[\s\S]{0,800}?ReparsePoint[\s\S]{0,500}?400000[\s\S]{0,700}?\[IO\.File\]::Copy[\s\S]{0,500}?-AssetPath \$targetPath[\s\S]{0,1000}?Studio sidebar identity import cleanup failed/,
+    "The sidebar identity picker must be separately named, PNG-only, size-bounded, copied into app data, and cleaned up");
+  assert.equal((ui.match(/StudioEditorState\['error'\]\s*=\s*'picker-cancelled'/g) ?? []).length, 3,
+    "Closing any theme image picker must be acknowledged as neutral cancellation");
   assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-theme-launcher-mark' -ActionSucceeded \$true/g) ?? []).length, 1);
+  assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-sidebar-identity-mark' -ActionSucceeded \$true/g) ?? []).length, 1);
   assert.match(ui, /Send-AuraUiStudioState -Action \$action -ActionSucceeded \$true/,
     "Layer and instant-prompt picker cancellation must settle through their exact requested action");
   assert.match(studioEditor,
@@ -1220,10 +1233,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Windows host must verify editor preview bytes against the digest in their exact URL");
   for (const locale of ["en", "zh-CN", "zh-HKTW"]) {
     assert(uiCopy[locale].chooseThemeLauncherMarkTitle
+      && uiCopy[locale].chooseSidebarIdentityMarkTitle
       && uiCopy[locale].themeLauncherMarkImported
       && uiCopy[locale].themeLauncherMarkFailed
       && uiCopy[locale].themeLauncherMarkApplyFailed,
-    `${locale} must localize the mark picker and its result`);
+    `${locale} must distinguish the app-mark and sidebar-identity pickers and localize their result`);
     assert.match(uiCopy[locale].themeLauncherMarkFailed, /(?:static|静态|靜態)/,
       `${locale} must explain that animated launcher marks are rejected`);
   }
@@ -1234,10 +1248,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /Complete-AuraUiStudioEditorAction[\s\S]{0,2500}?pick-theme-launcher-mark[\s\S]{0,400}?LauncherStyleAppliedAsRequested[\s\S]{0,500}?identity-apply-failed[\s\S]{0,600}?themeLauncherMarkApplyFailed/,
     "A Windows identity-application failure must not be reported as a clean mark replacement");
   assert.match(studioHtml,
-    /class="editor-section" data-editor-branch="background" data-editor-targets="background\.canvas background\.layer" aria-labelledby="editor-background-title"/,
+    /id="editor-background-scope-section" class="editor-section" data-editor-branch="background" data-editor-targets="background\.layer" aria-labelledby="editor-background-title"/,
     "Background scope must stay visible before or after an image is selected");
   assert.match(studioHtml,
-    /data-editor-targets="background\.canvas background\.layer" aria-labelledby="editor-layers-title"[\s\S]{0,1100}?id="editor-add-layer"/,
+    /data-editor-targets="background\.layer" aria-labelledby="editor-layers-title"[\s\S]{0,1100}?id="editor-add-layer"/,
     "Background must expose Add image on first entry without requiring Image 1");
   assert.match(studioEditor,
     /const scopeRect = backgroundScopeRect\(scope,[\s\S]{0,260}?const backgroundSelected = backgroundScopeUiActive\(inspectorPage,\s*isBuiltInLayoutEdit\(\)\)[\s\S]{0,520}?stageBackgroundSelection\.style\.width/,
@@ -2222,7 +2236,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   for (const forbiddenSurface of [
     "#editor-document-details",
     '[data-editor-targets~="interface.theme"]',
-    '[data-editor-targets~="background.canvas"]',
+    "#editor-background-scope-section",
+    ".editor-prompt-material",
+    ".layer-filter-controls",
     '[data-editor-targets~="widgets.app-identity"]',
     ".editor-greeting-personal",
     "#editor-greeting-reset",
@@ -2238,7 +2254,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       `Built-in layout mode still exposes forbidden surface ${forbiddenSurface}`);
   }
   assert.match(studioEditor,
-    /const BUILTIN_LAYOUT_TARGETS = new Set\(\[[\s\S]{0,180}?"interface\.new-chat-area"[\s\S]{0,120}?"interface\.greeting"[\s\S]{0,120}?"background\.layer"/,
+    /const BUILTIN_LAYOUT_TARGETS = new Set\(\[[\s\S]{0,180}?"interface\.prompt-block"[\s\S]{0,120}?"interface\.greeting"[\s\S]{0,120}?"background\.layer"/,
     "Built-in layout navigation must contain only prompt, greeting, and existing artwork framing");
   assert.match(studioEditor,
     /const BUILTIN_LAYOUT_LAYER_PROPERTIES = new Set\(\[[\s\S]{0,180}?"anchor"[\s\S]{0,180}?"scale"/,
@@ -2253,7 +2269,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /if \(isBuiltInLayoutEdit\(\)\)[\s\S]{0,400}?message\.changes\.every\(builtInLayoutChangeAllowed\)[\s\S]{0,220}?return false/,
     "Hidden controls must not be able to post a forbidden permanent-theme mutation");
   assert.match(studioEditor,
-    /editor\.dataset\.level\s*=\s*"advanced"[\s\S]{0,700}?setInspectorTarget\("interface\.new-chat-area"\)[\s\S]{0,120}?stageSelection\s*=\s*\{\s*kind:\s*"prompt"\s*\}/,
+    /editor\.dataset\.level\s*=\s*"advanced"[\s\S]{0,700}?setInspectorTarget\("interface\.prompt-block"\)[\s\S]{0,120}?stageSelection\s*=\s*\{\s*kind:\s*"prompt"\s*\}/,
     "Built-in layout entry must open on a valid, fully exposed layout target");
   const builtInPresentationBlock = studioEditor.slice(
     studioEditor.indexOf("const syncBuiltInLayoutPresentation"),
@@ -2389,8 +2405,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.equal((studioHtml.match(/type="radio" name="stage-context"/g) ?? []).length, 2,
     "The stage must expose native new-chat and conversation context toggles");
   assert.match(studioEditor,
-    /window\.CLAUDE_AURA_EDITOR\s*=\s*Object\.freeze\(\{[\s\S]{0,500}?createController,[\s\S]{0,500}?normalizeEditorState,[\s\S]{0,500}?normalizeStudioStyle,[\s\S]{0,500}?normalizeCapabilityRegistry,[\s\S]{0,500}?reconcileDuplicateTokenValue,[\s\S]{0,500}?backgroundScopeUiActive,[\s\S]{0,500}?capabilityRegistry:\s*EDITOR_CAPABILITY_REGISTRY,?\s*\}\)/,
-    "The editor module must expose its controller, strict validators, and read-only capability registry");
+    /window\.CLAUDE_AURA_EDITOR\s*=\s*Object\.freeze\(\{[\s\S]{0,500}?createController,[\s\S]{0,500}?normalizeEditorState,[\s\S]{0,500}?normalizeStudioStyle,[\s\S]{0,500}?normalizeInterfaceSurfaces,[\s\S]{0,500}?normalizeCapabilityRegistry,[\s\S]{0,500}?reconcileDuplicateTokenValue,[\s\S]{0,500}?backgroundScopeUiActive,[\s\S]{0,500}?capabilityRegistry:\s*EDITOR_CAPABILITY_REGISTRY,[\s\S]{0,120}?registeredViews:\s*REGISTERED_VIEW_IDS,?\s*\}\)/,
+    "The editor module must expose its controller, strict validators, registered views, and read-only capability registry");
 
   const editorActionMatch = studioEditor.match(/const ACTIONS\s*=\s*new Set\(\[([\s\S]*?)\]\);/);
   assert(editorActionMatch, "The editor action allowlist is missing");
@@ -2410,8 +2426,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(pendingWatchdogBlock, /WATCHDOG_EXEMPT_ACTIONS\.has\(action\)/,
     "file-picker actions wait on the user and must be exempt from the watchdog");
   assert.match(studioEditor,
-    /WATCHDOG_EXEMPT_ACTIONS = new Set\(\[[\s\S]{0,140}?"pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon"/,
-    "only the three host-owned picker actions may skip the pending-action watchdog");
+    /WATCHDOG_EXEMPT_ACTIONS = new Set\(\[[\s\S]{0,180}?"pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon"/,
+    "only the four host-owned picker actions may skip the pending-action watchdog");
 
   assert.match(studioEditor,
     /const STRINGS = Object\.fromEntries\(\s*Object\.entries\(window\.CLAUDE_AURA_STRINGS \?\? \{\}\)/,
@@ -2481,8 +2497,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && !studioEditor.includes('documentDetailsPanel?.addEventListener("keydown"'),
   "Details must not retain disclosure-only aria-expanded or Escape-to-close behavior");
   assert.match(studioHtml,
-    /class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface\.new-chat-area"/,
-    "Canvas selection must route the new-chat area to its Interface target in both editor levels");
+    /class="editor-section editor-prompt-context" data-editor-branch="interface" data-editor-targets="interface\.prompt-block"/,
+    "Canvas selection must route new-chat prompt geometry to the Prompt block target in both editor levels");
   const metadataCardBlock = studioEditor.slice(
     studioEditor.indexOf("const renderMetadataLocales"),
     studioEditor.indexOf("const reflectMetadata"),
@@ -3155,8 +3171,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(!/dataset\.level === "advanced"[\s\S]{0,120}?setInspectorTarget\("background\.layer"\)/.test(stageSelectionBlock),
     "Quick artwork selection must not be gated behind Advanced mode");
   assert.match(stageSelectionBlock,
-    /selection\?\.kind === "prompt"[\s\S]{0,160}?setInspectorTarget\("interface\.new-chat-area",\s*\{\s*reveal\s*}\)/,
-    "Selecting the new-chat area must route to and reveal Interface without leaving image controls visible");
+    /selection\?\.kind === "prompt"[\s\S]{0,160}?setInspectorTarget\("interface\.prompt-block",\s*\{\s*reveal\s*}\)/,
+    "Selecting the new-chat prompt must route to and reveal Prompt block without leaving image controls visible");
   assert.match(studioEditor,
     /stageRing\.dataset\.stageHandle\s*=\s*"move"[\s\S]{0,100}?stageRing\.setAttribute\("aria-hidden",\s*"true"\)/,
     "The current selection ring must provide a pointer move surface without becoming a duplicate keyboard control");
@@ -3200,8 +3216,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /inspectorBranch === "widgets"[\s\S]{0,160}?return false/,
     "Widgets must reject blank WebView canvas selection");
   assert.match(selectStageBranchSurfaceBlock,
-    /inspectorBranch === "interface" \? "interface\.theme" : "background\.canvas"/,
-    "A blank Background click may select the canvas without changing its scope");
+    /inspectorBranch === "interface" \? "interface\.theme" : "background\.layer"/,
+    "A blank Background click may select the single Background target without changing its scope");
   assert.doesNotMatch(selectStageBranchSurfaceBlock, /setBackgroundScope|backgroundScopeFromPointer/,
     "Blank preview clicks must not overwrite an explicit background scope");
   assert.match(studioEditor,
@@ -3216,7 +3232,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(stagePointerBlock, /artWidth:\s*scopeRect\.width/,
     "Artwork movement must use the same validated scope width");
   assert.match(selectStageBranchSurfaceBlock,
-    /inspectorBranch === "interface" \? "interface\.theme"\s*:\s*"background\.canvas"/,
+    /inspectorBranch === "interface" \? "interface\.theme"\s*:\s*"background\.layer"/,
     "Non-pointer branch selection must stay inside the active capability");
   assert(!selectStageBranchSurfaceBlock.includes('"widgets.app-identity"'),
     "The host-only App identity may be selected only through its local preview");
@@ -3381,10 +3397,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     editorApi.capabilityRegistry.map((entry) => entry.id),
     [
       "interface.theme",
-      "interface.sidebar-wordmark",
-      "interface.new-chat-area",
+      "interface.sidebar",
+      "interface.sidebar-identity",
+      "interface.prompt-block",
       "interface.greeting",
-      "background.canvas",
       "background.layer",
       "widgets.app-identity",
       "widgets.instant-prompts",
@@ -3393,16 +3409,17 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   );
   assert.deepEqual(
     editorApi.capabilityRegistry
-      .find((entry) => entry.id === "interface.sidebar-wordmark"),
+      .find((entry) => entry.id === "interface.sidebar-identity"),
     {
-      id: "interface.sidebar-wordmark",
+      id: "interface.sidebar-identity",
+      surfaceId: "sidebar-identity",
       branch: "interface",
       views: ["new-chat", "conversation"],
-      axes: [],
+      axes: ["appearance"],
       captureGeometry: "local-preview",
       selectionBehavior: "picker",
     },
-    "Sidebar wordmark must be a complete Interface dropdown page without a theme-owned edit axis",
+    "Sidebar identity must be a complete appearance-scoped Interface page",
   );
   assert(editorApi.capabilityRegistry
     .find((entry) => entry.id === "interface.greeting")?.axes.includes("frame"),
@@ -3426,17 +3443,17 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     ), `editor.css still exposes the entire ${branch} branch as one long page`);
   }
   assert.match(studioHtml,
-    /data-editor-targets="background\.canvas background\.layer"/,
-    "The asset and safe-zone guide must remain shared by both Background pages");
+    /data-editor-targets="background\.layer"[^>]*aria-labelledby="asset-guide-title"/,
+    "The asset and safe-zone guide must remain part of the single Background target");
   assert.deepEqual(
-    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.new-chat-area")?.axes,
-    [],
-    "Shared new-chat placement must not claim separate Standard and Wide saved values",
+    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.prompt-block")?.axes,
+    ["appearance", "frame"],
+    "Prompt material must be appearance-scoped while new-chat geometry retains Standard and Wide frames",
   );
   assert.equal(
-    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.new-chat-area")?.selectionBehavior,
+    editorApi.capabilityRegistry.find((entry) => entry.id === "interface.prompt-block")?.selectionBehavior,
     "stage-prompt",
-    "New-chat-area selection must route to the prompt geometry",
+    "Prompt-block selection must route to its outer new-chat geometry",
   );
   assert.equal(
     editorApi.capabilityRegistry.find((entry) => entry.id === "interface.greeting")?.selectionBehavior,
@@ -3449,7 +3466,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   for (const entry of editorApi.capabilityRegistry) {
     assert.deepEqual(
       Object.keys(entry).sort(),
-      ["axes", "branch", "captureGeometry", "id", "selectionBehavior", "views"],
+      ["axes", "branch", "captureGeometry", "id", "selectionBehavior", "surfaceId", "views"],
       `${entry.id} exposes an unregistered route, selector, or extension field`,
     );
     assert(Object.isFrozen(entry) && Object.isFrozen(entry.views) && Object.isFrozen(entry.axes),
@@ -3463,10 +3480,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(editorApi.normalizeCapabilityRegistry(capabilityDto()),
     "The editor rejected its own exact capability DTO");
   for (const [label, mutate] of [
-    ["unknown target", (registry) => { registry[0].id = "interface.sidebar"; }],
+    ["unknown target", (registry) => { registry[0].id = "interface.extra"; }],
     ["unknown view", (registry) => { registry[0].views.push("code"); }],
     ["unknown axis", (registry) => { registry[0].axes.push("selector"); }],
     ["branch mismatch", (registry) => { registry[0].branch = "widgets"; }],
+    ["surface mismatch", (registry) => { registry[0].surfaceId = "sidebar"; }],
     ["extra selector", (registry) => { registry[0].selector = "main"; }],
     ["extra target", (registry) => { registry.push({ ...registry[0], id: "background.extra" }); }],
   ]) {
@@ -3530,6 +3548,31 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     },
     launcherPreviewUrl: "https://aura.assets/default/launcher-mark.png",
     launcherStylePreviewUrl: "https://aura.assets/default/launcher-mark.png",
+    interfaceSurfaces: {
+      sidebar: {
+        appearance: {
+          light: { surface: "#EFEFEF", primaryText: "#202020", rowRadius: 14, spacing: "comfortable" },
+          dark: { surface: "#202020", primaryText: "#F0F0F0" },
+        },
+      },
+      sidebarIdentity: {
+        base: { mode: "styled-label", font: "editorial-serif", weight: 600, fontSize: 20, letterSpacing: 0 },
+        appearance: { light: { color: "#202020" }, dark: { color: "#F0F0F0" } },
+      },
+      promptBlock: {
+        appearance: {
+          light: { surface: "#FFFFFF", foreground: "#202020", border: "#777777", focus: "#805AD5" },
+          dark: { surface: "#282828", foreground: "#F0F0F0", border: "#999999", focus: "#B794F4" },
+        },
+        frame: {
+          standard: { widthRatio: 0.7, offsetXRatio: 0, offsetYRatio: 0 },
+          wide: { widthRatio: 0.62, offsetXRatio: 0.04, offsetYRatio: -0.03 },
+        },
+      },
+    },
+    interfaceStyle: null,
+    identityPreviewUrl: null,
+    identityStylePreviewUrl: null,
     shared: {
       fontUi: "system-sans", fontDisplay: "editorial-serif", radius: 12, blur: 16,
       shadow: "soft", backgroundScope: "content", prompt: { native: false, width: 0.7, x: 0, y: 0 },
@@ -3562,6 +3605,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       id: "layer-00000000000000000000000000000000", index: 0,
       role: "hero", appearance: "all", context: "new-chat", viewport: "normal",
       visible: true, opacity: 0.9, mask: "soft-right", mobile: "reduce", bytes: 399_999,
+      filters: { hueDeg: -12, saturation: 0.9, brightness: 1.05, contrast: 1.1, blurPx: 2 },
       previewUrl: "https://aura.editor/active/layer-00000000000000000000000000000000.webp?v=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       frames: {
         normal: { anchor: "right", focalX: 70, focalY: 50, positionX: 0, positionY: 0, scale: 1 },
@@ -3602,6 +3646,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Editor-state validation changed the editable App identity style");
   assert.deepEqual(normalizedEditorState.launcherStyle, validEditorState.launcherStyle,
     "Editor-state validation changed the last-valid App identity style");
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizedEditorState.interfaceSurfaces)), validEditorState.interfaceSurfaces,
+    "Editor-state validation changed sparse Interface surface overrides");
+  assert.deepEqual(JSON.parse(JSON.stringify(normalizedEditorState.layers[0].filters)), validEditorState.layers[0].filters,
+    "Editor-state validation changed bounded fixed-order background filters");
   assert.deepEqual(normalizedEditorState.shared.inherited, validEditorState.shared.inherited,
     "Editor-state validation changed which shared controls still inherit the theme's original CSS");
   assert.equal(normalizedEditorState.shared.prompt.native, false,
@@ -5640,7 +5688,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
       "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
       "$script:PromptShelfMaxTextLength=8000",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
       "$script:PersonalWordmarkSession=$session",

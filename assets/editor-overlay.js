@@ -13,7 +13,7 @@
   ]);
   const GREETING_TARGET = "interface.greeting";
   const TARGETS = new Set([
-    "interface.theme", "interface.new-chat-area", GREETING_TARGET, "background.layer",
+    "interface.theme", "interface.sidebar", "interface.sidebar-identity", "interface.prompt-block", GREETING_TARGET, "background.layer",
     "widgets.instant-prompts",
   ]);
   const COPY_KEYS = [
@@ -314,17 +314,22 @@
     };
     const composer = closest(node, '[data-aura-role="composer-shell"],[data-claude-aura-prompt]');
     if (composer) return {
-      selection: interfaceSelection("interface.composer", composer, ["surface", "text", "border", "accent"]),
+      selection: interfaceSelection("interface.composer", composer, ["surface", "text", "border", "accent"], "interface.prompt-block"),
       node: composer,
     };
     const card = closest(node, '[data-aura-role="sidebar-row"]');
     if (card) return {
-      selection: interfaceSelection("interface.card", card, ["surface", "text", "border", "accent"]),
+      selection: interfaceSelection("interface.sidebar", card, ["sidebar", "text", "border", "accent"], "interface.sidebar"),
       node: card,
+    };
+    const identity = closest(node, "[data-claude-aura-brand-image]");
+    if (identity) return {
+      selection: interfaceSelection("interface.sidebar-identity", identity, ["text", "accent"], "interface.sidebar-identity"),
+      node: identity,
     };
     const sidebar = closest(node, "[data-claude-aura-sidebar]");
     if (sidebar) return {
-      selection: interfaceSelection("interface.sidebar", sidebar, ["sidebar", "text", "border", "accent"]),
+      selection: interfaceSelection("interface.sidebar", sidebar, ["sidebar", "text", "border", "accent"], "interface.sidebar"),
       node: sidebar,
     };
     const art = [];

@@ -362,13 +362,13 @@ test("Studio and the Windows host keep personal wordmark mutations exact and tra
   assert.match(html, /data-i18n="avatarHelp"[\s\S]{0,800}?id="personal-wordmark-current"/,
     "The wordmark editor must appear immediately below the account avatar");
   assert.match(html,
-    /data-editor-branch="interface" data-editor-targets="interface\.sidebar-wordmark" data-personal-wordmark-panel/,
-    "The theme editor Interface dropdown must expose a complete Sidebar wordmark page");
+    /data-editor-branch="interface" data-editor-targets="interface\.sidebar-identity" data-personal-wordmark-panel/,
+    "The portable identity target must keep the separate device-level wordmark preference on the same page");
   assert.match(editor,
-    /id:\s*"interface\.sidebar-wordmark"[\s\S]{0,180}?captureGeometry:\s*"local-preview"[\s\S]{0,100}?selectionBehavior:\s*"picker"/,
-    "The device-level page must use a local preview without claiming live-canvas selection");
+    /id:\s*"interface\.sidebar-identity"[\s\S]{0,220}?captureGeometry:\s*"local-preview"[\s\S]{0,100}?selectionBehavior:\s*"picker"/,
+    "Sidebar identity must use a local preview without claiming live-canvas geometry");
   assert(editorCss.includes(
-    'data-inspector-target="interface.sidebar-wordmark"] [data-editor-targets~="interface.sidebar-wordmark"]',
+    'data-inspector-target="interface.sidebar-identity"] [data-editor-targets~="interface.sidebar-identity"]',
   ), "The Interface target must reveal only its own complete page");
   const setConfigBlock = host.slice(
     host.indexOf("function Set-AuraUiConfig"),

@@ -13,15 +13,11 @@
     // A page-defined collision must never block navigation or the full renderer.
   }
 
-  if (settings.C === 1) {
-    const cssDictionary = [
-      "html.claude-aura", "[data-claude-aura-", "hsl(var(--aura-", "var(--aura-",
-      "!important", "#claude-aura-backdrop", "background-", "border-",
-    ];
-    cssText = cssText.replace(
-      /[\uE000-\uE007]/g,
-      (token) => cssDictionary[token.charCodeAt(0) - 0xE000],
-    );
+  if (Array.isArray(settings.C)) {
+    for (let index = settings.C.length - 1; index >= 0; index -= 1) {
+      cssText = cssText.replaceAll(String.fromCharCode(0x0100 + index), settings.C[index]);
+    }
+    delete settings.C;
   }
 
   const STYLE_ID = "claude-aura-style";
@@ -124,6 +120,9 @@
         element.style.setProperty("opacity", String(opacity));
       }
       if (hidden) element.style.setProperty("display", "none");
+      if (Array.isArray(layer.f) && layer.f.length === 5) {
+        element.style.setProperty("filter", `hue-rotate(${layer.f[0]}deg) saturate(${layer.f[1]}) brightness(${layer.f[2]}) contrast(${layer.f[3]}) blur(${layer.f[4]}px)`);
+      }
     }
   };
 

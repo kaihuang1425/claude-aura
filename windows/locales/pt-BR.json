@@ -65,6 +65,7 @@
   "themeAlreadyInstalled": "Já existe um tema chamado {0} instalado.",
   "chooseThemeLayerImageTitle": "Escolher arte do tema",
   "chooseThemeLauncherMarkTitle": "Escolher marca do aplicativo",
+  "chooseSidebarIdentityMarkTitle": "Selecionar marca de identidade da barra lateral",
   "themeCopyReady": "A cópia do tema está pronta para personalizar.",
   "themeEditReady": "O editor de tema está pronto.",
   "themeLayerImageImported": "A arte foi importada.",

@@ -38,6 +38,15 @@ export {
   normalizeLocale,
 } from "./theme-core/validation.mjs";
 export {
+  INTERFACE_SURFACE_SPECS,
+  validateInterfaceSurfaces,
+  resolveInterfaceSurface,
+  renderInterfaceSurfacesCss,
+  promptFrameOverrides,
+  validateLayerFilters,
+  layerFilterCss,
+} from "./theme-core/surface-overrides.mjs";
+export {
   readThemeKit,
   readThemeRegistry,
   listThemes,
@@ -86,6 +95,7 @@ export {
   setGreetingPhrases,
   resetGreeting,
   attachThemeLayerImage,
+  attachThemeSidebarIdentityMark,
   attachInstantPromptIcon,
   removeThemeLayer,
   moveThemeLayer,
