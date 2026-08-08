@@ -4856,9 +4856,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(navigationStartingHandler,
     /\$script:ActiveNavigationId\s*=\s*\[UInt64\]\$eventArgs\.NavigationId/,
     "Every main navigation must record its WebView2 NavigationId");
-  assert.match(ui,
-    /\$core\.add_DOMContentLoaded\(\{[\s\S]{0,700}?\$script:ReadyNavigationId\s*=\s*\[UInt64\]\$eventArgs\.NavigationId[\s\S]{0,220}?Hide-AuraUiLoading/,
-    "A current claude.ai DOMContentLoaded signal must reveal the usable post-auth document");
+  const domContentLoadedIndex = ui.indexOf("$core.add_DOMContentLoaded({", navigationStartingEnd);
+  const domContentLoadedEnd = ui.indexOf("$core.add_NavigationCompleted({", domContentLoadedIndex);
+  assert(domContentLoadedIndex >= 0 && domContentLoadedEnd > domContentLoadedIndex,
+    "Aura UI must register its main DOMContentLoaded handler");
+  const domContentLoadedHandler = ui.slice(domContentLoadedIndex, domContentLoadedEnd);
+  assert.match(domContentLoadedHandler,
+    /\$script:ReadyNavigationId\s*=\s*\[UInt64\]\$eventArgs\.NavigationId/,
+    "DOMContentLoaded must preserve the usable post-auth cancellation signal");
+  assert.doesNotMatch(domContentLoadedHandler, /\$script:PageReady\s*=\s*\$true/,
+    "DOMContentLoaded must not authorize error paths to uncover an unpresented document");
+  assert.doesNotMatch(domContentLoadedHandler, /Hide-AuraUiLoading/,
+    "DOMContentLoaded must not uncover Claude before WebView2 reports navigation complete");
   assert.match(ui,
     /Get-AuraUiNavigationCompletionDisposition[\s\S]{0,700}?if\s*\(\$navigationDisposition\s+-eq\s+['"]Ignore['"]\)\s*\{[\s\S]{0,260}?return/,
     "A stale completion must return before it can change the loading cover");
@@ -6642,6 +6651,51 @@ test("WO-29 activates the layered launcher and dispatches host work without poll
     Buffer.from(smoke, "utf16le").toString("base64"),
   ], { timeout: 30_000 });
   assert.match(output, /WO-29 launcher and dispatch smoke: PASS/);
+});
+
+test("Windows keeps the startup cover through DOMContentLoaded", () => {
+  const regression = [
+    "$ErrorActionPreference='Stop'",
+    `$uiPath='${path.join(PROJECT_ROOT, "windows", "aura-ui.ps1").replaceAll("'", "''")}'`,
+    "$tokens=$null;$errors=$null",
+    "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
+    "if($errors.Count){throw 'Could not parse Aura UI for startup-cover regression'}",
+    "$claudeUri=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Test-AuraUiClaudeUri'},$true)",
+    "if($null -eq $claudeUri){throw 'Missing Test-AuraUiClaudeUri'}",
+    "Invoke-Expression $claudeUri.Extent.Text",
+    "$handlerCalls=@($ast.FindAll({param($node)$node -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and \"$($node.Member.Value)\" -ceq 'add_DOMContentLoaded' -and $node.Extent.Text -match 'ActiveNavigationId'},$true))",
+    "if($handlerCalls.Count -ne 1){throw \"Expected one main DOMContentLoaded handler; found $($handlerCalls.Count)\"}",
+    "$handlerFactory=[scriptblock]::Create($handlerCalls[0].Arguments[0].Extent.Text)",
+    "$handler=& $handlerFactory",
+    "function Test-AuraUiRescueChallengeCandidate { return $false }",
+    "function Hide-AuraUiLoading { $script:HideCount++ }",
+    "$script:HideCount=0",
+    "$script:ActiveNavigationId=[UInt64]42",
+    "$script:ReadyNavigationId=$null",
+    "$script:PageReady=$false",
+    "$script:NavigationRecoverySurface='None'",
+    "$script:RescueChallengeCandidate=$null",
+    "$script:WebView=[PSCustomObject]@{Source='https://claude.ai/'}",
+    "& $handler $null ([PSCustomObject]@{NavigationId=[UInt64]42})",
+    "if($script:HideCount -ne 0){throw 'DOMContentLoaded uncovered Claude before navigation completion'}",
+    "if($script:PageReady){throw 'DOMContentLoaded authorized an early error-path reveal'}",
+    "if([UInt64]$script:ReadyNavigationId -ne [UInt64]42){throw 'DOMContentLoaded lost its cancellation fallback signal'}",
+    "$script:ReadyNavigationId=$null",
+    "& $handler $null ([PSCustomObject]@{NavigationId=[UInt64]41})",
+    "if($null -ne $script:ReadyNavigationId -or $script:HideCount -ne 0){throw 'A stale DOMContentLoaded changed the current cover'}",
+    "$script:WebView.Source='https://example.com/'",
+    "& $handler $null ([PSCustomObject]@{NavigationId=[UInt64]42})",
+    "if($null -ne $script:ReadyNavigationId -or $script:HideCount -ne 0){throw 'A non-Claude DOMContentLoaded changed the current cover'}",
+    "Write-Output 'Startup cover DOM handoff: PASS'",
+  ].join("\n");
+  const output = run("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-EncodedCommand",
+    Buffer.from(regression, "utf16le").toString("base64"),
+  ]);
+  assert.match(output, /Startup cover DOM handoff: PASS/);
 });
 
 runIfMain(import.meta.url);

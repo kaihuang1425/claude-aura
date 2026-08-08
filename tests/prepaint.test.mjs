@@ -335,4 +335,24 @@ test("Windows registers passive prepaint before initial navigation and keeps fai
     "Semantic renderer work must remain behind late-response verification");
 });
 
+test("Windows keeps the WebView controller color-compatible with the startup cover", async () => {
+  const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
+  const loadingThemeStart = ui.indexOf("function Update-AuraUiLoadingTheme");
+  const loadingThemeEnd = ui.indexOf("\nfunction ", loadingThemeStart + 1);
+  const loadingTheme = ui.slice(loadingThemeStart, loadingThemeEnd);
+  const webViewCreated = ui.indexOf(
+    "$script:WebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()",
+  );
+  const initialCoverPrepared = ui.indexOf("\n  Update-AuraUiLoadingTheme", webViewCreated);
+  const formContentAttached = ui.indexOf("$script:Form.Controls.Add($content)", webViewCreated);
+
+  assert.match(loadingTheme,
+    /\$script:WebView\.DefaultBackgroundColor\s*=\s*\$profile\.Background/,
+    "The separately composed WebView surface must match the native cover before navigation");
+  assert.ok(webViewCreated >= 0 &&
+    initialCoverPrepared > webViewCreated &&
+    initialCoverPrepared < formContentAttached,
+    "The selected cover and controller color must be prepared before the form can present content");
+});
+
 runIfMain(import.meta.url);

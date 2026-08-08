@@ -2054,6 +2054,7 @@ function Update-AuraUiLoadingTheme {
     }
     if ($null -ne $script:WebView -and -not $script:WebView.IsDisposed) {
       $script:WebView.BackColor = $profile.Background
+      $script:WebView.DefaultBackgroundColor = $profile.Background
     }
     Set-AuraUiLoadingLayout
     Update-AuraUiLoadingBackground
@@ -10634,11 +10635,11 @@ public static class AuraUiAsyncDispatch {
           }
           # NavigationCompleted may report OperationCanceled or ConnectionAborted
           # after a usable post-auth document has already reached DOMContentLoaded.
-          # Record that concrete readiness signal and reveal the page immediately;
-          # theme injection remains independent and runs from NavigationCompleted.
+          # Preserve that readiness signal so the matching completion remains
+          # fail-open, but keep the native cover until WebView2 reports completion.
+          # Theme injection remains independent and runs later.
           $script:ReadyNavigationId = [UInt64]$eventArgs.NavigationId
-          $script:PageReady = $true
-          Hide-AuraUiLoading
+          $script:NavigationRecoverySurface = 'None'
           if (Test-AuraUiRescueChallengeCandidate `
               -Candidate $script:RescueChallengeCandidate `
               -CompletedNavigationId ([UInt64]$eventArgs.NavigationId) `
