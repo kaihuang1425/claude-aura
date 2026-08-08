@@ -1,364 +1,346 @@
-# Theme authoring
+# Build your first Claude Aura theme in 30 minutes
 
-Claude Aura themes are registered interface systems. A theme combines localized
-picker metadata, semantic light and dark tokens, typography, shape, effects,
-wallpaper behavior, optional launcher material, optional component variants,
-and optional isolated artwork.
+You do not need to know JSON, CSS, or this repository to make a theme. Start
+with Aura Studio. It keeps the built-in themes unchanged, checks your work as
+you go, and saves the result only on this Windows device.
 
-Do not add a theme by placing an unregistered JSON file in `themes/`. The
-registry is the source of truth for order, stable IDs, labels, descriptions,
-swatches, preview colors, and artwork slots.
+By the end of this tutorial, you will have:
 
-## Architecture
+- made a custom Light and Dark theme;
+- checked it in the actual Aura window on live `claude.ai`;
+- saved it and confirmed that it survives a restart; and
+- learned how to delete it completely.
 
-| File | Responsibility |
-| --- | --- |
-| `themes/registry.json` | Canonical order, Default ID, legacy aliases, localized picker metadata, swatches, preview colors, and artwork metadata |
-| `themes/<id>.json` | Light/dark semantic values, typography, shape, effects, wallpaper behavior, optional launcher material, and optional custom CSS |
-| `scripts/theme-core.mjs` | Schema validation, locale normalization, fallback resolution, semantic defaults, compatibility-token expansion, artwork validation, and payload compilation |
-| `assets/base.css` | Shared runtime styling driven by semantic variables |
-| `assets/theme-variants.css` | Centralized component-level differentiation selected by the stable root theme attribute |
-| `assets/renderer-inject.js` | Reversible in-page installation and cleanup of the compiled theme payload |
-| `windows/aura-ui.ps1` | Windows host for the live Claude WebView, Aura Studio bridge, launcher, app identity, and native persistence |
-| `scripts/build-studio-themes.mjs` | Generates Aura Studio's theme-card metadata from `listThemes()` |
+The second half shows the folder-and-command route for contributors. You can
+skip it if you only want to use Studio.
 
-The compiler applies the selected ID through
-`data-claude-aura-theme="<id>"`. Shared components consume semantic variables;
-theme-specific structural refinements live under root selectors such as:
+> **What counts as a visual check?** Studio's canvas is a placement aid. Even
+> when it shows a private in-memory capture, it is not acceptance evidence.
+> Judge the final result in the separate, whole Aura window on live
+> `claude.ai`.
 
-```css
-html.claude-aura[data-claude-aura-theme="my-theme"] [role="dialog"] {
-  border-radius: var(--aura-card-radius);
-}
+## Before you start
+
+For the Studio route, you need:
+
+- Claude Aura installed;
+- an internet connection and a signed-in `claude.ai` session in Aura; and
+- about 30 uninterrupted minutes.
+
+For the command route, you also need:
+
+- a Claude Aura source checkout;
+- Node.js 22 or newer;
+- Git available from PowerShell; and
+- PowerShell opened at the checkout's top-level folder, the one containing
+  `package.json`, `scripts`, and `themes`.
+
+The button and page names below assume Studio is using English. On a first
+launch, choose **English** in **Meet Claude Aura**. If Studio is already using
+another language, choose **Settings** > **Interface language** > **English**
+for this walkthrough.
+
+## Route A: make a theme in Aura Studio
+
+This is the recommended route. It requires no code and never overwrites a
+built-in theme.
+
+### Minute 0-3: open the visual editor
+
+1. Open **Claude Aura Studio** from the Start menu. You can also right-click
+   Aura's floating button, choose **Open Studio**, and then choose
+   **Create a theme**.
+2. If **Meet Claude Aura** opens, choose **English**, then choose **Skip** or
+   close the welcome guide.
+3. In Studio's left rail, choose **Create a theme**.
+4. Choose **Customize Default**.
+5. Leave **Quick customize** selected for your first pass.
+
+Studio creates an editable draft. Every valid change is also applied to the
+actual Aura window, while an invalid change leaves Aura on the last valid
+version.
+
+### Minute 3-7: name it
+
+1. Choose **Document details**.
+2. Enter a short English name and a concrete one-sentence description.
+3. Open **Theme languages** only if you have reviewed copy for another
+   language. English is required; unselected languages use English.
+
+Good names describe a visual direction, such as `Quiet Moss` or
+`Midnight Paper`. Avoid version numbers and words that promise behavior the
+theme does not provide.
+
+### Minute 7-14: set Light and Dark
+
+1. Choose **Interface**.
+2. Select **Light** under **Theme mode**.
+3. Adjust the main colors first. Keep the page background calm, the text easy
+   to read, and the accent obvious without making every surface compete.
+4. Choose an interface font, corner radius, and shadow.
+5. Select **Dark** and repeat the same pass. Dark mode needs its own readable
+   colors; it is not an automatic inversion of Light mode.
+6. Watch the status near the editor controls. Continue only when it says the
+   preview is up to date and the contrast and size checks pass.
+
+If you want the two modes to start alike, switch to **Advanced** and use
+**Copy Light colors to Dark** or **Copy Dark colors to Light**, then tune the
+copied mode.
+
+### Minute 14-19: add optional artwork
+
+Skip this section for a colors-only theme.
+
+1. Choose **Background**.
+2. Choose whether the background covers the **Entire window** or the
+   **Main area only**.
+3. Under **Images**, choose an image type and then **Add image...**.
+4. Pick a local image that you own or have permission to distribute.
+5. Drag the image in the canvas or use its controls to position it.
+6. Check both **New chat** and **Conversation**, both **Standard** and
+   **Wide**, and both theme modes.
+
+Keep detailed subjects outside the text-safe and composer zones. Artwork is
+decorative: it must not contain fake controls, interface text, borrowed logos,
+or a person whose image you do not have permission to use.
+
+For an app mark, choose **Widgets** > **App identity** > **Replace mark** and
+use a static transparent 96 x 96 PNG. Keep the silhouette clear at 24-48 px.
+
+### Minute 19-25: review the real result
+
+1. Choose **Review states**.
+2. Check Light and Dark, New chat and Conversation, and Standard and Wide.
+3. Fix every highlighted contrast, size, or budget issue.
+4. Choose **Review in Aura**.
+5. In the actual Aura window, check that you can still:
+   - read the sidebar and conversation;
+   - use the composer and its controls;
+   - open menus and dialogs; and
+   - see focus clearly when using the keyboard.
+6. Return to Studio and choose **Save theme**.
+7. Wait until Studio returns to **Themes** and your new theme card says
+   **Selected**. Do not exit while the save is still in progress.
+
+The Studio canvas helps with placement, but only the separate Aura window is
+the real interface review. If the live window is unavailable, save the draft
+but leave visual approval open.
+
+### Minute 25-28: prove restart persistence
+
+1. Right-click Aura's floating button and choose **Exit Claude Aura**. Do not
+   end its PowerShell host in Task Manager.
+2. Reopen **Claude Aura** from the Start menu.
+3. Open Studio, choose **Themes**, and confirm that your custom theme card says
+   **Selected**.
+4. Under **Appearance mode**, choose **Light**, then choose
+   **Back to Claude Aura** and inspect the actual Aura window.
+5. Return to Studio, choose **Dark**, then choose **Back to Claude Aura** and
+   inspect the actual Aura window again.
+
+Your theme lives under
+`%LOCALAPPDATA%\ClaudeAura\data\themes\<theme-id>`. Reinstalling Aura does not
+silently replace it.
+
+### Minute 28-30: delete the practice theme
+
+1. In Studio, choose **Themes** and open your custom theme.
+2. Choose **Delete**.
+3. Confirm with **Delete theme**.
+
+If the deleted theme was active, Aura applies Default first. Deletion removes
+that theme's one owned folder; built-in themes and other user themes are not
+changed.
+
+You are done when the custom card is gone, Aura uses Default, and reopening
+Studio does not bring the deleted theme back.
+
+## Route B: build and install a folder kit
+
+This route is for contributors or people who want a portable local theme kit.
+The example deliberately uses the ID `demo-proof`. Run every command from the
+top-level Claude Aura source folder.
+
+### 1. Check the starting folder
+
+```powershell
+node --version
+git --version
+Test-Path -LiteralPath package.json
+Test-Path -LiteralPath scripts\theme-cli.mjs
+Test-Path -LiteralPath themes\demo-proof
+Test-Path -LiteralPath themes\demo-proof.json
+git status --short
 ```
 
-Keep theme checks in the registry, compiler, or centralized variant stylesheet.
-Do not scatter ID checks through unrelated application logic.
+Node must report version 22 or newer, and Git must report a version. The first
+two `Test-Path` commands must print `True`; the two `demo-proof` checks must
+print `False`. `git status --short` must print nothing. If it lists existing
+work, use a separate clean clone for this proof. Do not reset or delete someone
+else's changes.
 
-## Canonical themes
+### 2. Scaffold `demo-proof`
 
-Registry order is part of the picker experience:
+```powershell
+node scripts/theme-cli.mjs scaffold demo-proof
+```
 
-1. `default` — Default
-2. `japanese-film-editorial` — Japanese Film Editorial
-3. `korean-prestige` — Korean Prestige
-4. `cartoon-studio` — Cartoon Studio
-5. `anime-twilight` — Anime Twilight
-6. `study-library` — Study Library
-7. `japanese-idol` — Japanese Idol
-8. `korean-idol` — Korean Idol
+This creates:
 
-IDs are lowercase kebab-case and must remain stable after release. The Default
-theme is the safe fallback.
+- `themes/demo-proof/theme.json` - the standalone kit Studio installs;
+- `themes/demo-proof/CHECKLIST.md` - the optional artwork slot guide; and
+- `themes/demo-proof.json` - a source-tree token template.
 
-## Register a theme
+The command also prints a registry snippet. You do not need to paste that
+snippet for this local proof.
 
-Add one entry to `themes/registry.json`. The following is a valid structural
-example; replace the locale placeholders with reviewed copy before committing:
+### 3. Give it one real production artwork file
+
+For this proof, reuse the repository's canonical Default launcher mark. This
+is a byte-for-byte copy of a production asset, not a generated image, fixture,
+render, or screenshot.
+
+```powershell
+Copy-Item -LiteralPath assets\theme-art\default\launcher-mark.png `
+  -Destination themes\demo-proof\launcher-mark.png
+```
+
+Open both of these JSON files in your text editor:
+
+- `themes/demo-proof/theme.json`
+- `themes/demo-proof.json`
+
+In each file, find the `launcher` object's `asset` value and change only that
+value:
 
 ```json
-{
-  "id": "my-theme",
-  "labels": {
-    "en": "My Theme",
-    "zh-CN": "<localized name>",
-    "zh-HKTW": "<localized name>"
-  },
-  "descriptions": {
-    "en": "A short, concrete description of the interface character.",
-    "zh-CN": "<localized description>",
-    "zh-HKTW": "<localized description>"
-  },
-  "swatches": ["#F5F1E8", "#26312B", "#527A65", "#B66C4A"],
-  "preview": {
-    "chrome": "#202722",
-    "background": "#EEE9DE",
-    "surface": "#FAF7F0",
-    "accent": "#527A65",
-    "text": "#252A27"
-  },
-  "artwork": null
-}
+"asset": "launcher-mark.png"
 ```
 
-Rules enforced by the registry validator:
+Do not copy a whole built-in theme folder. A standalone kit may refer only to
+files inside its own folder.
 
-- every ID is unique and references `themes/<id>.json`;
-- `labels` and `descriptions` include `en`, `zh-CN`, and `zh-HKTW`;
-- three to six six-digit hexadecimal swatches are provided;
-- `preview` defines `chrome`, `background`, `surface`, `accent`, and `text`; and
-- artwork, when present, stays under `assets/theme-art` (one subdirectory level
-  is allowed) and uses an approved SVG, PNG, WebP, or AVIF extension.
-
-A theme may declare either a single `artwork` slot or an `artworkLayers` array
-of one to eight layers. Each layer supports `path`, `position`, `size`,
-`mobile` (`reduce`, `hide`, or `keep`), `opacity` (0–1), and `mask`
-(`soft-right` for the right-anchored edge fade, or `none`). Layers are embedded
-as data URLs only for the active theme and render as inert, pointer-safe
-backdrop divs behind the interface (see the japanese-idol entry for a layered
-example: appearance-specific backgrounds plus a context-aware hero). Keep
-raster layers optimized WebP; `scripts/convert-theme-assets.mjs` shows the
-local conversion pattern. The chrome portion of every payload must stay under
-65 KB and total embedded artwork under 1.4 MB (enforced by the tests).
-
-`listThemes({ locale })` resolves display copy from this registry. Windows uses
-the current UI culture when requesting picker metadata. Locale normalization
-maps `zh-CN`, `zh-SG`, and `zh-Hans` tags to `zh-CN`; it maps `zh-HKTW`,
-`zh-HK`, `zh-MO`, and `zh-Hant` tags to `zh-HKTW`. Other tags use English.
-
-Theme code must remain language-independent. Do not put localized interface
-copy in theme CSS or artwork.
-
-## Define the interface system
-
-Create `themes/<id>.json`. Copy `themes/default.json` when starting a new theme
-so both modes and every component profile field are present.
-
-Top-level fields are:
-
-| Field | Purpose |
-| --- | --- |
-| `name` | Stable ID matching the registry entry and filename |
-| `variant` | Central component-variant ID; normally the same as `name` |
-| `blur` | Shared backdrop blur amount from 0 to 40 |
-| `typography` | UI, display, body, and monospace system-font stacks plus display weight and tracking |
-| `shape` | Control, card, composer, and icon radii plus border width |
-| `effects` | Soft/elevated shadows, hover lift, and transition duration |
-| `launcher` | Optional local mark and material tokens for Aura's host-owned Studio launcher |
-| `light`, `dark` | Semantic colors and wallpaper behavior for each appearance mode |
-| `customCss` | Optional narrowly scoped CSS for exceptional cases |
-
-Use reliable system-font fallbacks. Claude Aura has no runtime font CDN and
-does not bundle third-party font files.
-
-### App identity and floating launcher
-
-`launcher` is optional. Omitting it inherits the complete Default design. When
-present, it accepts only `asset`, `surface`, `surfaceHover`, `foreground`,
-`accent`, `border`, `radius`, and `borderWidth`. Permanent themes use
-`assets/theme-art/<id>/launcher-mark.png` plus the matching
-`launcher-mark.ico`; standalone user kits may use only a kit-local
-`launcher-mark.png`. Custom marks are static transparent 96×96 PNGs below 400
-KB and count toward the kit's 1.4 MB source-art total. They are host identity
-assets, not renderer-embedded artwork, so their encoded bytes do not count
-toward the separate 1.4 MB renderer-art budget. The Windows host derives a
-content-addressed ICO in Aura-owned data.
-Foreground must clear 4.5:1 contrast against both surfaces, radius is 8–24,
-and border width is 1–3. The theme controls appearance only: Aura retains the
-permanent circular 48 px target, whole-button DPI-scaled 6 px drag threshold,
-click-or-right-click action menu, safe edge gap, keyboard name, installed
-shortcut ownership, and Default fallback. Hover may change the validated
-material but never expands the window. Original look restores the Default
-identity everywhere.
-
-Each built-in identity begins with a distinct authored transparent 1254×1254
-source under
-`assets/studio-previews/references/launcher-marks-v2/<id>.png`. The
-deterministic builder produces the shipped 96×96 PNG and a nine-frame ICO at
-16, 20, 24, 32, 40, 48, 64, 128, and 256 px. Those source images and recorded
-prompts are repository-only and excluded from releases. The active built-in
-identity is shared by the main and Studio windows, taskbar, notification area,
-floating launcher, Studio rail, and the exact four Aura/Studio Desktop and
-Start shortcuts.
-
-## Semantic tokens
-
-Semantic values use HSL components without `hsl()`, for example
-`258 66% 38%`. Each mode must directly define:
-
-- `--aura-background-primary`
-- `--aura-background-secondary`
-- `--aura-sidebar-background`
-- `--aura-panel-background`
-- `--aura-elevated-surface`
-- `--aura-text-primary`
-- `--aura-text-secondary`
-- `--aura-text-muted`
-- `--aura-text-on-accent`
-- `--aura-accent-primary`
-- `--aura-accent-secondary`
-- `--aura-border-emphasis`
-- `--aura-composer-background`
-- `--aura-card-background`
-- `--aura-destructive`
-- `--aura-success`
-- `--aura-warning`
-
-The validator derives consistent defaults for overlay, sidebar text, sidebar
-selection, disabled text, subtle borders, focus rings, hover/selected/disabled
-surfaces, and informational status. Define those optional roles explicitly when
-the default relationship is not appropriate for the theme.
-
-The compiler then generates Claude compatibility variables from the semantic
-map. This keeps legacy Claude token names at the integration boundary while
-theme authors work with stable roles. New themes should not be authored as raw
-color swaps of `--bg-*` and `--text-*` ramps.
-
-## Wallpaper behavior
-
-Each light and dark mode also defines:
-
-| Field | Purpose |
-| --- | --- |
-| `gradient` | CSS gradient used when no custom image is present |
-| `surfaceAlpha` | Opacity of content surfaces over decoration |
-| `sidebarAlpha` | Opacity of the sidebar over decoration |
-| `imageOpacity` | Default opacity for a user-provided background image |
-| `artOpacity` | Opacity of registered theme artwork |
-| `textureOpacity` | Strength of the shared lightweight texture layer |
-
-Decoration must not be required to understand or operate the interface. Keep a
-readable text-safe region and verify the theme with artwork unavailable.
-
-## Export matching Claude Code colours
-
-Claude Code v2.1.118 or later supports custom terminal themes. Export an Aura
-theme's Light and Dark colour projections to Aura-owned staging:
+Optional copy check:
 
 ```powershell
-node scripts/theme-cli.mjs export-terminal default
+(Get-FileHash assets\theme-art\default\launcher-mark.png).Hash
+(Get-FileHash themes\demo-proof\launcher-mark.png).Hash
 ```
 
-Use `--out <folder>` to choose another explicit destination and
-`--user-themes <folder>` when exporting a valid installed user theme. Aura
-writes two deterministic JSON files plus a separate ownership manifest and
-refuses to replace a file it cannot prove it owns. Inspect the files, place
-them in the official `~/.claude/themes/` directory through an explicit user
-action, then choose the desired `Claude Aura — …` entry with `/theme`. Aura
-does not edit Claude settings or select a running CLI theme.
+The two SHA-256 values must match.
 
-This export provides **matching colours, not the same theme**. Claude Code's
-documented format cannot carry Aura artwork, fonts, blur, shadows, radii, or
-layout. See the current
-[Claude Code terminal-theme reference](https://code.claude.com/docs/en/terminal-config#create-a-custom-theme)
-for the supported client version, bases, tokens, and `/theme` workflow.
+### 4. Validate both modes
 
-## Component variants
+```powershell
+node scripts/theme-cli.mjs validate themes/demo-proof
+```
 
-Tokens establish the shared color and material system. Use
-`assets/theme-variants.css` for meaningful differences in typography,
-navigation, cards, composer treatment, icon containers, menus, dialogs, and
-selected states.
-
-Every selector must begin with the stable root attribute. Prefer semantic
-elements, roles, ARIA state, stable data attributes, and existing shared hooks.
-Generated utility classes can change on any `claude.ai` deployment.
-
-Do not:
-
-- hide permission, safety, sign-in, error, or account controls;
-- replace interactive content with generated images;
-- bake fake controls into artwork;
-- reduce readable body or control copy below 12 px; or
-- add constant or distracting motion.
-
-## Artwork
-
-Optional bundled art is registered separately from the theme JSON. Use only an
-isolated asset under `assets/theme-art`:
+Success is JSON containing all three of these values:
 
 ```json
-"artwork": {
-  "path": "assets/theme-art/my-theme.svg",
-  "position": "right center",
-  "size": "min(58vw, 860px) auto",
-  "mobile": "reduce"
-}
+{"pass":true,"theme":"demo-proof","source":"folder"}
 ```
 
-Set `mobile` to `reduce` or `hide`. Artwork layers are loaded only for the
-active theme, receive an empty accessible name, and remain pointer-inert.
+The full result also reports Light and Dark payload budgets. Validation writes
+no UI screenshot, preview board, contact sheet, or image golden.
 
-Bundled SVG requirements:
+### 5. Install and apply it
 
-- original project artwork with a documented license;
-- self-contained, lightweight, and free of external or embedded resources;
-- no functional controls, rasterized interface, or embedded UI text;
-- `aria-hidden="true"`, `focusable="false"`, and `pointer-events="none"` on
-  the root; and
-- fictional, non-endorsing figures when a human form is used.
+1. Open **Claude Aura Studio**.
+2. If **Meet Claude Aura** opens, choose **English**, then choose **Skip**.
+3. Choose **Create a theme**.
+4. Choose **Install theme from folder...**.
+5. Select the exact `themes\demo-proof` folder - the folder that directly
+   contains `theme.json`.
+6. Choose **Themes** and wait for the **Demo Proof** card to say **Selected**.
+7. Choose **Back to Claude Aura** and check the real Aura window on live
+   `claude.ai`.
 
-Theme-selection masters live under `assets/studio-previews/masters/`. They are
-product media for Aura Studio only: never register, trace, vectorize, or embed
-them in a renderer theme, and never offer them as UI evidence. Studio loads the
-uncropped file through the isolated `aura.previews` host and applies registry
-or user `x`, `y`, and `zoom` framing in the browser; reframing changes config,
-not image bytes. The compatibility command
-`convert-theme-assets.mjs --card-previews` may still rebuild the retired 640 x
-360 fallbacks under `assets/theme-art/<id>/card-preview.webp`, but current cards
-use the masters. Unassigned alternates belong under
-`assets/studio-previews/references/` and are excluded from releases and
-installed copies. This source-only area also contains the authored built-in
-launcher sources and prompt record; only their derived runtime PNG/ICO files
-ship. User themes must provide their own distributable selector artwork.
+Studio validates the folder again, copies it to the user-theme directory, and
+applies it. It never changes the source kit or the installed application.
 
-## Contrast and accessibility
+Confirm that the installed artwork is the same file:
 
-- Keep normal text at 4.5:1 or better against its actual surface.
-- Verify text on both primary and secondary accent colors.
-- Make focus visible in every mode; do not rely on color alone for selection.
-- Preserve keyboard operation, text resizing, reduced motion, and forced-color
-  behavior.
-- Test loading, error, disabled, hover, active, selected, menu, and dialog
-  states—not only the home canvas.
-- Check representative desktop sizes and Windows scaling at 100%, 125%, and
-  150%.
+```powershell
+(Get-FileHash themes\demo-proof\launcher-mark.png).Hash
+(Get-FileHash "$env:LOCALAPPDATA\ClaudeAura\data\themes\demo-proof\launcher-mark.png").Hash
+```
 
-## Custom CSS
+The hashes must match. This disposable theme deliberately keeps Default's
+colors and reuses Default's launcher mark, so it will look like Default in
+Aura. The **Selected** card and matching installed-file hash prove which theme
+is active; the whole Aura review checks that the real interface still works.
 
-`customCss` is intentionally powerful and should be rare. Keep selectors narrow
-and rooted to the theme. All `@import` rules, `url()` functions, and backslash
-escapes are rejected, including protocol-relative forms. Shared component changes belong in `assets/base.css` or
-`assets/theme-variants.css`, not repeated in multiple theme files.
+### 6. Restart and recheck
 
-## Persistence and migration
+1. Choose **Exit Claude Aura** from Aura's own menu.
+2. Reopen Aura from the Start menu.
+3. Open Studio and choose **Themes**.
+4. Confirm that the **Demo Proof** card still says **Selected**.
+5. Under **Appearance mode**, choose **Light**, then choose
+   **Back to Claude Aura** and inspect the live window.
+6. Return to Studio and repeat with **Dark**.
 
-The installed app stores the selected stable ID in its local `config.json`.
-Theme changes are written atomically. A ready Claude view updates immediately;
-during startup or sign-in, the saved selection applies when the view becomes
-ready. Invalid or removed IDs fall back to `default`.
+### 7. Delete the installed theme and clean the proof files
 
-Legacy aliases currently preserve earlier saved choices:
+First delete **Demo Proof** in Studio: open its theme card, choose **Delete**,
+and confirm **Delete theme**. Confirm that Aura returns to Default.
 
-| Earlier ID | Canonical ID |
+Then remove only the two scaffold outputs you just created:
+
+```powershell
+Remove-Item -LiteralPath themes\demo-proof -Recurse
+Remove-Item -LiteralPath themes\demo-proof.json
+Test-Path -LiteralPath themes\demo-proof
+Test-Path -LiteralPath themes\demo-proof.json
+Test-Path -LiteralPath "$env:LOCALAPPDATA\ClaudeAura\data\themes\demo-proof"
+git status --short
+```
+
+All three `Test-Path` commands must print `False`, and `git status --short`
+must print nothing, matching the clean start. The kit directory is ignored by
+Git, so `git status` alone cannot prove it was removed. Do not use a glob or
+delete the whole `themes` directory.
+
+## Where `qa` fits
+
+`validate` is the correct command for a standalone folder kit. `qa` is the
+non-image production-asset audit for a theme that is already registered in
+the repository.
+
+To prove the existing production audit without registering the disposable
+kit, run it on a built-in theme:
+
+```powershell
+node scripts/theme-cli.mjs qa default
+```
+
+It validates both payload modes and writes only `status.json`, normally under
+`dist/qa/default/`. It does not render interface imagery. Running
+`qa demo-proof` before adding `demo-proof` to the production registry will
+correctly report `Unknown theme`; that is not an install or folder-validation
+failure.
+
+## Quick troubleshooting
+
+| What you see | What to do |
 | --- | --- |
-| `midnight` | `default` |
-| `ember` | `japanese-film-editorial` |
-| `forest` | `study-library` |
-| `sakura` | `japanese-idol` |
+| `Theme id already exists: demo-proof` | Check whether the two exact `demo-proof` scaffold paths are yours. Delete only those paths, or choose a new lowercase kebab-case ID. |
+| Studio says `theme.json` is missing | Select `themes\demo-proof`, not its parent `themes` folder. |
+| The launcher asset is rejected | Confirm the file is named `launcher-mark.png`, is a static transparent 96 x 96 PNG, and both JSON asset values match it. |
+| Aura keeps the last valid preview | Read the highlighted Studio issue, fix that one field, and wait for the preview-up-to-date status. |
+| The custom theme disappears after restart | Open Studio and confirm it was saved or installed, not left as an unsaved draft. |
+| `qa demo-proof` says `Unknown theme` | Use `validate themes/demo-proof` for a standalone kit. `qa` accepts registered production IDs. |
 
-Do not remove an alias while released configurations may still contain it.
+## Safety rules that always apply
 
-## Validate and inspect
+- Use local files only. Themes cannot load remote fonts, scripts, or artwork.
+- Use artwork you have the right to distribute.
+- Keep `customCss` empty in a standalone kit.
+- Do not put fake Claude controls or copied interface text into artwork.
+- Original look and Default remain safe fallbacks.
+- Removing a user theme removes one owned folder and must not affect the app,
+  another theme, Claude Desktop, or your Claude account.
 
-```powershell
-npm run themes
-node scripts/theme-cli.mjs list --locale zh-CN
-node scripts/theme-cli.mjs validate --theme my-theme
-npm run studio:build
-npm test
-npm run check
-npm run verify:cycle
-node scripts/theme-cli.mjs qa my-theme
-```
-
-`npm run verify:cycle` is a non-image compile/validation pass for all eight
-stable themes in Light and Dark. `theme-cli qa` writes a production-asset
-`status.json` audit only. Neither command creates a preview or UI image.
-
-Open the installed Aura Studio, then apply the theme in the actual Aura
-WebView2 window on live `claude.ai`. Inspect both appearance modes, new-chat
-and conversation contexts, normal and fullscreen sizes, keyboard focus, the
-composer, menus, dialogs, and sidebar translucency. A whole-window live Aura
-capture is the only UI visual evidence; never generate a fake DOM, offline
-preview, QA board, contact sheet, headless screenshot, or image golden.
-
-Before packaging, run the checks and then:
-
-```powershell
-npm run release
-```
-
-The release archive intentionally omits `.git`, dependency/build directories,
-logs, temporary files, and `assets/studio-previews/references/`. The registered
-Studio preview masters ship because the picker uses them; the renderer does not.
+For schema fields and advanced artwork framing after you finish this tutorial,
+see `docs/THEME_KIT_SPEC.md`.
