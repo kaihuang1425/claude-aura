@@ -11,8 +11,9 @@
   const TOKEN_IDS = new Set([
     "canvas", "sidebar", "surface", "text", "accent", "border",
   ]);
+  const GREETING_TARGET = "interface.greeting";
   const TARGETS = new Set([
-    "interface.theme", "interface.new-chat-area", "background.layer",
+    "interface.theme", "interface.new-chat-area", GREETING_TARGET, "background.layer",
     "widgets.instant-prompts",
   ]);
   const COPY_KEYS = [
@@ -37,15 +38,30 @@
     && exact(value.frames, ["normal", "wide"])
     && validFrame(value.frames.normal, positionMinimum, positionMaximum, scaleMinimum, scaleMaximum)
     && validFrame(value.frames.wide, positionMinimum, positionMaximum, scaleMinimum, scaleMaximum);
+  const validGreetingFrame = (value) => exact(value, [
+    "fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale",
+  ])
+    && finite(value.fontSize, 24, 72)
+    && finite(value.lineHeight, 0.9, 1.5)
+    && finite(value.maxWidthRatio, 0.35, 0.9)
+    && finite(value.xRatio, -0.45, 0.45)
+    && finite(value.yRatio, -0.4, 0.45)
+    && finite(value.markScale, 0.5, 1.5);
+  const validGreeting = (value) => exact(value, ["light", "dark"])
+    && ["light", "dark"].every((appearance) => (
+      exact(value[appearance], ["standard", "wide"])
+      && validGreetingFrame(value[appearance].standard)
+      && validGreetingFrame(value[appearance].wide)
+    ));
   const validCopy = (value) => exact(value, COPY_KEYS)
     && COPY_KEYS.every((key) => typeof value[key] === "string"
       && value[key].trim() && value[key].length <= 160
       && !/[\u0000-\u001F\u007F]/u.test(value[key]));
   const validConfig = exact(config, [
-    "version", "session", "revision", "nonce", "copy", "layers", "widgets",
+    "version", "session", "revision", "nonce", "copy", "greeting", "layers", "widgets",
   ]) && config.version === 1 && SESSION_ID.test(config.session)
     && Number.isSafeInteger(config.revision) && config.revision >= 0
-    && NONCE.test(config.nonce) && validCopy(config.copy)
+    && NONCE.test(config.nonce) && validCopy(config.copy) && validGreeting(config.greeting)
     && Array.isArray(config.layers) && config.layers.length <= 8
     && config.layers.every((item) => validItem(item, LAYER_ID, -100, 100, 0.25, 3))
     && new Set(config.layers.map((item) => item.id)).size === config.layers.length
@@ -66,7 +82,14 @@
   const copy = config.copy;
   const layerById = new Map(config.layers.map((item) => [item.id, item]));
   const widgetById = new Map(config.widgets.map((item) => [item.id, item]));
-  const frame = () => window.innerWidth >= 1440 ? "wide" : "normal";
+  const frame = () => {
+    const active = document.documentElement.getAttribute?.("data-claude-aura-viewport");
+    return active === "wide" || (active !== "normal" && window.innerWidth >= 1440)
+      ? "wide" : "normal";
+  };
+  const greetingFrame = () => frame() === "wide" ? "wide" : "standard";
+  const greetingAppearance = () => document.documentElement
+    .getAttribute?.("data-claude-aura-effective-mode") === "dark" ? "dark" : "light";
   const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
   const rounded = (value, precision = 100) => Math.round(value * precision) / precision;
   const rectValue = (node) => {
@@ -96,6 +119,17 @@
     } catch { return null; }
     return closest(node, '[data-claude-aura-instant-prompts="true"]') ? node : null;
   };
+  const greetingOwner = (node) => {
+    const selector = '[data-claude-aura-greeting="new-chat"],[data-claude-aura-greeting="native"]';
+    const candidate = closest(node, selector);
+    if (!candidate) return null;
+    const owners = Array.from(document.querySelectorAll?.(selector) ?? [])
+      .filter((owner) => rectValue(owner));
+    if (owners.length !== 1 || owners[0] !== candidate) {
+      return { status: "ambiguous", node: null };
+    }
+    return { status: "found", node: candidate };
+  };
   const itemGeometry = (item) => {
     const activeFrame = frame();
     const authored = item.frames[activeFrame];
@@ -107,6 +141,15 @@
       scale: authored.scale,
     };
   };
+  const greetingGeometry = () => {
+    const appearance = greetingAppearance();
+    const activeFrame = greetingFrame();
+    return {
+      appearance,
+      frame: activeFrame,
+      ...config.greeting[appearance][activeFrame],
+    };
+  };
 
   let sequence = 0;
   let stopped = false;
@@ -114,6 +157,7 @@
   let selected = null;
   let selectedNode = null;
   let selectedBase = null;
+  let selectedProxyRect = null;
   let drag = null;
   let previewFrame = 0;
   let pendingPreview = null;
@@ -248,6 +292,21 @@
         node: widget,
       };
     }
+    const greeting = greetingOwner(node);
+    if (greeting) {
+      return greeting.status === "found" ? {
+        selection: selectionFor(
+          "found", "interface", GREETING_TARGET, "interface.greeting",
+          ["text", "accent"], greeting.node, greetingGeometry(),
+        ),
+        node: greeting.node,
+      } : {
+        selection: selectionFor(
+          "ambiguous", "interface", GREETING_TARGET, null, [], null, null,
+        ),
+        node: null,
+      };
+    }
     const dialog = closest(node, "dialog,[role=dialog]");
     if (dialog) return {
       selection: interfaceSelection("interface.dialog", dialog, ["surface", "text", "border", "accent"]),
@@ -316,6 +375,7 @@
       selectedNode.style.opacity = selectedBase.opacity;
     }
     selectedBase = null;
+    selectedProxyRect = null;
   };
   const captureSelectedStyle = () => {
     if (!selectedNode || !selected?.geometry) return null;
@@ -332,6 +392,10 @@
       opacity: selectedNode.style.opacity,
       geometry: { ...selected.geometry },
     };
+    if (selected.targetId === GREETING_TARGET) return {
+      geometry: { ...selected.geometry },
+      rect: rectValue(selectedNode),
+    };
     return null;
   };
   const resolveSelectedNode = () => {
@@ -341,6 +405,11 @@
     }
     if (selected.kind === "background") {
       return artworkOwner(selected.itemId);
+    }
+    if (selected.targetId === GREETING_TARGET) {
+      return document.querySelector?.(
+        '[data-claude-aura-greeting="new-chat"],[data-claude-aura-greeting="native"]',
+      ) ?? null;
     }
     const selectors = {
       "interface.dialog": "dialog,[role=dialog]",
@@ -360,7 +429,7 @@
       return;
     }
     if (!selectedNode?.isConnected) selectedNode = resolveSelectedNode();
-    const rect = rectValue(ringTarget());
+    const rect = selectedProxyRect ?? rectValue(ringTarget());
     if (!rect) {
       ring.hidden = true;
       return;
@@ -371,11 +440,14 @@
     ring.style.top = `${rect.top}px`;
     ring.style.width = `${rect.width}px`;
     ring.style.height = `${rect.height}px`;
-    const editable = Boolean(selected.geometry && ["background", "widget"].includes(selected.kind));
+    const editable = Boolean(selected.geometry && (
+      ["background", "widget"].includes(selected.kind) || selected.targetId === GREETING_TARGET
+    ));
+    const opacityEditable = editable && selected.targetId !== GREETING_TARGET;
     moveHandle.hidden = !editable;
     scaleHandle.hidden = !editable;
-    geometryBar.hidden = !editable;
-    if (editable) opacityInput.value = String(Math.round(selected.geometry.opacity * 100));
+    geometryBar.hidden = !opacityEditable;
+    if (opacityEditable) opacityInput.value = String(Math.round(selected.geometry.opacity * 100));
   };
   const renderTokens = () => {
     tokenList.replaceChildren(...(selected?.tokenIds ?? []).map((tokenId) => {
@@ -389,6 +461,7 @@
     restoreSelectedStyle();
     selected = result.selection;
     selectedNode = result.node;
+    selectedProxyRect = null;
     if (result.ringNode) selected.rect = rectValue(result.ringNode);
     selectedBase = captureSelectedStyle();
     status.textContent = copy[selected.status === "found" ? "selected" : selected.status];
@@ -409,6 +482,29 @@
       selectedNode.style.translate = `${geometry.positionX - base.positionX}vw ${geometry.positionY - base.positionY}vh`;
       selectedNode.style.scale = String(geometry.scale / base.scale);
       selectedNode.style.opacity = String(geometry.opacity);
+    } else if (selected.targetId === GREETING_TARGET && selectedBase.rect) {
+      const base = selectedBase.geometry;
+      const canvas = rectValue(document.querySelector?.("[data-claude-aura-main-canvas]"))
+        ?? { width: window.innerWidth, height: window.innerHeight };
+      const fontScale = geometry.fontSize / base.fontSize;
+      const widthScale = geometry.maxWidthRatio / base.maxWidthRatio;
+      const lineScale = Math.sqrt(geometry.lineHeight / base.lineHeight);
+      const width = clamp(
+        selectedBase.rect.width * Math.max(fontScale, widthScale),
+        12, Math.max(12, canvas.width),
+      );
+      const height = clamp(
+        selectedBase.rect.height * fontScale * lineScale,
+        8, Math.max(8, canvas.height),
+      );
+      selectedProxyRect = {
+        left: selectedBase.rect.left + ((geometry.xRatio - base.xRatio) * canvas.width)
+          - ((width - selectedBase.rect.width) / 2),
+        top: selectedBase.rect.top + ((geometry.yRatio - base.yRatio) * canvas.height)
+          - ((height - selectedBase.rect.height) / 2),
+        width,
+        height,
+      };
     }
     selected.geometry = geometry;
     updateRing();
@@ -456,28 +552,61 @@
   const geometryFromDrag = (event) => {
     if (!drag) return null;
     const next = { ...drag.start };
+    const greeting = selected?.targetId === GREETING_TARGET;
     const background = selected?.kind === "background";
     const positionMinimum = background ? -100 : -50;
     const positionMaximum = background ? 100 : 50;
     const scaleMinimum = background ? 0.25 : 0.5;
     const scaleMaximum = background ? 3 : 1.75;
+    const canvas = greeting
+      ? rectValue(document.querySelector?.("[data-claude-aura-main-canvas]"))
+        ?? { width: window.innerWidth, height: window.innerHeight }
+      : null;
     if (drag.kind === "move") {
-      next.positionX = clamp(
-        drag.start.positionX + ((event.clientX - drag.x) / Math.max(1, window.innerWidth) * 100),
-        positionMinimum, positionMaximum,
-      );
-      next.positionY = clamp(
-        drag.start.positionY + ((event.clientY - drag.y) / Math.max(1, window.innerHeight) * 100),
-        positionMinimum, positionMaximum,
-      );
+      if (greeting) {
+        next.xRatio = clamp(
+          drag.start.xRatio + ((event.clientX - drag.x) / Math.max(1, canvas.width)),
+          -0.45, 0.45,
+        );
+        next.yRatio = clamp(
+          drag.start.yRatio + ((event.clientY - drag.y) / Math.max(1, canvas.height)),
+          -0.4, 0.45,
+        );
+      } else {
+        next.positionX = clamp(
+          drag.start.positionX + ((event.clientX - drag.x) / Math.max(1, window.innerWidth) * 100),
+          positionMinimum, positionMaximum,
+        );
+        next.positionY = clamp(
+          drag.start.positionY + ((event.clientY - drag.y) / Math.max(1, window.innerHeight) * 100),
+          positionMinimum, positionMaximum,
+        );
+      }
     } else {
       const delta = ((event.clientX - drag.x) + (event.clientY - drag.y))
         / Math.max(80, drag.rectSize);
-      next.scale = clamp(drag.start.scale * (1 + delta), scaleMinimum, scaleMaximum);
+      const factor = Math.max(0.5, Math.min(2, 1 + delta));
+      if (greeting) {
+        next.fontSize = clamp(drag.start.fontSize * factor, 24, 72);
+        next.lineHeight = clamp(drag.start.lineHeight * Math.sqrt(factor), 0.9, 1.5);
+        next.maxWidthRatio = clamp(drag.start.maxWidthRatio * factor, 0.35, 0.9);
+        next.markScale = clamp(drag.start.markScale * factor, 0.5, 1.5);
+      } else {
+        next.scale = clamp(drag.start.scale * factor, scaleMinimum, scaleMaximum);
+      }
     }
-    next.positionX = rounded(next.positionX);
-    next.positionY = rounded(next.positionY);
-    next.scale = rounded(next.scale, 1000);
+    if (greeting) {
+      next.xRatio = rounded(next.xRatio, 100);
+      next.yRatio = rounded(next.yRatio, 100);
+      next.fontSize = rounded(next.fontSize, 100);
+      next.lineHeight = rounded(next.lineHeight, 100);
+      next.maxWidthRatio = rounded(next.maxWidthRatio, 100);
+      next.markScale = rounded(next.markScale, 100);
+    } else {
+      next.positionX = rounded(next.positionX);
+      next.positionY = rounded(next.positionY);
+      next.scale = rounded(next.scale, 1000);
+    }
     return next;
   };
   const beginDrag = (kind, event) => {
@@ -508,19 +637,39 @@
   const onHandleKey = (event) => {
     if (!selected?.geometry || !event.key.startsWith("Arrow")) return;
     const geometry = { ...selected.geometry };
+    const greeting = selected.targetId === GREETING_TARGET;
     const background = selected.kind === "background";
     const positionMinimum = background ? -100 : -50;
     const positionMaximum = background ? 100 : 50;
     const scaleMinimum = background ? 0.25 : 0.5;
     const scaleMaximum = background ? 3 : 1.75;
     const direction = ["ArrowRight", "ArrowUp"].includes(event.key) ? 1 : -1;
-    if (event.altKey) geometry.scale = clamp(
+    if (greeting && event.altKey) {
+      const factor = direction > 0 ? 1.05 : 0.95;
+      geometry.fontSize = clamp(geometry.fontSize * factor, 24, 72);
+      geometry.lineHeight = clamp(geometry.lineHeight * Math.sqrt(factor), 0.9, 1.5);
+      geometry.maxWidthRatio = clamp(geometry.maxWidthRatio * factor, 0.35, 0.9);
+      geometry.markScale = clamp(geometry.markScale * factor, 0.5, 1.5);
+    } else if (greeting && (event.ctrlKey || event.metaKey)) {
+      geometry.maxWidthRatio = clamp(geometry.maxWidthRatio + (direction * 0.01), 0.35, 0.9);
+    } else if (!greeting && event.altKey) geometry.scale = clamp(
       geometry.scale + (direction * 0.05), scaleMinimum, scaleMaximum,
     );
-    else if (event.ctrlKey || event.metaKey) geometry.opacity = clamp(geometry.opacity + (direction * 0.05), 0, 1);
-    else {
+    else if (!greeting && (event.ctrlKey || event.metaKey)) {
+      geometry.opacity = clamp(geometry.opacity + (direction * 0.05), 0, 1);
+    } else {
       const pixels = event.shiftKey ? 10 : 1;
-      if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+      if (greeting && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+        geometry.xRatio = clamp(
+          geometry.xRatio + (direction * (event.shiftKey ? 0.05 : 0.01)),
+          -0.45, 0.45,
+        );
+      } else if (greeting) {
+        geometry.yRatio = clamp(
+          geometry.yRatio + (-direction * (event.shiftKey ? 0.05 : 0.01)),
+          -0.4, 0.45,
+        );
+      } else if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
         geometry.positionX = clamp(
           geometry.positionX + (direction * pixels / Math.max(1, window.innerWidth) * 100),
           positionMinimum, positionMaximum,
@@ -533,10 +682,19 @@
       }
     }
     event.preventDefault();
-    geometry.positionX = rounded(geometry.positionX);
-    geometry.positionY = rounded(geometry.positionY);
-    geometry.scale = rounded(geometry.scale, 1000);
-    geometry.opacity = rounded(geometry.opacity, 1000);
+    if (greeting) {
+      geometry.xRatio = rounded(geometry.xRatio, 100);
+      geometry.yRatio = rounded(geometry.yRatio, 100);
+      geometry.fontSize = rounded(geometry.fontSize, 100);
+      geometry.lineHeight = rounded(geometry.lineHeight, 100);
+      geometry.maxWidthRatio = rounded(geometry.maxWidthRatio, 100);
+      geometry.markScale = rounded(geometry.markScale, 100);
+    } else {
+      geometry.positionX = rounded(geometry.positionX);
+      geometry.positionY = rounded(geometry.positionY);
+      geometry.scale = rounded(geometry.scale, 1000);
+      geometry.opacity = rounded(geometry.opacity, 1000);
+    }
     commitGeometry(geometry);
   };
 
@@ -578,11 +736,11 @@
     handle.addEventListener("keydown", onHandleKey);
   }
   opacityInput.addEventListener("input", () => {
-    if (!selected?.geometry) return;
+    if (!selected?.geometry || !Object.hasOwn(selected.geometry, "opacity")) return;
     previewGeometry({ ...selected.geometry, opacity: opacityInput.valueAsNumber / 100 });
   });
   opacityInput.addEventListener("change", () => {
-    if (!selected?.geometry) return;
+    if (!selected?.geometry || !Object.hasOwn(selected.geometry, "opacity")) return;
     commitGeometry({ ...selected.geometry, opacity: opacityInput.valueAsNumber / 100 });
   });
 

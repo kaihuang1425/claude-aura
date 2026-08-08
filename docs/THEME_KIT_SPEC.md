@@ -110,16 +110,23 @@ document, the tooling is not finished.
    actual Aura window on live `claude.ai`. The temporary toolbar first asks you
    to **Pick element**. Recognized Claude sidebar, composer, card, dialog, and
    canvas surfaces route to existing Interface token controls; they are never
-   moved or rewritten. A registered artwork layer routes to Background by its
-   opaque layer ID, and an Instant prompt routes to Widgets by its opaque card
-   ID. Drag the move or scale handle, use the opacity control, or use the arrow
-   keys; Alt + arrows scales and Ctrl + arrows changes opacity. Each completed
+   moved or rewritten. A marked new-chat Greeting routes to the existing
+   Interface Greeting target. Its overlay-owned proxy can move or resize the
+   active Light/Dark and Standard/Wide frame; resize writes real bounded font
+   size, line height, maximum width, and mark size rather than a transform.
+   A registered artwork layer routes to Background by its opaque layer ID, and
+   an Instant prompt routes to Widgets by its opaque card ID. Drag the move or
+   scale handle, use the opacity control where offered, or use the arrow keys;
+   Alt + arrows resizes and Ctrl + arrows changes opacity or Greeting width.
+   Each completed
    pointer or keyboard gesture is one draft change and one Undo step. Missing
    and overlapping probes report missing or ambiguous instead of guessing a
    selector. **Done**, **End window edit**, Esc, navigation, Original look,
    closing Studio, and app exit remove the complete toolbar, handles,
-   temporary styles, observers, and listeners. This session-only overlay never
-   stores page content, edits a Claude-owned node, or runs in Aura Code.
+   temporary styles, observers, and listeners. Native Greeting preview stays in
+   the overlay proxy until the complete validated frame commits through the
+   renderer. This session-only overlay never stores page content, edits a
+   Claude-owned node, or runs in Aura Code.
 10. Open **Review** for the compact global validation status, then Save. Review
    is a workflow stage, not a fourth capability branch. Passing contrast ratios
    stay out of Quick customize; a problem links to its exact branch, target,

@@ -16,10 +16,12 @@
   const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const OVERLAY_TOKEN_IDS = Object.freeze(["canvas", "sidebar", "surface", "text", "accent", "border"]);
   const OVERLAY_TARGET_IDS = Object.freeze([
-    "interface.theme", "interface.new-chat-area", "background.layer", "widgets.instant-prompts",
+    "interface.theme", "interface.new-chat-area", "interface.greeting",
+    "background.layer", "widgets.instant-prompts",
   ]);
   const OVERLAY_INTERFACE_ITEMS = Object.freeze([
-    "interface.sidebar", "interface.composer", "interface.card", "interface.dialog", "interface.canvas",
+    "interface.sidebar", "interface.composer", "interface.card", "interface.dialog",
+    "interface.canvas", "interface.greeting",
   ]);
   const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
   const LAUNCHER_ASSET_PATTERN = /^(?:assets\/theme-art\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png|launcher-mark\.png)$/;
@@ -340,7 +342,7 @@
         || !integer(value.viewport.height, 1, 10000)
         || !enumValue(value.viewport.frame, ["normal", "wide"])) return null;
     const typedTarget = value.kind === "interface"
-      ? ["interface.theme", "interface.new-chat-area"].includes(value.targetId)
+      ? ["interface.theme", "interface.new-chat-area", "interface.greeting"].includes(value.targetId)
       : value.kind === "background"
         ? value.targetId === "background.layer"
         : value.targetId === "widgets.instant-prompts";
@@ -365,10 +367,26 @@
         || !inRange(value.rect.width, 0.01, 10000)
         || !inRange(value.rect.height, 0.01, 10000)) return null;
     if (value.kind === "interface") {
-      if (!["interface.theme", "interface.new-chat-area"].includes(value.targetId)
+      const greeting = value.targetId === "interface.greeting";
+      if (!["interface.theme", "interface.new-chat-area", "interface.greeting"].includes(value.targetId)
           || !OVERLAY_INTERFACE_ITEMS.includes(value.itemId)
           || (value.targetId === "interface.new-chat-area" && value.itemId !== "interface.composer")
-          || value.geometry !== null) return null;
+          || (greeting && value.itemId !== "interface.greeting")
+          || (!greeting && value.itemId === "interface.greeting")) return null;
+      if (greeting) {
+        if (!exactShape(value.geometry, [
+          "appearance", "frame", "fontSize", "lineHeight", "maxWidthRatio",
+          "xRatio", "yRatio", "markScale",
+        ])
+            || !enumValue(value.geometry.appearance, ["light", "dark"])
+            || !enumValue(value.geometry.frame, ["standard", "wide"])
+            || !inRange(value.geometry.fontSize, 24, 72)
+            || !inRange(value.geometry.lineHeight, 0.9, 1.5)
+            || !inRange(value.geometry.maxWidthRatio, 0.35, 0.9)
+            || !inRange(value.geometry.xRatio, -0.45, 0.45)
+            || !inRange(value.geometry.yRatio, -0.4, 0.45)
+            || !inRange(value.geometry.markScale, 0.5, 1.5)) return null;
+      } else if (value.geometry !== null) return null;
     } else {
       const background = value.kind === "background";
       if ((background && (value.targetId !== "background.layer" || !LAYER_ID_PATTERN.test(value.itemId)))
@@ -401,7 +419,9 @@
         || !enumValue(value.event, ["selection", "preview", "commit"])) return null;
     const selection = normalizeOverlaySelection(value.selection);
     if (!selection || (["preview", "commit"].includes(value.event)
-        && (selection.status !== "found" || !["background", "widget"].includes(selection.kind)))) return null;
+        && (selection.status !== "found"
+          || (!["background", "widget"].includes(selection.kind)
+            && selection.targetId !== "interface.greeting")))) return null;
     return {
       session: value.session,
       revision: value.revision,
@@ -3772,6 +3792,16 @@
 
     const routeOverlaySelection = (selection) => {
       if (selection.status !== "found") return;
+      if (selection.targetId === "interface.greeting") {
+        selectedMode = selection.geometry.appearance;
+        stageViewport = selection.geometry.frame === "wide" ? "wide" : "normal";
+        syncModeInputs();
+        reflectStageViewport();
+        reflectTokens();
+        reflectGreeting();
+        selectStageItem({ kind: "greeting" }, { reveal: true });
+        return;
+      }
       if (selection.kind === "background") {
         selectStageItem({ kind: "layer", id: selection.itemId }, { reveal: true });
         return;
@@ -3793,12 +3823,43 @@
     const applyOverlayGeometry = (selection, persist) => {
       const geometry = selection.geometry;
       if (!geometry || !state) return false;
-      const frame = geometry.frame;
+      const greeting = selection.targetId === "interface.greeting";
+      const frame = greeting ? (geometry.frame === "wide" ? "wide" : "normal") : geometry.frame;
       stageViewport = frame;
       stagePreviewSize = [selection.viewport.width, selection.viewport.height];
       reflectStageViewport();
       setPreviewInputValues(...stagePreviewSize);
-      if (selection.kind === "background") {
+      if (greeting) {
+        selectedMode = geometry.appearance;
+        syncModeInputs();
+        const frameId = geometry.frame;
+        const current = activeGreetingFrame(geometry.appearance, frameId);
+        if (!current) return false;
+        const next = {
+          ...current,
+          fontSize: geometry.fontSize,
+          lineHeight: geometry.lineHeight,
+          maxWidthRatio: geometry.maxWidthRatio,
+          xRatio: geometry.xRatio,
+          yRatio: geometry.yRatio,
+          markScale: geometry.markScale,
+        };
+        const prefix = greetingFramePrefix(geometry.appearance, frameId);
+        const paths = [
+          "fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale",
+        ].map((field) => `${prefix}${field}`);
+        for (const field of [
+          "fontSize", "lineHeight", "maxWidthRatio", "xRatio", "yRatio", "markScale",
+        ]) setStageOverride(`${prefix}${field}`, next[field]);
+        if (persist) queueGreetingFrame(next, {
+          immediate: true,
+          appearance: geometry.appearance,
+          frameId,
+        });
+        inspectorField = `${prefix}xRatio`;
+        reflectGreeting();
+        reflectStageInputs(paths);
+      } else if (selection.kind === "background") {
         const index = state.layers.findIndex((layer) => layer.id === selection.itemId);
         if (index < 0) return false;
         const paths = {

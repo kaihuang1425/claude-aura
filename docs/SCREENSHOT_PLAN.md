@@ -728,9 +728,10 @@ Screenshots cannot prove accessibility or keyboard behavior. Record a
 Narrator/accessibility-tree pass showing that custom mode exposes the visible
 phrase exactly once with heading semantics, hides duplicate native semantics
 only after the replacement is ready, remains non-focusable and non-live, and
-restores the native heading on failure. Complete the Studio and WO-20 greeting
-controls using only the keyboard with visible focus, including source change,
-  phrase editing, saved-layout selection, movement, resize, Undo/Redo,
+restores the native heading on failure. Complete the Studio and **Edit on
+window** Greeting controls using only the keyboard with visible focus,
+including source change, phrase editing, saved-layout selection, movement,
+resize, Undo/Redo,
 validation recovery, save, restart, and Reset to Claude.
 
 Judge only what Aura controls: artwork identity, visibility, crop, focal

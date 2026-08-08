@@ -6290,6 +6290,57 @@ function Assert-AuraUiEditorOverlayCopy {
   }
 }
 
+function ConvertTo-AuraUiEditorOverlayGreetingFrame {
+  param([Parameter(Mandatory = $true)][object]$Value)
+  $names = @(
+    'font', 'color', 'fontSize', 'weight', 'italic', 'align', 'letterSpacing',
+    'lineHeight', 'maxWidthRatio', 'xRatio', 'yRatio', 'decoration',
+    'markSource', 'markScale')
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value -Names $names)) {
+    throw 'Aura window editor greeting frame has an invalid shape.'
+  }
+  return [ordered]@{
+    fontSize = ConvertTo-AuraUiStudioNumber -Value $Value.fontSize `
+      -Minimum 24 -Maximum 72 -Label 'Aura greeting font size'
+    lineHeight = ConvertTo-AuraUiStudioNumber -Value $Value.lineHeight `
+      -Minimum 0.9 -Maximum 1.5 -Label 'Aura greeting line height'
+    maxWidthRatio = ConvertTo-AuraUiStudioNumber -Value $Value.maxWidthRatio `
+      -Minimum 0.35 -Maximum 0.9 -Label 'Aura greeting maximum width'
+    xRatio = ConvertTo-AuraUiStudioNumber -Value $Value.xRatio `
+      -Minimum -0.45 -Maximum 0.45 -Label 'Aura greeting horizontal position'
+    yRatio = ConvertTo-AuraUiStudioNumber -Value $Value.yRatio `
+      -Minimum -0.4 -Maximum 0.45 -Label 'Aura greeting vertical position'
+    markScale = ConvertTo-AuraUiStudioNumber -Value $Value.markScale `
+      -Minimum 0.5 -Maximum 1.5 -Label 'Aura greeting mark size'
+  }
+}
+
+function ConvertTo-AuraUiEditorOverlayGreeting {
+  param([Parameter(Mandatory = $true)][object]$Value)
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value `
+        -Names @('native', 'compactMarkAvailable', 'frames')) -or
+      $Value.native -isnot [bool] -or $Value.compactMarkAvailable -isnot [bool] -or
+      $Value.frames -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value.frames -Names @('light', 'dark'))) {
+    throw 'Aura window editor greeting has an invalid shape.'
+  }
+  $result = [ordered]@{}
+  foreach ($appearance in @('light', 'dark')) {
+    $appearanceValue = $Value.frames.$appearance
+    if ($appearanceValue -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $appearanceValue -Names @('standard', 'wide'))) {
+      throw 'Aura window editor greeting appearance has an invalid shape.'
+    }
+    $result[$appearance] = [ordered]@{
+      standard = ConvertTo-AuraUiEditorOverlayGreetingFrame -Value $appearanceValue.standard
+      wide = ConvertTo-AuraUiEditorOverlayGreetingFrame -Value $appearanceValue.wide
+    }
+  }
+  return $result
+}
+
 function Test-AuraUiEditorOverlayRuntimeAvailable {
   return $script:WebReady -and $script:PageReady -and (Get-AuraUiEnabled) -and
     -not $script:RescueActive -and -not $script:RescueVerificationPending -and
@@ -6331,6 +6382,8 @@ function New-AuraUiEditorOverlaySource {
   $script:EditorOverlayRevision = ConvertTo-AuraUiStudioInteger `
     -Value $revision -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision'
   Assert-AuraUiEditorOverlayCopy -Copy $script:EditorOverlayCopy
+  $greeting = ConvertTo-AuraUiEditorOverlayGreeting `
+    -Value $script:StudioEditorState.shared.greeting
   $layers = @($script:StudioEditorState.layers | ForEach-Object {
     [ordered]@{
       id = [string]$_.id
@@ -6375,6 +6428,7 @@ function New-AuraUiEditorOverlaySource {
     revision = [long]$script:EditorOverlayRevision
     nonce = [string]$script:EditorOverlayNonce
     copy = $script:EditorOverlayCopy
+    greeting = $greeting
     layers = $layers
     widgets = $widgets
   }
@@ -6540,6 +6594,32 @@ function Assert-AuraUiEditorOverlayViewport {
   [void](ConvertTo-AuraUiStudioInteger -Value $Viewport.height -Minimum 1 -Maximum 10000 -Label 'Aura window editor viewport height')
 }
 
+function Assert-AuraUiEditorOverlayGreetingGeometry {
+  param([Parameter(Mandatory = $true)][object]$Geometry)
+  if ($Geometry -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Geometry -Names @(
+        'appearance', 'frame', 'fontSize', 'lineHeight', 'maxWidthRatio',
+        'xRatio', 'yRatio', 'markScale')) -or
+      $Geometry.appearance -isnot [string] -or
+      $Geometry.appearance -cnotin @('light', 'dark') -or
+      $Geometry.frame -isnot [string] -or
+      $Geometry.frame -cnotin @('standard', 'wide')) {
+    throw 'Aura window editor greeting geometry is invalid.'
+  }
+  [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.fontSize `
+    -Minimum 24 -Maximum 72 -Label 'Aura greeting font size')
+  [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.lineHeight `
+    -Minimum 0.9 -Maximum 1.5 -Label 'Aura greeting line height')
+  [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.maxWidthRatio `
+    -Minimum 0.35 -Maximum 0.9 -Label 'Aura greeting maximum width')
+  [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.xRatio `
+    -Minimum -0.45 -Maximum 0.45 -Label 'Aura greeting horizontal position')
+  [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.yRatio `
+    -Minimum -0.4 -Maximum 0.45 -Label 'Aura greeting vertical position')
+  [void](ConvertTo-AuraUiStudioNumber -Value $Geometry.markScale `
+    -Minimum 0.5 -Maximum 1.5 -Label 'Aura greeting mark size')
+}
+
 function Assert-AuraUiEditorOverlaySelection {
   param([Parameter(Mandatory = $true)][object]$Selection)
   if ($Selection -isnot [System.Management.Automation.PSCustomObject] -or
@@ -6551,12 +6631,15 @@ function Assert-AuraUiEditorOverlaySelection {
       $Selection.kind -cnotin @('interface', 'background', 'widget') -or
       $Selection.targetId -isnot [string] -or
       $Selection.targetId -cnotin @(
-        'interface.theme', 'interface.new-chat-area', 'background.layer',
+        'interface.theme', 'interface.new-chat-area', 'interface.greeting', 'background.layer',
         'widgets.instant-prompts')) {
     throw 'Aura window editor selection has an invalid shape.'
   }
   $typedTarget = switch -CaseSensitive ($Selection.kind) {
-    'interface' { $Selection.targetId -in @('interface.theme', 'interface.new-chat-area'); break }
+    'interface' {
+      $Selection.targetId -in @('interface.theme', 'interface.new-chat-area', 'interface.greeting')
+      break
+    }
     'background' { $Selection.targetId -ceq 'background.layer'; break }
     'widget' { $Selection.targetId -ceq 'widgets.instant-prompts'; break }
     default { $false; break }
@@ -6592,6 +6675,14 @@ function Assert-AuraUiEditorOverlaySelection {
       -Minimum $minimum -Maximum 10000 -Label "Aura window editor rectangle $name")
   }
   if ($Selection.kind -ceq 'interface') {
+    if ($Selection.targetId -ceq 'interface.greeting') {
+      if ($Selection.itemId -isnot [string] -or
+          $Selection.itemId -cne 'interface.greeting') {
+        throw 'Aura window editor greeting target is invalid.'
+      }
+      Assert-AuraUiEditorOverlayGreetingGeometry -Geometry $Selection.geometry
+      return
+    }
     if ($Selection.targetId -cnotin @('interface.theme', 'interface.new-chat-area') -or
         $Selection.itemId -isnot [string] -or
         $Selection.itemId -cnotin @(
@@ -6698,7 +6789,8 @@ function Invoke-AuraUiEditorOverlayMessage {
   Assert-AuraUiEditorOverlaySelection -Selection $message.payload
   if ($message.event -in @('preview', 'commit') -and
       ($message.payload.status -cne 'found' -or
-        $message.payload.kind -notin @('background', 'widget'))) {
+        ($message.payload.kind -notin @('background', 'widget') -and
+          $message.payload.targetId -cne 'interface.greeting'))) {
     throw 'Aura window editor geometry event target is invalid.'
   }
   if ($script:StudioReady -and $null -ne $script:StudioWebView.CoreWebView2) {
