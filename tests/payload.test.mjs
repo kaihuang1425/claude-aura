@@ -68,6 +68,8 @@ test("production payload keeps the Code adapter inert independently of registry 
     css: "",
     settings: { digest: "inert-code-adapter" },
   });
+  assert(!bundle.payload.includes("__AURA_RENDERER_WINDOW__"),
+    "Production payloads must resolve the prepaint handoff window placeholder");
   assert.match(bundle.payload, /function createInertCodeAdapter/);
   for (const forbidden of [
     "function createCodeAdapter",
@@ -75,6 +77,9 @@ test("production payload keeps the Code adapter inert independently of registry 
     "data-claude-aura-code-root",
     "querySelectorAll(entry.selector)",
     "role.css",
+    "__AURA_CODE_WINDOW__",
+    "__AURA_CODE_DOCUMENT__",
+    "const $w=window,$d=document",
   ]) {
     assert(!bundle.payload.includes(forbidden),
       `Production payload must not contain dormant Code adapter source: ${forbidden}`);
@@ -964,6 +969,7 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
       translate: element.style.getPropertyValue("translate") || "none",
       backgroundColor: element.style.getPropertyValue("background-color") || "rgba(0, 0, 0, 0)",
       backgroundImage: element.style.getPropertyValue("background-image") || "none",
+      boxShadow: element.style.getPropertyValue("box-shadow") || "none",
     }),
     addEventListener: (type, listener) => {
       const listeners = windowListeners.get(type) ?? new Set();
@@ -1925,6 +1931,11 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
       descriptor: createExperimentalCodeDescriptor(experimentalCompiled.theme),
     },
   });
+  assert.match(experimentalBundle.payload, /const \$w=window,\$d=document/,
+    "Only the source experiment may compact its repeated browser-global references");
+  assert(!experimentalBundle.payload.includes("__AURA_CODE_WINDOW__")
+    && !experimentalBundle.payload.includes("__AURA_CODE_DOCUMENT__"),
+  "Experimental alias placeholders must not survive payload compilation");
   const injectExperimental = new Function(
     "window",
     "document",
@@ -1954,12 +1965,80 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
   assert.equal(main["data-aura-code"], "v1c",
     "The full experimental renderer must mark one visible Code canvas");
   assert.equal(codeSheets().length, 1, "The Code route must commit exactly one owned sheet");
+  const cartoonSheet = codeSheets()[0];
+  assert.match(cartoonSheet.textContent,
+    /box-shadow:inset 0 0 0 2px hsl\(25 28% 18%\/.42\)!important/,
+    "Cartoon Studio must project its ink frame through the compiled payload");
   assert.equal(document.getElementById("claude-aura-style"), null,
     "Code must suppress the broad Chat stylesheet");
   assert.equal(document.getElementById("claude-aura-backdrop"), null,
     "Code must suppress Chat artwork");
   assert.equal(document.documentElement.classList.contains("claude-aura"), false,
     "Code must clear the broad Chat root class");
+
+  const editorialCompiled = await compileTheme({
+    config: { ...DEFAULT_CONFIG, theme: "japanese-film-editorial" },
+  });
+  const editorialBundle = await buildPayloadFromCompiled(editorialCompiled, {
+    experimentalCode: {
+      factory: createExperimentalCodeAdapter,
+      descriptor: createExperimentalCodeDescriptor(editorialCompiled.theme),
+    },
+  });
+  const injectEditorial = new Function(
+    "window",
+    "document",
+    "MutationObserver",
+    "setInterval",
+    "clearInterval",
+    "setTimeout",
+    "clearTimeout",
+    editorialBundle.payload,
+  );
+  const cartoonState = window.__CLAUDE_AURA_STATE__;
+  injectEditorial(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.notEqual(window.__CLAUDE_AURA_STATE__, cartoonState,
+    "A different experimental theme must replace the prior renderer lifecycle");
+  assert.equal(cartoonSheet.isConnected, false,
+    "Theme replacement must remove the prior exact Code sheet object");
+  assert.equal(codeSheets().length, 1,
+    "Theme replacement must retain exactly one Code sheet");
+  const editorialSheet = codeSheets()[0];
+  assert.match(editorialSheet.textContent,
+    /box-shadow:inset -3px 0 0 hsl\(10 56% 36%\/.46\)!important/,
+    "Theme replacement must publish the new editorial material cue");
+  assert.doesNotMatch(editorialSheet.textContent,
+    /inset 0 0 0 2px hsl\(25 28% 18%\/.42\)/,
+    "Theme replacement must not retain the prior ink frame");
+  assert.equal(sidebar["data-aura-code"], "v1n");
+  assert.equal(main["data-aura-code"], "v1c");
+  assert.equal(primaryAction["data-aura-code"], undefined,
+    "Theme replacement must leave inner Code controls native");
+  assert.equal(document.getElementById("claude-aura-style"), null);
+  assert.equal(document.getElementById("claude-aura-backdrop"), null);
+
+  injectExperimental(
+    window,
+    document,
+    FakeMutationObserver,
+    setInterval,
+    clearInterval,
+    setTimeout,
+    clearTimeout,
+  );
+  assert.equal(editorialSheet.isConnected, false);
+  assert.equal(codeSheets().length, 1);
+  assert.match(codeSheets()[0].textContent,
+    /box-shadow:inset 0 0 0 2px hsl\(25 28% 18%\/.42\)!important/,
+    "A second replacement must restore the selected Cartoon Studio cue");
 
   const nativeSidebarRemoveAttribute = sidebar.removeAttribute.bind(sidebar);
   let routeCleanupBlocked = true;

@@ -613,14 +613,15 @@ const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
   ["codeMain", "Q3"],
   ["codePending", "Q4"],
   ["codeApplied", "Q5"],
+  ["codeShadow", "Q6"],
   ["codeCleanupRetry", "R1"],
   ["codeAdapter", "R7"],
   ["replacementOnly", "R8"],
 ]);
 
-export function compactRendererIdentifiers(source) {
+export function compactRendererIdentifiers(source, extraAliases = []) {
   if (typeof source !== "string") throw new TypeError("Renderer template must be a string");
-  const aliases = new Map(RENDERER_IDENTIFIER_ALIASES);
+  const aliases = new Map([...RENDERER_IDENTIFIER_ALIASES, ...extraAliases]);
   const settingAliases = new Map(RUNTIME_SETTING_ALIASES);
   const identifierStart = /[A-Za-z_$]/;
   const identifierPart = /[A-Za-z0-9_$]/;
@@ -1077,7 +1078,28 @@ export async function buildPayloadFromCompiled(compiled, {
       "__AURA_CODE_SIGNATURES__",
       JSON.stringify(experimentalCode?.descriptor ?? null),
     );
-  let template = compactRendererSyntax(compactRendererIdentifiers(rendererSource));
+  const experimentalAliases = experimentalCode === null
+    ? []
+    : [["window", "$w"], ["document", "$d"]];
+  let template = compactRendererSyntax(compactRendererIdentifiers(
+    rendererSource,
+    experimentalAliases,
+  ));
+  if (!template.includes("__AURA_RENDERER_WINDOW__")) {
+    throw new Error("Renderer is missing its prepaint handoff window");
+  }
+  template = template.replace("__AURA_RENDERER_WINDOW__", "window");
+  if (experimentalCode !== null) {
+    for (const [placeholder, identifier] of [
+      ["__AURA_CODE_WINDOW__", "window"],
+      ["__AURA_CODE_DOCUMENT__", "document"],
+    ]) {
+      if (!template.includes(placeholder)) {
+        throw new Error(`Experimental Code renderer is missing ${placeholder}`);
+      }
+      template = template.replace(placeholder, identifier);
+    }
+  }
   const runtimeSettings = { ...compiled.settings };
   for (const diagnosticKey of [
     "label",

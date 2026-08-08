@@ -180,42 +180,60 @@ function runtime(options = {}) {
 }
 
 const EXPERIMENTAL = {
-  l: ["20 20% 90%", "20 20% 95%"],
-  d: ["240 20% 8%", "240 20% 12%"],
+  l: ["20 20% 90%", "20 20% 95%", "none"],
+  d: ["240 20% 8%", "240 20% 12%", "none"],
 };
 
 const EXPERIMENTAL_THEME_PALETTES = Object.freeze({
   default: {
-    l: ["234 30% 92%", "232 38% 96%"],
-    d: ["236 29% 8%", "233 24% 14%"],
+    l: ["234 30% 92%", "232 38% 96%", "none"],
+    d: ["236 29% 8%", "233 24% 14%", "none"],
   },
   "japanese-film-editorial": {
-    l: ["38 20% 84%", "42 38% 94%"],
-    d: ["210 10% 7%", "210 10% 12%"],
+    l: ["38 20% 84%", "42 38% 94%",
+      "inset -3px 0 0 hsl(10 56% 36%/.46)",
+      "inset 0 2px 0 hsl(10 56% 36%/.30)"],
+    d: ["210 10% 7%", "210 10% 12%",
+      "inset -3px 0 0 hsl(14 76% 65%/.46)",
+      "inset 0 2px 0 hsl(14 76% 65%/.30)"],
   },
   "korean-prestige": {
-    l: ["216 24% 84%", "216 29% 94%"],
-    d: ["218 55% 6%", "216 46% 10%"],
+    l: ["216 24% 84%", "216 29% 94%",
+      "inset 0 0 0 1px hsl(216 27% 19%/.12)"],
+    d: ["218 55% 6%", "216 46% 10%",
+      "inset 0 0 0 1px hsl(215 30% 76%/.12)"],
   },
   "cartoon-studio": {
-    l: ["42 52% 93%", "40 62% 95%"],
-    d: ["185 26% 8%", "184 22% 14%"],
+    l: ["42 52% 93%", "40 62% 95%",
+      "inset 0 0 0 2px hsl(25 28% 18%/.42)"],
+    d: ["185 26% 8%", "184 22% 14%",
+      "inset 0 0 0 2px hsl(42 36% 80%/.42)"],
   },
   "anime-twilight": {
-    l: ["228 22% 90%", "229 45% 94%"],
-    d: ["232 56% 8%", "232 48% 14%"],
+    l: ["228 22% 90%", "229 45% 94%",
+      "inset 0 0 26px hsl(188 58% 31%/.10)"],
+    d: ["232 56% 8%", "232 48% 14%",
+      "inset 0 0 26px hsl(185 72% 73%/.10)"],
   },
   "study-library": {
-    l: ["44 28% 90%", "44 43% 93%"],
-    d: ["139 26% 7%", "138 20% 13%"],
+    l: ["44 28% 90%", "44 43% 93%",
+      "inset 0 3px 0 hsl(352 36% 33%/.46)",
+      "inset 0 3px 0 hsl(146 37% 28%/.26)"],
+    d: ["139 26% 7%", "138 20% 13%",
+      "inset 0 3px 0 hsl(351 54% 72%/.46)",
+      "inset 0 3px 0 hsl(145 45% 67%/.26)"],
   },
   "japanese-idol": {
-    l: ["13 56% 95%", "13 58% 96%"],
-    d: ["339 28% 8%", "337 24% 14%"],
+    l: ["13 56% 95%", "13 58% 96%",
+      "inset 0 1px 0 hsl(266 35% 47%/.22),inset 0 0 0 1px hsl(342 62% 42%/.12)"],
+    d: ["339 28% 8%", "337 24% 14%",
+      "inset 0 1px 0 hsl(266 58% 78%/.22),inset 0 0 0 1px hsl(344 79% 75%/.12)"],
   },
   "korean-idol": {
-    l: ["248 58% 96%", "246 55% 97%"],
-    d: ["250 41% 8%", "248 34% 15%"],
+    l: ["248 58% 96%", "246 55% 97%",
+      "inset 2px 0 0 hsl(256 62% 43%/.22),inset -2px 0 0 hsl(188 56% 34%/.22)"],
+    d: ["250 41% 8%", "248 34% 15%",
+      "inset 2px 0 0 hsl(258 78% 76%/.22),inset -2px 0 0 hsl(186 70% 72%/.22)"],
   },
 });
 
@@ -230,6 +248,7 @@ function experimentalRuntime({
   outsideListCount = 0,
   mainCount = 1,
   descriptor = EXPERIMENTAL,
+  nativeBoxShadow = "none",
 } = {}) {
   const document = new Document();
   const asides = [];
@@ -279,7 +298,7 @@ function experimentalRuntime({
   let currentContext = context;
   const adapter = createExperimentalCodeAdapter([
     document,
-    () => ({ display: "block", visibility: "visible" }),
+    () => ({ display: "block", visibility: "visible", boxShadow: nativeBoxShadow }),
     () => mode,
   ], descriptor);
   return {
@@ -322,8 +341,34 @@ test("the experimental descriptor derives both palettes from the selected theme"
       semantic["--aura-background-primary"],
     ];
   };
-  assert.deepEqual(descriptor.l, palette("light"));
-  assert.deepEqual(descriptor.d, palette("dark"));
+  assert.deepEqual(descriptor.l.slice(0, 2), palette("light"));
+  assert.deepEqual(descriptor.d.slice(0, 2), palette("dark"));
+  const malformedTheme = structuredClone(compiled.theme);
+  malformedTheme.light.semantic["--aura-sidebar-background"] = "1..2 20% 30%";
+  assert.throws(() => createExperimentalCodeDescriptor(malformedTheme), TypeError,
+    "Descriptor generation must reject malformed numeric HSL components");
+});
+
+test("Japanese Film Editorial adds its closed editorial shell rule", async () => {
+  const compiled = await compileTheme({
+    projectRoot: PROJECT_ROOT,
+    config: { enabled: true, theme: "japanese-film-editorial", appearance: "light" },
+  });
+  const descriptor = createExperimentalCodeDescriptor(compiled.theme);
+  assert.deepEqual(descriptor.l.slice(0, 2),
+    EXPERIMENTAL_THEME_PALETTES["japanese-film-editorial"].l.slice(0, 2));
+  assert.equal(descriptor.l[2],
+    "inset -3px 0 0 hsl(10 56% 36%/.46)");
+  assert.equal(descriptor.l[3],
+    "inset 0 2px 0 hsl(10 56% 36%/.30)");
+
+  const view = experimentalRuntime({ descriptor });
+  assert.equal((await view.activate()).status, "styled");
+  const [style] = view.document.querySelectorAll("style");
+  assert.match(style.textContent,
+    /\[data-aura-code=v1n\][^{]*\{[^}]*box-shadow:inset -3px 0 0 hsl\(10 56% 36%\/.46\)!important/);
+  assert.match(style.textContent,
+    /\[data-aura-code=v1c\][^{]*\{[^}]*box-shadow:inset 0 2px 0 hsl\(10 56% 36%\/.30\)!important/);
 });
 
 test("all built-ins project exact unique Light and Dark Code shell palettes", async () => {
@@ -332,7 +377,8 @@ test("all built-ins project exact unique Light and Dark Code shell palettes", as
     [...THEME_IDS].sort(),
     "The experimental matrix must cover every frozen built-in exactly once",
   );
-  const unique = { l: new Set(), d: new Set() };
+  const unique = { l: new Set(), d: new Set() },
+    uniqueMaterial = { l: new Set(), d: new Set() };
   for (const theme of THEME_IDS) {
     const compiled = await compileTheme({
       projectRoot: PROJECT_ROOT,
@@ -343,12 +389,20 @@ test("all built-ins project exact unique Light and Dark Code shell palettes", as
       `${theme} must keep its reviewed semantic shell palette`);
 
     for (const [mode, key] of [["light", "l"], ["dark", "d"]]) {
-      unique[key].add(descriptor[key].join(" / "));
+      unique[key].add(descriptor[key].slice(0, 2).join(" / "));
+      uniqueMaterial[key].add(descriptor[key].slice(2).join(" / "));
       const view = experimentalRuntime({ descriptor });
       view.setMode(mode);
       assert.equal((await view.activate()).status, "styled");
       const [style] = view.document.querySelectorAll("style");
-      for (const value of descriptor[key]) assert.match(style.textContent, new RegExp(`hsl\\(${value}\\)`));
+      for (const value of descriptor[key].slice(0, 2)) {
+        assert.match(style.textContent, new RegExp(`hsl\\(${value}\\)`));
+      }
+      for (const shadow of descriptor[key].slice(2)) {
+        assert.match(style.textContent, new RegExp(
+          `box-shadow:${shadow.replace(/[()]/g, "\\$&")}`,
+        ));
+      }
       assert.doesNotMatch(style.textContent, /background-image|gradient\(|(?:^|[;{])background:/,
         `${theme} ${mode} must preserve every native Code background layer`);
     }
@@ -357,6 +411,10 @@ test("all built-ins project exact unique Light and Dark Code shell palettes", as
     "Every built-in must remain visually distinguishable in Light mode");
   assert.equal(unique.d.size, THEME_IDS.length,
     "Every built-in must remain visually distinguishable in Dark mode");
+  assert.equal(uniqueMaterial.l.size, THEME_IDS.length,
+    "Every built-in must retain a distinct Light material signature");
+  assert.equal(uniqueMaterial.d.size, THEME_IDS.length,
+    "Every built-in must retain a distinct Dark material signature");
 });
 
 test("the source experiment styles only the exact Code shell roles", async () => {
@@ -386,8 +444,10 @@ test("the source experiment styles only the exact Code shell roles", async () =>
     "Code surfaces should retain native background imagery");
   assert.doesNotMatch(style.textContent, /(?:^|[;{])color:/,
     "Code shells must not pass an Aura text color into unclassified descendants");
-  assert.doesNotMatch(style.textContent, /(?:box-shadow|outline|border):/,
-    "Code styling must preserve native focus, selection, and elevation frames");
+  assert.match(style.textContent, /box-shadow:none!important/,
+    "The quiet material must explicitly retain a shadow-free owned shell");
+  assert.doesNotMatch(style.textContent, /(?:^|[;{])(?:outline|border|filter|opacity|transform|position|overflow|content):/,
+    "Code styling must not introduce focus, layout, clipping, generated-content, or whole-surface effects");
   assert.doesNotMatch(style.textContent, /(?:^|[;{])background:/,
     "Code styling must not reset native background layers");
 });
@@ -416,6 +476,17 @@ test("the source experiment reapplies the selected dark palette", async () => {
   assert.match(styles[0].textContent, /hsl\(240 20% 8%\)/);
   assert.equal(view.editorNodes[0].getAttribute(EXPERIMENTAL_MARKER), null,
     "A generic editable element must remain native");
+});
+
+test("unsupported appearance names keep the Code page native", async () => {
+  for (const mode of ["legacy", "dark-custom", "system", ""]) {
+    const view = experimentalRuntime();
+    view.setMode(mode);
+    assert.equal((await view.activate()).status, "native");
+    assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), null);
+    assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), null);
+    assert.equal(view.document.querySelectorAll("style").length, 0);
+  }
 });
 
 test("safety UI or a missing or ambiguous required Code role keeps the experiment native", async () => {
@@ -449,12 +520,44 @@ test("a malformed experimental palette keeps the Code page native", async () => 
       ...EXPERIMENTAL,
       l: [`${EXPERIMENTAL.l[0]},${EXPERIMENTAL.l[1]}`],
     },
+    {
+      ...EXPERIMENTAL,
+      l: [...EXPERIMENTAL.l.slice(0, 2), "0 0 20px red", "none"],
+    },
+    {
+      ...EXPERIMENTAL,
+      l: [...EXPERIMENTAL.l.slice(0, 2), "inset 0 0 0 #000;display:none", "none"],
+    },
+    {
+      ...EXPERIMENTAL,
+      l: [...EXPERIMENTAL.l.slice(0, 2), "inset hsl()///", "none"],
+    },
+    {
+      ...EXPERIMENTAL,
+      l: ["1..2 20% 30%", EXPERIMENTAL.l[1], "none"],
+    },
+    {
+      ...EXPERIMENTAL,
+      l: [". .% .%", EXPERIMENTAL.l[1], "none"],
+    },
+    {
+      ...EXPERIMENTAL,
+      l: [...EXPERIMENTAL.l.slice(0, 2), "inset 0 0 0 hsl(1..2 20% 30%/.1)"],
+    },
   ]) {
     const view = experimentalRuntime({ descriptor });
     assert.equal((await view.activate()).status, "native");
     assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), null);
     assert.equal(view.document.querySelectorAll("style").length, 0);
   }
+});
+
+test("a native shell shadow keeps the complete experiment native", async () => {
+  const view = experimentalRuntime({ nativeBoxShadow: "0 1px 2px rgb(0 0 0 / .2)" });
+  assert.equal((await view.activate()).status, "native");
+  assert.equal(view.aside.getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.mains[0].getAttribute(EXPERIMENTAL_MARKER), null);
+  assert.equal(view.document.querySelectorAll("style").length, 0);
 });
 
 test("missing or ambiguous inner roles stay native while safe outer roles style", async () => {

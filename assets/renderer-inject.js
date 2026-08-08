@@ -1,5 +1,8 @@
 ((cssText, settings) => {
-  window.__CLAUDE_AURA_PREPAINT__?.handoff?.();
+  __AURA_RENDERER_WINDOW__.__CLAUDE_AURA_PREPAINT__?.handoff?.();
+  /*__AURA_CODE_ACTIVE_START__*/
+  const $w = __AURA_CODE_WINDOW__, $d = __AURA_CODE_DOCUMENT__;
+  /*__AURA_CODE_ACTIVE_END__*/
   if (settings.C === 1) {
     const cssDictionary = [
       "html.claude-aura", "[data-claude-aura-", "hsl(var(--aura-", "var(--aura-",

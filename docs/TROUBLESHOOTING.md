@@ -98,10 +98,13 @@ and VS Code theming ship only if their separate feasibility gates pass.
 Developers can opt into a reversible source-checkout-only styling experiment.
 Installers, ordinary launches, release payloads, and Claude Desktop remain
 unchanged. The experiment requires exactly one visible `aside` and one visible
-`main`; it themes only those two structural surfaces. Inner regions, lists,
-editors, controls, and unknown structures stay native. Any visible native
-`dialog`, ARIA `dialog`, or ARIA `alertdialog` rolls the entire experiment back
-to native presentation until the safety surface is gone.
+`main`; it themes only those two structural surfaces with the selected
+built-in's background palette and fixed inset material cue. Inner regions,
+lists, editors, controls, and unknown structures stay native. Existing native
+shell elevation, malformed material data, or any visible native `dialog`, ARIA
+`dialog`, or ARIA `alertdialog` rolls the entire experiment back to native
+presentation. Forced colors and every requested contrast mode also stay
+native.
 
 Start it explicitly from the repository root:
 

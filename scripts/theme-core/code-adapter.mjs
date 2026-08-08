@@ -4,17 +4,61 @@ export const CODE_ROLE_SIGNATURES = Object.freeze({
 });
 
 export function createExperimentalCodeDescriptor(theme) {
-  const keys = [
-    "--aura-sidebar-background",
-    "--aura-background-primary",
-  ];
-  const palette = (mode) => keys.map((key) => {
-    const value = theme?.[mode]?.semantic?.[key];
-    if (typeof value !== "string" || !/^[\d.]+ [\d.]+% [\d.]+%$/.test(value)) {
-      throw new TypeError(`Experimental Code palette is missing ${mode} ${key}`);
+  const read = (semantic, key) => {
+    const value = semantic?.[key];
+    if (typeof value !== "string"
+        || !/^\d+(?:\.\d+)? \d+(?:\.\d+)?% \d+(?:\.\d+)?%$/.test(value)) {
+      throw new TypeError(`Experimental Code palette is missing ${key}`);
     }
     return value;
-  });
+  };
+  const recipes = {
+    default: () => ["none"],
+    "japanese-film-editorial": (semantic) => {
+      const accent = read(semantic, "--aura-accent-primary");
+      return [
+        `inset -3px 0 0 hsl(${accent}/.46)`,
+        `inset 0 2px 0 hsl(${accent}/.30)`,
+      ];
+    },
+    "korean-prestige": (semantic) => {
+      const border = read(semantic, "--aura-border-emphasis");
+      return [`inset 0 0 0 1px hsl(${border}/.12)`];
+    },
+    "cartoon-studio": (semantic) => {
+      const border = read(semantic, "--aura-border-emphasis");
+      return [`inset 0 0 0 2px hsl(${border}/.42)`];
+    },
+    "anime-twilight": (semantic) => {
+      const accent = read(semantic, "--aura-accent-secondary");
+      return [`inset 0 0 26px hsl(${accent}/.10)`];
+    },
+    "study-library": (semantic) => [
+      `inset 0 3px 0 hsl(${read(semantic, "--aura-accent-secondary")}/.46)`,
+      `inset 0 3px 0 hsl(${read(semantic, "--aura-accent-primary")}/.26)`,
+    ],
+    "japanese-idol": (semantic) => {
+      const secondary = read(semantic, "--aura-accent-secondary"),
+        primary = read(semantic, "--aura-accent-primary");
+      const shadow = `inset 0 1px 0 hsl(${secondary}/.22),inset 0 0 0 1px hsl(${primary}/.12)`;
+      return [shadow];
+    },
+    "korean-idol": (semantic) => {
+      const primary = read(semantic, "--aura-accent-primary"),
+        secondary = read(semantic, "--aura-accent-secondary");
+      const shadow = `inset 2px 0 0 hsl(${primary}/.22),inset -2px 0 0 hsl(${secondary}/.22)`;
+      return [shadow];
+    },
+  };
+  const recipe = recipes[theme?.variant] ?? recipes.default;
+  const palette = (mode) => {
+    const semantic = theme?.[mode]?.semantic;
+    return [
+      read(semantic, "--aura-sidebar-background"),
+      read(semantic, "--aura-background-primary"),
+      ...recipe(semantic),
+    ];
+  };
   return Object.freeze({
     l: Object.freeze(palette("light")),
     d: Object.freeze(palette("dark")),
@@ -56,67 +100,69 @@ export function createExperimentalCodeAdapter(
 ) {
   const codeMarker = "data-aura-code",
     codeStyleId = "claude-aura-code-style";
-  let codeSnapshots = [], codeSheet = null;
+  let codeSnapshots = [], codeSheet;
 
   const codeNative = { status: "native" }, codeStyled = { status: "styled" },
     codePending = { status: "cleanup-pending" };
   const codeVisible = (codeElement) => {
-    if (!codeElement?.isConnected) return false;
-    const codeRect = codeElement?.getBoundingClientRect?.(),
-      codeStyle = codeGetComputedStyle?.(codeElement);
-    return codeRect?.width > 0 && codeRect.height > 0
-      && codeStyle?.display !== "none" && codeStyle?.visibility !== "hidden"
-      && codeStyle?.opacity !== "0";
+    const codeRect = codeElement.getBoundingClientRect(),
+      codeStyle = codeGetComputedStyle(codeElement);
+    return codeElement.isConnected && codeRect.width > 0 && codeRect.height > 0
+      && codeStyle.display !== "none" && codeStyle.visibility !== "hidden"
+      && codeStyle.opacity !== "0";
   };
-  const codeMatches = (codeScope, codeSelector) =>
-    [...codeScope.querySelectorAll(codeSelector)].filter(codeVisible);
+  const codeMatches = (codeSelector) =>
+    [...codeDocument.querySelectorAll(codeSelector)].filter(codeVisible);
   const codeReset = () => {
-    const codeFound = [];
-    for (const [codeElement, codeValue, codeApplied] of [...codeSnapshots].reverse()) {
+    codeSnapshots = codeSnapshots.reverse().filter(([
+      codeElement, codeValue, codeApplied
+    ]) => {
       try {
-        if (codeElement.getAttribute(codeMarker) !== codeApplied) continue;
-        if (codeValue === null) codeElement.removeAttribute(codeMarker);
-        else codeElement.setAttribute(codeMarker, codeValue);
+        if (codeElement.getAttribute(codeMarker) === codeApplied) {
+          codeValue === null
+            ? codeElement.removeAttribute(codeMarker)
+            : codeElement.setAttribute(codeMarker, codeValue);
+        }
+        return false;
       } catch {
-        codeFound.push([codeElement, codeValue, codeApplied]);
+        return true;
       }
-    }
-    codeSnapshots = codeFound.reverse();
+    }).reverse();
     try {
       codeSheet?.remove();
       codeSheet = null;
     } catch {}
     return !codeSnapshots.length && !codeSheet;
   };
-  const codeRollback = codeReset;
   const activate = (codeContext) => {
     if (!codeReset()) return codePending;
     try {
-      if (codeDocument?.getElementById?.(codeStyleId)) return codeNative;
       const codeMode = codeGetMode?.(),
         codePalette = codeDescriptor?.[
-          codeMode === "dark" ? "d" : codeMode === "light" ? "l" : ""
+          codeMode === "light" ? "l" : codeMode === "dark" ? "d" : ""
         ];
-      if ((codeContext !== "code-list" && codeContext !== "code-session")
+      if (codeDocument.getElementById(codeStyleId)
+          || !/^code-(?:list|session)$/.test(codeContext)
           || !Array.isArray(codePalette)
-          || codePalette.length !== 2
-          || !/^(?:[\d.]+(?:\x20[\d.]+%){2},?){2}$/.test(codePalette)) {
+          || codePalette.length < 3 || codePalette.length > 4
+          || !/^(?:\d+(?:\.\d+)?(?:\x20\d+(?:\.\d+)?%){2},?){2}$/.test(codePalette.slice(0, 2))
+          || !codePalette.slice(2).every((codeShadow) =>
+            codeShadow === "none" || codeShadow.split(",").every((codeText) =>
+              /^inset\x20(?:-?\d+px|0)\x20(?:-?\d+px|0)\x20(?:\d+px|0)(?:\x20\d+px)?\x20hsl\(\d+(?:\.\d+)?\x20\d+(?:\.\d+)?%\x20\d+(?:\.\d+)?%\/\.\d+\)$/.test(codeText)))) {
         return codeNative;
       }
-      if (codeMatches(
-        codeDocument,
-        'dialog,[role="dialog"],[role="alertdialog"]',
-      ).length) return codeNative;
-      const codeAsides = codeMatches(codeDocument, "aside"),
-        codeMains = codeMatches(codeDocument, "main");
+      if (codeMatches('dialog,[role="dialog"],[role="alertdialog"]').length) return codeNative;
+      const codeAsides = codeMatches("aside"), codeMains = codeMatches("main");
       if (codeAsides.length !== 1 || codeMains.length !== 1) return codeNative;
       const codeAside = codeAsides[0], codeMain = codeMains[0];
-      if (codeAside.contains?.(codeMain) || codeMain.contains?.(codeAside)) return codeNative;
+      if (codeAside.contains(codeMain) || codeMain.contains(codeAside)
+          || codeGetComputedStyle(codeAside).boxShadow !== "none"
+          || codeGetComputedStyle(codeMain).boxShadow !== "none") return codeNative;
       codeSheet = codeDocument.createElement("style");
       codeSheet.id = codeStyleId;
-      codeSheet.textContent = `@media(forced-colors:none) and (prefers-contrast:no-preference){`
-        + `[${codeMarker}=v1n]{background-color:hsl(${codePalette[0]})!important}`
-        + `[${codeMarker}=v1c]{background-color:hsl(${codePalette[1]})!important}}`;
+      const codeText = (codeValue, codeIndex) =>
+        `[${codeMarker}=${codeValue}]{background-color:hsl(${codePalette[codeIndex]})!important;box-shadow:${codePalette[codeIndex + 2] ?? codePalette[2]}!important}`;
+      codeSheet.textContent = `@media(forced-colors:none) and (prefers-contrast:no-preference){${codeText("v1n", 0)}${codeText("v1c", 1)}}`;
       for (const [codeElement, codeApplied] of [
         [codeAside, "v1n"], [codeMain, "v1c"]
       ]) {
@@ -128,13 +174,13 @@ export function createExperimentalCodeAdapter(
       codeDocument.head.appendChild(codeSheet);
       return codeStyled;
     } catch {
-      return codeRollback() ? codeNative : codePending;
+      return codeReset() ? codeNative : codePending;
     }
   };
 
   return {
     activate,
-    rollback: codeRollback
+    rollback: codeReset
   };
 }
 
