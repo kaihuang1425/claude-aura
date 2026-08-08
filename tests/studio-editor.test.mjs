@@ -527,13 +527,21 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /\$script:MainOpenSignal\s*=\s*\[System\.Threading\.EventWaitHandle\]::new\([\s\S]{0,180}?\[System\.Threading\.EventResetMode\]::AutoReset[\s\S]{0,180}?"Local\\ClaudeAura\.\$sid\.OpenMain"/,
     "Titleless main-window launch signaling must be a per-user AutoReset event");
+  assert.match(ui,
+    /\$script:ConfigRefreshSignal\s*=\s*\[System\.Threading\.EventWaitHandle\]::new\([\s\S]{0,180}?\[System\.Threading\.EventResetMode\]::AutoReset[\s\S]{0,180}?"Local\\ClaudeAura\.\$sid\.RefreshConfig"/,
+    "Live config refresh signaling must be a per-user AutoReset event");
   const existingInstanceIndex = ui.indexOf("if (-not $createdNew)");
+  const existingConfigSignalIndex = ui.indexOf("[void]$script:ConfigRefreshSignal.Set()", existingInstanceIndex);
   const existingStudioBranchIndex = ui.indexOf("if ($OpenStudio)", existingInstanceIndex);
   const existingSignalIndex = ui.indexOf("[void]$script:StudioOpenSignal.Set()", existingStudioBranchIndex);
   const existingReturnIndex = ui.indexOf("return", existingSignalIndex);
-  assert(existingInstanceIndex >= 0 && existingStudioBranchIndex > existingInstanceIndex
+  assert(existingInstanceIndex >= 0 && existingConfigSignalIndex > existingInstanceIndex
+      && existingStudioBranchIndex > existingConfigSignalIndex
       && existingSignalIndex > existingStudioBranchIndex && existingReturnIndex > existingSignalIndex,
-    "-OpenStudio must signal the already-running Aura instance before the second process returns");
+    "A config-changing second launch must refresh the running Aura instance before it returns");
+  assert.match(ui,
+    /if \(\$initialOptions\.Count -gt 0\)\s*\{\s*\[void\]\$script:ConfigRefreshSignal\.Set\(\)\s*\}/,
+    "Only a second launch that changed config should request a live refresh");
   assert.match(ui,
     /if \(\$OpenStudio\)[\s\S]{0,120}?\$script:StudioOpenSignal\.Set\(\)[\s\S]{0,120}?else\s*\{[\s\S]{0,100}?\$script:MainOpenSignal\.Set\(\)/,
     "A normal second launch must foreground the titleless main window through its named signal");
@@ -547,6 +555,16 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(namedSignalRegistration,
     /\$script:MainOpenSignal[\s\S]{0,160}?Show-AuraUiMain/,
     "A registered wait must post the main-window foreground signal to the UI thread");
+  assert.match(namedSignalRegistration,
+    /\$script:ConfigRefreshSignal[\s\S]{0,180}?Sync-AuraUiExternalConfig/,
+    "A registered wait must post config refresh to the Aura UI thread");
+  const externalConfigSync = powershellFunction("Sync-AuraUiExternalConfig");
+  assert.match(externalConfigSync,
+    /Get-Content -LiteralPath \$ConfigPath -Raw -Encoding UTF8 \| ConvertFrom-Json/,
+    "Live config refresh must reread the validated UTF-8 config from disk");
+  assert.match(externalConfigSync,
+    /Invoke-AuraUiSetEnabled -Enabled \(Get-AuraUiEnabled\)/,
+    "Live config refresh must reuse Aura's normal apply-or-restore path");
   assert.match(powershellFunction("Show-AuraUiStudio"),
     /\.Activate\(\)[\s\S]{0,120}?\.BringToFront\(\)/,
     "A signaled Studio window must be restored and foregrounded");
@@ -557,6 +575,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The named Studio signal must be disposed during shutdown");
   assert.match(ui, /\$script:MainOpenSignal\.Dispose\(\)/,
     "The named main-window signal must be disposed during shutdown");
+  assert.match(ui, /\$script:ConfigRefreshSignal\.Dispose\(\)/,
+    "The named config-refresh signal must be disposed during shutdown");
 
   const expectedStudioMessageTypes = [
     "get-state",

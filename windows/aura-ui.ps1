@@ -8314,6 +8314,18 @@ function Invoke-AuraUiSetEnabled {
   }
 }
 
+function Sync-AuraUiExternalConfig {
+  try {
+    $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Invoke-AuraUiSetEnabled -Enabled (Get-AuraUiEnabled)
+    return $true
+  } catch {
+    Write-AuraUiLog -Message "External theme configuration could not be applied: $($_.Exception.Message)"
+    Send-AuraUiStudioState -Status "$($script:UiCopy.themeNotChangedMessage)" -Tone error
+    return $false
+  }
+}
+
 function Invoke-AuraUiSetAppearance {
   param([Parameter(Mandatory = $true)][string]$Appearance)
   if ($Appearance -cnotin @('system', 'light', 'dark')) { throw 'Studio appearance must be system, light, or dark.' }
@@ -9206,6 +9218,10 @@ function Register-AuraUiNamedSignalWaits {
       $script:Form,
       [Action]{ if (-not $script:Closing) { Show-AuraUiStudio } }))
   $script:HostSignalWaits.Add([AuraUiAsyncDispatch]::RegisterSignal(
+      $script:ConfigRefreshSignal,
+      $script:Form,
+      [Action]{ if (-not $script:Closing) { [void](Sync-AuraUiExternalConfig) } }))
+  $script:HostSignalWaits.Add([AuraUiAsyncDispatch]::RegisterSignal(
       $script:DraftHandoffEnableSignal,
       $script:Form,
       [Action]{
@@ -9453,6 +9469,7 @@ $script:JumpListIdentityPath = $null
 $script:EffectiveLauncherIdentity = $null
 $script:MainOpenSignal = $null
 $script:StudioOpenSignal = $null
+$script:ConfigRefreshSignal = $null
 $script:Launcher = $null
 $script:LauncherButton = $null
 $script:LauncherDpiWindow = $null
@@ -9787,6 +9804,12 @@ public static class AuraUiAsyncDispatch {
     [System.Threading.EventResetMode]::AutoReset,
     "Local\ClaudeAura.$sid.OpenStudio",
     [ref]$studioSignalCreatedNew)
+  $configRefreshSignalCreatedNew = $false
+  $script:ConfigRefreshSignal = [System.Threading.EventWaitHandle]::new(
+    $false,
+    [System.Threading.EventResetMode]::AutoReset,
+    "Local\ClaudeAura.$sid.RefreshConfig",
+    [ref]$configRefreshSignalCreatedNew)
   $draftHandoffSignalCreatedNew = $false
   $script:DraftHandoffEnableSignal = [System.Threading.EventWaitHandle]::new(
     $false,
@@ -9801,6 +9824,9 @@ public static class AuraUiAsyncDispatch {
   if (-not $createdNew) {
     if ($script:BuiltInAuthoring) {
       throw 'Exit the running Claude Aura instance before starting built-in layout authoring.'
+    }
+    if ($initialOptions.Count -gt 0) {
+      [void]$script:ConfigRefreshSignal.Set()
     }
     if ($ExperimentalDraftHandoff) {
       [void]$script:DraftHandoffEnableSignal.Set()
@@ -11248,6 +11274,10 @@ public static class AuraUiAsyncDispatch {
   if ($null -ne $script:StudioOpenSignal) {
     try { $script:StudioOpenSignal.Dispose() } catch {}
     $script:StudioOpenSignal = $null
+  }
+  if ($null -ne $script:ConfigRefreshSignal) {
+    try { $script:ConfigRefreshSignal.Dispose() } catch {}
+    $script:ConfigRefreshSignal = $null
   }
   if ($null -ne $script:DraftHandoffEnableSignal) {
     try { $script:DraftHandoffEnableSignal.Dispose() } catch {}
