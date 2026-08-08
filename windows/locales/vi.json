@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "Xóa nháp này?",
   "promptShelfDeleteMessage": "Thao tác này sẽ xóa nháp khỏi thiết bị này và không thể hoàn tác. Văn bản đã chèn vào Claude sẽ không đổi.",
   "openDesktopApp": "Mở ứng dụng máy tính",
+  "openDesktopWorkspaceGuidance": "Xem lại hướng dẫn không gian làm việc đầy đủ",
+  "desktopWorkspaceGuidanceTitle": "Không gian làm việc Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop là một workspace native riêng biệt với giao diện và điều khiển riêng. Aura sẽ mở hướng dẫn hiện tại của Anthropic. Aura sẽ không chọn hoặc chuyển phiên Remote Control của bạn, không gửi đường dẫn dự án hay prompt, và không áp dụng kiểu dáng cho Claude Desktop. Nếu thiết lập của bạn hỗ trợ /desktop, hãy tự chạy trong phiên CLI dự định.\n\nMở hướng dẫn",
+  "desktopWorkspaceGuidanceFailedTitle": "Không thể mở hướng dẫn",
+  "desktopWorkspaceGuidanceFailedMessage": "Mở hướng dẫn Claude Desktop của Anthropic trong trình duyệt của bạn:\n{0}",
   "exitApp": "Thoát Claude Aura",
   "navLauncherName": "Mở menu Claude Aura",
   "launcherTipTitle": "Menu Claude Aura",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura không thể mở",
   "startupMessage": "Claude Aura không thể khởi động cửa sổ trình duyệt. Cài đặt hoặc sửa Microsoft Edge WebView2 Runtime, rồi thử lại.",
   "technicalDetails": "Chi tiết kỹ thuật đã được lưu vào:",
-  "openDesktopWorkspaceGuidance": "Xem lại hướng dẫn không gian làm việc đầy đủ",
-  "desktopWorkspaceGuidanceTitle": "Không gian làm việc Claude Desktop",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktop là một workspace native riêng biệt với giao diện và điều khiển riêng. Aura sẽ mở hướng dẫn hiện tại của Anthropic. Aura sẽ không chọn hoặc chuyển phiên Remote Control của bạn, không gửi đường dẫn dự án hay prompt, và không áp dụng kiểu dáng cho Claude Desktop. Nếu thiết lập của bạn hỗ trợ /desktop, hãy tự chạy trong phiên CLI dự định.\n\nMở hướng dẫn",
-  "desktopWorkspaceGuidanceFailedTitle": "Không thể mở hướng dẫn",
-  "desktopWorkspaceGuidanceFailedMessage": "Mở hướng dẫn Claude Desktop của Anthropic trong trình duyệt của bạn:\n{0}"
+  "chooseWordmarkTitle": "Chọn wordmark thanh bên của Claude Aura",
+  "removingWordmark": "Đang xóa wordmark tùy chỉnh...",
+  "wordmarkPositionSaved": "Wordmark thanh bên đã được lưu.",
+  "wordmarkNotChangedTitle": "Wordmark chưa bị thay đổi",
+  "invalidWordmarkMessage": "Chọn ảnh PNG hoặc JPEG tối đa 2 MB và ít nhất 344 × 124 px."
 }

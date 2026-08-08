@@ -297,6 +297,7 @@
   ]);
   const CAPABILITY_TARGETS = Object.freeze({
     "interface.theme": Object.freeze({ branch: "interface", labelKey: "targetInterfaceTheme" }),
+    "interface.sidebar-wordmark": Object.freeze({ branch: "interface", labelKey: "wordmarkTitle" }),
     "interface.new-chat-area": Object.freeze({ branch: "interface", labelKey: "targetNewChatArea" }),
     "interface.greeting": Object.freeze({ branch: "interface", labelKey: "targetGreeting" }),
     "background.canvas": Object.freeze({ branch: "background", labelKey: "branchBackground" }),
@@ -344,6 +345,14 @@
       views: ["new-chat", "conversation"],
       axes: ["appearance"],
       captureGeometry: "none",
+      selectionBehavior: "picker",
+    },
+    {
+      id: "interface.sidebar-wordmark",
+      branch: "interface",
+      views: ["new-chat", "conversation"],
+      axes: [],
+      captureGeometry: "local-preview",
       selectionBehavior: "picker",
     },
     {
@@ -838,6 +847,7 @@
     focusThemeCard,
     getThemeCardPreview,
     openThemeCardPreview,
+    hasPersonalWordmark,
     onOrdinaryViewRestore,
     onStudioStyleChange,
   }) {
@@ -1466,6 +1476,7 @@
           || /^shared\.(fontUi|fontDisplay|radius|blur|shadow)$/.test(field)) {
         return "interface.theme";
       }
+      if (field === "personalWordmark") return "interface.sidebar-wordmark";
       if (field === "shared.prompt" || field.startsWith("shared.prompt.")) {
         return "interface.new-chat-area";
       }
@@ -1479,6 +1490,7 @@
     };
     const defaultInspectorField = (target) => {
       if (target === "interface.theme") return `tokens.${selectedMode}.canvas`;
+      if (target === "interface.sidebar-wordmark") return "personalWordmark";
       if (target === "interface.new-chat-area") return "shared.prompt";
       if (target === "interface.greeting") return "shared.greeting";
       if (target === "background.canvas") return "shared.backgroundScope";
@@ -1551,6 +1563,8 @@
       const tokenMode = /^tokens\.(light|dark)\./.exec(inspectorField)?.[1] ?? null;
       contextApplies.textContent = inspectorTarget === "background.layer"
         ? layerScopeLabel(selectedLayer)
+        : inspectorTarget === "interface.sidebar-wordmark"
+          ? `${tr("allModesScope")} · ${tr("allPagesScope")}`
         : inspectorTarget === "interface.new-chat-area"
           ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${tr("frameStandard")} + ${tr("frameWide")}`
           : inspectorTarget === "interface.greeting"
@@ -1558,8 +1572,10 @@
             : tokenMode
             ? `${tr(tokenMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
             : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
-      contextSource.textContent = fieldUsesThemeOriginal(inspectorField)
-        ? tr("themeOriginalSource") : tr("customizedSource");
+      contextSource.textContent = inspectorTarget === "interface.sidebar-wordmark"
+        ? tr(hasPersonalWordmark?.() ? "wordmarkSaved" : "themeOriginalSource")
+        : fieldUsesThemeOriginal(inspectorField)
+          ? tr("themeOriginalSource") : tr("customizedSource");
       const fieldFrame = /^layers\[\d+]\.frames\.(normal|wide)\./.exec(inspectorField)?.[1]
         ?? /^shared\.greeting\.frames\.(?:light|dark)\.(standard|wide)\./.exec(inspectorField)?.[1]
         ?? null;
@@ -5933,6 +5949,9 @@
       requestDelete,
       refreshCardPreview: () => {
         if (state) reflectCardPreview();
+      },
+      refreshDeviceState: () => {
+        if (state) refreshInspectorContext();
       },
       translate: tr,
       isActive: () => Boolean(state),

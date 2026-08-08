@@ -117,7 +117,7 @@ export function readPayloadSettings(payload) {
     i: "imageDataUrl", j: "imageAnimated", o: "imageOpacity",
     p: "imagePosition", z: "imageZoom", d: "artDataUrl",
     e: "artPosition", f: "artSize", l: "artMobile", y: "artLayers",
-    h: "reduceMotion", x: "digest", A: "avatarDataUrl",
+    h: "reduceMotion", x: "digest", A: "avatarDataUrl", W: "personalWordmark",
   };
   let end = payload.length - 1;
   while (end >= 0 && /\s/.test(payload[end])) end -= 1;

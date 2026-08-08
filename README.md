@@ -348,6 +348,8 @@ customize one.
 | **Create a theme** | Creates or edits an Aura-owned custom theme |
 | **Personal wallpaper > Choose wallpaper…** | Selects a local image separately from the active theme |
 | **Clear wallpaper** | Stops using the wallpaper without deleting its source file |
+| **Sidebar wordmark > Choose an image…** | Frames one device-local PNG or JPEG for Claude's expanded-sidebar wordmark |
+| **Remove custom wordmark** | Restores the selected theme's built-in wordmark, or Claude's native logo when no Aura wordmark is available |
 | **Original look** | Removes Aura styling and shows the live site without the selected theme |
 | **Apply theme** | Restores the saved Aura theme after Original look |
 | **Open desktop app** | Opens Claude Desktop without modifying it |
@@ -364,6 +366,13 @@ Personal wallpaper remains linked to the original image path. Moving or
 deleting that file makes the wallpaper unavailable. Theme artwork imported
 through the editor follows a different path: Studio copies or converts it into
 Aura-owned theme folders.
+
+The sidebar wordmark also stays separate from themes, but Aura copies its
+source into local app data so it can be reframed later. Studio bakes a
+transparent 344 × 124 PNG for the live sidebar; the image never enters theme
+kits or exports. **Original look** always shows Claude's native brand, and an
+invalid or missing saved wordmark fails open to the normal theme/native
+fallback.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

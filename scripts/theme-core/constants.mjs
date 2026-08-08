@@ -81,6 +81,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   // Claude account picture in the sidebar footer. `null` = keep Claude's own
   // avatar. Personal, never written into theme documents, exports, or packages.
   avatar: null,
+  // Host-generated, device-local wide wordmark. The compiler accepts only a
+  // validated 344x124 PNG below the fixed personal-wordmark data root.
+  personalWordmark: null,
   imageOpacity: null,
   imagePosition: "center",
   imageZoom: 1,
@@ -172,6 +175,7 @@ export const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 // wallpaper. Like the wallpaper, the avatar is excluded from the chrome budget
 // but still ships inside the payload, so keep it lean.
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+export const MAX_PERSONAL_WORDMARK_BYTES = 256 * 1024;
 export const MAX_ARTWORK_BYTES = 3 * 1024 * 1024;
 export const MAX_USER_RASTER_ARTWORK_BYTES = 400_000;
 export const MAX_USER_ARTWORK_TOTAL_BYTES = 1_400_000;

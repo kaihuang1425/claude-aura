@@ -6,6 +6,7 @@
   const STUDIO_PAGE_MESSAGE_TYPES = Object.freeze([
     "get-state", "set-theme", "set-appearance", "set-locale", "complete-studio-introduction",
     "set-image", "clear-image", "set-avatar", "clear-avatar", "set-avatar-framing",
+    "set-personal-wordmark", "clear-personal-wordmark", "set-personal-wordmark-framing",
     "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-desktop",
     "import-theme", "export-terminal-themes", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
     "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "remove-theme-layer", "move-theme-layer",
@@ -96,6 +97,18 @@
   const clearImage = document.getElementById("clear-image");
   const clearAvatar = document.getElementById("clear-avatar");
   const adjustAvatar = document.getElementById("adjust-avatar");
+  const personalWordmarkControls = [...document.querySelectorAll("[data-personal-wordmark-panel]")]
+    .map((panel) => ({
+      panel,
+      pick: panel.querySelector('[data-personal-wordmark-action="choose"]'),
+      adjust: panel.querySelector('[data-personal-wordmark-action="adjust"]'),
+      clear: panel.querySelector('[data-personal-wordmark-action="clear"]'),
+      current: panel.querySelector("[data-personal-wordmark-current]"),
+      state: panel.querySelector("[data-personal-wordmark-state]"),
+      thumbnail: panel.querySelector("[data-personal-wordmark-thumbnail]"),
+      image: panel.querySelector("[data-personal-wordmark-image]"),
+    }))
+    .filter((controls) => Object.values(controls).every(Boolean));
   const railThemeMark = document.getElementById("rail-theme-mark");
   const studioThemeIcon = document.getElementById("studio-theme-icon");
   const cropDialog = document.getElementById("crop-dialog");
@@ -111,6 +124,12 @@
   const cropBackgroundColor = document.getElementById("crop-background-color");
   const cropBackgroundChoices = [...document.querySelectorAll('input[name="crop-background-choice"]')];
   const cropCancelButtons = [...cropDialog.querySelectorAll('[value="cancel"]')];
+  const wordmarkSurfacePreviews = document.getElementById("wordmark-surface-previews");
+  const wordmarkSurfaceFrames = [...document.querySelectorAll(".wordmark-surface-frame")];
+  const wordmarkSurfaceImages = [
+    document.getElementById("wordmark-surface-light-image"),
+    document.getElementById("wordmark-surface-dark-image"),
+  ];
   const promptShelfSection = document.getElementById("prompt-shelf");
   const promptShelfSearch = document.getElementById("prompt-shelf-search");
   const promptShelfNew = document.getElementById("prompt-shelf-new");
@@ -168,6 +187,12 @@
     avatarCrop: { ...DEFAULT_CROP },
     avatarBackground: "transparent",
     avatarHasAlpha: false,
+    hasPersonalWordmark: false,
+    personalWordmarkPreviewUrl: null,
+    personalWordmarkCrop: { ...DEFAULT_CROP },
+    personalWordmarkUnavailable: false,
+    personalWordmarkSession: null,
+    personalWordmarkRevision: 0,
     imagePreviewUrl: null,
     backgroundAspectRatio: 16 / 9,
     backgroundCropSupported: true,
@@ -220,6 +245,15 @@
   let cropDrag = null;
   let cropReturnFocus = null;
   let pendingCropSave = null;
+  let pendingWordmarkAction = null;
+  const clearPendingWordmarkAction = () => {
+    window.clearTimeout(pendingWordmarkAction?.timer);
+    pendingWordmarkAction = null;
+  };
+  const clearPendingCropSave = () => {
+    window.clearTimeout(pendingCropSave?.timer);
+    pendingCropSave = null;
+  };
   let appearancePending = false;
   let localePending = null;
   let terminalThemeExportPending = false;
@@ -466,6 +500,18 @@
       return url.href;
     } catch { return null; }
   };
+  const personalWordmarkPreviewUrl = (value) => {
+    if (typeof value !== "string") return null;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" || url.hostname !== "aura.wordmark") return null;
+      if (!/^\/(?:staging\/[a-f0-9]{32}|generations\/[a-f0-9]{64})\/source\.(?:png|jpe?g)$/.test(url.pathname)) {
+        return null;
+      }
+      if (!/^\?v=[a-f0-9]{64}$/.test(url.search)) return null;
+      return url.href;
+    } catch { return null; }
+  };
   // The avatar backdrop is either untouched alpha or one exact #RRGGBB fill.
   const normalizeAvatarBackground = (value) => (
     typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value) ? value.toUpperCase() : "transparent"
@@ -519,16 +565,40 @@
     if (!frameWidth || !frameHeight || !image.naturalWidth || !image.naturalHeight) {
       return { overflowX: 0, overflowY: 0 };
     }
-    const scale = Math.max(frameWidth / image.naturalWidth, frameHeight / image.naturalHeight) * crop.zoom;
-    const width = image.naturalWidth * scale;
-    const height = image.naturalHeight * scale;
-    const overflowX = Math.max(0, width - frameWidth);
-    const overflowY = Math.max(0, height - frameHeight);
-    image.style.width = `${width}px`;
-    image.style.height = `${height}px`;
-    image.style.left = `${-overflowX * crop.x / 100}px`;
-    image.style.top = `${-overflowY * crop.y / 100}px`;
-    return { overflowX, overflowY };
+    const layout = window.CLAUDE_AURA_CROP_MATH?.coverLayout?.({
+      sourceWidth: image.naturalWidth,
+      sourceHeight: image.naturalHeight,
+      outputWidth: frameWidth,
+      outputHeight: frameHeight,
+      ...crop,
+    });
+    if (!layout) return { overflowX: 0, overflowY: 0 };
+    image.style.width = `${layout.width}px`;
+    image.style.height = `${layout.height}px`;
+    image.style.left = `${layout.left}px`;
+    image.style.top = `${layout.top}px`;
+    return { overflowX: layout.overflowX, overflowY: layout.overflowY };
+  };
+
+  const layoutPersonalWordmarkPreview = (controls = null) => {
+    for (const item of controls ? [controls] : personalWordmarkControls) {
+      if (!item.image.complete || !item.image.naturalWidth) continue;
+      layoutCropImage(
+        item.thumbnail,
+        item.image,
+        state.personalWordmarkCrop,
+      );
+    }
+  };
+
+  const layoutWordmarkSurfacePreviews = () => {
+    if (cropContext?.kind !== "wordmark") return;
+    for (let index = 0; index < wordmarkSurfaceFrames.length; index += 1) {
+      const image = wordmarkSurfaceImages[index];
+      if (image?.complete && image.naturalWidth) {
+        layoutCropImage(wordmarkSurfaceFrames[index], image, cropContext.draft);
+      }
+    }
   };
 
   const layoutCardCrop = (themeId) => {
@@ -541,9 +611,56 @@
         const themeId = entry.target.dataset.theme;
         if (themeId) layoutCardCrop(themeId);
         else if (entry.target === cropStage && cropContext) syncCropEditor();
+        else {
+          const controls = personalWordmarkControls.find(
+            (item) => item.thumbnail === entry.target,
+          );
+          if (controls) layoutPersonalWordmarkPreview(controls);
+        }
       }
     })
     : null;
+  for (const controls of personalWordmarkControls) {
+    cropResizeObserver?.observe(controls.thumbnail);
+    controls.image.onload = () => layoutPersonalWordmarkPreview(controls);
+    controls.image.onerror = () => controls.image.removeAttribute("src");
+  }
+
+  const syncPersonalWordmarkControls = () => {
+    const hasPreview = Boolean(state.personalWordmarkPreviewUrl);
+    const pending = Boolean(pendingWordmarkAction || pendingCropSave?.kind === "wordmark");
+    const sessionReady = promptShelfUuidPattern.test(state.personalWordmarkSession ?? "")
+      && Number.isSafeInteger(state.personalWordmarkRevision)
+      && state.personalWordmarkRevision >= 0;
+    for (const controls of personalWordmarkControls) {
+      controls.current.hidden = !state.hasPersonalWordmark && !hasPreview;
+      controls.state.textContent = state.personalWordmarkUnavailable
+        ? t("wordmarkUnavailable")
+        : state.hasPersonalWordmark && !hasPreview
+          ? t("wordmarkSourceUnavailable")
+          : t("wordmarkSaved");
+      if (hasPreview) {
+        if (controls.image.src !== state.personalWordmarkPreviewUrl) {
+          controls.image.src = state.personalWordmarkPreviewUrl;
+        } else {
+          layoutPersonalWordmarkPreview(controls);
+        }
+      } else {
+        controls.image.removeAttribute("src");
+      }
+      controls.pick.textContent = t(
+        state.hasPersonalWordmark ? "replaceWordmark" : "chooseWordmark",
+      );
+      controls.pick.classList.toggle("primary-button", !state.hasPersonalWordmark);
+      controls.pick.classList.toggle("ghost-button", state.hasPersonalWordmark);
+      controls.pick.disabled = pending || !sessionReady;
+      controls.adjust.hidden = !state.hasPersonalWordmark;
+      controls.adjust.disabled = pending || !hasPreview || state.personalWordmarkUnavailable;
+      controls.clear.hidden = !state.hasPersonalWordmark;
+      controls.clear.disabled = pending || !sessionReady;
+    }
+    editorController?.refreshDeviceState?.();
+  };
 
   const reflect = () => {
     applyStudioStyle();
@@ -602,6 +719,7 @@
       adjustAvatar.hidden = !state.hasAvatar;
       adjustAvatar.disabled = state.hasAvatar && !state.avatarPreviewUrl;
     }
+    syncPersonalWordmarkControls();
     for (const themeId of cardFrames.keys()) layoutCardCrop(themeId);
     editorController?.refreshCardPreview?.();
     renderPromptShelf();
@@ -1065,6 +1183,50 @@
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+  const newPersonalWordmarkMessage = (type, fields = {}) => {
+    const requestId = newPromptShelfRequestId();
+    if (!requestId || !promptShelfUuidPattern.test(state.personalWordmarkSession ?? "")
+        || !Number.isSafeInteger(state.personalWordmarkRevision)
+        || state.personalWordmarkRevision < 0) return null;
+    return {
+      type,
+      requestId,
+      session: state.personalWordmarkSession,
+      revision: state.personalWordmarkRevision,
+      ...fields,
+    };
+  };
+  const sendPersonalWordmarkAction = (type, fields = {}, opener = null) => {
+    if (pendingWordmarkAction || pendingCropSave?.kind === "wordmark") return null;
+    const message = newPersonalWordmarkMessage(type, fields);
+    if (!message) {
+      setStatus(t("statusDemo"), "error");
+      return null;
+    }
+    const pending = {
+      requestId: message.requestId,
+      type,
+      operation: fields.operation ?? null,
+      opener,
+    };
+    pendingWordmarkAction = pending;
+    if (!send(message)) {
+      clearPendingWordmarkAction();
+      setStatus(t("statusDemo"), "error");
+      reflect();
+      return null;
+    }
+    if (fields.operation !== "choose") {
+      pending.timer = window.setTimeout(() => {
+        if (pendingWordmarkAction !== pending) return;
+        clearPendingWordmarkAction();
+        setStatus(t("saveFailed"), "error");
+        reflect();
+      }, 10_000);
+    }
+    reflect();
+    return message;
   };
   const promptShelfTextIsValid = (value) => (
     typeof value === "string"
@@ -1537,6 +1699,7 @@
     focusThemeCard,
     getThemeCardPreview,
     openThemeCardPreview,
+    hasPersonalWordmark: () => state.hasPersonalWordmark,
     onOrdinaryViewRestore: (view) => activateStudioView(view, {
       updateHistory: false,
       focusPage: false,
@@ -1727,6 +1890,31 @@
         state.avatarCrop = normalizeCrop(data.avatarCrop);
         state.avatarBackground = normalizeAvatarBackground(data.avatarBackground);
         if (typeof data.avatarHasAlpha === "boolean") state.avatarHasAlpha = data.avatarHasAlpha;
+        const priorWordmarkSession = state.personalWordmarkSession;
+        if (typeof data.personalWordmarkSession === "string"
+            && promptShelfUuidPattern.test(data.personalWordmarkSession)) {
+          state.personalWordmarkSession = data.personalWordmarkSession;
+        }
+        if (Number.isSafeInteger(data.personalWordmarkRevision)
+            && data.personalWordmarkRevision >= 0) {
+          state.personalWordmarkRevision = data.personalWordmarkRevision;
+        }
+        if (typeof data.hasPersonalWordmark === "boolean") {
+          state.hasPersonalWordmark = data.hasPersonalWordmark;
+        }
+        state.personalWordmarkPreviewUrl = personalWordmarkPreviewUrl(
+          data.personalWordmarkPreviewUrl,
+        );
+        state.personalWordmarkCrop = normalizeCrop(data.personalWordmarkCrop);
+        state.personalWordmarkUnavailable = data.personalWordmarkUnavailable === true;
+        if (priorWordmarkSession && state.personalWordmarkSession !== priorWordmarkSession) {
+          clearPendingWordmarkAction();
+          if (pendingCropSave?.kind === "wordmark") {
+            clearPendingCropSave();
+            setCropBusy(false);
+            setCropError(t("saveFailed"));
+          }
+        }
         state.effectiveIdentity = normalizeEffectiveIdentity(data.effectiveIdentity);
         state.imagePreviewUrl = backgroundPreviewUrl(data.imagePreviewUrl);
         state.backgroundAspectRatio = normalizeAspectRatio(data.backgroundAspectRatio);
@@ -1761,14 +1949,37 @@
           cropStage.style.setProperty("--crop-aspect-ratio", String(state.backgroundAspectRatio));
           syncCropEditor();
         }
-        if (pendingCropSave && data.action === pendingCropSave.action && typeof data.actionSucceeded === "boolean") {
+        let openChosenWordmark = false;
+        let chosenWordmarkOpener = null;
+        if (pendingWordmarkAction
+            && data.action === pendingWordmarkAction.type
+            && data.requestId === pendingWordmarkAction.requestId
+            && typeof data.actionSucceeded === "boolean") {
+          const pending = pendingWordmarkAction;
+          clearPendingWordmarkAction();
+          chosenWordmarkOpener = pending.opener;
+          openChosenWordmark = Boolean(
+            data.actionSucceeded
+            && data.tone !== "error"
+            && pending.type === "set-personal-wordmark"
+            && pending.operation === "choose"
+            && state.personalWordmarkPreviewUrl,
+          );
+        }
+        if (pendingCropSave
+            && data.action === pendingCropSave.action
+            && (pendingCropSave.kind !== "wordmark"
+              || data.requestId === pendingCropSave.requestId)
+            && typeof data.actionSucceeded === "boolean") {
           const pending = pendingCropSave;
           const persisted = pending.kind === "card"
             ? state.studioPreviewCrops[pending.theme]
             : pending.kind === "avatar"
               ? state.avatarCrop
-              : state.backgroundCrop;
-          pendingCropSave = null;
+              : pending.kind === "wordmark"
+                ? state.personalWordmarkCrop
+                : state.backgroundCrop;
+          clearPendingCropSave();
           const backdropSettled = pending.kind !== "avatar"
             || state.avatarBackground === pending.background;
           if (data.actionSucceeded && data.tone !== "error"
@@ -1781,6 +1992,12 @@
           setCropError(t("saveFailed"));
         }
         reflect();
+        if (openChosenWordmark && !cropDialog.open) {
+          openPersonalWordmarkCrop(
+            chosenWordmarkOpener ?? personalWordmarkControls[0]?.pick,
+            { staged: true },
+          );
+        }
         if (promptShelfRuntimeChanged && promptShelf.loaded
             && !promptShelf.pending && promptShelf.readRequests.size === 0) {
           requestPromptShelfState();
@@ -2016,6 +2233,18 @@
   clearImage.addEventListener("click", () => send({ type: "clear-image" }));
   document.getElementById("pick-avatar")?.addEventListener("click", () => send({ type: "set-avatar" }));
   clearAvatar?.addEventListener("click", () => send({ type: "clear-avatar" }));
+  for (const controls of personalWordmarkControls) {
+    controls.pick.addEventListener("click", () => {
+      sendPersonalWordmarkAction(
+        "set-personal-wordmark",
+        { operation: "choose" },
+        controls.pick,
+      );
+    });
+    controls.clear.addEventListener("click", () => {
+      sendPersonalWordmarkAction("clear-personal-wordmark", {}, controls.clear);
+    });
+  }
   document.getElementById("open-aura").addEventListener("click", () => send({ type: "open-aura" }));
   document.getElementById("open-desktop").addEventListener("click", () => send({ type: "open-desktop" }));
   document.getElementById("start-theme").addEventListener("click", () => {
@@ -2033,6 +2262,7 @@
     cropOutputs.y.value = `${Math.round(cropContext.draft.y)}%`;
     cropOutputs.zoom.value = `${Math.round(cropContext.draft.zoom * 100)}%`;
     layoutCropImage(cropStage, cropImage, cropContext.draft);
+    layoutWordmarkSurfacePreviews();
   };
 
   const updateCropDraft = (patch) => {
@@ -2064,23 +2294,48 @@
     syncAvatarBackdrop();
     cropInputs.zoom.max = String(maximumZoom * 100);
     cropStage.dataset.kind = kind;
-    const aspectRatio = kind === "card" ? 3 / 2 : kind === "avatar" ? 1 : state.backgroundAspectRatio;
+    const aspectRatio = kind === "card"
+      ? 3 / 2
+      : kind === "avatar"
+        ? 1
+        : kind === "wordmark" ? 344 / 124 : state.backgroundAspectRatio;
     cropStage.style.setProperty("--crop-aspect-ratio", String(aspectRatio));
-    const titleKey = kind === "card" ? "cardCropTitle" : kind === "avatar" ? "avatarCropTitle" : "backgroundCropTitle";
-    const helpKey = kind === "card" ? "cardCropHelp" : kind === "avatar" ? "avatarCropHelp" : "backgroundCropHelp";
+    const titleKey = kind === "card"
+      ? "cardCropTitle"
+      : kind === "avatar"
+        ? "avatarCropTitle"
+        : kind === "wordmark" ? "wordmarkCropTitle" : "backgroundCropTitle";
+    const helpKey = kind === "card"
+      ? "cardCropHelp"
+      : kind === "avatar"
+        ? "avatarCropHelp"
+        : kind === "wordmark" ? "wordmarkCropHelp" : "backgroundCropHelp";
     cropTitle.textContent = t(titleKey);
     cropHelp.textContent = t(helpKey);
     setCropError();
     setCropNotice(kind === "background" && !positionSupported ? t("advancedPositionHelp") : "");
+    wordmarkSurfacePreviews.hidden = kind !== "wordmark";
     setCropBusy(false);
     cropSave.disabled = true;
-    cropImage.onload = () => { setCropBusy(false); syncCropEditor(); };
+    const finishCropImageLoad = () => {
+      setCropBusy(false);
+      syncCropEditor();
+    };
+    cropImage.onload = finishCropImageLoad;
     cropImage.onerror = () => {
       cropSave.disabled = true;
       setCropError(t("previewUnavailable"));
       setStatus(t("previewUnavailable"), "error");
     };
+    for (const image of wordmarkSurfaceImages) {
+      image.onload = () => layoutWordmarkSurfacePreviews();
+      image.onerror = () => image.removeAttribute("src");
+      if (kind === "wordmark") image.src = imageUrl;
+      else image.removeAttribute("src");
+    }
     cropImage.src = imageUrl;
+    if (cropImage.complete && cropImage.naturalWidth) finishCropImageLoad();
+    cropDialog.returnValue = "";
     cropDialog.showModal();
     cropResizeObserver?.observe(cropStage);
     requestAnimationFrame(() => { syncCropEditor(); cropInputs.x.focus(); });
@@ -2108,6 +2363,20 @@
     }, opener);
   };
   adjustAvatar?.addEventListener("click", () => openAvatarCrop(adjustAvatar));
+  const openPersonalWordmarkCrop = (opener, { staged = false } = {}) => {
+    openCropEditor({
+      kind: "wordmark",
+      imageUrl: state.personalWordmarkPreviewUrl,
+      crop: state.personalWordmarkCrop,
+      staged,
+    }, opener);
+  };
+  for (const controls of personalWordmarkControls) {
+    controls.adjust.addEventListener(
+      "click",
+      () => openPersonalWordmarkCrop(controls.adjust),
+    );
+  }
 
   for (const axis of ["x", "y"]) {
     cropInputs[axis].addEventListener("input", () => updateCropDraft({ [axis]: Number(cropInputs[axis].value) }));
@@ -2171,37 +2440,67 @@
       ? { type: "set-card-preview-crop", theme: cropContext.theme, ...saved }
       : cropContext.kind === "avatar"
         ? { type: "set-avatar-framing", ...saved, background: cropContext.background }
-        : { type: "set-image-framing", ...saved };
-    if (!send(message)) {
+        : cropContext.kind === "wordmark"
+          ? newPersonalWordmarkMessage("set-personal-wordmark-framing", saved)
+          : { type: "set-image-framing", ...saved };
+    if (!message) {
       setCropError(t("statusDemo"));
       return;
     }
-    pendingCropSave = {
+    const pending = {
       action: message.type,
       kind: cropContext.kind,
       theme: cropContext.theme,
       crop: saved,
       background: cropContext.background,
+      requestId: message.requestId ?? null,
     };
+    pendingCropSave = pending;
     setCropError();
     setCropBusy(true);
+    if (!send(message)) {
+      clearPendingCropSave();
+      setCropBusy(false);
+      setCropError(t("statusDemo"));
+      return;
+    }
+    if (pending.kind === "wordmark") {
+      pending.timer = window.setTimeout(() => {
+        if (pendingCropSave !== pending) return;
+        clearPendingCropSave();
+        setCropBusy(false);
+        setCropError(t("saveFailed"));
+      }, 10_000);
+    }
   });
   cropDialog.addEventListener("close", () => {
+    const abandonWordmarkDraft = cropContext?.kind === "wordmark"
+      && cropContext.staged
+      && cropDialog.returnValue !== "saved";
     cropResizeObserver?.unobserve(cropStage);
     cropStage.classList.remove("is-dragging");
     cropDrag = null;
     cropImage.onload = null;
     cropImage.onerror = null;
     cropImage.removeAttribute("src");
+    for (const image of wordmarkSurfaceImages) {
+      image.onload = null;
+      image.onerror = null;
+      image.removeAttribute("src");
+    }
+    wordmarkSurfacePreviews.hidden = true;
     setCropError();
     setCropNotice();
     if (cropBackground) cropBackground.hidden = true;
     delete cropStage.dataset.backdrop;
     cropStage.style.removeProperty("--crop-backdrop");
-    pendingCropSave = null;
+    clearPendingCropSave();
     cropContext = null;
     cropReturnFocus?.focus();
     cropReturnFocus = null;
+    if (abandonWordmarkDraft) {
+      sendPersonalWordmarkAction("set-personal-wordmark", { operation: "cancel" });
+    }
   });
   cropDialog.addEventListener("cancel", (event) => {
     if (pendingCropSave) event.preventDefault();

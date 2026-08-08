@@ -55,6 +55,7 @@ function parse(argv) {
       "json",
       "clear-image",
       "clear-avatar",
+      "clear-personal-wordmark",
       "payload",
       "experimental-code-style",
     ].includes(key)) options[key] = true;
@@ -260,6 +261,7 @@ Commands:
   greeting-checkpoint --config <path> --state-base64 <base64url-json>
   set --config <path> [--theme <name>] [--image <path>|--clear-image]
       [--avatar <path>|--clear-avatar]
+      [--personal-wordmark <path>|--clear-personal-wordmark]
       [--appearance system|light|dark]
       [--image-opacity <0..0.55>] [--image-position <css-position>] [--image-zoom <1..2>]
       [--studio-preview-theme <id> --studio-preview-x <0..100>
@@ -605,6 +607,8 @@ if (command === "help" || command === "--help") {
   if (options["clear-image"]) config.image = null;
   if (options.avatar) config.avatar = path.resolve(options.avatar);
   if (options["clear-avatar"]) config.avatar = null;
+  if (options["personal-wordmark"]) config.personalWordmark = path.resolve(options["personal-wordmark"]);
+  if (options["clear-personal-wordmark"]) config.personalWordmark = null;
   if (options["image-opacity"] !== undefined) config.imageOpacity = Number(options["image-opacity"]);
   if (options["image-position"] !== undefined) config.imagePosition = options["image-position"];
   if (options["image-zoom"] !== undefined) config.imageZoom = Number(options["image-zoom"]);

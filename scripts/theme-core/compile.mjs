@@ -25,6 +25,7 @@ import {
   readThemeKit,
   resolveAvatar,
   resolveImage,
+  resolvePersonalWordmark,
   resolveTheme,
 } from "./registry.mjs";
 import {
@@ -53,6 +54,9 @@ const AVATAR_OVERLAY_CSS = [
 const GREETING_BLOCK_PATTERN = /\/\*__AURA_GREETING_START__\*\/[\s\S]*?\/\*__AURA_GREETING_END__\*\//;
 const GREETING_PHRASES_PATTERN = /\/\*__AURA_GREETING_PHRASES_START__\*\/[\s\S]*?\/\*__AURA_GREETING_PHRASES_END__\*\//;
 const CODE_ADAPTER_ACTIVE_PATTERN = /\/\*__AURA_CODE_ACTIVE_START__\*\/[\s\S]*?\/\*__AURA_CODE_ACTIVE_END__\*\//g;
+const PERSONAL_WORDMARK_PATTERN = /\/\*__AURA_PERSONAL_WORDMARK_START__\*\/[\s\S]*?\/\*__AURA_PERSONAL_WORDMARK_END__\*\//g;
+const BUILTIN_WORDMARK_PATTERN = /\/\*__AURA_BUILTIN_WORDMARK_START__\*\/[\s\S]*?\/\*__AURA_BUILTIN_WORDMARK_END__\*\//g;
+const WORDMARK_MARKER_PATTERN = /\/\*__AURA_(?:PERSONAL|BUILTIN)_WORDMARK_(?:START|END)__\*\//g;
 
 const WALLPAPER_VARIABLES = Object.freeze({
   gradient: "--aura-wallpaper-gradient",
@@ -907,6 +911,7 @@ export async function compileTheme({
   const [
     image,
     avatar,
+    personalWordmark,
     artwork,
     artworkLayers,
     brandWordmark,
@@ -916,6 +921,7 @@ export async function compileTheme({
   ] = await Promise.all([
     resolveImage(config, resolvedConfigPath),
     resolveAvatar(config, resolvedConfigPath),
+    resolvePersonalWordmark(config, resolvedConfigPath),
     resolveArtwork(theme),
     resolveArtworkLayers(theme),
     resolveBrandWordmark(theme),
@@ -923,7 +929,13 @@ export async function compileTheme({
     fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8"),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "theme-variants.css"), "utf8"),
   ]);
-  const variantCss = filterThemeVariantCss(allVariantCss, theme.name, theme.variant, Boolean(brandWordmark));
+  const activePersonalWordmark = config.enabled ? personalWordmark : null;
+  const variantCss = filterThemeVariantCss(
+    allVariantCss,
+    theme.name,
+    theme.variant,
+    Boolean(activePersonalWordmark || brandWordmark),
+  );
   const studioRecipeOverrides = renderStudioRecipeOverrides(theme);
   const imageOpacity = config.imageOpacity === null || config.imageOpacity === undefined
     ? null
@@ -983,7 +995,7 @@ export async function compileTheme({
         } : {}),
       }))
       : null,
-    brandWordmark: brandWordmark
+    brandWordmark: !activePersonalWordmark && brandWordmark
       ? {
         lightDataUrl: brandWordmark.lightDataUrl,
         darkDataUrl: brandWordmark.darkDataUrl,
@@ -1001,6 +1013,15 @@ export async function compileTheme({
   // missing so the Studio can warn without shipping anything to the renderer.
   if (avatar) settingsBase.avatarDataUrl = avatar.dataUrl;
   else if (config.avatar) settingsBase.avatarUnavailable = true;
+  if (activePersonalWordmark) {
+    settingsBase.personalWordmark = {
+      dataUrl: activePersonalWordmark.dataUrl,
+      minWidth: activePersonalWordmark.minWidth,
+      width: activePersonalWordmark.width,
+    };
+  } else if (config.personalWordmark && !personalWordmark) {
+    settingsBase.personalWordmarkUnavailable = true;
+  }
   // WO-21 greeting: theme-owned presentation (validated) plus host-owned effective
   // phrases (fail open to native on invalid custom data). Only attach when there is
   // something greeting-related so existing null-greeting configs keep a stable digest.
@@ -1036,6 +1057,7 @@ export async function compileTheme({
     theme,
     themePath,
     image,
+    personalWordmark,
     artwork,
     artworkLayers,
     brandWordmark,
@@ -1068,6 +1090,10 @@ export async function buildPayloadFromCompiled(compiled, {
   if (experimentalCode === null) {
     rendererSource = rendererSource.replace(CODE_ADAPTER_ACTIVE_PATTERN, "");
   }
+  rendererSource = rendererSource.replace(
+    compiled.settings.personalWordmark ? BUILTIN_WORDMARK_PATTERN : PERSONAL_WORDMARK_PATTERN,
+    "",
+  ).replace(WORDMARK_MARKER_PATTERN, "");
   rendererSource = rendererSource
     .replace(
       "__AURA_CODE_ADAPTER_FACTORY__",
@@ -1109,6 +1135,7 @@ export async function buildPayloadFromCompiled(compiled, {
     "imageUnavailable",
     "artUnavailable",
     "avatarUnavailable",
+    "personalWordmarkUnavailable",
   ]) delete runtimeSettings[diagnosticKey];
   runtimeSettings.q = runtimeSettings.backgroundScope === "sidebar"
     ? "s"
@@ -1154,6 +1181,15 @@ export async function buildPayloadFromCompiled(compiled, {
       wordmark.width,
     ];
     delete runtimeSettings.brandWordmark;
+  }
+  if (runtimeSettings.personalWordmark) {
+    const wordmark = runtimeSettings.personalWordmark;
+    runtimeSettings.W = [
+      wordmark.dataUrl,
+      wordmark.minWidth,
+      wordmark.width,
+    ];
+    delete runtimeSettings.personalWordmark;
   }
   if (Array.isArray(runtimeSettings.artLayers)) {
     const contextKeys = { "new-chat": "n", conversation: "c", other: "o" };

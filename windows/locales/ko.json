@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "이 초안을 삭제할까요?",
   "promptShelfDeleteMessage": "이 장치에서 초안을 삭제합니다. 되돌릴 수 없습니다. 이미 Claude에 삽입된 텍스트는 변경되지 않습니다.",
   "openDesktopApp": "데스크톱 앱 열기",
+  "openDesktopWorkspaceGuidance": "전체 작업공간 가이드 검토",
+  "desktopWorkspaceGuidanceTitle": "Claude Desktop 작업 공간",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop는 고유한 모양과 제어 요소를 가진 별도의 네이티브 워크스페이스입니다. Aura는 Anthropic의 현재 가이드를 엽니다. Aura는 Remote Control 세션을 선택하거나 전환하지 않으며, 프로젝트 경로나 프롬프트를 보내거나 Claude Desktop의 스타일을 변경하지 않습니다. 환경이 /desktop을 지원하면 의도한 CLI 세션에서 직접 실행하세요.\n\n가이드를 열기",
+  "desktopWorkspaceGuidanceFailedTitle": "가이드를 열 수 없습니다",
+  "desktopWorkspaceGuidanceFailedMessage": "브라우저에서 Anthropic의 Claude Desktop 가이드를 열기:\n{0}",
   "exitApp": "Claude Aura 종료",
   "navLauncherName": "Claude Aura 메뉴 열기",
   "launcherTipTitle": "Claude Aura 메뉴",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura를 열 수 없음",
   "startupMessage": "Claude Aura가 브라우저 창을 시작하지 못했습니다. Microsoft Edge WebView2 Runtime을 설치하거나 복구한 뒤 다시 시도하세요.",
   "technicalDetails": "기술 세부정보가 저장됨:",
-  "openDesktopWorkspaceGuidance": "전체 작업공간 가이드 검토",
-  "desktopWorkspaceGuidanceTitle": "Claude Desktop 작업 공간",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktop는 고유한 모양과 제어 요소를 가진 별도의 네이티브 워크스페이스입니다. Aura는 Anthropic의 현재 가이드를 엽니다. Aura는 Remote Control 세션을 선택하거나 전환하지 않으며, 프로젝트 경로나 프롬프트를 보내거나 Claude Desktop의 스타일을 변경하지 않습니다. 환경이 /desktop을 지원하면 의도한 CLI 세션에서 직접 실행하세요.\n\n가이드를 열기",
-  "desktopWorkspaceGuidanceFailedTitle": "가이드를 열 수 없습니다",
-  "desktopWorkspaceGuidanceFailedMessage": "브라우저에서 Anthropic의 Claude Desktop 가이드를 열기:\n{0}"
+  "chooseWordmarkTitle": "Claude Aura 사이드바 워드마크 선택",
+  "removingWordmark": "사용자 지정 워드마크를 제거 중...",
+  "wordmarkPositionSaved": "사이드바 워드마크가 저장되었습니다.",
+  "wordmarkNotChangedTitle": "워드마크가 변경되지 않았습니다",
+  "invalidWordmarkMessage": "최대 2MB이고 최소 344 × 124 px인 PNG 또는 JPEG 이미지를 선택하세요."
 }

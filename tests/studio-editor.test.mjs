@@ -569,6 +569,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "set-avatar",
     "clear-avatar",
     "set-avatar-framing",
+    "set-personal-wordmark",
+    "clear-personal-wordmark",
+    "set-personal-wordmark-framing",
     "set-image-framing",
     "set-card-preview-crop",
     "set-enabled",
@@ -3350,13 +3353,27 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     editorApi.capabilityRegistry.map((entry) => entry.id),
     [
       "interface.theme",
+      "interface.sidebar-wordmark",
       "interface.new-chat-area",
       "interface.greeting",
       "background.canvas",
       "background.layer",
       "widgets.app-identity",
     ],
-    "The host-owned capability registry must contain the WO-18 targets plus the WO-21 greeting",
+    "The host-owned capability registry must contain the theme targets plus the device-level wordmark page",
+  );
+  assert.deepEqual(
+    editorApi.capabilityRegistry
+      .find((entry) => entry.id === "interface.sidebar-wordmark"),
+    {
+      id: "interface.sidebar-wordmark",
+      branch: "interface",
+      views: ["new-chat", "conversation"],
+      axes: [],
+      captureGeometry: "local-preview",
+      selectionBehavior: "picker",
+    },
+    "Sidebar wordmark must be a complete Interface dropdown page without a theme-owned edit axis",
   );
   assert(editorApi.capabilityRegistry
     .find((entry) => entry.id === "interface.greeting")?.axes.includes("frame"),
@@ -4356,7 +4373,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(rejectedStudioMessageHandler.includes("'export-terminal-themes'"),
     "Rejected terminal export messages must be recognized as a bounded action");
   assert.match(rejectedStudioMessageHandler,
-    /Send-AuraUiStudioState[^\r\n]*-Tone error -Action \$failedAction -ActionSucceeded \$false/,
+    /Send-AuraUiStudioState[\s\S]{0,220}?-Tone error -Action \$failedAction -ActionSucceeded \$false/,
     "A rejected terminal export request must release the page pending gate with a path-free failure");
 
   const mouseEnterStart = ui.indexOf("$launcherPointerEnter = {");
@@ -5563,6 +5580,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "$ErrorActionPreference='Stop'",
       `$uiPath='${psPath(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"))}'`,
       `$promptShelfPath='${psPath(path.join(PROJECT_ROOT, "windows", "aura-prompt-shelf.ps1"))}'`,
+      `$personalWordmarkPath='${psPath(path.join(PROJECT_ROOT, "windows", "personal-wordmark.ps1"))}'`,
       `$testRoot='${psPath(editorRootsTestRoot)}'`,
       "$tokens=$null;$errors=$null",
       "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
@@ -5570,6 +5588,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "foreach($name in @('Get-AuraUiPropertyValue','Get-AuraUiUnicodeScalarLength','ConvertTo-AuraUiStudioNumber','ConvertTo-AuraUiStudioInteger','Assert-AuraUiStudioEditorRoots','Test-AuraUiStudioExactProperties','Test-AuraUiStudioMetadataText','Assert-AuraUiStudioEditorPublicValue','Assert-AuraUiStudioEditorMessage','Test-AuraUiStudioDocumentUri','Get-AuraUiStudioMessage','Assert-AuraUiStudioEditorSession','Request-AuraUiMirror','ConvertTo-AuraUiGreetingShuffleCheckpoint')){",
       "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
       "  if($null -eq $definition){throw \"Missing Studio editor bridge function $name\"}",
+      "  Invoke-Expression $definition.Extent.Text",
+      "}",
+      "$wordmarkTokens=$null;$wordmarkErrors=$null",
+      "$wordmarkAst=[System.Management.Automation.Language.Parser]::ParseFile($personalWordmarkPath,[ref]$wordmarkTokens,[ref]$wordmarkErrors)",
+      "if($wordmarkErrors.Count){throw 'Could not parse personal wordmark bridge functions'}",
+      "foreach($name in @('Test-AuraUiStudioUuid','Assert-AuraUiPersonalWordmarkRequest')){",
+      "  $definition=$wordmarkAst.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
+      "  if($null -eq $definition){throw \"Missing personal wordmark bridge function $name\"}",
       "  Invoke-Expression $definition.Extent.Text",
       "}",
       "$promptTokens=$null;$promptErrors=$null",
@@ -5583,9 +5609,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
       "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
       "$script:PromptShelfMaxTextLength=8000",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
+      "$script:PersonalWordmarkSession=$session",
+      "$script:PersonalWordmarkRevision=[long]0",
       "$requestId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'",
       "$shelfSession='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'",
       "$itemId='0123456789abcdef0123456789abcdef'",
@@ -5602,6 +5630,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  [ordered]@{type='set-locale';locale='zh-HKTW'},",
       "  [ordered]@{type='complete-studio-introduction'},",
       "  [ordered]@{type='export-terminal-themes';theme='default'},",
+      "  [ordered]@{type='set-personal-wordmark';requestId=$requestId;session=$session;revision=0;operation='choose'},",
+      "  [ordered]@{type='clear-personal-wordmark';requestId=$requestId;session=$session;revision=0},",
+      "  [ordered]@{type='set-personal-wordmark-framing';requestId=$requestId;session=$session;revision=0;x=50;y=50;zoom=1},",
       "  [ordered]@{type='create-theme-copy';theme='default'},",
       "  [ordered]@{type='begin-theme-edit';theme='user-theme';reset=$false},",
       "  [ordered]@{type='set-theme-token';session=$session;revision=0;mode='light';token='canvas';value='#123ABC'},",

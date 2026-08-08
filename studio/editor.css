@@ -2324,6 +2324,7 @@
 .editor-view[data-inspector-page="details"] [data-editor-workflow-page="details"],
 .editor-view[data-inspector-page="review"] [data-editor-workflow-page="review"],
 .editor-view[data-inspector-page="interface"][data-inspector-target="interface.theme"] [data-editor-targets~="interface.theme"],
+.editor-view[data-inspector-page="interface"][data-inspector-target="interface.sidebar-wordmark"] [data-editor-targets~="interface.sidebar-wordmark"],
 .editor-view[data-inspector-page="interface"][data-inspector-target="interface.new-chat-area"] [data-editor-targets~="interface.new-chat-area"],
 .editor-view[data-inspector-page="interface"][data-inspector-target="interface.greeting"] [data-editor-targets~="interface.greeting"],
 .editor-view[data-inspector-page="background"][data-inspector-target="background.canvas"] [data-editor-targets~="background.canvas"],

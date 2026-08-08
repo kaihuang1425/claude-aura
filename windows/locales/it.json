@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "Eliminare questa bozza?",
   "promptShelfDeleteMessage": "L'operazione elimina la bozza da questo dispositivo e non può essere annullata. Il testo già inserito in Claude non cambierà.",
   "openDesktopApp": "Apri app desktop",
+  "openDesktopWorkspaceGuidance": "Rivedi le linee guida dello spazio di lavoro completo",
+  "desktopWorkspaceGuidanceTitle": "Workspace di Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop è uno spazio di lavoro nativo separato con un aspetto e controlli propri. Aura aprirà la guida corrente di Anthropic. Aura non selezionerà né trasferirà la sessione Remote Control, non invierà un percorso di progetto o prompt, e non modificherà lo stile di Claude Desktop. Se la tua impostazione supporta /desktop, eseguilo tu stesso nella sessione CLI prevista.\n\nApri la guida",
+  "desktopWorkspaceGuidanceFailedTitle": "Impossibile aprire la guida",
+  "desktopWorkspaceGuidanceFailedMessage": "Apri la guida di Claude Desktop di Anthropic nel browser:\n{0}",
   "exitApp": "Esci da Claude Aura",
   "navLauncherName": "Apri menu di Claude Aura",
   "launcherTipTitle": "Menu di Claude Aura",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura non è riuscita ad aprire",
   "startupMessage": "Claude Aura non è riuscita ad avviare la finestra del browser. Installa o ripara Microsoft Edge WebView2 Runtime, quindi riprova.",
   "technicalDetails": "I dettagli tecnici sono stati salvati in:",
-  "openDesktopWorkspaceGuidance": "Rivedi le linee guida dello spazio di lavoro completo",
-  "desktopWorkspaceGuidanceTitle": "Workspace di Claude Desktop",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktop è uno spazio di lavoro nativo separato con un aspetto e controlli propri. Aura aprirà la guida corrente di Anthropic. Aura non selezionerà né trasferirà la sessione Remote Control, non invierà un percorso di progetto o prompt, e non modificherà lo stile di Claude Desktop. Se la tua impostazione supporta /desktop, eseguilo tu stesso nella sessione CLI prevista.\n\nApri la guida",
-  "desktopWorkspaceGuidanceFailedTitle": "Impossibile aprire la guida",
-  "desktopWorkspaceGuidanceFailedMessage": "Apri la guida di Claude Desktop di Anthropic nel browser:\n{0}"
+  "chooseWordmarkTitle": "Scegli la wordmark della barra laterale di Claude Aura",
+  "removingWordmark": "Rimozione wordmark personalizzata...",
+  "wordmarkPositionSaved": "Wordmark della barra laterale salvata.",
+  "wordmarkNotChangedTitle": "La wordmark non è stata modificata",
+  "invalidWordmarkMessage": "Scegli un' immagine PNG o JPEG fino a 2 MB e almeno 344 × 124 px."
 }

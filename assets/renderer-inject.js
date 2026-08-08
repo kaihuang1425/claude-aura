@@ -278,7 +278,6 @@
   };
 
   const findBrand = (sidebar) => {
-    if (!Array.isArray(settings.b) || settings.b.length < 2) return null;
     const side = visibleRect(sidebar);
     if (!side || side.width < 208) return null;
     const sel = [
@@ -304,8 +303,14 @@
     if (brands.size !== 1) return null;
     const brand = [...brands][0];
     const br = visibleRect(brand);
-    const min = Number(settings.b[2]) || 136;
-    const width = Number(settings.b[3]) || 160;
+    /*__AURA_PERSONAL_WORDMARK_START__*/
+    var min = Number(settings.W[1]) || 136;
+    var width = Number(settings.W[2]) || 160;
+    /*__AURA_PERSONAL_WORDMARK_END__*/
+    /*__AURA_BUILTIN_WORDMARK_START__*/
+    var min = Number(settings.b[2]) || 136;
+    var width = Number(settings.b[3]) || 160;
+    /*__AURA_BUILTIN_WORDMARK_END__*/
     let host = null;
     let hr = null;
     for (let p = brand.parentElement, d = 0; p && p !== sidebar && d < 4; p = p.parentElement, d += 1) {
@@ -331,6 +336,7 @@
     };
   };
 
+  /*__AURA_BUILTIN_WORDMARK_START__*/
   const brandAssetMode = (target) => {
     const channels = window.getComputedStyle?.(target.native[0])?.color
       ?.match(/\d+(?:\.\d+)?/g);
@@ -340,18 +346,32 @@
       + Number(channels[2]) * 114;
     return brightness >= 160000 ? "dark" : "light";
   };
+  /*__AURA_BUILTIN_WORDMARK_END__*/
 
   const syncBrand = (sidebar) => {
-    if (!Array.isArray(settings.b) || settings.b.length < 2) {
+    /*__AURA_PERSONAL_WORDMARK_START__*/
+    if (!settings.W?.[0]) {
       if (bb) clearBrand();
       return;
     }
+    /*__AURA_PERSONAL_WORDMARK_END__*/
+    /*__AURA_BUILTIN_WORDMARK_START__*/
+    if (!settings.b?.[1]) {
+      if (bb) clearBrand();
+      return;
+    }
+    /*__AURA_BUILTIN_WORDMARK_END__*/
     const t = findBrand(sidebar);
     if (!t) {
       if (bb) clearBrand();
       return;
     }
-    const am = brandAssetMode(t);
+    /*__AURA_PERSONAL_WORDMARK_START__*/
+    var am = "personal";
+    /*__AURA_PERSONAL_WORDMARK_END__*/
+    /*__AURA_BUILTIN_WORDMARK_START__*/
+    var am = brandAssetMode(t);
+    /*__AURA_BUILTIN_WORDMARK_END__*/
     if (bb?.host === t.host && bb.native?.[0] === t.native[0]
         && bb.mode === am
         && bb.offset === t.offset && bb.width === t.width
@@ -360,7 +380,12 @@
     const mark = document.createElement("span");
     const im = document.createElement("img");
     const token = ++bt;
-    const source = settings.b[am === "dark" ? 1 : 0];
+    /*__AURA_PERSONAL_WORDMARK_START__*/
+    var source = settings.W[0];
+    /*__AURA_PERSONAL_WORDMARK_END__*/
+    /*__AURA_BUILTIN_WORDMARK_START__*/
+    var source = settings.b[am === "dark" ? 1 : 0];
+    /*__AURA_BUILTIN_WORDMARK_END__*/
     mark.setAttribute("aria-hidden", "true");
     mark.setAttribute(BI, `${settings.version}:${settings.digest}`);
     mark.style.setProperty("inset-inline-start", `${t.offset}px`);
@@ -379,7 +404,10 @@
       const decoded = typeof im.decode === "function" ? im.decode() : Promise.resolve();
       Promise.resolve(decoded).then(() => {
         if (bb?.token !== token || !mark.isConnected || !im.isConnected || !t.host.isConnected
-            || !im.naturalWidth || brandAssetMode(t) !== am
+            || !im.naturalWidth
+            /*__AURA_BUILTIN_WORDMARK_START__*/
+            || brandAssetMode(t) !== am
+            /*__AURA_BUILTIN_WORDMARK_END__*/
             || findBrand(sidebar)?.native?.[0] !== t.native[0]) return fail();
         if ((window.getComputedStyle?.(t.host)?.position || "static") === "static") {
           t.host.setAttribute(BF, "true");

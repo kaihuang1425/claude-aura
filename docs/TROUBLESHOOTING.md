@@ -129,6 +129,16 @@ Use PNG, JPEG, WebP, GIF, or AVIF and keep the file below 16 MB. Moving or
 deleting the image after selecting it prevents Aura from rebuilding the theme.
 Choose the image again from **Background...**.
 
+## My sidebar wordmark does not appear
+
+Open Studio's **Personal wallpaper** page and replace the image with a PNG or
+JPEG no larger than 2 MB and at least 344 × 124 px. Aura keeps the source in
+its own local data folder and uses a fixed transparent crop. If the saved file
+cannot be validated, Aura shows the selected theme's built-in wordmark or
+Claude's native logo instead. A collapsed or narrow sidebar, ambiguous live
+logo target, forced-colors mode, and **Original look** intentionally keep the
+native Claude visual.
+
 ## I want to remove Aura styling
 
 Click **Original look** in the top bar. It removes the injected stylesheet and

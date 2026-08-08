@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "Hapus draf ini?",
   "promptShelfDeleteMessage": "Ini akan menghapus draf dari perangkat ini dan tidak dapat dibatalkan. Teks yang sudah disisipkan di Claude tidak akan berubah.",
   "openDesktopApp": "Buka aplikasi desktop",
+  "openDesktopWorkspaceGuidance": "Tinjau panduan ruang kerja penuh",
+  "desktopWorkspaceGuidanceTitle": "Ruang kerja Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop adalah ruang kerja native terpisah dengan tampilan dan kontrol sendiri. Aura akan membuka panduan saat ini dari Anthropic. Aura tidak akan memilih atau mentransfer sesi Remote Control Anda, tidak mengirim jalur proyek atau prompt, dan tidak akan mengatur gaya Claude Desktop. Jika setup Anda mendukung /desktop, jalankan sendiri di sesi CLI yang dimaksud.\n\nBuka panduan",
+  "desktopWorkspaceGuidanceFailedTitle": "Tidak dapat membuka panduan",
+  "desktopWorkspaceGuidanceFailedMessage": "Buka panduan Claude Desktop dari Anthropic di browser Anda:\n{0}",
   "exitApp": "Keluar dari Claude Aura",
   "navLauncherName": "Buka menu Claude Aura",
   "launcherTipTitle": "Menu Claude Aura",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura tidak dapat dibuka",
   "startupMessage": "Claude Aura tidak dapat memulai jendela browser-nya. Pasang atau perbaiki Microsoft Edge WebView2 Runtime, lalu coba lagi.",
   "technicalDetails": "Rincian teknis disimpan ke:",
-  "openDesktopWorkspaceGuidance": "Tinjau panduan ruang kerja penuh",
-  "desktopWorkspaceGuidanceTitle": "Ruang kerja Claude Desktop",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktop adalah ruang kerja native terpisah dengan tampilan dan kontrol sendiri. Aura akan membuka panduan saat ini dari Anthropic. Aura tidak akan memilih atau mentransfer sesi Remote Control Anda, tidak mengirim jalur proyek atau prompt, dan tidak akan mengatur gaya Claude Desktop. Jika setup Anda mendukung /desktop, jalankan sendiri di sesi CLI yang dimaksud.\n\nBuka panduan",
-  "desktopWorkspaceGuidanceFailedTitle": "Tidak dapat membuka panduan",
-  "desktopWorkspaceGuidanceFailedMessage": "Buka panduan Claude Desktop dari Anthropic di browser Anda:\n{0}"
+  "chooseWordmarkTitle": "Pilih wordmark bilah sisi Claude Aura",
+  "removingWordmark": "Menghapus wordmark kustom...",
+  "wordmarkPositionSaved": "Wordmark bilah sisi disimpan.",
+  "wordmarkNotChangedTitle": "Wordmark tidak berubah",
+  "invalidWordmarkMessage": "Pilih gambar PNG atau JPEG hingga 2 MB dan minimal 344 × 124 px."
 }

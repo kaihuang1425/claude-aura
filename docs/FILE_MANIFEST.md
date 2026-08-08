@@ -15,6 +15,7 @@ offline-preview files and comparison screenshots are not deliverables.
 ## Aura Studio
 
 - `studio/app.js`
+- `studio/crop-math.js`
 - `studio/editor.css`
 - `studio/editor.js`
 - `studio/generated-themes.js`
@@ -356,14 +357,17 @@ the retired reconstructed preview are not deliverables.
 - `tests/theme-cli.test.mjs`
 - `tests/themes.test.mjs`
 - `tests/user-kits.test.mjs`
+- `tests/wordmark.test.mjs`
 
 ## Windows application
 
-- `windows/aura-code-popup-diagnostic.ps1`
 - `windows/aura-draft-handoff.ps1`
+- `windows/aura-code-popup-diagnostic.ps1`
 - `windows/desktop-capability.ps1`
 - `windows/desktop-presentation.ps1`
 - `windows/aura-ui.ps1`
+- `windows/image-crop.ps1`
+- `windows/personal-wordmark.ps1`
 - `windows/aura-prompt-shelf.ps1`
 - `windows/common.ps1`
 - `windows/install.ps1`

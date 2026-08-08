@@ -12,6 +12,7 @@ import "./terminal-theme.test.mjs";
 import "./user-kits.test.mjs";
 import "./config.test.mjs";
 import "./avatar.test.mjs";
+import "./wordmark.test.mjs";
 import "./greeting.test.mjs";
 import "./greeting-runtime.test.mjs";
 import "./prepaint.test.mjs";

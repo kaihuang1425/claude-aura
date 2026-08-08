@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "Supprimer ce brouillon ?",
   "promptShelfDeleteMessage": "Cela supprime le brouillon de cet appareil et ne peut pas être annulé. Le texte déjà inséré dans Claude ne changera pas.",
   "openDesktopApp": "Ouvrir l’application de bureau",
+  "openDesktopWorkspaceGuidance": "Consulter les instructions de l’espace de travail complet",
+  "desktopWorkspaceGuidanceTitle": "Espace de travail Claude Desktop",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop est un espace de travail natif distinct avec sa propre apparence et ses propres contrôles. Aura ouvrira le guide actuel d’Anthropic. Aura ne choisira ni ne transférera votre session Remote Control, n’enverra pas de chemin de projet ou d’invite, et ne stylisera pas Claude Desktop. Si votre configuration prend en charge /desktop, exécutez-le vous-même dans la session CLI prévue.\n\nOuvrir le guide",
+  "desktopWorkspaceGuidanceFailedTitle": "Impossible d’ouvrir le guide",
+  "desktopWorkspaceGuidanceFailedMessage": "Ouvrez le guide de Claude Desktop d’Anthropic dans votre navigateur:\n{0}",
   "exitApp": "Quitter Claude Aura",
   "navLauncherName": "Ouvrir le menu Claude Aura",
   "launcherTipTitle": "Menu Claude Aura",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura n’a pas pu ouvrir",
   "startupMessage": "Claude Aura n’a pas pu démarrer sa fenêtre de navigateur. Installez ou réparez le Microsoft Edge WebView2 Runtime, puis réessayez.",
   "technicalDetails": "Les détails techniques ont été enregistrés dans :",
-  "openDesktopWorkspaceGuidance": "Consulter les instructions de l’espace de travail complet",
-  "desktopWorkspaceGuidanceTitle": "Espace de travail Claude Desktop",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktop est un espace de travail natif distinct avec sa propre apparence et ses propres contrôles. Aura ouvrira le guide actuel d’Anthropic. Aura ne choisira ni ne transférera votre session Remote Control, n’enverra pas de chemin de projet ou d’invite, et ne stylisera pas Claude Desktop. Si votre configuration prend en charge /desktop, exécutez-le vous-même dans la session CLI prévue.\n\nOuvrir le guide",
-  "desktopWorkspaceGuidanceFailedTitle": "Impossible d’ouvrir le guide",
-  "desktopWorkspaceGuidanceFailedMessage": "Ouvrez le guide de Claude Desktop d’Anthropic dans votre navigateur:\n{0}"
+  "chooseWordmarkTitle": "Choisir une wordmark de barre latérale Claude Aura",
+  "removingWordmark": "Suppression du wordmark personnalisé...",
+  "wordmarkPositionSaved": "Wordmark de la barre latérale enregistrée.",
+  "wordmarkNotChangedTitle": "La wordmark n’a pas été modifiée",
+  "invalidWordmarkMessage": "Choisissez une image PNG ou JPEG d’au plus 2 Mo et d’au moins 344 × 124 px."
 }

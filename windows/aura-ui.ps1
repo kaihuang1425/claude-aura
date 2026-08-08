@@ -75,6 +75,9 @@ $StudioBackgroundRoot = Join-Path $DataRoot 'studio-background'
 $AvatarRoot = Join-Path $DataRoot 'avatar'
 $AvatarStatePath = Join-Path $AvatarRoot 'crop.json'
 $AvatarBakedPath = Join-Path $AvatarRoot 'current.png'
+$PersonalWordmarkRoot = Join-Path $DataRoot 'personal-wordmark'
+$PersonalWordmarkStagingRoot = Join-Path $PersonalWordmarkRoot 'staging'
+$PersonalWordmarkGenerationsRoot = Join-Path $PersonalWordmarkRoot 'generations'
 $WindowLayoutPath = Join-Path $DataRoot 'window-layout.json'
 $WindowLayoutSchemaVersion = 1
 # The avatar renders around 32 logical pixels; 256 keeps it crisp on any DPI while
@@ -84,6 +87,8 @@ $StudioPreferencesPath = Join-Path $DataRoot 'studio-preferences.json'
 $StudioIntroductionVersion = 1
 $StudioBackgroundMaxBytes = 16 * 1024 * 1024
 $AvatarSourceMaxBytes = 16 * 1024 * 1024
+$PersonalWordmarkSourceMaxBytes = 2 * 1024 * 1024
+$PersonalWordmarkOutputMaxBytes = 256 * 1024
 $StudioMirrorJpegMaxBytes = 8000000
 $StudioEditorDirectoryName = if ($script:BuiltInAuthoring) {
   'theme-drafts-builtin-authoring'
@@ -113,6 +118,8 @@ $StudioLocaleIds = @(
 $StudioEditorImageMaxBytes = 16 * 1024 * 1024
 $ThemeAssetConverter = Join-Path $Root 'scripts\convert-theme-assets.mjs'
 . (Join-Path $PSScriptRoot 'common.ps1')
+. (Join-Path $PSScriptRoot 'image-crop.ps1')
+. (Join-Path $PSScriptRoot 'personal-wordmark.ps1')
 
 function Write-AuraUiLog {
   param([string]$Message)
@@ -1224,16 +1231,27 @@ function Set-AuraUiPayloadState {
 
 function Set-AuraUiConfig {
   param([string[]]$Options)
-  $editorPayload = if ($script:StudioEditorState -and
-      (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true -and
-      $script:Payload) { $script:Payload } else { $null }
+  $editorActive = $script:StudioEditorState -and
+    (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
   $arguments = @($ThemeCli, 'set', '--config', $ConfigPath, '--user-themes', $UserThemesRoot) + $Options
   if ($script:Locale) { $arguments += @('--locale', $script:Locale) }
   if ($script:ExperimentalCodeStyle) { $arguments += '--experimental-code-style' }
   $arguments += '--payload'
   $payload = Invoke-AuraUiNode -CommandArguments $arguments
   $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
-  Set-AuraUiPayloadState -Payload $(if ($editorPayload) { $editorPayload } else { $payload })
+  if ($editorActive) {
+    # Device-owned preferences such as the personal wordmark must be compiled
+    # into the active editor draft. Keeping the prior payload preserves draft
+    # geometry but silently drops the new device setting.
+    $editorResult = Get-AuraUiStudioEditorCoreState
+    Update-AuraUiStudioEditorSessionTracking -State $editorResult.State
+    $script:StudioEditorState = $editorResult.State
+    if ($null -eq $editorResult.Payload -or -not "$($editorResult.Payload)".Trim()) {
+      throw 'Aura Studio could not rebuild the active draft after the device setting changed.'
+    }
+    $payload = [string]$editorResult.Payload
+  }
+  Set-AuraUiPayloadState -Payload $payload
   if ($script:WebReady -or $script:StudioReady) { Set-AuraUiPreferredColorScheme }
   Update-AuraUiTrayAppearance
   Send-AuraUiStudioState
@@ -6614,12 +6632,14 @@ function Send-AuraUiStudioState {
     [ValidateSet('ok', 'busy', 'error')][string]$Tone = 'ok',
     [ValidateSet(
       '', 'set-image-framing', 'set-card-preview-crop', 'set-avatar', 'set-avatar-framing',
+      'set-personal-wordmark', 'clear-personal-wordmark', 'set-personal-wordmark-framing',
       'export-terminal-themes',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')][string]$Action = '',
-    [bool]$ActionSucceeded = $true
+    [bool]$ActionSucceeded = $true,
+    [AllowEmptyString()][string]$RequestId = ''
   )
   if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
       $null -eq $script:StudioWebView.CoreWebView2) { return }
@@ -6648,6 +6668,7 @@ function Send-AuraUiStudioState {
     $avatarValue = if ($null -ne $script:Config) {
       Get-AuraUiPropertyValue -InputObject $script:Config -Names @('avatar')
     } else { $null }
+    $wordmarkValue = Get-AuraUiConfiguredPersonalWordmarkPath
     $imagePreviewUrl = Sync-AuraUiStudioBackgroundPreview
     $state = [ordered]@{
       type = 'state'
@@ -6665,6 +6686,12 @@ function Send-AuraUiStudioState {
       avatarCrop = Get-AuraUiAvatarCrop
       avatarBackground = Get-AuraUiAvatarBackground
       avatarHasAlpha = Test-AuraUiAvatarHasAlpha
+      hasPersonalWordmark = ($null -ne $wordmarkValue -and "$wordmarkValue".Trim().Length -gt 0)
+      personalWordmarkPreviewUrl = Get-AuraUiPersonalWordmarkPreviewUrl
+      personalWordmarkCrop = Get-AuraUiPersonalWordmarkCrop
+      personalWordmarkUnavailable = Test-AuraUiPersonalWordmarkUnavailable
+      personalWordmarkSession = [string]$script:PersonalWordmarkSession
+      personalWordmarkRevision = [long]$script:PersonalWordmarkRevision
       imagePreviewUrl = $imagePreviewUrl
       backgroundAspectRatio = Get-AuraUiBackgroundAspectRatio
       backgroundCrop = Get-AuraUiStudioBackgroundCrop
@@ -6678,6 +6705,9 @@ function Send-AuraUiStudioState {
     if ($Action) {
       $state['action'] = $Action
       $state['actionSucceeded'] = $ActionSucceeded
+      if ($RequestId -and (Test-AuraUiStudioUuid -Value $RequestId)) {
+        $state['requestId'] = $RequestId
+      }
     }
     $json = $state | ConvertTo-Json -Depth 10 -Compress
     $script:StudioWebView.CoreWebView2.PostWebMessageAsJson($json)
@@ -8794,6 +8824,15 @@ function Get-AuraUiStudioMessage {
     'set-enabled' { 'type'; 'enabled'; break }
     'set-image-framing' { 'type'; 'x'; 'y'; 'zoom'; break }
     'set-avatar-framing' { 'type'; 'x'; 'y'; 'zoom'; 'background'; break }
+    'set-personal-wordmark' {
+      'type'; 'requestId'; 'session'; 'revision'; 'operation'
+      break
+    }
+    'clear-personal-wordmark' { 'type'; 'requestId'; 'session'; 'revision'; break }
+    'set-personal-wordmark-framing' {
+      'type'; 'requestId'; 'session'; 'revision'; 'x'; 'y'; 'zoom'
+      break
+    }
     'set-card-preview-crop' { 'type'; 'theme'; 'x'; 'y'; 'zoom'; break }
     'create-theme-copy' { 'type'; 'theme'; break }
     'begin-theme-edit' { 'type'; 'theme'; 'reset'; break }
@@ -8868,6 +8907,16 @@ function Get-AuraUiStudioMessage {
     if ($message.theme -isnot [string] -or $message.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
       throw 'Terminal theme export id is invalid.'
     }
+  }
+  if ($type -in @(
+      'set-personal-wordmark',
+      'clear-personal-wordmark',
+      'set-personal-wordmark-framing')) {
+    if ($sourceUri.AbsolutePath -cne '/index.html' -or
+        -not (Test-AuraUiStudioDocumentUri -Uri $sourceUri -AllowFragment)) {
+      throw 'Personal wordmark Studio message source is not allowed.'
+    }
+    Assert-AuraUiPersonalWordmarkRequest -Message $message
   }
   if ($type -clike 'prompt-shelf-*') {
     if ($sourceUri.AbsolutePath -cne '/index.html') {
@@ -8948,6 +8997,25 @@ function Invoke-AuraUiStudioMessage {
     'set-avatar-framing' {
       Invoke-AuraUiSetAvatarFraming -X $message.x -Y $message.y -Zoom $message.zoom `
         -Background $message.background
+      break
+    }
+    'set-personal-wordmark' {
+      if ($message.operation -ceq 'choose') {
+        [void](Invoke-AuraUiChoosePersonalWordmark `
+          -Owner $script:StudioForm -RequestId ([string]$message.requestId))
+      } else {
+        Invoke-AuraUiCancelPersonalWordmark -RequestId ([string]$message.requestId)
+      }
+      break
+    }
+    'clear-personal-wordmark' {
+      Invoke-AuraUiClearPersonalWordmark -RequestId ([string]$message.requestId)
+      break
+    }
+    'set-personal-wordmark-framing' {
+      Invoke-AuraUiSetPersonalWordmarkFraming `
+        -X $message.x -Y $message.y -Zoom $message.zoom `
+        -RequestId ([string]$message.requestId)
       break
     }
     'set-image-framing' {
@@ -9257,6 +9325,9 @@ $script:AuraLastWindowState = $null
 $script:StudioLastWindowState = $null
 $script:AuraNormalWindowSnapshot = $null
 $script:StudioNormalWindowSnapshot = $null
+$script:PersonalWordmarkSession = [Guid]::NewGuid().ToString('D').ToLowerInvariant()
+$script:PersonalWordmarkRevision = [long]0
+$script:PersonalWordmarkDraft = $null
 $script:StudioMessageTypes = @(
   'get-state',
   'set-theme',
@@ -9268,6 +9339,9 @@ $script:StudioMessageTypes = @(
   'set-avatar',
   'clear-avatar',
   'set-avatar-framing',
+  'set-personal-wordmark',
+  'clear-personal-wordmark',
+  'set-personal-wordmark-framing',
   'set-image-framing',
   'set-card-preview-crop',
   'set-enabled',
@@ -9441,7 +9515,9 @@ try {
   }
 
   [void](Assert-AuraUiStudioEditorRoots -Create)
-  New-Item -ItemType Directory -Force -Path $DataRoot, $WebDataRoot, $StudioBackgroundRoot, $AvatarRoot | Out-Null
+  New-Item -ItemType Directory -Force -Path `
+    $DataRoot, $WebDataRoot, $StudioBackgroundRoot, $AvatarRoot, $PersonalWordmarkRoot | Out-Null
+  Initialize-AuraUiPersonalWordmarkStorage
   $script:Node = Get-AuraNodeRuntime
   $script:StudioPreferences = Get-AuraUiStudioPreferences
   $script:Locale = [string]$script:StudioPreferences.locale
@@ -10452,6 +10528,10 @@ public static class AuraUiAsyncDispatch {
             $AvatarRoot,
             [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
           $studioCore.SetVirtualHostNameToFolderMapping(
+            'aura.wordmark',
+            $PersonalWordmarkRoot,
+            [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
+          $studioCore.SetVirtualHostNameToFolderMapping(
             'aura.editor',
             $StudioEditorPreviewRoot,
             [Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind]::Allow)
@@ -10484,6 +10564,7 @@ public static class AuraUiAsyncDispatch {
             } catch {
               Write-AuraUiLog -Message "Studio message rejected: $($_.Exception.Message)"
               $failedAction = ''
+              $failedRequestId = ''
               $promptShelfRejected = $false
               try {
                 if ($rawMessage -isnot [string] -or $rawMessage.Length -gt 16384) {
@@ -10497,12 +10578,18 @@ public static class AuraUiAsyncDispatch {
                   } elseif ($failedMessage.type -in @(
                       'set-locale', 'complete-studio-introduction',
                       'set-image-framing', 'set-avatar-framing', 'set-card-preview-crop',
+                      'set-personal-wordmark', 'clear-personal-wordmark',
+                      'set-personal-wordmark-framing',
                       'export-terminal-themes',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                     $failedAction = [string]$failedMessage.type
+                    if ($failedMessage.requestId -is [string] -and
+                        (Test-AuraUiStudioUuid -Value ([string]$failedMessage.requestId))) {
+                      $failedRequestId = [string]$failedMessage.requestId
+                    }
                   }
                 }
               } catch {}
@@ -10525,7 +10612,9 @@ public static class AuraUiAsyncDispatch {
                   Send-AuraUiStudioState -Status (Get-AuraUiStudioEditorStatus -Action $failedAction -Succeeded $false) `
                     -Tone error -Action $failedAction -ActionSucceeded $false
                 } else {
-                  Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error -Action $failedAction -ActionSucceeded $false
+                  Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" `
+                    -Tone error -Action $failedAction -ActionSucceeded $false `
+                    -RequestId $failedRequestId
                 }
               } else {
                 Send-AuraUiStudioState -Status "$($script:UiCopy.appearanceNotChangedMessage)" -Tone error

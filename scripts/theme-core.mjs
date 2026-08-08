@@ -39,6 +39,7 @@ export {
   listThemes,
   readConfig,
   writeConfig,
+  resolvePersonalWordmark,
 } from "./theme-core/registry.mjs";
 export {
   resolveArtworkLayers,

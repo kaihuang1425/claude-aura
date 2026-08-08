@@ -199,6 +199,26 @@
         <button type="button" id="clear-avatar" class="ghost-button" data-i18n="clearAvatar">Remove avatar</button>
       </div>
       <p class="help" data-i18n="avatarHelp">PNG, JPEG, or GIF up to 16 MB. You choose the square crop after picking the image.</p>
+
+      <div data-personal-wordmark-panel>
+        <h3 class="personal-wordmark-title" data-i18n="wordmarkTitle">Sidebar wordmark</h3>
+        <p class="lede" data-i18n="wordmarkLede">Customize the logo shown at the top of Claude's expanded sidebar. It stays on this device and keeps Claude's original link and accessible name.</p>
+        <div id="personal-wordmark-current" class="personal-wordmark-current" data-personal-wordmark-current hidden>
+          <div id="personal-wordmark-thumbnail" class="personal-wordmark-thumbnail" data-personal-wordmark-thumbnail aria-hidden="true">
+            <img id="personal-wordmark-thumbnail-image" data-personal-wordmark-image alt="" aria-hidden="true" draggable="false">
+          </div>
+          <div>
+            <strong data-i18n="wordmarkCurrent">Current sidebar wordmark</strong>
+            <span id="personal-wordmark-state" data-personal-wordmark-state></span>
+          </div>
+        </div>
+        <div class="actions-row">
+          <button type="button" id="pick-personal-wordmark" class="primary-button" data-personal-wordmark-action="choose" data-i18n="chooseWordmark">Choose an image…</button>
+          <button type="button" id="adjust-personal-wordmark" class="ghost-button" data-personal-wordmark-action="adjust" data-i18n="adjustWordmark" hidden>Adjust position</button>
+          <button type="button" id="clear-personal-wordmark" class="ghost-button" data-personal-wordmark-action="clear" data-i18n="clearWordmark" hidden>Remove custom wordmark</button>
+        </div>
+        <p class="help" data-i18n="wordmarkHelp">PNG or JPEG up to 2 MB. Transparent, wide images work best. Recommended canvas: 688 × 248 px or larger.</p>
+      </div>
     </section>
 
     <section id="create" class="studio-page" data-studio-page="create" aria-labelledby="create-title" hidden inert>
@@ -643,6 +663,26 @@
             <select id="editor-shadow" data-editor-shared="shadow" data-editor-focus="shared-shadow" data-editor-field="shared.shadow"></select>
           </label>
         </div>
+      </section>
+
+      <section class="editor-section" data-editor-branch="interface" data-editor-targets="interface.sidebar-wordmark" data-personal-wordmark-panel aria-labelledby="editor-personal-wordmark-title">
+        <h2 id="editor-personal-wordmark-title" data-i18n="wordmarkTitle">Sidebar wordmark</h2>
+        <p class="lede" data-i18n="wordmarkLede">Customize the logo shown at the top of Claude's expanded sidebar. It stays on this device and keeps Claude's original link and accessible name.</p>
+        <div id="editor-personal-wordmark-current" class="personal-wordmark-current" data-personal-wordmark-current hidden>
+          <div id="editor-personal-wordmark-thumbnail" class="personal-wordmark-thumbnail" data-personal-wordmark-thumbnail aria-hidden="true">
+            <img id="editor-personal-wordmark-thumbnail-image" data-personal-wordmark-image alt="" aria-hidden="true" draggable="false">
+          </div>
+          <div>
+            <strong data-i18n="wordmarkCurrent">Current sidebar wordmark</strong>
+            <span id="editor-personal-wordmark-state" data-personal-wordmark-state></span>
+          </div>
+        </div>
+        <div class="actions-row">
+          <button type="button" id="editor-pick-personal-wordmark" class="primary-button" data-personal-wordmark-action="choose" data-i18n="chooseWordmark">Choose an image…</button>
+          <button type="button" id="editor-adjust-personal-wordmark" class="ghost-button" data-personal-wordmark-action="adjust" data-i18n="adjustWordmark" hidden>Adjust position</button>
+          <button type="button" id="editor-clear-personal-wordmark" class="ghost-button" data-personal-wordmark-action="clear" data-i18n="clearWordmark" hidden>Remove custom wordmark</button>
+        </div>
+        <p class="help" data-i18n="wordmarkHelp">PNG or JPEG up to 2 MB. Transparent, wide images work best. Recommended canvas: 688 × 248 px or larger.</p>
       </section>
 
       <section class="editor-section" data-editor-branch="widgets" data-editor-targets="widgets.app-identity" aria-labelledby="editor-app-identity-title">
@@ -1091,6 +1131,24 @@
       <span id="crop-drag-hint" class="crop-drag-hint" data-i18n="dragToReposition">Drag to reposition</span>
     </div>
 
+    <section id="wordmark-surface-previews" class="wordmark-surface-previews" aria-labelledby="wordmark-surface-title" hidden>
+      <p id="wordmark-surface-title" data-i18n="wordmarkSurfacePreview">Preview on light and dark sidebar surfaces</p>
+      <div class="wordmark-surface-grid">
+        <figure>
+          <div class="wordmark-surface-frame is-light" aria-hidden="true">
+            <img id="wordmark-surface-light-image" alt="" aria-hidden="true" draggable="false">
+          </div>
+          <figcaption data-i18n="wordmarkSurfaceLight">Light surface</figcaption>
+        </figure>
+        <figure>
+          <div class="wordmark-surface-frame is-dark" aria-hidden="true">
+            <img id="wordmark-surface-dark-image" alt="" aria-hidden="true" draggable="false">
+          </div>
+          <figcaption data-i18n="wordmarkSurfaceDark">Dark surface</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <div class="crop-controls">
       <label for="crop-x">
         <span data-i18n="horizontalPosition">Horizontal position</span>
@@ -1175,6 +1233,7 @@
 <script src="locales/zh-CN.js"></script>
 <script src="locales/zh-HKTW.js"></script>
 <script src="generated-themes.js"></script>
+<script src="crop-math.js"></script>
 <script src="editor.js"></script>
 <script src="app.js"></script>
 </body>

@@ -684,6 +684,68 @@ test("built-in wordmark swaps only after decode and fails back to the native log
   assert.equal(timeouts.size, 0);
   assert.equal(mediaListeners.size, 0);
   assert.equal(forcedColorListeners.size, 0);
+
+  const personalTemporary = await fs.mkdtemp(path.join(PROJECT_ROOT, "tests", ".tmp-wordmark-dom-"));
+  try {
+    const generationDirectory = path.join(
+      personalTemporary,
+      "personal-wordmark",
+      "generations",
+      "a".repeat(64),
+    );
+    const personalPath = path.join(generationDirectory, "wordmark.png");
+    const configPath = path.join(personalTemporary, "config.json");
+    await fs.mkdir(generationDirectory, { recursive: true });
+    await fs.copyFile(
+      path.join(PROJECT_ROOT, "assets", "theme-art", "default", "brand-wordmark-light.png"),
+      personalPath,
+    );
+    await writeConfig(configPath, {
+      ...DEFAULT_CONFIG,
+      theme: "korean-idol",
+      personalWordmark: personalPath,
+    });
+    const personalBundle = await buildPayload({ configPath });
+    const personalRuntime = readPayloadSettings(personalBundle.payload);
+    assert(Array.isArray(personalRuntime.personalWordmark));
+    assert.equal(personalRuntime.b, undefined,
+      "The personal payload must reach the renderer without a built-in wordmark channel");
+    const injectPersonal = new Function(
+      "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+      personalBundle.payload,
+    );
+    injectPersonal(
+      window,
+      document,
+      FakeMutationObserver,
+      setInterval,
+      clearInterval,
+      setTimeout,
+      clearTimeout,
+    );
+    assert.equal(brandImages().length, 1,
+      "A personal-only W channel must mount through the conservative brand discovery path");
+    const personalMark = brandImages()[0];
+    const personalImage = personalMark.children[0];
+    assert.equal(personalImage.src, personalRuntime.personalWordmark[0]);
+    assert.equal(personalMark["aria-hidden"], "true");
+    assert.equal(personalImage["aria-hidden"], "true");
+    personalImage.naturalWidth = 344;
+    personalImage.onload();
+    personalImage.resolveDecode();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(first.row["data-claude-aura-brand-host"], "ready");
+
+    mediaDark = !mediaDark;
+    for (const listener of mediaListeners) listener({ matches: mediaDark });
+    assert.equal(brandImages()[0], personalMark,
+      "Appearance changes must not remount a personal image that serves both surfaces");
+    assert.equal(window.__CLAUDE_AURA_STATE__.cleanup(), true);
+    assert.equal(brandImages().length, 0);
+  } finally {
+    await fs.rm(personalTemporary, { recursive: true, force: true });
+  }
 });
 
 test("renderer switching keeps one lifecycle, Code cleanup, and stable root writes", async () => {

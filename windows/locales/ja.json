@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "このドラフトを削除しますか？",
   "promptShelfDeleteMessage": "この端末からドラフトを削除します。元に戻すことはできません。Claude にすでに挿入されたテキストは変更されません。",
   "openDesktopApp": "デスクトップアプリを開く",
+  "openDesktopWorkspaceGuidance": "全ワークスペースガイダンスを確認",
+  "desktopWorkspaceGuidanceTitle": "Claude Desktopワークスペース",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktopは独自の外観とコントロールを持つ別個のネイティブワークスペースです。AuraはAnthropicの現在のガイドを開きます。AuraはRemote Controlセッションを選択または移譲せず、プロジェクトパスやプロンプトを送信せず、Claude Desktopのスタイルを変更しません。セットアップで/desktopがサポートされる場合は、対象のCLIセッションであなたが直接実行してください。\n\nガイドを開く",
+  "desktopWorkspaceGuidanceFailedTitle": "ガイドを開けませんでした",
+  "desktopWorkspaceGuidanceFailedMessage": "ブラウザーでAnthropicのClaude Desktopガイドを開く:\n{0}",
   "exitApp": "Claude Aura を終了",
   "navLauncherName": "Claude Aura メニューを開く",
   "launcherTipTitle": "Claude Aura メニュー",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura を起動できませんでした",
   "startupMessage": "Claude Aura がブラウザーウィンドウを起動できませんでした。Microsoft Edge WebView2 Runtime をインストールまたは修復してから、再試行してください。",
   "technicalDetails": "技術的な詳細は次に保存されました:",
-  "openDesktopWorkspaceGuidance": "全ワークスペースガイダンスを確認",
-  "desktopWorkspaceGuidanceTitle": "Claude Desktopワークスペース",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktopは独自の外観とコントロールを持つ別個のネイティブワークスペースです。AuraはAnthropicの現在のガイドを開きます。AuraはRemote Controlセッションを選択または移譲せず、プロジェクトパスやプロンプトを送信せず、Claude Desktopのスタイルを変更しません。セットアップで/desktopがサポートされる場合は、対象のCLIセッションであなたが直接実行してください。\n\nガイドを開く",
-  "desktopWorkspaceGuidanceFailedTitle": "ガイドを開けませんでした",
-  "desktopWorkspaceGuidanceFailedMessage": "ブラウザーでAnthropicのClaude Desktopガイドを開く:\n{0}"
+  "chooseWordmarkTitle": "Claude Aura のサイドバー用ワードマークを選択",
+  "removingWordmark": "カスタムワードマークを削除しています...",
+  "wordmarkPositionSaved": "サイドバーのワードマークを保存しました。",
+  "wordmarkNotChangedTitle": "ワードマークは変更されませんでした",
+  "invalidWordmarkMessage": "PNGまたはJPEG画像を選択してください。2 MB以下、最小344 × 124 px。"
 }

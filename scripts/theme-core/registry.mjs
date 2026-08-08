@@ -9,6 +9,7 @@ import {
   IMAGE_TYPES,
   MAX_AVATAR_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_PERSONAL_WORDMARK_BYTES,
   PROJECT_ROOT,
   STUDIO_KIT_SCHEMA_VERSIONS,
   STUDIO_THEME_SCHEMA_VERSION,
@@ -420,6 +421,60 @@ export async function resolveAvatar(config, configPath) {
   if (!detectedMime) throw new Error(`Avatar content is not a supported PNG, JPEG, WebP, GIF, or AVIF file: ${avatarPath}`);
   if (detectedMime !== mime) throw new Error(`Avatar extension does not match its content: ${avatarPath}`);
   return { path: avatarPath, mime, dataUrl: `data:${mime};base64,${bytes.toString("base64")}`, bytes: bytes.length };
+}
+
+// Device-level personal wordmarks are host-generated artifacts, never arbitrary
+// source paths. Fail open for every invalid or unavailable state so a damaged
+// personal generation cannot prevent the selected theme from compiling.
+export async function resolvePersonalWordmark(config, configPath) {
+  const configured = config.personalWordmark;
+  if (configured === null || configured === undefined || configured === "") return null;
+  if (typeof configured !== "string" || !path.isAbsolute(configured)) return null;
+  const wordmarkPath = path.resolve(configured);
+  const allowedRoot = path.resolve(path.dirname(configPath), "personal-wordmark");
+  if (!isPathWithin(allowedRoot, wordmarkPath)
+      || path.extname(wordmarkPath).toLowerCase() !== ".png") return null;
+
+  let stat;
+  let realRoot;
+  let realPath;
+  try {
+    const lexicalStat = await fs.lstat(wordmarkPath);
+    if (!lexicalStat.isFile() || lexicalStat.isSymbolicLink()) return null;
+    [stat, realRoot, realPath] = await Promise.all([
+      fs.stat(wordmarkPath),
+      fs.realpath(allowedRoot),
+      fs.realpath(wordmarkPath),
+    ]);
+  } catch {
+    return null;
+  }
+  if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_PERSONAL_WORDMARK_BYTES
+      || !isPathWithin(realRoot, realPath)) return null;
+
+  let bytes;
+  try {
+    bytes = await fs.readFile(realPath);
+  } catch {
+    return null;
+  }
+  if (bytes.length <= 0 || bytes.length > MAX_PERSONAL_WORDMARK_BYTES
+      || detectImageMime(bytes) !== "image/png"
+      || bytes.length < 33
+      || bytes.readUInt32BE(8) !== 13
+      || bytes.subarray(12, 16).toString("ascii") !== "IHDR"
+      || bytes.readUInt32BE(16) !== 344
+      || bytes.readUInt32BE(20) !== 124
+      || bytes[24] !== 8
+      || ![4, 6].includes(bytes[25])) return null;
+  return {
+    path: realPath,
+    mime: "image/png",
+    dataUrl: `data:image/png;base64,${bytes.toString("base64")}`,
+    bytes: bytes.length,
+    minWidth: 136,
+    width: 160,
+  };
 }
 
 async function publishConfigFile(resolved, temporary, fileOperations) {

@@ -411,6 +411,16 @@ sidebar, and restores the native visual for collapsed or undersized layout,
 ambiguous discovery, failed decode, forced colors, cleanup, SPA remount, and
 Original look.
 
+Studio can additionally store one **device-level personal wordmark** under
+Aura's local data root. It is not a theme field and never enters a theme kit,
+duplicate, or export. The host retains the validated source and crop sidecar,
+bakes a transparent 344 × 124 PNG, and exposes only that fixed host-generated
+asset to the compiler. A valid personal wordmark takes visual precedence over
+the selected theme's built-in pair; removing it or failing validation restores
+the built-in/native fallback. Original look suppresses both personal and
+built-in replacements. The same conservative renderer discovery, decoded
+single-overlay rule, native wrapper, and accessible-name protections apply.
+
 `theme.variant` remains separate from the installed theme ID. Schema v1
 requires it to equal that ID; schema v2 permits either the theme's own ID or one
 of the eight frozen built-in IDs. A built-in duplicate retains its source ID as
@@ -497,7 +507,7 @@ skipped — a tokens-only theme with zero artwork is completely valid):
 | `corner-top-right` | transparent, safe to clip at the viewport edge |
 | `corner-bottom` | transparent, safe to clip at the viewport edge |
 | `card-1` / `card-2` / `card-3` | square, transparent, subject in the bottom-right 40% |
-| `brand-mark` | optional small, flat reserved kit-artwork slot; no custom top-left replacement is wired. The fixed all-eight built-in wordmark map is Aura-owned and is not a kit extension point |
+| `brand-mark` | optional small, flat reserved kit-artwork slot; it does not control the top-left wordmark. The fixed all-eight built-in map and the separate device-level personal preference are Aura-owned, not kit extension points |
 | `launcher-mark` | optional static 96×96 transparent PNG, legible at 24–48 px inside a centered 72×72 safe area; Aura derives the content-addressed Windows ICO; set `theme.launcher.asset` to `launcher-mark.png` |
 
 ### 2. Validate

@@ -684,6 +684,66 @@ h2 { font-size: 23px; }
 /* ── Buttons ──────────────────────────────────────────────────────── */
 .actions-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 
+.account-avatar-title,
+.personal-wordmark-title {
+  margin-top: 32px;
+}
+
+.personal-wordmark-current {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--control-radius);
+  background: var(--raised);
+}
+
+.personal-wordmark-current[hidden] { display: none; }
+
+.personal-wordmark-current > div:last-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.personal-wordmark-current strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.personal-wordmark-current span {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.personal-wordmark-thumbnail {
+  position: relative;
+  flex: 0 0 172px;
+  width: 172px;
+  aspect-ratio: 344 / 124;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: calc(var(--control-radius) - 2px);
+  background-color: #f7f6f2;
+  background-image:
+    linear-gradient(45deg, #d9dae0 25%, transparent 25% 75%, #d9dae0 75%),
+    linear-gradient(45deg, #d9dae0 25%, transparent 25% 75%, #d9dae0 75%);
+  background-position: 0 0, 6px 6px;
+  background-size: 12px 12px;
+}
+
+.personal-wordmark-thumbnail img,
+.wordmark-surface-frame img {
+  position: absolute;
+  inset: 0 auto auto 0;
+  display: block;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
 .primary-button,
 .ghost-button {
   font: inherit;
@@ -1442,6 +1502,18 @@ fieldset.settings-card {
   background-color: var(--crop-backdrop, var(--raised));
 }
 
+.crop-stage[data-kind="wordmark"] {
+  aspect-ratio: 344 / 124;
+  max-width: 620px;
+  margin-inline: auto;
+  background-color: #f7f6f2;
+  background-image:
+    linear-gradient(45deg, #d9dae0 25%, transparent 25% 75%, #d9dae0 75%),
+    linear-gradient(45deg, #d9dae0 25%, transparent 25% 75%, #d9dae0 75%);
+  background-position: 0 0, 9px 9px;
+  background-size: 18px 18px;
+}
+
 /* With no backdrop chosen, a checkerboard makes the see-through areas obvious. */
 .crop-stage[data-kind="avatar"][data-backdrop="none"] {
   background-color: #ffffff;
@@ -1457,6 +1529,14 @@ fieldset.settings-card {
   background: none;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgb(255 255 255 / .72), 0 0 0 9999px rgb(24 22 18 / .34);
+  filter: none;
+}
+
+.crop-stage[data-kind="wordmark"] .crop-guides {
+  inset: 8% 6%;
+  border: 1px dashed rgb(255 255 255 / .88);
+  background: none;
+  box-shadow: 0 0 0 1px rgb(20 19 16 / .28);
   filter: none;
 }
 
@@ -1487,6 +1567,43 @@ fieldset.settings-card {
   padding: 0;
   border: 0;
 }
+
+.wordmark-surface-previews {
+  margin-top: 18px;
+}
+
+.wordmark-surface-previews > p {
+  margin: 0 0 8px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wordmark-surface-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wordmark-surface-grid figure { margin: 0; }
+
+.wordmark-surface-grid figcaption {
+  margin-top: 5px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
+.wordmark-surface-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 344 / 124;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--control-radius);
+}
+
+.wordmark-surface-frame.is-light { background: #f7f6f2; }
+.wordmark-surface-frame.is-dark { background: #242426; }
 
 .crop-background legend {
   margin-bottom: 8px;
@@ -1743,6 +1860,20 @@ fieldset.settings-card {
 }
 
 @media (max-width: 640px), (max-height: 430px) {
+  .personal-wordmark-current {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .personal-wordmark-thumbnail {
+    width: min(100%, 240px);
+    flex-basis: auto;
+  }
+
+  .wordmark-surface-grid {
+    grid-template-columns: 1fr;
+  }
+
   .studio:not([data-editor-active="true"]) {
     grid-template-columns: 56px minmax(0, 1fr);
   }
@@ -2200,6 +2331,11 @@ fieldset.settings-card {
   .welcome-launcher-note { border-color: Highlight; background: Canvas; }
   .crop-stage { outline: 2px solid CanvasText; outline-offset: -2px; }
   .crop-guides, .crop-drag-hint { display: none; }
+  .personal-wordmark-thumbnail,
+  .wordmark-surface-frame {
+    border-color: CanvasText;
+    background: Canvas;
+  }
   .crop-dialog::backdrop,
   .welcome-dialog::backdrop { backdrop-filter: none; }
 }

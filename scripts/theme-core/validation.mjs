@@ -95,6 +95,13 @@ export function payloadBudget(payload, settings) {
   if (typeof avatarDataUrl === "string" && avatarDataUrl) {
     payloadDataUrls.push(avatarDataUrl);
   }
+  // A personal wordmark is a device-owned embed, not theme artwork. It appears
+  // once in the compact W channel and remains separately capped by the resolver.
+  const personalWordmarkDataUrl = settings.personalWordmark?.dataUrl
+    ?? (Array.isArray(settings.W) ? settings.W[0] : null);
+  if (typeof personalWordmarkDataUrl === "string" && personalWordmarkDataUrl) {
+    payloadDataUrls.push(personalWordmarkDataUrl);
+  }
   const embeddedArtworkBytes = artworkUrls
     .reduce((total, dataUrl) => total + Buffer.byteLength(dataUrl, "utf8"), 0);
   const embeddedDataBytes = payloadDataUrls

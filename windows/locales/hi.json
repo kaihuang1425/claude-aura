@@ -44,6 +44,11 @@
   "promptShelfDeleteTitle": "इस ड्राफ्ट को हटाएँ?",
   "promptShelfDeleteMessage": "यह ड्राफ्ट इस डिवाइस से हट जाएगा और वापस नहीं लिया जा सकता। Claude में पहले से डाला टेक्स्ट नहीं बदलेगा।",
   "openDesktopApp": "डेस्कटॉप ऐप खोलें",
+  "openDesktopWorkspaceGuidance": "पूर्ण वर्कस्पेस मार्गदर्शन देखें",
+  "desktopWorkspaceGuidanceTitle": "Claude Desktop वर्कस्पेस",
+  "desktopWorkspaceGuidanceMessage": "Claude Desktop एक अलग native वर्कस्पेस है, जिसका अपना अलग appearance और controls है। Aura Anthropic की वर्तमान गाइड खोलेगा। Aura न तो आपके Remote Control session का चयन या स्थानांतरण करेगा, न कोई project path या prompt भेजेगा, और न ही Claude Desktop की शैली बदलेगा। यदि आपके setup में /desktop समर्थित है, तो इसे इच्छित CLI session में स्वयं चलाएँ।\n\nगाइड खोलें",
+  "desktopWorkspaceGuidanceFailedTitle": "गाइड नहीं खोला जा सका",
+  "desktopWorkspaceGuidanceFailedMessage": "अपने ब्राउज़र में Anthropic की Claude Desktop गाइड खोलें:\n{0}",
   "exitApp": "Claude Aura बंद करें",
   "navLauncherName": "Claude Aura मेनू खोलें",
   "launcherTipTitle": "Claude Aura मेनू",
@@ -149,9 +154,9 @@
   "startupTitle": "Claude Aura नहीं खुल सका",
   "startupMessage": "Claude Aura अपनी ब्राउज़र विंडो शुरू नहीं कर सका। Microsoft Edge WebView2 Runtime इंस्टॉल या रिपेयर करें, फिर दोबारा प्रयास करें।",
   "technicalDetails": "तकनीकी विवरण यहाँ सहेजे गए:",
-  "openDesktopWorkspaceGuidance": "पूर्ण वर्कस्पेस मार्गदर्शन देखें",
-  "desktopWorkspaceGuidanceTitle": "Claude Desktop वर्कस्पेस",
-  "desktopWorkspaceGuidanceMessage": "Claude Desktop एक अलग native वर्कस्पेस है, जिसका अपना अलग appearance और controls है। Aura Anthropic की वर्तमान गाइड खोलेगा। Aura न तो आपके Remote Control session का चयन या स्थानांतरण करेगा, न कोई project path या prompt भेजेगा, और न ही Claude Desktop की शैली बदलेगा। यदि आपके setup में /desktop समर्थित है, तो इसे इच्छित CLI session में स्वयं चलाएँ।\n\nगाइड खोलें",
-  "desktopWorkspaceGuidanceFailedTitle": "गाइड नहीं खोला जा सका",
-  "desktopWorkspaceGuidanceFailedMessage": "अपने ब्राउज़र में Anthropic की Claude Desktop गाइड खोलें:\n{0}"
+  "chooseWordmarkTitle": "एक Claude Aura साइडबार वर्डमार्क चुनें",
+  "removingWordmark": "कस्टम वर्डमार्क हटाया जा रहा है...",
+  "wordmarkPositionSaved": "साइडबार वर्डमार्क सहेजा गया।",
+  "wordmarkNotChangedTitle": "वर्डमार्क नहीं बदला गया",
+  "invalidWordmarkMessage": "PNG या JPEG छवि चुनें, अधिकतम 2 MB और न्यूनतम 344 × 124 px।"
 }
