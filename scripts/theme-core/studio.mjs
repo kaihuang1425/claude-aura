@@ -1274,6 +1274,14 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
       document.instantPrompts = [];
       changed = true;
     }
+    const normalizedInstantPrompts = validateInstantPrompts(
+      document.instantPrompts,
+      `editor ${name} theme.instantPrompts`,
+    );
+    if (JSON.stringify(normalizedInstantPrompts) !== JSON.stringify(document.instantPrompts)) {
+      document.instantPrompts = normalizedInstantPrompts;
+      changed = true;
+    }
     if (document.schemaVersion !== STUDIO_THEME_SCHEMA_VERSION) {
       document.schemaVersion = STUDIO_THEME_SCHEMA_VERSION;
       changed = true;
@@ -2986,7 +2994,14 @@ export function mutateStudioInstantPromptDocument(document, change) {
     prompts[index].icon = null;
     return;
   }
-  const field = strictEnum(change.field, new Set(["label", "prompt"]), "instant prompt field");
+  const field = strictEnum(change.field, new Set(["label", "prompt", "layout"]), "instant prompt field");
+  if (field === "layout") {
+    if (change.locale !== null) throw new Error("Instant prompt layout locale must be null");
+    const candidate = cloneJson(prompts[index]);
+    candidate.layout = change.value;
+    prompts[index] = validateInstantPrompts([candidate], "instant prompt layout update")[0];
+    return;
+  }
   const locale = strictEnum(change.locale, new Set(STUDIO_METADATA_LOCALES), "instant prompt locale");
   if (!Object.hasOwn(prompts[index].labels, locale) || !Object.hasOwn(prompts[index].prompts, locale)) {
     throw new Error("Instant prompt locale is not enabled");

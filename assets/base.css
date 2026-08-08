@@ -427,6 +427,10 @@ html.claude-aura [data-claude-aura-instant-prompts="true"] {
 }
 
 html.claude-aura [data-claude-aura-instant-prompt-card] {
+  --aura-widget-opacity: 1;
+  --aura-widget-x: 0vw;
+  --aura-widget-y: 0vh;
+  --aura-widget-scale: 1;
   appearance: none;
   min-block-size: 34px;
   max-inline-size: min(100%, 260px);
@@ -444,6 +448,9 @@ html.claude-aura [data-claude-aura-instant-prompt-card] {
   letter-spacing: 0.01em;
   text-align: start;
   cursor: pointer;
+  opacity: var(--aura-widget-opacity);
+  transform: translate(var(--aura-widget-x), var(--aura-widget-y)) scale(var(--aura-widget-scale));
+  transform-origin: center;
   transition: transform var(--aura-transition-duration) ease,
     border-color var(--aura-transition-duration) ease,
     background-color var(--aura-transition-duration) ease;
@@ -469,12 +476,12 @@ html.claude-aura [data-claude-aura-instant-prompt-card]:hover {
   color: hsl(var(--aura-text-primary));
   border-color: hsl(var(--aura-accent-primary) / 0.7);
   background: hsl(var(--aura-hover-surface) / 0.96);
-  transform: translateY(-1px);
+  transform: translate(var(--aura-widget-x), var(--aura-widget-y)) scale(var(--aura-widget-scale)) translateY(-1px);
 }
 
 html.claude-aura [data-claude-aura-instant-prompt-card]:active {
   background: hsl(var(--aura-selected-surface) / 0.96);
-  transform: translateY(0) scale(0.98);
+  transform: translate(var(--aura-widget-x), var(--aura-widget-y)) scale(var(--aura-widget-scale));
 }
 /*__AURA_INSTANT_PROMPTS_CSS_END__*/
 

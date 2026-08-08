@@ -81,6 +81,7 @@ const REQUIRED_THEME_DESCRIPTOR_FILES = new Set([
 ].map((name) => `themes/${name}`));
 const REQUIRED_APP_SURFACE_FILES = new Set([
   "assets/base.css",
+  "assets/editor-overlay.js",
   "assets/brand/aura-mark.svg",
   "assets/brand/claude-aura.ico",
   "assets/renderer-inject.js",

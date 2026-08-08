@@ -106,7 +106,21 @@ document, the tooling is not finished.
    front so they do not force a window switch after every adjustment. The local
    prompt builder only drafts asset-generation text and makes no model or
    network call.
-9. Open **Review** for the compact global validation status, then Save. Review
+9. Choose **Edit on window** to manipulate eligible Aura-owned visuals in the
+   actual Aura window on live `claude.ai`. The temporary toolbar first asks you
+   to **Pick element**. Recognized Claude sidebar, composer, card, dialog, and
+   canvas surfaces route to existing Interface token controls; they are never
+   moved or rewritten. A registered artwork layer routes to Background by its
+   opaque layer ID, and an Instant prompt routes to Widgets by its opaque card
+   ID. Drag the move or scale handle, use the opacity control, or use the arrow
+   keys; Alt + arrows scales and Ctrl + arrows changes opacity. Each completed
+   pointer or keyboard gesture is one draft change and one Undo step. Missing
+   and overlapping probes report missing or ambiguous instead of guessing a
+   selector. **Done**, **End window edit**, Esc, navigation, Original look,
+   closing Studio, and app exit remove the complete toolbar, handles,
+   temporary styles, observers, and listeners. This session-only overlay never
+   stores page content, edits a Claude-owned node, or runs in Aura Code.
+10. Open **Review** for the compact global validation status, then Save. Review
    is a workflow stage, not a fourth capability branch. Passing contrast ratios
    stay out of Quick customize; a problem links to its exact branch, target,
    scope, and visible control, while Advanced provides the full diagnostic
@@ -252,6 +266,13 @@ for every language enabled in the theme; English remains the fallback.
 Tickets can be reordered or removed without changing the identities of the
 remaining tickets.
 
+Each ticket stores one shared opacity and separate Standard/Wide placement.
+Opacity is `0`–`1`; horizontal and vertical offsets are `-50`–`50` viewport
+percent; scale is `0.5`–`1.75`. A legacy ticket without layout migrates to
+opacity `1`, zero offsets, and scale `1` in both frames. Studio, the compiled
+payload, and Edit on window use this same bounded layout object, so saving and
+restarting cannot reinterpret a live gesture.
+
 The preview places the ticket rail immediately above the new-chat composer.
 Choose a ticket on the canvas or through the keyboard target picker to route
 that same ticket to the inspector. **Default**, **Hover**, **Focus**,
@@ -276,6 +297,15 @@ It may replace only the visual Claude sidebar mark and style the unchanged
 literal `Claude` label with approved font and Light/Dark colour controls. The
 native wrapper, destination, accessible name, focus, wording, and collapsed or
 failure fallback remain Claude-owned.
+
+WO-20's live selection protocol carries exactly one capability kind
+(`interface`, `background`, or `widget`), one registered target ID, and—only
+for an eligible Aura-owned visual—its opaque item ID and bounded geometry.
+Interface selections carry an allowlisted token list but no geometry. The host
+accepts events only from the current HTTPS Claude document with the current
+editor session, draft revision, one-time nonce, and increasing sequence. The
+preview page remains a view choice; selecting a live object does not silently
+change the draft's appearance, page applicability, or another frame.
 
 An Aura-owned capability registry declares which registered views, axes, and
 properties each target supports. Themes cannot add a page, selector, route, or

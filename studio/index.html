@@ -378,6 +378,27 @@
             <button type="button" id="stage-mirror-refresh" class="ghost-button" data-editor-i18n="mirrorRefresh">Refresh capture</button>
             <button type="button" id="stage-open-aura" class="ghost-button" data-editor-i18n="openAuraWindow">Review in Aura ↗</button>
           </div>
+          <section class="window-editor-panel" aria-labelledby="window-editor-title">
+            <div class="window-editor-copy">
+              <h3 id="window-editor-title" data-editor-i18n="overlayTitle">Edit the Aura window</h3>
+              <p class="help" data-editor-i18n="overlayHelp">Pick an Aura-owned image, prompt card, or recognized Claude surface in the actual window.</p>
+            </div>
+            <div class="window-editor-actions">
+              <button type="button" id="stage-window-edit" class="secondary-button" data-editor-i18n="overlayEditOnWindow">Edit on window</button>
+              <button type="button" id="stage-window-edit-stop" class="ghost-button" data-editor-i18n="overlayEndWindowEdit" hidden>End window edit</button>
+            </div>
+            <p id="window-editor-status" class="window-editor-status" role="status" aria-live="polite" data-editor-i18n="overlayIdle">Window editing is off.</p>
+            <dl id="window-editor-inspector" class="window-editor-inspector" hidden>
+              <div>
+                <dt data-editor-i18n="overlayTarget">Target</dt>
+                <dd id="window-editor-target"></dd>
+              </div>
+              <div>
+                <dt data-editor-i18n="overlayTokens">Theme tokens</dt>
+                <dd id="window-editor-tokens" data-editor-i18n="overlayNoTokens">No theme tokens for this target.</dd>
+              </div>
+            </dl>
+          </section>
         </div>
         <div class="stage-secondary">
           <p class="editor-guide-notice stage-notice advanced-only" data-editor-i18n="stageNotice">When available, the canvas uses a private capture of the actual Aura window with editable Aura artwork over it. Otherwise it shows the placement guide. It is not a Claude preview or acceptance evidence.</p>

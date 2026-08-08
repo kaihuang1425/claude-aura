@@ -616,6 +616,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "delete-user-theme",
     "set-greeting-phrases",
     "reset-greeting",
+    "start-window-edit",
+    "stop-window-edit",
     "set-aura-preview",
     "set-aura-topmost",
     "refresh-aura-mirror",

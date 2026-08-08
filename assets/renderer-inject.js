@@ -1308,6 +1308,7 @@
           element.dataset.artMask = layer.k === "n" ? "none" : "soft-right";
           element.dataset.artMobile = layer.m === "h" ? "hide" : layer.m === "k" ? "keep" : "reduce";
           element.dataset.artRole = layer.r === "b" ? "background" : layer.r === "h" ? "hero" : layer.r === "c" ? "corner" : "decoration";
+          if (/^layer-[a-f0-9]{32}$/.test(layer.i)) element.id = layer.i;
           const dataUrl = Number.isInteger(layer.d) ? settings.u?.[layer.d] : layer.d;
           if (typeof dataUrl !== "string") continue;
           let frameImage = null;

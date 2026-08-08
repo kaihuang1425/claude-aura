@@ -605,6 +605,35 @@ target. Drag one eligible target and repeat the change by keyboard. Esc,
 closing Studio, and session exit must each remove every overlay node, handle,
 marker, and listener without changing normal Claude interaction.
 
+Record this WO-20 matrix in whole-window actual-Aura captures and the adjacent
+manifest entries:
+
+- select the live sidebar, composer, sidebar card, one real dialog, and the
+  main canvas; record the returned Interface target, stable surface role, and
+  allowlisted token IDs, then confirm Studio reveals those existing tokens
+  without moving or editing the Claude-owned node;
+- select one Aura artwork layer by its opaque layer ID, then move, scale, and
+  change opacity once by pointer and once by keyboard in Standard and Wide;
+  save, restart Aura, and confirm the same bounded frame values persist;
+- select one Instant prompt by its opaque prompt ID and repeat move, scale,
+  opacity, pointer, keyboard, save, and restart checks in Standard and Wide;
+  each completed gesture must add exactly one Undo entry;
+- exercise one missing probe and one overlapping-artwork ambiguous probe; both
+  must expose no item ID, rectangle, or geometry and must leave the prior draft
+  unchanged; and
+- capture the active toolbar and the same live page after **Done**, Esc,
+  navigation, Original look, closing Studio, and app exit. The after state must
+  contain no overlay root, focus trap, temporary style, observer, listener, or
+  blocked Claude control.
+
+The manifest records editor session/revision, selection kind, registered target
+ID, opaque item ID when present, Standard/Wide frame, and the saved draft
+values. It must not record page text, conversation content, source selectors,
+nonces, or private URLs. Studio captures may document its host-owned controls,
+but cannot replace the paired whole-window actual-Aura evidence. If the owner
+directs work to continue without this live review, mark Checkpoint F skipped
+and leave it unpassed.
+
 For WO-25, exercise Overall interface, Sidebar, Sidebar identity, Prompt block,
 Greeting, one background layer, Instant prompts, and App launcher through the
 compact target picker and direct selection where supported. Record:

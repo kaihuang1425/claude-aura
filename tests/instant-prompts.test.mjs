@@ -19,6 +19,13 @@ import {
 
 const CARD_ID = "prompt-0123456789abcdef0123456789abcdef";
 const SECOND_CARD_ID = "prompt-fedcba9876543210fedcba9876543210";
+const defaultLayout = () => ({
+  opacity: 1,
+  frames: {
+    normal: { positionX: 0, positionY: 0, scale: 1 },
+    wide: { positionX: 0, positionY: 0, scale: 1 },
+  },
+});
 const card = (id = CARD_ID) => ({
   id,
   labels: { en: "Plan the day", "zh-CN": "规划今天", "zh-HKTW": "規劃今天" },
@@ -28,6 +35,7 @@ const card = (id = CARD_ID) => ({
     "zh-HKTW": "幫我選出今天最重要的三項任務。",
   },
   icon: null,
+  layout: defaultLayout(),
 });
 
 test("instant prompt cards validate strict portable identities, locales, and bounds", () => {
@@ -64,6 +72,14 @@ test("instant prompt cards validate strict portable identities, locales, and bou
     () => validateInstantPrompts([{ ...card(), prompts: { ...card().prompts, en: "x".repeat(1201) } }], "cards"),
     /prompt/i,
   );
+  const legacy = card();
+  delete legacy.layout;
+  assert.deepEqual(validateInstantPrompts([legacy], "cards")[0].layout, defaultLayout());
+  for (const [field, value] of [["positionX", 51], ["positionY", -51], ["scale", 1.76]]) {
+    const invalid = card();
+    invalid.layout.frames.normal[field] = value;
+    assert.throws(() => validateInstantPrompts([invalid], "cards"), new RegExp(field, "i"));
+  }
 });
 
 test("Studio exposes the complete instant-prompt visual surface through the strict host bridge", async () => {
@@ -111,6 +127,12 @@ class MockNode {
     this.value = "";
     this.selectionStart = 0;
     this.selectionEnd = 0;
+    this.styleValues = new Map();
+    this.style = {
+      setProperty: (name, value) => this.styleValues.set(name, String(value)),
+      getPropertyValue: (name) => this.styleValues.get(name) ?? "",
+      removeProperty: (name) => this.styleValues.delete(name),
+    };
   }
 
   get isConnected() { return this.tagName === "HTML" || Boolean(this.parentElement?.isConnected); }
@@ -180,7 +202,7 @@ function instantPromptHarness() {
 test("instant prompt runtime creates one owned block, inserts without sending, and cleans up", () => {
   const harness = instantPromptHarness();
   const controller = createInstantPromptController(harness.document, harness.window, {
-    P: [[CARD_ID, "Plan the day", "Draft the plan", null]],
+    P: [[CARD_ID, "Plan the day", "Draft the plan", null, [0.72, 5, -4, 1.1, 12, 8, 1.25]]],
     u: [],
   });
   controller.sync("new-chat", harness);
@@ -189,6 +211,10 @@ test("instant prompt runtime creates one owned block, inserts without sending, a
   assert.equal(block.getAttribute("data-claude-aura-instant-prompts"), "true");
   const button = block.children[0];
   assert.equal(button.getAttribute("type"), "button");
+  assert.equal(button.style.getPropertyValue("--aura-widget-opacity"), "0.72");
+  assert.equal(button.style.getPropertyValue("--aura-widget-x"), "5vw");
+  assert.equal(button.style.getPropertyValue("--aura-widget-y"), "-4vh");
+  assert.equal(button.style.getPropertyValue("--aura-widget-scale"), "1.1");
   block.listeners.get("click")({ target: button });
   assert.equal(harness.editor.value, "Draft the plan");
   assert.equal(harness.editor.lastEvent.type, "input");
@@ -241,6 +267,27 @@ test("Studio persists localized instant prompts, icon ownership, ordering, resta
     });
     assert.deepEqual(result.state.instantPrompts.map((entry) => entry.id), [SECOND_CARD_ID, CARD_ID]);
 
+    const authoredLayout = {
+      opacity: 0.72,
+      frames: {
+        normal: { positionX: 5, positionY: -4, scale: 1.1 },
+        wide: { positionX: 12, positionY: 8, scale: 1.25 },
+      },
+    };
+    result = await request({
+      type: "apply-theme-patch",
+      session: result.state.session,
+      revision: result.state.revision,
+      changes: [{
+        kind: "instant-prompt", operation: "update", id: CARD_ID,
+        field: "layout", locale: null, value: authoredLayout,
+      }],
+    });
+    assert.deepEqual(
+      result.state.instantPrompts.find((entry) => entry.id === CARD_ID).layout,
+      authoredLayout,
+    );
+
     const importRoot = path.join(editorRoot, "imports");
     await fs.mkdir(importRoot, { recursive: true });
     const iconPath = path.join(importRoot, "prompt.webp");
@@ -257,6 +304,7 @@ test("Studio persists localized instant prompts, icon ownership, ordering, resta
 
     const restarted = await readStudioState({ editorRoot, configPath });
     assert.deepEqual(restarted.instantPrompts.map((entry) => entry.id), [SECOND_CARD_ID, CARD_ID]);
+    assert.deepEqual(restarted.instantPrompts.find((entry) => entry.id === CARD_ID).layout, authoredLayout);
     result = await request({
       type: "save-theme-edit",
       session: restarted.session,
@@ -264,6 +312,7 @@ test("Studio persists localized instant prompts, icon ownership, ordering, resta
     });
     const installed = await readThemeKit(path.join(userThemesDir, themeId));
     assert.equal(installed.metadata.instantPrompts.length, 2);
+    assert.deepEqual(installed.metadata.instantPrompts[1].layout, authoredLayout);
     assert.equal(installed.metadata.instantPrompts[1].prompts["zh-CN"], "帮我选出今天最重要的三项任务。");
     await writeConfig(configPath, { ...DEFAULT_CONFIG, theme: themeId, appearance: "light" });
     const bundle = await buildPayload({ configPath, userThemesDir, locale: "zh-CN" });

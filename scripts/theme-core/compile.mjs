@@ -888,6 +888,7 @@ async function resolveInstantPrompts(theme, locale) {
       label: card.labels[normalizedLocale] ?? card.labels.en,
       prompt: card.prompts[normalizedLocale] ?? card.prompts.en,
       iconDataUrl: icon?.dataUrl ?? null,
+      layout: card.layout,
     };
   }));
   const textBytes = Buffer.byteLength(JSON.stringify(
@@ -1311,7 +1312,18 @@ export async function buildPayloadFromCompiled(compiled, {
           urlIndexes.set(card.iconDataUrl, iconIndex);
         }
       }
-      return [card.id, card.label, card.prompt, iconIndex];
+      const normal = card.layout?.frames?.normal;
+      const wide = card.layout?.frames?.wide;
+      const layout = normal && wide ? [
+        card.layout.opacity,
+        normal.positionX, normal.positionY, normal.scale,
+        wide.positionX, wide.positionY, wide.scale,
+      ] : [1, 0, 0, 1, 0, 0, 1];
+      const compact = [card.id, card.label, card.prompt, iconIndex];
+      if (layout.some((value, index) => value !== [1, 0, 0, 1, 0, 0, 1][index])) {
+        compact.push(layout);
+      }
+      return compact;
     });
     if (urls.length) runtimeSettings.u = urls;
   }

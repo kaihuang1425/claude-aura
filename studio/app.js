@@ -12,6 +12,7 @@
     "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon", "remove-theme-layer", "move-theme-layer",
     "undo-theme-edit", "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
+    "start-window-edit", "stop-window-edit",
     "set-aura-preview", "set-aura-topmost", "refresh-aura-mirror",
     "prompt-shelf-read", "prompt-shelf-create", "prompt-shelf-update",
     "prompt-shelf-move", "prompt-shelf-delete", "prompt-shelf-insert",
@@ -1833,6 +1834,14 @@
           clearPromptShelfReads();
           requestPromptShelfState();
         }
+        return;
+      }
+      if (data.type === "aura-editor-overlay-state") {
+        editorController?.receiveOverlayState?.(data);
+        return;
+      }
+      if (data.type === "aura-editor-overlay") {
+        editorController?.receiveOverlay?.(data);
         return;
       }
       if (data.type === "aura-mirror") {

@@ -47,6 +47,20 @@ export const STUDIO_MAX_INSTANT_PROMPTS = 12;
 export const INSTANT_PROMPT_LABEL_MAX_CHARS = 48;
 export const INSTANT_PROMPT_TEXT_MAX_CHARS = 1200;
 export const INSTANT_PROMPT_RUNTIME_TEXT_MAX_BYTES = 1536;
+// WO-20 prompt-card placement is viewport-relative so Studio, the live Aura
+// overlay, and the renderer can exchange the same bounded numbers without
+// reading Claude-owned layout or persisting CSS.
+export const INSTANT_PROMPT_POSITION_MIN = -50;
+export const INSTANT_PROMPT_POSITION_MAX = 50;
+export const INSTANT_PROMPT_SCALE_MIN = 0.5;
+export const INSTANT_PROMPT_SCALE_MAX = 1.75;
+export const DEFAULT_INSTANT_PROMPT_LAYOUT = Object.freeze({
+  opacity: 1,
+  frames: Object.freeze({
+    normal: Object.freeze({ positionX: 0, positionY: 0, scale: 1 }),
+    wide: Object.freeze({ positionX: 0, positionY: 0, scale: 1 }),
+  }),
+});
 // These are the two logical Aura client sizes used by Studio's responsive
 // framing presets. Legacy built-in artwork is resolved against the same sizes
 // before it enters the native frame editor, so the first adjustment starts

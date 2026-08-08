@@ -14,6 +14,13 @@
   const INSTANT_PROMPT_ID_PATTERN = /^prompt-[a-f0-9]{32}$/;
   const INSTANT_PROMPT_ICON_PATTERN = /^artwork\/layer-[a-f0-9]{32}\.webp$/;
   const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const OVERLAY_TOKEN_IDS = Object.freeze(["canvas", "sidebar", "surface", "text", "accent", "border"]);
+  const OVERLAY_TARGET_IDS = Object.freeze([
+    "interface.theme", "interface.new-chat-area", "background.layer", "widgets.instant-prompts",
+  ]);
+  const OVERLAY_INTERFACE_ITEMS = Object.freeze([
+    "interface.sidebar", "interface.composer", "interface.card", "interface.dialog", "interface.canvas",
+  ]);
   const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
   const LAUNCHER_ASSET_PATTERN = /^(?:assets\/theme-art\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png|launcher-mark\.png)$/;
   const PREVIEW_PATH_PATTERN = /^\/active\/(?:[a-z0-9][a-z0-9-]{0,63}\/)*[a-z0-9][a-z0-9-]{0,80}\.webp$/;
@@ -43,6 +50,17 @@
   ]);
   const THEME_METADATA_LOCALE_IDS = new Set(THEME_METADATA_LOCALES.map(({ id }) => id));
   const MAX_INSTANT_PROMPTS = 12;
+  const INSTANT_PROMPT_POSITION_MIN = -50;
+  const INSTANT_PROMPT_POSITION_MAX = 50;
+  const INSTANT_PROMPT_SCALE_MIN = 0.5;
+  const INSTANT_PROMPT_SCALE_MAX = 1.75;
+  const defaultInstantPromptLayout = () => ({
+    opacity: 1,
+    frames: {
+      normal: { positionX: 0, positionY: 0, scale: 1 },
+      wide: { positionX: 0, positionY: 0, scale: 1 },
+    },
+  });
   const MODE_TOKEN_KEYS = Object.freeze([
     "canvas", "sidebar", "surface", "text", "accent", "border", "surfaceAlpha", "sidebarAlpha",
   ]);
@@ -289,6 +307,108 @@
   const formatBytes = (value) => value >= 1_000_000
     ? `${(value / 1_000_000).toFixed(2)} MB`
     : `${Math.max(0, Math.round(value / 1000))} KB`;
+
+  function normalizeOverlayState(value) {
+    if (!exactShape(value, [
+      "type", "version", "active", "pending", "session", "revision", "error",
+    ]) || value.type !== "aura-editor-overlay-state" || value.version !== 1
+        || typeof value.active !== "boolean" || typeof value.pending !== "boolean"
+        || !(value.session === null || (typeof value.session === "string" && SESSION_PATTERN.test(value.session)))
+        || !integer(value.revision, -1, 2147483647)
+        || !(value.error === null || ["unavailable", "injection-failed"].includes(value.error))
+        || (value.active && (value.session === null || value.revision < 0))) return null;
+    return {
+      active: value.active,
+      pending: value.pending,
+      session: value.session,
+      revision: value.revision,
+      failure: value.error,
+    };
+  }
+
+  function normalizeOverlaySelection(value) {
+    if (!exactShape(value, [
+      "status", "kind", "targetId", "itemId", "tokenIds", "rect", "viewport", "geometry",
+    ]) || !enumValue(value.status, ["found", "missing", "ambiguous"])
+        || !enumValue(value.kind, ["interface", "background", "widget"])
+        || !OVERLAY_TARGET_IDS.includes(value.targetId)
+        || !Array.isArray(value.tokenIds) || value.tokenIds.length > 6
+        || new Set(value.tokenIds).size !== value.tokenIds.length
+        || value.tokenIds.some((token) => !OVERLAY_TOKEN_IDS.includes(token))
+        || !exactShape(value.viewport, ["width", "height", "frame"])
+        || !integer(value.viewport.width, 1, 10000)
+        || !integer(value.viewport.height, 1, 10000)
+        || !enumValue(value.viewport.frame, ["normal", "wide"])) return null;
+    const typedTarget = value.kind === "interface"
+      ? ["interface.theme", "interface.new-chat-area"].includes(value.targetId)
+      : value.kind === "background"
+        ? value.targetId === "background.layer"
+        : value.targetId === "widgets.instant-prompts";
+    if (!typedTarget) return null;
+    if (value.status !== "found") {
+      return value.itemId === null && value.rect === null && value.geometry === null
+        ? {
+          status: value.status,
+          kind: value.kind,
+          targetId: value.targetId,
+          itemId: null,
+          tokenIds: [...value.tokenIds],
+          rect: null,
+          viewport: { ...value.viewport },
+          geometry: null,
+        }
+        : null;
+    }
+    if (!exactShape(value.rect, ["left", "top", "width", "height"])
+        || !inRange(value.rect.left, -10000, 10000)
+        || !inRange(value.rect.top, -10000, 10000)
+        || !inRange(value.rect.width, 0.01, 10000)
+        || !inRange(value.rect.height, 0.01, 10000)) return null;
+    if (value.kind === "interface") {
+      if (!["interface.theme", "interface.new-chat-area"].includes(value.targetId)
+          || !OVERLAY_INTERFACE_ITEMS.includes(value.itemId)
+          || (value.targetId === "interface.new-chat-area" && value.itemId !== "interface.composer")
+          || value.geometry !== null) return null;
+    } else {
+      const background = value.kind === "background";
+      if ((background && (value.targetId !== "background.layer" || !LAYER_ID_PATTERN.test(value.itemId)))
+          || (!background && (value.targetId !== "widgets.instant-prompts"
+            || !INSTANT_PROMPT_ID_PATTERN.test(value.itemId)))
+          || !exactShape(value.geometry, ["opacity", "frame", "positionX", "positionY", "scale"])
+          || !inRange(value.geometry.opacity, 0, 1)
+          || !enumValue(value.geometry.frame, ["normal", "wide"])
+          || !inRange(value.geometry.positionX, background ? -100 : -50, background ? 100 : 50)
+          || !inRange(value.geometry.positionY, background ? -100 : -50, background ? 100 : 50)
+          || !inRange(value.geometry.scale, background ? 0.25 : 0.5, background ? 3 : 1.75)) return null;
+    }
+    return {
+      status: value.status,
+      kind: value.kind,
+      targetId: value.targetId,
+      itemId: value.itemId,
+      tokenIds: [...value.tokenIds],
+      rect: { ...value.rect },
+      viewport: { ...value.viewport },
+      geometry: value.geometry ? { ...value.geometry } : null,
+    };
+  }
+
+  function normalizeOverlayMessage(value) {
+    if (!exactShape(value, ["type", "version", "session", "revision", "event", "selection"])
+        || value.type !== "aura-editor-overlay" || value.version !== 1
+        || typeof value.session !== "string" || !SESSION_PATTERN.test(value.session)
+        || !integer(value.revision, 0, 2147483647)
+        || !enumValue(value.event, ["selection", "preview", "commit"])) return null;
+    const selection = normalizeOverlaySelection(value.selection);
+    if (!selection || (["preview", "commit"].includes(value.event)
+        && (selection.status !== "found" || !["background", "widget"].includes(selection.kind)))) return null;
+    return {
+      session: value.session,
+      revision: value.revision,
+      event: value.event,
+      selection,
+    };
+  }
 
   const CAPABILITY_BRANCHES = Object.freeze(["interface", "background", "widgets"]);
   const CAPABILITY_VIEWS = Object.freeze(["new-chat", "conversation"]);
@@ -770,7 +890,7 @@
   }
 
   function normalizeInstantPrompt(value) {
-    if (!exactShape(value, ["id", "labels", "prompts", "icon", "iconPreviewUrl"])
+    if (!exactShape(value, ["id", "labels", "prompts", "icon", "iconPreviewUrl", "layout"])
         || !INSTANT_PROMPT_ID_PATTERN.test(value.id)
         || !plainRecord(value.labels) || !plainRecord(value.prompts)) return null;
     const locales = Object.keys(value.labels);
@@ -792,7 +912,26 @@
         && (typeof value.icon !== "string" || !INSTANT_PROMPT_ICON_PATTERN.test(value.icon))) return null;
     const iconPreviewUrl = normalizePreviewUrl(value.iconPreviewUrl);
     if (iconPreviewUrl === undefined || (value.icon === null) !== (iconPreviewUrl === null)) return null;
-    return { id: value.id, labels, prompts, icon: value.icon, iconPreviewUrl };
+    if (!exactShape(value.layout, ["opacity", "frames"])
+        || !inRange(value.layout.opacity, 0, 1)
+        || !exactShape(value.layout.frames, ["normal", "wide"])) return null;
+    const normalizeLayoutFrame = (frame) => exactShape(frame, ["positionX", "positionY", "scale"])
+      && inRange(frame.positionX, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX)
+      && inRange(frame.positionY, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX)
+      && inRange(frame.scale, INSTANT_PROMPT_SCALE_MIN, INSTANT_PROMPT_SCALE_MAX)
+      ? { positionX: frame.positionX, positionY: frame.positionY, scale: frame.scale }
+      : null;
+    const normal = normalizeLayoutFrame(value.layout.frames.normal);
+    const wide = normalizeLayoutFrame(value.layout.frames.wide);
+    if (!normal || !wide) return null;
+    return {
+      id: value.id,
+      labels,
+      prompts,
+      icon: value.icon,
+      iconPreviewUrl,
+      layout: { opacity: value.layout.opacity, frames: { normal, wide } },
+    };
   }
 
   function normalizeContrast(value) {
@@ -1093,7 +1232,17 @@
     const reviewPanel = editor.querySelector('[data-editor-workflow-page="review"]');
     const switchSupportedPreviewButton = document.getElementById("editor-switch-supported-preview");
     const stageRoot = document.getElementById("editor-stage");
+    const windowEditorPanel = document.querySelector(".window-editor-panel");
+    const windowEditButton = document.getElementById("stage-window-edit");
+    const windowEditStopButton = document.getElementById("stage-window-edit-stop");
+    const windowEditorStatus = document.getElementById("window-editor-status");
+    const windowEditorInspector = document.getElementById("window-editor-inspector");
+    const windowEditorTarget = document.getElementById("window-editor-target");
+    const windowEditorTokens = document.getElementById("window-editor-tokens");
     let state = null;
+    let overlayState = null;
+    let overlaySelection = null;
+    let overlayStartTimer = null;
     let cardPreviewState = null;
     const isBuiltInLayoutEdit = () => state?.editKind === "builtin-layout";
     const targetAllowedInCurrentEdit = (target) => (
@@ -1163,6 +1312,11 @@
     let changeSendRetryCount = 0;
     let patchResponseRetryCount = 0;
     let actionAfterPatch = null;
+    const overlayTransportBusy = () => Boolean(
+      pendingAction || greetingResyncPending || patchResyncPending
+      || coalescedChanges.size || changeFlushTimer || inFlightChanges.length
+      || stageKeyTimer || stageKeyPaths.size,
+    );
     const hasUnsavedEdits = () => hasUnsavedEditorWork({
       dirty: state?.dirty || greetingPreferenceDraftDirty || greetingPreferenceInputDirty
         || metadataInputDirty,
@@ -2206,6 +2360,7 @@
     };
 
     const hideEditor = (action = "") => {
+      resetOverlayUi();
       editor.hidden = true;
       studioShell?.removeAttribute("data-editor-active");
       syncBuiltInLayoutPresentation();
@@ -2515,10 +2670,59 @@
       if (!selection) return [];
       if (selection.kind === "prompt") return [...STAGE_PROMPT_PATHS];
       if (selection.kind === "greeting") return greetingStagePaths(appearance, frame);
+      if (selection.kind === "instant-prompt") {
+        const index = state?.instantPrompts?.findIndex((prompt) => prompt.id === selection.id) ?? -1;
+        if (index < 0) return [];
+        const prefix = `instantPrompts[${index}].layout.frames.${viewport}.`;
+        return [
+          `instantPrompts[${index}].layout.opacity`,
+          `${prefix}positionX`,
+          `${prefix}positionY`,
+          `${prefix}scale`,
+        ];
+      }
       const index = layerIndexForId(selection.id);
       return index < 0 ? [] : STAGE_LAYER_PATHS.map((property) => `layers[${index}].frames.${viewport}.${property}`);
     };
     const commitStagePaths = (paths) => {
+      const widgetPath = /^instantPrompts\[(\d+)]\.layout\.(?:opacity|frames\.(normal|wide)\.(?:positionX|positionY|scale))$/;
+      const widgetIndexes = new Set(paths.map((path) => widgetPath.exec(path)?.[1]).filter(Boolean));
+      if (widgetIndexes.size) {
+        for (const rawIndex of widgetIndexes) {
+          const index = Number(rawIndex);
+          const prompt = state?.instantPrompts?.[index];
+          if (!prompt) continue;
+          const layout = JSON.parse(JSON.stringify(prompt.layout));
+          let changed = false;
+          for (const path of paths) {
+            const match = widgetPath.exec(path);
+            if (!match || Number(match[1]) !== index || !stageOverrides.has(path)) continue;
+            const value = stageOverrides.get(path);
+            const saved = statePath(path);
+            if (typeof saved === "number" && Math.abs(saved - value) < 0.00005) {
+              stageOverrides.delete(path);
+              continue;
+            }
+            if (path.endsWith(".opacity")) layout.opacity = value;
+            else {
+              const property = path.split(".").at(-1);
+              layout.frames[match[2]][property] = value;
+            }
+            changed = true;
+          }
+          if (changed) {
+            queueThemeChange({
+              kind: "instant-prompt",
+              operation: "update",
+              id: prompt.id,
+              field: "layout",
+              locale: null,
+              value: layout,
+            }, { immediate: true });
+          }
+        }
+        return;
+      }
       const greetingScopes = new Map();
       for (const path of paths) {
         const match = /^shared\.greeting\.frames\.(light|dark)\.(standard|wide)\.(xRatio|yRatio|maxWidthRatio|fontSize)$/.exec(path);
@@ -2694,17 +2898,28 @@
     stageOpacityWrap.appendChild(stageOpacityInput);
     stageHud.appendChild(stageOpacityWrap);
     stageOpacityInput.addEventListener("input", () => {
-      if (isBuiltInLayoutEdit() || isBlockingAction() || stageSelection?.kind !== "layer") return;
-      const index = layerIndexForId(stageSelection.id);
+      if (isBuiltInLayoutEdit() || isBlockingAction()
+          || !["layer", "instant-prompt"].includes(stageSelection?.kind)) return;
+      const index = stageSelection.kind === "layer"
+        ? layerIndexForId(stageSelection.id)
+        : state.instantPrompts.findIndex((prompt) => prompt.id === stageSelection.id);
       if (index < 0) return;
-      setStageOverride(`layers[${index}].opacity`, stageOpacityInput.valueAsNumber / 100);
+      const path = stageSelection.kind === "layer"
+        ? `layers[${index}].opacity`
+        : `instantPrompts[${index}].layout.opacity`;
+      setStageOverride(path, stageOpacityInput.valueAsNumber / 100);
       applyStageLayout();
     });
     stageOpacityInput.addEventListener("change", () => {
-      if (isBuiltInLayoutEdit() || isBlockingAction() || stageSelection?.kind !== "layer") return;
+      if (isBuiltInLayoutEdit() || isBlockingAction()
+          || !["layer", "instant-prompt"].includes(stageSelection?.kind)) return;
+      if (stageSelection.kind === "instant-prompt") {
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === stageSelection.id);
+        if (index >= 0) commitStagePaths([`instantPrompts[${index}].layout.opacity`]);
+        return;
+      }
       const index = layerIndexForId(stageSelection.id);
-      if (index < 0) return;
-      queueStageMutations([{
+      if (index >= 0) queueStageMutations([{
         type: "set-theme-layer",
         index,
         preset: "shared",
@@ -2956,7 +3171,14 @@
       const promptCards = stageContext === "new-chat"
         ? state.instantPrompts
         : state.instantPrompts.filter((prompt) => prompt.id === selectedInstantPromptId);
+      const [widgetViewportWidth, widgetViewportHeight] = stageLogicalSize();
       stageInstantPromptRail.replaceChildren(...promptCards.map((prompt) => {
+        const promptIndex = state.instantPrompts.findIndex((entry) => entry.id === prompt.id);
+        const layoutPrefix = `instantPrompts[${promptIndex}].layout.frames.${stageViewport}.`;
+        const positionX = Number(stageValue(`${layoutPrefix}positionX`)) || 0;
+        const positionY = Number(stageValue(`${layoutPrefix}positionY`)) || 0;
+        const widgetScale = Number(stageValue(`${layoutPrefix}scale`)) || 1;
+        const widgetOpacity = Number(stageValue(`instantPrompts[${promptIndex}].layout.opacity`));
         const ticket = document.createElement("button");
         ticket.type = "button";
         ticket.className = "stage-instant-prompt-ticket";
@@ -2968,6 +3190,10 @@
           ? instantPromptPreviewState : "default";
         ticket.setAttribute("aria-pressed", String(prompt.id === selectedInstantPromptId));
         ticket.disabled = stageContext !== "new-chat";
+        ticket.style.setProperty("--stage-widget-x", `${widgetViewportWidth * positionX / 100}px`);
+        ticket.style.setProperty("--stage-widget-y", `${widgetViewportHeight * positionY / 100}px`);
+        ticket.style.setProperty("--stage-widget-scale", String(widgetScale));
+        ticket.style.opacity = String(Number.isFinite(widgetOpacity) ? widgetOpacity : 1);
         if (prompt.iconPreviewUrl) {
           const icon = document.createElement("img");
           icon.src = prompt.iconPreviewUrl;
@@ -3065,19 +3291,26 @@
       setRect(stageEdges[3], clampX(left - 4, 8), clampY(top + 12, sideLength), 8, sideLength);
       const selectionIndex = stageSelection.kind === "layer" ? layerIndexForId(stageSelection.id) : -1;
       const framePrefix = selectionIndex >= 0 ? `layers[${selectionIndex}].frames.${stageViewport}.` : "";
+      const widgetIndex = stageSelection.kind === "instant-prompt"
+        ? state.instantPrompts.findIndex((promptCard) => promptCard.id === stageSelection.id) : -1;
+      const widgetPrefix = widgetIndex >= 0
+        ? `instantPrompts[${widgetIndex}].layout.frames.${stageViewport}.` : "";
       const positionX = Number(prompt
         ? stageValue("shared.prompt.x") * 100
         : greeting ? stageValue(`${greetingStagePrefix()}xRatio`) * 100
-          : stageValue(`${framePrefix}positionX`)) || 0;
+          : widgetIndex >= 0 ? stageValue(`${widgetPrefix}positionX`)
+            : stageValue(`${framePrefix}positionX`)) || 0;
       const positionY = Number(prompt
         ? stageValue("shared.prompt.y") * 100
         : greeting ? stageValue(`${greetingStagePrefix()}yRatio`) * 100
-          : stageValue(`${framePrefix}positionY`)) || 0;
+          : widgetIndex >= 0 ? stageValue(`${widgetPrefix}positionY`)
+            : stageValue(`${framePrefix}positionY`)) || 0;
       for (const node of stageEdges) {
         const horizontal = node.dataset.side === "e" || node.dataset.side === "w";
         const value = horizontal ? positionX : positionY;
         const limit = prompt ? (horizontal ? 35 : 30)
-          : greeting ? (horizontal ? 45 : 40) : 100;
+          : greeting ? (horizontal ? 45 : 40)
+            : widgetIndex >= 0 ? INSTANT_PROMPT_POSITION_MAX : 100;
         node.setAttribute("aria-label", tr("stageMoveHandle"));
         node.setAttribute("aria-orientation", horizontal ? "horizontal" : "vertical");
         node.setAttribute("aria-valuemin", String(-limit));
@@ -3096,13 +3329,13 @@
         const value = prompt
           ? (Number(stageValue("shared.prompt.width")) || 0.4) * 100
           : greeting ? Number(stageValue(`${greetingStagePrefix()}fontSize`)) || 24
-            : (Number(stageValue(`${framePrefix}scale`)) || 1) * 100;
+            : (Number(stageValue(`${widgetIndex >= 0 ? widgetPrefix : framePrefix}scale`)) || 1) * 100;
         node.hidden = false;
         node.style.left = `${clampX(point[0], cornerTarget)}px`;
         node.style.top = `${clampY(point[1], cornerTarget)}px`;
         node.setAttribute("aria-label", tr(prompt ? "stageWidthHandle" : "stageScaleHandle"));
-        node.setAttribute("aria-valuemin", prompt ? "40" : greeting ? "24" : "25");
-        node.setAttribute("aria-valuemax", prompt ? "96" : greeting ? "72" : "300");
+        node.setAttribute("aria-valuemin", prompt ? "40" : greeting ? "24" : widgetIndex >= 0 ? "50" : "25");
+        node.setAttribute("aria-valuemax", prompt ? "96" : greeting ? "72" : widgetIndex >= 0 ? "175" : "300");
         node.setAttribute("aria-valuenow", String(Math.round(value * 100) / 100));
         node.setAttribute("aria-valuetext", `${Math.round(value * 100) / 100}%`);
       }
@@ -3110,9 +3343,11 @@
         stageOpacityWrap.hidden = true;
       } else {
         const index = layerIndexForId(stageSelection.id);
-        const opacity = Number(index < 0 ? 1 : stageValue(`layers[${index}].opacity`));
+        const opacity = Number(widgetIndex >= 0
+          ? stageValue(`instantPrompts[${widgetIndex}].layout.opacity`)
+          : index < 0 ? 1 : stageValue(`layers[${index}].opacity`));
         stageOpacityInput.value = String(Math.round((Number.isFinite(opacity) ? opacity : 1) * 100));
-        stageOpacityInput.setAttribute("aria-label", tr("layerOpacity"));
+        stageOpacityInput.setAttribute("aria-label", tr(widgetIndex >= 0 ? "overlayOpacity" : "layerOpacity"));
         stageOpacityWrap.hidden = false;
         let wrapTop = top + rect.height + 10;
         if (wrapTop + 34 > frameRect.height) wrapTop = top + rect.height - 42;
@@ -3272,6 +3507,21 @@
           stageInstantPromptRail.style.top = `${Math.max(8, rect.top - 44)}px`;
           stageInstantPromptRail.style.width = `${rect.width}px`;
           stageInstantPromptRail.style.height = "38px";
+          for (const ticket of stageInstantPromptRail.querySelectorAll(".stage-instant-prompt-ticket")) {
+            const index = state.instantPrompts.findIndex(
+              (prompt) => prompt.id === ticket.dataset.instantPromptId,
+            );
+            if (index < 0) continue;
+            const prefix = `instantPrompts[${index}].layout.frames.${stageViewport}.`;
+            const x = Number(stageValue(`${prefix}positionX`)) || 0;
+            const y = Number(stageValue(`${prefix}positionY`)) || 0;
+            const widgetScale = Number(stageValue(`${prefix}scale`)) || 1;
+            const opacity = Number(stageValue(`instantPrompts[${index}].layout.opacity`));
+            ticket.style.setProperty("--stage-widget-x", `${logicalWidth * x / 100}px`);
+            ticket.style.setProperty("--stage-widget-y", `${logicalHeight * y / 100}px`);
+            ticket.style.setProperty("--stage-widget-scale", String(widgetScale));
+            ticket.style.opacity = String(Number.isFinite(opacity) ? opacity : 1);
+          }
         }
         stagePromptSample.style.fontFamily = STAGE_FONT_STACKS[stageValue("shared.fontDisplay")]
           ?? STAGE_FONT_STACKS["system-sans"];
@@ -3440,6 +3690,212 @@
       return true;
     };
 
+    const clearOverlayStartTimer = () => {
+      if (!overlayStartTimer) return;
+      clearTimeout(overlayStartTimer);
+      overlayStartTimer = null;
+    };
+    let overlayStatusKey = "overlayIdle";
+    const overlayCopy = () => ({
+      title: tr("overlayTitle"),
+      pick: tr("overlayPick"),
+      done: tr("overlayDone"),
+      move: tr("overlayMove"),
+      scale: tr("overlayScale"),
+      opacity: tr("overlayOpacity"),
+      keyboard: tr("overlayKeyboard"),
+      selected: tr("overlaySelected"),
+      missing: tr("overlayMissing"),
+      ambiguous: tr("overlayAmbiguous"),
+    });
+    const overlayTokenSummary = (selection) => selection.tokenIds.map((token) => {
+      const value = state?.tokens?.[selectedMode]?.[token];
+      return typeof value === "string" ? `${token} ${value}` : token;
+    }).join(" · ");
+    const reflectOverlayPresentation = () => {
+      if (!windowEditorPanel) return;
+      const active = overlayState?.active === true;
+      const pending = overlayState?.pending === true;
+      const error = Boolean(overlayState?.failure) || overlayStatusKey === "overlayUnavailable";
+      windowEditorPanel.dataset.state = error ? "error" : active ? "active" : pending ? "pending" : "idle";
+      windowEditButton.hidden = active || pending;
+      windowEditStopButton.hidden = !active && !pending;
+      windowEditButton.disabled = !state || overlayTransportBusy();
+      windowEditStopButton.disabled = !state;
+      windowEditorStatus.textContent = tr(overlayStatusKey);
+      const resolved = overlaySelection?.status === "found";
+      windowEditorInspector.hidden = !resolved;
+      if (!resolved) {
+        windowEditorTarget.textContent = "";
+        windowEditorTokens.textContent = tr("overlayNoTokens");
+        return;
+      }
+      windowEditorTarget.textContent = `${overlaySelection.targetId} · ${overlaySelection.itemId}`;
+      windowEditorTokens.textContent = overlayTokenSummary(overlaySelection) || tr("overlayNoTokens");
+    };
+    const resetOverlayUi = ({ unavailable = false } = {}) => {
+      clearOverlayStartTimer();
+      overlayState = null;
+      overlaySelection = null;
+      overlayStatusKey = unavailable ? "overlayUnavailable" : "overlayIdle";
+      reflectOverlayPresentation();
+    };
+    const stopWindowEdit = () => {
+      const base = mutationBase();
+      if (!base || !send({ type: "stop-window-edit", ...base })) {
+        resetOverlayUi({ unavailable: true });
+        return false;
+      }
+      resetOverlayUi();
+      return true;
+    };
+    const startWindowEdit = () => {
+      const base = mutationBase();
+      if (!base || overlayTransportBusy() || overlayState?.active || overlayState?.pending) return false;
+      if (!send({ type: "start-window-edit", ...base, copy: overlayCopy() })) {
+        resetOverlayUi({ unavailable: true });
+        return false;
+      }
+      overlayState = { active: false, pending: true, session: base.session, revision: base.revision, failure: null };
+      overlaySelection = null;
+      overlayStatusKey = "overlayStarting";
+      reflectOverlayPresentation();
+      clearOverlayStartTimer();
+      overlayStartTimer = setTimeout(() => {
+        overlayStartTimer = null;
+        if (overlayState?.pending && !overlayState.active) resetOverlayUi({ unavailable: true });
+      }, 12000);
+      return true;
+    };
+    windowEditButton?.addEventListener("click", startWindowEdit);
+    windowEditStopButton?.addEventListener("click", stopWindowEdit);
+
+    const routeOverlaySelection = (selection) => {
+      if (selection.status !== "found") return;
+      if (selection.kind === "background") {
+        selectStageItem({ kind: "layer", id: selection.itemId }, { reveal: true });
+        return;
+      }
+      if (selection.kind === "widget") {
+        selectStageItem({ kind: "instant-prompt", id: selection.itemId }, { reveal: true });
+        return;
+      }
+      if (!setInspectorTarget(selection.targetId, { reveal: true })) return;
+      const token = selection.tokenIds.find((id) => COLOR_TOKEN_KEYS.has(id));
+      if (!token) return;
+      inspectorField = `tokens.${selectedMode}.${token}`;
+      const control = tokenGroups.querySelector(`[data-editor-token="${CSS.escape(token)}"]`);
+      const group = control?.closest("details");
+      if (group) group.open = true;
+      refreshInspectorContext();
+      if (control) requestAnimationFrame(() => revealWithinInspector(control));
+    };
+    const applyOverlayGeometry = (selection, persist) => {
+      const geometry = selection.geometry;
+      if (!geometry || !state) return false;
+      const frame = geometry.frame;
+      stageViewport = frame;
+      stagePreviewSize = [selection.viewport.width, selection.viewport.height];
+      reflectStageViewport();
+      setPreviewInputValues(...stagePreviewSize);
+      if (selection.kind === "background") {
+        const index = state.layers.findIndex((layer) => layer.id === selection.itemId);
+        if (index < 0) return false;
+        const paths = {
+          opacity: `layers[${index}].opacity`,
+          positionX: `layers[${index}].frames.${frame}.positionX`,
+          positionY: `layers[${index}].frames.${frame}.positionY`,
+          scale: `layers[${index}].frames.${frame}.scale`,
+        };
+        for (const [field, path] of Object.entries(paths)) setStageOverride(path, geometry[field]);
+        if (persist) {
+          const changes = [
+            ...(!isBuiltInLayoutEdit() ? [{
+              kind: "layer", layerId: selection.itemId, preset: "shared",
+              property: "opacity", value: geometry.opacity,
+            }] : []),
+            ...["positionX", "positionY", "scale"].map((property) => ({
+              kind: "layer", layerId: selection.itemId, preset: frame,
+              property, value: geometry[property],
+            })),
+          ];
+          queueThemeChanges(changes, { immediate: true });
+        }
+        reflectStageInputs(Object.values(paths));
+      } else if (selection.kind === "widget") {
+        if (isBuiltInLayoutEdit()) return false;
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.itemId);
+        if (index < 0) return false;
+        const prefix = `instantPrompts[${index}].layout.frames.${frame}.`;
+        const paths = {
+          opacity: `instantPrompts[${index}].layout.opacity`,
+          positionX: `${prefix}positionX`,
+          positionY: `${prefix}positionY`,
+          scale: `${prefix}scale`,
+        };
+        for (const [field, path] of Object.entries(paths)) setStageOverride(path, geometry[field]);
+        if (persist) {
+          const layout = structuredClone(state.instantPrompts[index].layout);
+          layout.opacity = geometry.opacity;
+          layout.frames[frame] = {
+            positionX: geometry.positionX,
+            positionY: geometry.positionY,
+            scale: geometry.scale,
+          };
+          queueThemeChange({
+            kind: "instant-prompt", operation: "update", id: selection.itemId,
+            field: "layout", locale: null, value: layout,
+          }, { immediate: true });
+        }
+        reflectStageInputs(Object.values(paths));
+      }
+      applyStageLayout();
+      syncStageHud();
+      refreshInspectorContext();
+      return true;
+    };
+    const receiveOverlayState = (rawState) => {
+      const normalized = normalizeOverlayState(rawState);
+      if (!normalized) return false;
+      if (normalized.session !== null && normalized.session !== state?.session) return false;
+      overlayState = normalized;
+      clearOverlayStartTimer();
+      if (normalized.failure) {
+        overlaySelection = null;
+        overlayStatusKey = "overlayUnavailable";
+      } else if (normalized.active) {
+        overlayStatusKey = "overlayActive";
+      } else if (normalized.pending) {
+        overlaySelection = null;
+        overlayStatusKey = "overlayStarting";
+      } else {
+        overlaySelection = null;
+        overlayStatusKey = "overlayIdle";
+      }
+      reflectOverlayPresentation();
+      return true;
+    };
+    const receiveOverlay = (rawMessage) => {
+      const normalized = normalizeOverlayMessage(rawMessage);
+      if (!normalized || normalized.session !== state?.session
+          || normalized.revision !== state?.revision) return false;
+      const priorSelection = overlaySelection;
+      overlaySelection = normalized.selection;
+      overlayStatusKey = normalized.selection.status === "found"
+        ? "overlaySelected"
+        : normalized.selection.status === "ambiguous" ? "overlayAmbiguous" : "overlayMissing";
+      if (normalized.event === "selection"
+          || priorSelection?.kind !== normalized.selection.kind
+          || priorSelection?.itemId !== normalized.selection.itemId) {
+        routeOverlaySelection(normalized.selection);
+      }
+      if (["preview", "commit"].includes(normalized.event)) {
+        applyOverlayGeometry(normalized.selection, normalized.event === "commit");
+      }
+      reflectOverlayPresentation();
+      return true;
+    };
+
     const stageSelectionFromNode = (node) => {
       const selection = node.dataset.stageItem === "prompt"
         ? { kind: "prompt" }
@@ -3551,7 +4007,6 @@
         itemNode.focus?.();
       }
       if (!selection || !stageSelectionAllowed(selection)) return;
-      if (selection.kind === "instant-prompt") return;
       const [logicalWidth, logicalHeight] = stageLogicalSize();
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
       const scopeRect = backgroundScopeRect(
@@ -3575,7 +4030,12 @@
       for (const path of gesturePaths) start[path] = Number(stageValue(path)) || 0;
       const targetRect = (selection.kind === "layer"
         ? stageLayerNodes.get(selection.id)?.item
-        : selection.kind === "greeting" ? stageGreetingEl : stagePromptEl)?.getBoundingClientRect();
+        : selection.kind === "greeting" ? stageGreetingEl
+          : selection.kind === "instant-prompt"
+            ? stageInstantPromptRail.querySelector(
+              `[data-instant-prompt-id="${CSS.escape(selection.id)}"]`,
+            )
+            : stagePromptEl)?.getBoundingClientRect();
       const handleKind = handle?.dataset.stageHandle;
       if (selection.kind === "layer") {
         const index = layerIndexForId(selection.id);
@@ -3584,6 +4044,9 @@
         }
       } else if (selection.kind === "prompt") {
         inspectorField = "shared.prompt";
+      } else if (selection.kind === "instant-prompt") {
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.id);
+        inspectorField = `instantPrompts[${index}].layout.frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
       } else {
         inspectorField = `${greetingStagePrefix()}xRatio`;
       }
@@ -3593,9 +4056,11 @@
         pointerId: event.pointerId,
         kind: handleKind === "scale"
           ? (selection.kind === "prompt" ? "prompt-width"
-            : selection.kind === "greeting" ? "greeting-size" : "scale")
+            : selection.kind === "greeting" ? "greeting-size"
+              : selection.kind === "instant-prompt" ? "widget-scale" : "scale")
           : selection.kind === "prompt" ? "prompt-move"
-            : selection.kind === "greeting" ? "greeting-move" : "layer-move",
+            : selection.kind === "greeting" ? "greeting-move"
+              : selection.kind === "instant-prompt" ? "widget-move" : "layer-move",
         signX: corner.includes("w") ? -1 : 1,
         signY: corner.includes("n") ? -1 : 1,
         selection,
@@ -3641,6 +4106,40 @@
         const prefix = `layers[${index}].frames.${drag.viewport}.`;
         const factor = 1 + (((drag.signX * (event.clientX - drag.startX)) + (drag.signY * (event.clientY - drag.startY))) / drag.rectSize);
         setStageOverride(`${prefix}scale`, clampNumber(drag.start[`${prefix}scale`] * factor, 0.25, 3));
+      } else if (drag.kind === "widget-move") {
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === drag.selection.id);
+        if (index < 0) return;
+        const prefix = `instantPrompts[${index}].layout.frames.${drag.viewport}.`;
+        let nextX = clampNumber(
+          drag.start[`${prefix}positionX`] + (dx / drag.mainWidth * 100),
+          INSTANT_PROMPT_POSITION_MIN,
+          INSTANT_PROMPT_POSITION_MAX,
+        );
+        let nextY = clampNumber(
+          drag.start[`${prefix}positionY`] + (dy / drag.mainHeight * 100),
+          INSTANT_PROMPT_POSITION_MIN,
+          INSTANT_PROMPT_POSITION_MAX,
+        );
+        if (!event.altKey) {
+          if (Math.abs(nextX) < 2.5) nextX = 0;
+          if (Math.abs(nextY) < 2.5) nextY = 0;
+        }
+        setStageOverride(`${prefix}positionX`, nextX);
+        setStageOverride(`${prefix}positionY`, nextY);
+      } else if (drag.kind === "widget-scale") {
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === drag.selection.id);
+        if (index < 0) return;
+        const prefix = `instantPrompts[${index}].layout.frames.${drag.viewport}.`;
+        const factor = 1 + (((drag.signX * (event.clientX - drag.startX))
+          + (drag.signY * (event.clientY - drag.startY))) / drag.rectSize);
+        setStageOverride(
+          `${prefix}scale`,
+          clampNumber(
+            drag.start[`${prefix}scale`] * factor,
+            INSTANT_PROMPT_SCALE_MIN,
+            INSTANT_PROMPT_SCALE_MAX,
+          ),
+        );
       } else if (drag.kind === "prompt-move") {
         seedNativePromptOverrides();
         let nextX = clampNumber(drag.start["shared.prompt.x"] + (dx / drag.mainWidth), -0.35, 0.35);
@@ -3683,6 +4182,7 @@
       if (!stageDrag || !event) return;
       computeStageDragOverrides(stageDrag, event);
       applyStageLayout();
+      syncStageHud();
       reflectStageInputs(stageDrag.paths);
       refreshInspectorContext();
     };
@@ -3743,7 +4243,6 @@
         reflectButtonStates();
         return;
       }
-      if (selection.kind === "instant-prompt") return;
       const step = event.shiftKey ? 5 : 1;
       const handleKind = handle?.dataset.stageHandle;
       const scaleDirection = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1
@@ -3753,7 +4252,30 @@
         setStageOverride(path, clampNumber((Number(stageValue(path)) || 0) + delta, minimum, maximum));
         changed = true;
       };
-      if (selection.kind === "layer") {
+      if (selection.kind === "instant-prompt") {
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.id);
+        if (index < 0) return;
+        const prefix = `instantPrompts[${index}].layout.frames.${stageViewport}.`;
+        if (handleKind === "scale" && scaleDirection) {
+          adjust(
+            `${prefix}scale`,
+            scaleDirection * (event.shiftKey ? 0.1 : 0.05),
+            INSTANT_PROMPT_SCALE_MIN,
+            INSTANT_PROMPT_SCALE_MAX,
+          );
+        } else if (handleKind === "move") {
+          const horizontal = handle.dataset.side === "e" || handle.dataset.side === "w";
+          if (horizontal && event.key === "ArrowLeft") adjust(`${prefix}positionX`, -step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+          else if (horizontal && event.key === "ArrowRight") adjust(`${prefix}positionX`, step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+          else if (!horizontal && event.key === "ArrowUp") adjust(`${prefix}positionY`, -step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+          else if (!horizontal && event.key === "ArrowDown") adjust(`${prefix}positionY`, step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+        } else if (event.key === "ArrowLeft") adjust(`${prefix}positionX`, -step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+        else if (event.key === "ArrowRight") adjust(`${prefix}positionX`, step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+        else if (event.key === "ArrowUp") adjust(`${prefix}positionY`, -step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+        else if (event.key === "ArrowDown") adjust(`${prefix}positionY`, step, INSTANT_PROMPT_POSITION_MIN, INSTANT_PROMPT_POSITION_MAX);
+        else if (event.key === "+" || event.key === "=") adjust(`${prefix}scale`, event.shiftKey ? 0.1 : 0.05, INSTANT_PROMPT_SCALE_MIN, INSTANT_PROMPT_SCALE_MAX);
+        else if (event.key === "-" || event.key === "_") adjust(`${prefix}scale`, event.shiftKey ? -0.1 : -0.05, INSTANT_PROMPT_SCALE_MIN, INSTANT_PROMPT_SCALE_MAX);
+      } else if (selection.kind === "layer") {
         const index = layerIndexForId(selection.id);
         if (index < 0) return;
         const prefix = `layers[${index}].frames.${stageViewport}.`;
@@ -3818,6 +4340,9 @@
         }
       } else if (selection.kind === "prompt") {
         inspectorField = "shared.prompt";
+      } else if (selection.kind === "instant-prompt") {
+        const index = state.instantPrompts.findIndex((prompt) => prompt.id === selection.id);
+        inspectorField = `instantPrompts[${index}].layout.frames.${stageViewport}.${handleKind === "scale" ? "scale" : "positionX"}`;
       } else {
         inspectorField = `${greetingStagePrefix()}xRatio`;
       }
@@ -5033,6 +5558,7 @@
         labels,
         prompts,
         icon: null,
+        layout: defaultInstantPromptLayout(),
       };
     };
     const requestInstantPromptIcon = (id) => {
@@ -5749,6 +6275,7 @@
           || (button === addLayerButton && state.layers.length >= 8)
           || button.dataset.layerBoundary === "true";
       }
+      reflectOverlayPresentation();
     };
 
     const reflect = (focusKey = null) => {
@@ -5940,6 +6467,7 @@
       const focusKey = document.activeElement?.dataset?.editorFocus ?? null;
       const entering = !state;
       if (entering) {
+        resetOverlayUi();
         const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches === true;
         selectedMode = appearance === "dark" || (appearance === "system" && prefersDark) ? "dark" : "light";
         entryAppearance = appearance;
@@ -6824,6 +7352,7 @@
     const discard = () => {
       const base = mutationBase();
       if (!base) return;
+      if (overlayState?.active || overlayState?.pending) stopWindowEdit();
       // Cancel/Back stay live while a value patch is syncing; if that patch is
       // still in flight, post() defers the discard, so schedule it to run the
       // moment the patch settles rather than dropping it silently.
@@ -6923,6 +7452,8 @@
     return Object.freeze({
       receive,
       receiveMirror,
+      receiveOverlay,
+      receiveOverlayState,
       requestDelete,
       refreshCardPreview: () => {
         if (state) reflectCardPreview();
@@ -6942,6 +7473,9 @@
     createController,
     normalizeEditorState,
     normalizeStudioStyle,
+    normalizeOverlayMessage,
+    normalizeOverlaySelection,
+    normalizeOverlayState,
     normalizeCapabilityRegistry,
     reconcileDuplicateTokenValue,
     backgroundScopeUiActive,

@@ -60,6 +60,7 @@ if ($script:BuiltInAuthoring) {
 }
 $VendorRoot = Join-Path $Root 'vendor\webview2'
 $PrepaintTemplatePath = Join-Path $Root 'assets\renderer-prepaint.js'
+$EditorOverlayTemplatePath = Join-Path $Root 'assets\editor-overlay.js'
 $DataRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\data'
 $ConfigPath = Join-Path $DataRoot 'config.json'
 $UserThemesRoot = Join-Path $DataRoot 'themes'
@@ -5659,6 +5660,28 @@ function Test-AuraUiStudioExactProperties {
   return $true
 }
 
+function Assert-AuraUiStudioInstantPromptLayout {
+  param([Parameter(Mandatory = $true)][object]$Layout)
+  if ($Layout -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Layout -Names @('opacity', 'frames')) -or
+      $Layout.frames -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Layout.frames -Names @('normal', 'wide'))) {
+    throw 'Aura Studio instant prompt layout has an invalid shape.'
+  }
+  [void](ConvertTo-AuraUiStudioNumber -Value $Layout.opacity -Minimum 0 -Maximum 1 -Label 'Instant prompt opacity')
+  foreach ($frameName in @('normal', 'wide')) {
+    $frame = $Layout.frames.$frameName
+    if ($frame -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $frame `
+          -Names @('positionX', 'positionY', 'scale'))) {
+      throw 'Aura Studio instant prompt frame has an invalid shape.'
+    }
+    [void](ConvertTo-AuraUiStudioNumber -Value $frame.positionX -Minimum -50 -Maximum 50 -Label 'Instant prompt horizontal position')
+    [void](ConvertTo-AuraUiStudioNumber -Value $frame.positionY -Minimum -50 -Maximum 50 -Label 'Instant prompt vertical position')
+    [void](ConvertTo-AuraUiStudioNumber -Value $frame.scale -Minimum 0.5 -Maximum 1.75 -Label 'Instant prompt scale')
+  }
+}
+
 function Test-AuraUiStudioMetadataText {
   param(
     [AllowNull()][object]$Value,
@@ -5946,7 +5969,7 @@ function ConvertTo-AuraUiStudioEditorState {
     foreach ($instantPrompt in $instantPrompts) {
       if ($instantPrompt -isnot [System.Management.Automation.PSCustomObject] -or
           -not (Test-AuraUiStudioExactProperties -Message $instantPrompt `
-            -Names @('id', 'labels', 'prompts', 'icon', 'iconPreviewUrl')) -or
+            -Names @('id', 'labels', 'prompts', 'icon', 'iconPreviewUrl', 'layout')) -or
           $instantPrompt.id -isnot [string] -or
           $instantPrompt.id -cnotmatch '^prompt-[a-f0-9]{32}$' -or
           -not $instantPromptIds.Add([string]$instantPrompt.id)) {
@@ -5992,6 +6015,7 @@ function ConvertTo-AuraUiStudioEditorState {
       } elseif ($null -ne $instantPrompt.iconPreviewUrl) {
         throw 'Aura Studio editor state has an unexpected instant prompt icon preview.'
       }
+      Assert-AuraUiStudioInstantPromptLayout -Layout $instantPrompt.layout
     }
     $layers = @($State.layers)
     if ($layers.Count -gt 8) { throw 'Aura Studio editor state contains too many layers.' }
@@ -6129,6 +6153,7 @@ function Update-AuraUiStudioEditorSessionTracking {
 }
 
 function Restore-AuraUiStudioPreviewState {
+  Stop-AuraUiEditorOverlay -Reason studio-closed
   if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
     try { $script:Form.TopMost = $false }
     catch { Write-AuraUiLog -Message "Aura preview topmost state could not be cleared: $($_.Exception.Message)" }
@@ -6155,6 +6180,7 @@ function Sync-AuraUiStudioEditorDraft {
     Set-AuraUiPayloadState -Payload $result.Payload
     if ($payloadChanged -and $script:WebReady -and $result.Apply -cne 'none') { Apply-AuraUiTheme }
   }
+  Request-AuraUiEditorOverlayRefresh
   return $result
 }
 
@@ -6223,6 +6249,7 @@ function Complete-AuraUiStudioEditorAction {
   }
   Send-AuraUiStudioState -Status $status `
     -Tone $(if ($succeeded) { 'ok' } else { 'error' }) -Action $Action -ActionSucceeded $succeeded
+  Request-AuraUiEditorOverlayRefresh
   # Invalid edits advance the editor revision but deliberately keep Aura on the
   # previous valid payload. Re-capture that honest last-valid result under the
   # new revision; successful applies request their capture after injection.
@@ -6243,6 +6270,449 @@ function Assert-AuraUiStudioEditorSession {
   $requestedRevision = ConvertTo-AuraUiStudioInteger -Value $Request.revision -Minimum 0 -Maximum 2147483647 -Label 'Editor revision'
   $activeRevision = ConvertTo-AuraUiStudioInteger -Value $revision -Minimum 0 -Maximum 2147483647 -Label 'Active editor revision'
   if ($requestedRevision -ne $activeRevision) { throw 'Aura Studio rejected a stale editor revision.' }
+}
+
+function Assert-AuraUiEditorOverlayCopy {
+  param([Parameter(Mandatory = $true)][object]$Copy)
+  $names = @(
+    'title', 'pick', 'done', 'move', 'scale', 'opacity', 'keyboard',
+    'selected', 'missing', 'ambiguous')
+  if ($Copy -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Copy -Names $names)) {
+    throw 'Aura window editor copy has an invalid shape.'
+  }
+  foreach ($name in $names) {
+    $value = $Copy.$name
+    if ($value -isnot [string] -or -not $value.Trim() -or $value.Length -gt 160 -or
+        $value -match '[\x00-\x1F\x7F-\x9F]') {
+      throw 'Aura window editor copy is invalid.'
+    }
+  }
+}
+
+function Test-AuraUiEditorOverlayRuntimeAvailable {
+  return $script:WebReady -and $script:PageReady -and (Get-AuraUiEnabled) -and
+    -not $script:RescueActive -and -not $script:RescueVerificationPending -and
+    $null -eq $script:RescueChallengeCandidate -and
+    $null -ne $script:WebView -and $null -ne $script:WebView.CoreWebView2 -and
+    (Test-AuraUiClaudeUri -Value $script:WebView.Source) -and
+    -not (Test-AuraUiCodeUri -Value $script:WebView.Source)
+}
+
+function Send-AuraUiEditorOverlayState {
+  param([AllowEmptyString()][string]$Error = '')
+  if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
+      $null -eq $script:StudioWebView.CoreWebView2) { return }
+  try {
+    $state = [ordered]@{
+      type = 'aura-editor-overlay-state'
+      version = 1
+      active = [bool]$script:EditorOverlayActive
+      pending = ($null -ne $script:EditorOverlayTask -or $script:EditorOverlayRefreshPending)
+      session = if ($script:EditorOverlaySession) { [string]$script:EditorOverlaySession } else { $null }
+      revision = [long]$script:EditorOverlayRevision
+      error = if ($Error) { $Error } else { $null }
+    }
+    $script:StudioWebView.CoreWebView2.PostWebMessageAsJson(
+      ($state | ConvertTo-Json -Depth 4 -Compress))
+  } catch {
+    Write-AuraUiLog -Message 'Aura window editor state could not be sent to Studio.'
+  }
+}
+
+function New-AuraUiEditorOverlaySource {
+  $active = (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
+  $session = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session')
+  $revision = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('revision')
+  if (-not $active -or $session -isnot [string] -or
+      -not [string]::Equals($session, [string]$script:EditorOverlaySession, [StringComparison]::Ordinal)) {
+    throw 'Aura window editor session is no longer active.'
+  }
+  $script:EditorOverlayRevision = ConvertTo-AuraUiStudioInteger `
+    -Value $revision -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision'
+  Assert-AuraUiEditorOverlayCopy -Copy $script:EditorOverlayCopy
+  $layers = @($script:StudioEditorState.layers | ForEach-Object {
+    [ordered]@{
+      id = [string]$_.id
+      opacity = [double]$_.opacity
+      frames = [ordered]@{
+        normal = [ordered]@{
+          positionX = [double]$_.frames.normal.positionX
+          positionY = [double]$_.frames.normal.positionY
+          scale = [double]$_.frames.normal.scale
+        }
+        wide = [ordered]@{
+          positionX = [double]$_.frames.wide.positionX
+          positionY = [double]$_.frames.wide.positionY
+          scale = [double]$_.frames.wide.scale
+        }
+      }
+    }
+  })
+  $widgets = @($script:StudioEditorState.instantPrompts | ForEach-Object {
+    Assert-AuraUiStudioInstantPromptLayout -Layout $_.layout
+    [ordered]@{
+      id = [string]$_.id
+      opacity = [double]$_.layout.opacity
+      frames = [ordered]@{
+        normal = [ordered]@{
+          positionX = [double]$_.layout.frames.normal.positionX
+          positionY = [double]$_.layout.frames.normal.positionY
+          scale = [double]$_.layout.frames.normal.scale
+        }
+        wide = [ordered]@{
+          positionX = [double]$_.layout.frames.wide.positionX
+          positionY = [double]$_.layout.frames.wide.positionY
+          scale = [double]$_.layout.frames.wide.scale
+        }
+      }
+    }
+  })
+  $script:EditorOverlayNonce = [Guid]::NewGuid().ToString('N').ToLowerInvariant()
+  $configuration = [ordered]@{
+    version = 1
+    session = [string]$script:EditorOverlaySession
+    revision = [long]$script:EditorOverlayRevision
+    nonce = [string]$script:EditorOverlayNonce
+    copy = $script:EditorOverlayCopy
+    layers = $layers
+    widgets = $widgets
+  }
+  $template = [IO.File]::ReadAllText($EditorOverlayTemplatePath, [Text.Encoding]::UTF8)
+  $placeholder = '__AURA_EDITOR_OVERLAY_CONFIG__'
+  if (($template.Length -gt 131072) -or
+      ([regex]::Matches($template, [regex]::Escape($placeholder))).Count -ne 1) {
+    throw 'Aura window editor template has an invalid compilation boundary.'
+  }
+  $source = $template.Replace(
+    $placeholder,
+    ($configuration | ConvertTo-Json -Depth 8 -Compress))
+  if ($source.Contains($placeholder)) {
+    throw 'Aura window editor template was not fully compiled.'
+  }
+  return $source
+}
+
+function Start-AuraUiEditorOverlayTask {
+  if ($null -ne $script:EditorOverlayTask -or $null -ne $script:ScriptTask) { return }
+  if ($script:EditorOverlayCleanupPending) {
+    if (-not (Test-AuraUiEditorOverlayRuntimeAvailable)) {
+      $script:EditorOverlayCleanupPending = $false
+      return
+    }
+    $cleanup = '(() => { const r=document.getElementById("claude-aura-editor-overlay"),s=window.__CLAUDE_AURA_EDITOR_OVERLAY__; if(r&&(r.getAttribute("data-claude-aura-editor-overlay")!=="true"||s?.root!==r||typeof s.stop!=="function"))return false; s?.stop?.("host",false); return !document.getElementById("claude-aura-editor-overlay"); })()'
+    $script:EditorOverlayTaskKind = 'Cleanup'
+    $script:EditorOverlayTaskGeneration = [long]$script:EditorOverlayGeneration
+    $script:EditorOverlayTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($cleanup)
+    return
+  }
+  if (-not $script:EditorOverlayDesired -or -not $script:EditorOverlayRefreshPending) { return }
+  if (-not (Test-AuraUiEditorOverlayRuntimeAvailable)) {
+    Stop-AuraUiEditorOverlay -Reason unavailable
+    Send-AuraUiEditorOverlayState -Error 'unavailable'
+    return
+  }
+  $source = New-AuraUiEditorOverlaySource
+  $script:EditorOverlayRefreshPending = $false
+  $script:EditorOverlayActive = $false
+  $script:EditorOverlayLastSequence = [long]0
+  $script:EditorOverlayTaskKind = 'Inject'
+  $script:EditorOverlayTaskGeneration = [long]$script:EditorOverlayGeneration
+  $script:EditorOverlayTask = $script:WebView.CoreWebView2.ExecuteScriptAsync($source)
+  Send-AuraUiEditorOverlayState
+}
+
+function Stop-AuraUiEditorOverlay {
+  param([ValidateSet(
+    'done', 'escape', 'host', 'navigation', 'studio-closed', 'editor-ended',
+    'disabled', 'unavailable', 'replacement')][string]$Reason = 'host')
+  $wasRequested = $script:EditorOverlayDesired -or $script:EditorOverlayActive -or
+    $null -ne $script:EditorOverlayTask
+  $script:EditorOverlayDesired = $false
+  $script:EditorOverlayActive = $false
+  $script:EditorOverlayRefreshPending = $false
+  $script:EditorOverlayCleanupPending = $wasRequested
+  $script:EditorOverlayGeneration++
+  $script:EditorOverlaySession = $null
+  $script:EditorOverlayRevision = [long]-1
+  $script:EditorOverlayNonce = $null
+  $script:EditorOverlayCopy = $null
+  $script:EditorOverlayLastSequence = [long]0
+  if ($null -eq $script:EditorOverlayTask) { Start-AuraUiEditorOverlayTask }
+  Send-AuraUiEditorOverlayState
+}
+
+function Request-AuraUiEditorOverlayRefresh {
+  if (-not $script:EditorOverlayDesired) { return }
+  $active = (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -eq $true
+  $session = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session')
+  if (-not $active -or $session -isnot [string] -or
+      -not [string]::Equals($session, [string]$script:EditorOverlaySession, [StringComparison]::Ordinal)) {
+    Stop-AuraUiEditorOverlay -Reason editor-ended
+    return
+  }
+  $script:EditorOverlayRevision = ConvertTo-AuraUiStudioInteger `
+    -Value (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('revision')) `
+    -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision'
+  $script:EditorOverlayGeneration++
+  $script:EditorOverlayActive = $false
+  $script:EditorOverlayRefreshPending = $true
+  if ($null -eq $script:EditorOverlayTask) { Start-AuraUiEditorOverlayTask }
+}
+
+function Invoke-AuraUiStartEditorOverlay {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  Assert-AuraUiEditorOverlayCopy -Copy $Request.copy
+  if (-not (Test-AuraUiEditorOverlayRuntimeAvailable)) {
+    throw 'Aura window editing is unavailable on the current page.'
+  }
+  $script:EditorOverlayDesired = $true
+  $script:EditorOverlayActive = $false
+  $script:EditorOverlaySession = [string]$Request.session
+  $script:EditorOverlayRevision = [long]$Request.revision
+  $script:EditorOverlayCopy = $Request.copy
+  $script:EditorOverlayGeneration++
+  $script:EditorOverlayRefreshPending = $true
+  $script:EditorOverlayCleanupPending = $false
+  Start-AuraUiEditorOverlayTask
+  Show-AuraUiMain
+}
+
+function Invoke-AuraUiStopEditorOverlay {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  $activeSession = Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('session')
+  if ($Request.session -isnot [string] -or $activeSession -isnot [string] -or
+      -not [string]::Equals([string]$Request.session, [string]$activeSession, [StringComparison]::Ordinal)) {
+    throw 'Aura window editor stop came from a different session.'
+  }
+  [void](ConvertTo-AuraUiStudioInteger -Value $Request.revision -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision')
+  Stop-AuraUiEditorOverlay -Reason done
+}
+
+function Update-AuraUiEditorOverlay {
+  if ($null -eq $script:EditorOverlayTask) {
+    Start-AuraUiEditorOverlayTask
+    return
+  }
+  if (-not $script:EditorOverlayTask.IsCompleted) { return }
+  $task = $script:EditorOverlayTask
+  $kind = [string]$script:EditorOverlayTaskKind
+  $generation = [long]$script:EditorOverlayTaskGeneration
+  $script:EditorOverlayTask = $null
+  $script:EditorOverlayTaskKind = $null
+  $script:EditorOverlayTaskGeneration = [long]-1
+  $succeeded = $false
+  try {
+    $result = $task.GetAwaiter().GetResult()
+    $succeeded = $result -match '^\s*true\s*$'
+  } catch {
+    Write-AuraUiLog -Message 'Aura window editor script did not complete.'
+  }
+  if ($kind -ceq 'Inject') {
+    $current = $generation -eq $script:EditorOverlayGeneration -and
+      $script:EditorOverlayDesired
+    $script:EditorOverlayActive = $current -and $succeeded
+    if (-not $script:EditorOverlayActive) {
+      $script:EditorOverlayCleanupPending = $true
+      if ($current) {
+        $script:EditorOverlayDesired = $false
+        Send-AuraUiEditorOverlayState -Error 'injection-failed'
+      }
+    }
+  } elseif ($kind -ceq 'Cleanup') {
+    $script:EditorOverlayCleanupPending = -not $succeeded -and
+      (Test-AuraUiEditorOverlayRuntimeAvailable)
+  }
+  Send-AuraUiEditorOverlayState
+  Start-AuraUiEditorOverlayTask
+}
+
+function Assert-AuraUiEditorOverlayViewport {
+  param([Parameter(Mandatory = $true)][object]$Viewport)
+  if ($Viewport -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Viewport `
+        -Names @('width', 'height', 'frame')) -or
+      $Viewport.frame -isnot [string] -or $Viewport.frame -cnotin @('normal', 'wide')) {
+    throw 'Aura window editor viewport is invalid.'
+  }
+  [void](ConvertTo-AuraUiStudioInteger -Value $Viewport.width -Minimum 1 -Maximum 10000 -Label 'Aura window editor viewport width')
+  [void](ConvertTo-AuraUiStudioInteger -Value $Viewport.height -Minimum 1 -Maximum 10000 -Label 'Aura window editor viewport height')
+}
+
+function Assert-AuraUiEditorOverlaySelection {
+  param([Parameter(Mandatory = $true)][object]$Selection)
+  if ($Selection -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Selection -Names @(
+        'status', 'kind', 'targetId', 'itemId', 'tokenIds', 'rect', 'viewport', 'geometry')) -or
+      $Selection.status -isnot [string] -or
+      $Selection.status -cnotin @('found', 'missing', 'ambiguous') -or
+      $Selection.kind -isnot [string] -or
+      $Selection.kind -cnotin @('interface', 'background', 'widget') -or
+      $Selection.targetId -isnot [string] -or
+      $Selection.targetId -cnotin @(
+        'interface.theme', 'interface.new-chat-area', 'background.layer',
+        'widgets.instant-prompts')) {
+    throw 'Aura window editor selection has an invalid shape.'
+  }
+  $typedTarget = switch -CaseSensitive ($Selection.kind) {
+    'interface' { $Selection.targetId -in @('interface.theme', 'interface.new-chat-area'); break }
+    'background' { $Selection.targetId -ceq 'background.layer'; break }
+    'widget' { $Selection.targetId -ceq 'widgets.instant-prompts'; break }
+    default { $false; break }
+  }
+  if (-not $typedTarget) { throw 'Aura window editor target does not match its capability kind.' }
+  Assert-AuraUiEditorOverlayViewport -Viewport $Selection.viewport
+  if ($Selection.tokenIds -isnot [System.Array]) {
+    throw 'Aura window editor token ids must be an array.'
+  }
+  $tokenIds = @($Selection.tokenIds)
+  if ($tokenIds.Count -gt 6 -or
+      @($tokenIds | Where-Object {
+        $_ -isnot [string] -or $_ -cnotin @('canvas', 'sidebar', 'surface', 'text', 'accent', 'border')
+      }).Count -gt 0 -or
+      @($tokenIds | Select-Object -Unique).Count -ne $tokenIds.Count) {
+    throw 'Aura window editor token ids are invalid.'
+  }
+  if ($Selection.status -cne 'found') {
+    if ($null -ne $Selection.itemId -or $null -ne $Selection.rect -or
+        $null -ne $Selection.geometry) {
+      throw 'Aura window editor unresolved selection exposed target details.'
+    }
+    return
+  }
+  if ($Selection.rect -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Selection.rect `
+        -Names @('left', 'top', 'width', 'height'))) {
+    throw 'Aura window editor selection rectangle is invalid.'
+  }
+  foreach ($name in @('left', 'top', 'width', 'height')) {
+    $minimum = if ($name -in @('width', 'height')) { 0.01 } else { -10000 }
+    [void](ConvertTo-AuraUiStudioNumber -Value $Selection.rect.$name `
+      -Minimum $minimum -Maximum 10000 -Label "Aura window editor rectangle $name")
+  }
+  if ($Selection.kind -ceq 'interface') {
+    if ($Selection.targetId -cnotin @('interface.theme', 'interface.new-chat-area') -or
+        $Selection.itemId -isnot [string] -or
+        $Selection.itemId -cnotin @(
+          'interface.sidebar', 'interface.composer', 'interface.card',
+          'interface.dialog', 'interface.canvas') -or
+        ($Selection.targetId -ceq 'interface.new-chat-area' -and
+          $Selection.itemId -cne 'interface.composer') -or
+        $null -ne $Selection.geometry) {
+      throw 'Aura window editor interface target is invalid.'
+    }
+    return
+  }
+  if ($Selection.kind -ceq 'background') {
+    if ($Selection.targetId -cne 'background.layer' -or
+        $Selection.itemId -isnot [string] -or
+        $Selection.itemId -cnotmatch '^layer-[a-f0-9]{32}$' -or
+        @($script:StudioEditorState.layers | Where-Object {
+          [string]::Equals([string]$_.id, [string]$Selection.itemId, [StringComparison]::Ordinal)
+        }).Count -ne 1) {
+      throw 'Aura window editor background target is invalid.'
+    }
+  } elseif ($Selection.targetId -cne 'widgets.instant-prompts' -or
+      $Selection.itemId -isnot [string] -or
+      $Selection.itemId -cnotmatch '^prompt-[a-f0-9]{32}$' -or
+      @($script:StudioEditorState.instantPrompts | Where-Object {
+        [string]::Equals([string]$_.id, [string]$Selection.itemId, [StringComparison]::Ordinal)
+      }).Count -ne 1) {
+    throw 'Aura window editor widget target is invalid.'
+  }
+  $geometry = $Selection.geometry
+  if ($geometry -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $geometry `
+        -Names @('opacity', 'frame', 'positionX', 'positionY', 'scale')) -or
+      $geometry.frame -isnot [string] -or $geometry.frame -cnotin @('normal', 'wide')) {
+    throw 'Aura window editor geometry is invalid.'
+  }
+  [void](ConvertTo-AuraUiStudioNumber -Value $geometry.opacity -Minimum 0 -Maximum 1 -Label 'Aura window editor opacity')
+  $positionMinimum = if ($Selection.kind -ceq 'background') { -100 } else { -50 }
+  $positionMaximum = if ($Selection.kind -ceq 'background') { 100 } else { 50 }
+  $scaleMinimum = if ($Selection.kind -ceq 'background') { 0.25 } else { 0.5 }
+  $scaleMaximum = if ($Selection.kind -ceq 'background') { 3 } else { 1.75 }
+  [void](ConvertTo-AuraUiStudioNumber -Value $geometry.positionX -Minimum $positionMinimum -Maximum $positionMaximum -Label 'Aura window editor horizontal position')
+  [void](ConvertTo-AuraUiStudioNumber -Value $geometry.positionY -Minimum $positionMinimum -Maximum $positionMaximum -Label 'Aura window editor vertical position')
+  [void](ConvertTo-AuraUiStudioNumber -Value $geometry.scale -Minimum $scaleMinimum -Maximum $scaleMaximum -Label 'Aura window editor scale')
+}
+
+function Invoke-AuraUiEditorOverlayMessage {
+  param(
+    [Parameter(Mandatory = $true)][string]$Json,
+    [Parameter(Mandatory = $true)][string]$Source
+  )
+  if ($Json.Length -gt 16384 -or -not $script:EditorOverlayDesired) {
+    throw 'Aura window editor message is unavailable.'
+  }
+  try { $sourceUri = [Uri]$Source } catch { throw 'Aura window editor source is invalid.' }
+  if (-not $sourceUri.IsAbsoluteUri -or $sourceUri.Scheme -cne [Uri]::UriSchemeHttps -or
+      $sourceUri.UserInfo -or -not $sourceUri.IsDefaultPort -or
+      $sourceUri.Host -cnotin @('claude.ai', 'claude.com') -or
+      (Test-AuraUiCodeUri -Value $sourceUri)) {
+    throw 'Aura window editor source is not allowed.'
+  }
+  try { $message = $Json | ConvertFrom-Json } catch { throw 'Aura window editor message is invalid JSON.' }
+  if ($message -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $message -Names @(
+        'type', 'version', 'session', 'revision', 'nonce', 'sequence', 'event', 'payload')) -or
+      $message.type -cne 'aura-editor-overlay' -or $message.version -ne 1 -or
+      $message.session -isnot [string] -or
+      -not [string]::Equals([string]$message.session, [string]$script:EditorOverlaySession, [StringComparison]::Ordinal) -or
+      $message.nonce -isnot [string] -or
+      -not [string]::Equals([string]$message.nonce, [string]$script:EditorOverlayNonce, [StringComparison]::Ordinal) -or
+      $message.event -isnot [string] -or
+      $message.event -cnotin @('ready', 'selection', 'preview', 'commit', 'stop')) {
+    throw 'Aura window editor message envelope is invalid.'
+  }
+  $revision = ConvertTo-AuraUiStudioInteger -Value $message.revision -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision'
+  if ($revision -ne $script:EditorOverlayRevision) {
+    throw 'Aura window editor rejected a stale revision.'
+  }
+  $sequence = ConvertTo-AuraUiStudioInteger -Value $message.sequence -Minimum 1 -Maximum 2147483647 -Label 'Aura window editor sequence'
+  if ($sequence -le $script:EditorOverlayLastSequence) {
+    throw 'Aura window editor rejected an out-of-order message.'
+  }
+  $script:EditorOverlayLastSequence = [long]$sequence
+  if ($message.event -ceq 'ready') {
+    if ($message.payload -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $message.payload -Names @('viewport'))) {
+      throw 'Aura window editor ready message is invalid.'
+    }
+    Assert-AuraUiEditorOverlayViewport -Viewport $message.payload.viewport
+    $script:EditorOverlayActive = $true
+    Send-AuraUiEditorOverlayState
+    return
+  }
+  if ($message.event -ceq 'stop') {
+    if ($message.payload -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $message.payload -Names @('reason')) -or
+        $message.payload.reason -isnot [string] -or
+        $message.payload.reason -cnotin @('done', 'escape')) {
+      throw 'Aura window editor stop message is invalid.'
+    }
+    Stop-AuraUiEditorOverlay -Reason ([string]$message.payload.reason)
+    return
+  }
+  Assert-AuraUiEditorOverlaySelection -Selection $message.payload
+  if ($message.event -in @('preview', 'commit') -and
+      ($message.payload.status -cne 'found' -or
+        $message.payload.kind -notin @('background', 'widget'))) {
+    throw 'Aura window editor geometry event target is invalid.'
+  }
+  if ($script:StudioReady -and $null -ne $script:StudioWebView.CoreWebView2) {
+    $forward = [ordered]@{
+      type = 'aura-editor-overlay'
+      version = 1
+      session = [string]$message.session
+      revision = [long]$revision
+      event = [string]$message.event
+      selection = $message.payload
+    }
+    $script:StudioWebView.CoreWebView2.PostWebMessageAsJson(
+      ($forward | ConvertTo-Json -Depth 8 -Compress))
+  }
 }
 
 function Get-AuraUiStudioKnownTheme {
@@ -8357,6 +8827,7 @@ function Invoke-AuraUiSetEnabled {
     Apply-AuraUiTheme
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
   } else {
+    Stop-AuraUiEditorOverlay -Reason disabled
     Stop-AuraUiLauncherLayoutProbe
     Update-AuraUiLauncherPosition
     $cleanup = '(() => { const state = window.__CLAUDE_AURA_STATE__; if (state?.cleanup) return state.cleanup(); window.__CLAUDE_AURA_DISABLED__ = true; return true; })()'
@@ -8741,7 +9212,7 @@ function Assert-AuraUiStudioEditorMessage {
               if ($null -ne $change.field -or $null -ne $change.locale -or
                   $card -isnot [System.Management.Automation.PSCustomObject] -or
                   -not (Test-AuraUiStudioExactProperties -Message $card `
-                    -Names @('id', 'labels', 'prompts', 'icon')) -or
+                    -Names @('id', 'labels', 'prompts', 'icon', 'layout')) -or
                   $card.id -isnot [string] -or
                   -not [string]::Equals([string]$card.id, [string]$change.id, [StringComparison]::Ordinal)) {
                 throw 'Aura Studio instant prompt add is invalid.'
@@ -8776,9 +9247,17 @@ function Assert-AuraUiStudioEditorMessage {
                       $card.icon -cnotmatch '^artwork/layer-[a-f0-9]{32}\.webp$'))) {
                 throw 'Aura Studio instant prompt card is invalid.'
               }
+              Assert-AuraUiStudioInstantPromptLayout -Layout $card.layout
               break
             }
             if ($change.operation -ceq 'update') {
+              if ($change.field -ceq 'layout') {
+                if ($null -ne $change.locale) {
+                  throw 'Aura Studio instant prompt layout locale must be null.'
+                }
+                Assert-AuraUiStudioInstantPromptLayout -Layout $change.value
+                break
+              }
               if ($change.field -isnot [string] -or $change.field -cnotin @('label', 'prompt') -or
                   $change.locale -isnot [string] -or $change.locale -cnotin $StudioLocaleIds -or
                   $change.value -isnot [string] -or -not $change.value.Trim()) {
@@ -9008,6 +9487,8 @@ function Get-AuraUiStudioMessage {
       break
     }
     'reset-greeting' { 'type'; 'session'; 'revision'; break }
+    'start-window-edit' { 'type'; 'session'; 'revision'; 'copy'; break }
+    'stop-window-edit' { 'type'; 'session'; 'revision'; break }
     'set-aura-preview' { 'type'; 'size'; 'request'; break }
     'set-aura-topmost' { 'type'; 'enabled'; break }
     'prompt-shelf-read' { 'type'; 'version'; 'requestId'; break }
@@ -9061,6 +9542,16 @@ function Get-AuraUiStudioMessage {
     if ($message.theme -isnot [string] -or $message.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
       throw 'Terminal theme export id is invalid.'
     }
+  }
+  if ($type -in @('start-window-edit', 'stop-window-edit')) {
+    if ($sourceUri.AbsolutePath -cne '/index.html' -or
+        -not (Test-AuraUiStudioDocumentUri -Uri $sourceUri -AllowFragment) -or
+        $message.session -isnot [string] -or
+        $message.session -cnotmatch '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$') {
+      throw 'Aura window editor Studio message is invalid.'
+    }
+    [void](ConvertTo-AuraUiStudioInteger -Value $message.revision -Minimum 0 -Maximum 2147483647 -Label 'Aura window editor revision')
+    if ($type -ceq 'start-window-edit') { Assert-AuraUiEditorOverlayCopy -Copy $message.copy }
   }
   if ($type -in @(
       'set-personal-wordmark',
@@ -9202,6 +9693,8 @@ function Invoke-AuraUiStudioMessage {
       break
     }
     'refresh-aura-mirror' { Request-AuraUiMirror; break }
+    'start-window-edit' { Invoke-AuraUiStartEditorOverlay -Request $message; break }
+    'stop-window-edit' { Invoke-AuraUiStopEditorOverlay -Request $message; break }
     'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
     'import-theme' {
       [void](Invoke-AuraUiImportTheme -Owner $script:StudioForm)
@@ -9279,6 +9772,7 @@ function Register-AuraUiPendingTaskCompletions {
       $script:MirrorProbeTask,
       $script:GreetingProbeTask,
       $script:LauncherProbeTask,
+      $script:EditorOverlayTask,
       $promptShelfTask,
       $script:DraftHandoffAcceptTask,
       $draftReadTask,
@@ -9528,6 +10022,8 @@ $script:StudioMessageTypes = @(
   'delete-user-theme',
   'set-greeting-phrases',
   'reset-greeting',
+  'start-window-edit',
+  'stop-window-edit',
   'set-aura-preview',
   'set-aura-topmost',
   'refresh-aura-mirror',
@@ -9542,6 +10038,19 @@ $script:StudioMessageTypes = @(
 $script:StudioEditorState = [ordered]@{ active = $false }
 $script:StudioEditorTrackedSession = $null
 $script:StudioEditorEntryAppearance = $null
+$script:EditorOverlayDesired = $false
+$script:EditorOverlayActive = $false
+$script:EditorOverlaySession = $null
+$script:EditorOverlayRevision = [long]-1
+$script:EditorOverlayNonce = $null
+$script:EditorOverlayCopy = $null
+$script:EditorOverlayGeneration = [long]0
+$script:EditorOverlayTask = $null
+$script:EditorOverlayTaskKind = $null
+$script:EditorOverlayTaskGeneration = [long]-1
+$script:EditorOverlayRefreshPending = $false
+$script:EditorOverlayCleanupPending = $false
+$script:EditorOverlayLastSequence = [long]0
 $script:StudioForm = $null
 $script:StudioWebView = $null
 $script:StudioEnsureTask = $null
@@ -10855,6 +11364,7 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_NavigationStarting({
           param($sender, $eventArgs)
+          Stop-AuraUiEditorOverlay -Reason navigation
           Advance-AuraPromptShelfPageEpoch
           Stop-AuraUiLauncherLayoutProbe
           if ($script:PageReady) {
@@ -10886,6 +11396,18 @@ public static class AuraUiAsyncDispatch {
             Hide-AuraUiLoading
           } else {
             Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
+          }
+        })
+        $core.add_WebMessageReceived({
+          param($sender, $eventArgs)
+          try {
+            Invoke-AuraUiEditorOverlayMessage `
+              -Json $eventArgs.WebMessageAsJson `
+              -Source $eventArgs.Source
+          } catch {
+            # Never log message bodies, source URLs, nonces, or selected page
+            # details from the live Claude document.
+            Write-AuraUiLog -Message 'Aura window editor message was rejected.'
           }
         })
         $core.add_DOMContentLoaded({
@@ -11032,12 +11554,14 @@ public static class AuraUiAsyncDispatch {
         # source or history transition; Request-AuraUiMirror coalesces bursts
         # and keeps its existing editor-session/generation guards.
         $core.add_SourceChanged({
+          Stop-AuraUiEditorOverlay -Reason navigation
           Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
           Request-AuraUiGreetingProbe
           Request-AuraUiLauncherLayoutProbe
         })
         $core.add_HistoryChanged({
+          Stop-AuraUiEditorOverlay -Reason navigation
           Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
           Request-AuraUiGreetingProbe
@@ -11242,6 +11766,7 @@ public static class AuraUiAsyncDispatch {
         }
       }
       Complete-AuraPromptShelfInsertTask
+      Update-AuraUiEditorOverlay
       Update-AuraUiMirror
       Update-AuraUiGreetingProbe
       Update-AuraUiLauncherLayoutProbe
@@ -11333,6 +11858,7 @@ public static class AuraUiAsyncDispatch {
       Update-AuraUiLauncherPosition
       return
     }
+    Stop-AuraUiEditorOverlay -Reason host
     Restore-AuraUiStudioPreviewState
     $script:Closing = $true
     Dispose-AuraUiEventDispatch

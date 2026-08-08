@@ -16,7 +16,12 @@ import {
   GREETING_FONT_WEIGHTS,
   GREETING_MARK_SOURCES,
   HEX_COLOR,
+  DEFAULT_INSTANT_PROMPT_LAYOUT,
   INSTANT_PROMPT_LABEL_MAX_CHARS,
+  INSTANT_PROMPT_POSITION_MAX,
+  INSTANT_PROMPT_POSITION_MIN,
+  INSTANT_PROMPT_SCALE_MAX,
+  INSTANT_PROMPT_SCALE_MIN,
   INSTANT_PROMPT_TEXT_MAX_CHARS,
   LEGACY_REQUIRED_TOKENS,
   MAX_CHROME_PAYLOAD_BYTES,
@@ -1108,7 +1113,10 @@ export function validateInstantPrompts(value, label = "instantPrompts") {
   const ids = new Set();
   return value.map((card, index) => {
     const cardLabel = `${label}[${index}]`;
-    assertExactKeys(card, ["id", "labels", "prompts", "icon"], cardLabel);
+    const cardKeys = Object.hasOwn(card ?? {}, "layout")
+      ? ["id", "labels", "prompts", "icon", "layout"]
+      : ["id", "labels", "prompts", "icon"];
+    assertExactKeys(card, cardKeys, cardLabel);
     if (typeof card.id !== "string" || !STUDIO_INSTANT_PROMPT_ID_PATTERN.test(card.id)) {
       throw new Error(`${cardLabel}.id must be prompt- followed by 32 lowercase hexadecimal characters`);
     }
@@ -1152,7 +1160,40 @@ export function validateInstantPrompts(value, label = "instantPrompts") {
         && (typeof card.icon !== "string" || !STUDIO_ARTWORK_PATH_PATTERN.test(card.icon))) {
       throw new Error(`${cardLabel}.icon must be null or artwork/layer-<32 lowercase hex>.webp`);
     }
-    return { id: card.id, labels, prompts, icon: card.icon };
+    const sourceLayout = card.layout ?? DEFAULT_INSTANT_PROMPT_LAYOUT;
+    assertExactKeys(sourceLayout, ["opacity", "frames"], `${cardLabel}.layout`);
+    assertExactKeys(sourceLayout.frames, ["normal", "wide"], `${cardLabel}.layout.frames`);
+    const validateFrame = (frame, frameLabel) => {
+      assertExactKeys(frame, ["positionX", "positionY", "scale"], frameLabel);
+      return {
+        positionX: strictNumber(
+          frame.positionX,
+          `${frameLabel}.positionX`,
+          INSTANT_PROMPT_POSITION_MIN,
+          INSTANT_PROMPT_POSITION_MAX,
+        ),
+        positionY: strictNumber(
+          frame.positionY,
+          `${frameLabel}.positionY`,
+          INSTANT_PROMPT_POSITION_MIN,
+          INSTANT_PROMPT_POSITION_MAX,
+        ),
+        scale: strictNumber(
+          frame.scale,
+          `${frameLabel}.scale`,
+          INSTANT_PROMPT_SCALE_MIN,
+          INSTANT_PROMPT_SCALE_MAX,
+        ),
+      };
+    };
+    const layout = {
+      opacity: strictNumber(sourceLayout.opacity, `${cardLabel}.layout.opacity`, 0, 1),
+      frames: {
+        normal: validateFrame(sourceLayout.frames.normal, `${cardLabel}.layout.frames.normal`),
+        wide: validateFrame(sourceLayout.frames.wide, `${cardLabel}.layout.frames.wide`),
+      },
+    };
+    return { id: card.id, labels, prompts, icon: card.icon, layout };
   });
 }
 

@@ -61,10 +61,19 @@ export function createInstantPromptController(document, window, settings = {}) {
     next.setAttribute("role", "group");
     for (const card of cards) {
       if (!Array.isArray(card) || card.length < 4) continue;
-      const [id, label, , iconIndex] = card;
+      const [id, label, , iconIndex, layout] = card;
       const button = document.createElement("button");
       button.setAttribute("type", "button");
       button.setAttribute(CARD_ATTRIBUTE, id);
+      const frame = window.innerWidth >= 1440 ? "wide" : "normal";
+      const offset = frame === "wide" ? 4 : 1;
+      const values = Array.isArray(layout) && layout.length === 7
+        ? layout : [1, 0, 0, 1, 0, 0, 1];
+      button.setAttribute("data-claude-aura-widget-frame", frame);
+      button.style?.setProperty?.("--aura-widget-opacity", String(values[0]));
+      button.style?.setProperty?.("--aura-widget-x", `${values[offset]}vw`);
+      button.style?.setProperty?.("--aura-widget-y", `${values[offset + 1]}vh`);
+      button.style?.setProperty?.("--aura-widget-scale", String(values[offset + 2]));
       if (Number.isInteger(iconIndex) && typeof artworkUrls[iconIndex] === "string") {
         const icon = document.createElement("img");
         icon.setAttribute("src", artworkUrls[iconIndex]);
@@ -94,6 +103,18 @@ export function createInstantPromptController(document, window, settings = {}) {
     }
     editor = found.editor;
     if (!block) block = build();
+    const frame = window.innerWidth >= 1440 ? "wide" : "normal";
+    const offset = frame === "wide" ? 4 : 1;
+    for (const button of block.children ?? []) {
+      const card = cards.find((entry) => entry?.[0] === button.getAttribute?.(CARD_ATTRIBUTE));
+      const values = Array.isArray(card?.[4]) && card[4].length === 7
+        ? card[4] : [1, 0, 0, 1, 0, 0, 1];
+      button.setAttribute?.("data-claude-aura-widget-frame", frame);
+      button.style?.setProperty?.("--aura-widget-opacity", String(values[0]));
+      button.style?.setProperty?.("--aura-widget-x", `${values[offset]}vw`);
+      button.style?.setProperty?.("--aura-widget-y", `${values[offset + 1]}vh`);
+      button.style?.setProperty?.("--aura-widget-scale", String(values[offset + 2]));
+    }
     if (block.parentElement !== group || group.children?.[0] !== block) {
       group.insertBefore(block, shellChild);
     }
