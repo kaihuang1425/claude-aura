@@ -385,6 +385,7 @@ function ConvertTo-AuraUiThemeMetadata {
     studioStyle = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioStyle')
     studioPreview = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreview')
     studioPreviewFrame = Get-AuraUiPropertyValue -InputObject $Item -Names @('studioPreviewFrame')
+    loadingScreen = Get-AuraUiPropertyValue -InputObject $Item -Names @('loadingScreen')
     source = Get-AuraUiPropertyValue -InputObject $Item -Names @('source')
     sourceRecipe = Get-AuraUiPropertyValue -InputObject $Item -Names @('sourceRecipe')
   }
@@ -1527,6 +1528,85 @@ function Get-AuraUiLoadingColorValue {
   return $Fallback
 }
 
+function Resolve-AuraUiLoadingAssetPath {
+  param(
+    [Parameter(Mandatory = $true)][string]$RelativePath,
+    [Parameter(Mandatory = $true)][ValidateSet('mark', 'artwork')][string]$Kind,
+    [Parameter(Mandatory = $true)][string]$AllowedRoot
+  )
+  try {
+    $pattern = if ($Kind -ceq 'mark') {
+      '^loading/mark-(?<digest>[a-f0-9]{64})\.png$'
+    } else {
+      '^loading/artwork-(?<digest>[a-f0-9]{64})\.webp$'
+    }
+    $match = [regex]::Match($RelativePath, $pattern, [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+    if (-not $match.Success) { return $null }
+    $rootPath = [IO.Path]::GetFullPath($AllowedRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $candidate = [IO.Path]::GetFullPath((Join-Path $rootPath ($RelativePath -replace '/', [IO.Path]::DirectorySeparatorChar)))
+    if (-not $candidate.StartsWith(
+        $rootPath + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+      return $null
+    }
+    foreach ($pathToCheck in @((Split-Path $candidate -Parent), $candidate)) {
+      $item = Get-Item -LiteralPath $pathToCheck -Force
+      if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return $null }
+    }
+    $assetItem = Get-Item -LiteralPath $candidate -Force
+    if ($assetItem.Length -le 0 -or $assetItem.Length -ge 400000) { return $null }
+    $actualDigest = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+    if (-not [string]::Equals($actualDigest, $match.Groups['digest'].Value, [StringComparison]::Ordinal)) {
+      return $null
+    }
+    return $candidate
+  } catch {
+    Write-AuraUiLog -Message "A loading-screen $Kind asset was rejected."
+    return $null
+  }
+}
+
+function New-AuraUiLoadingCustomMarkBitmap {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = $null
+  $source = $null
+  try {
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Image]::FromStream($stream, $true, $true)
+    if ($source.Width -ne 96 -or $source.Height -ne 96) { return $null }
+    return [Drawing.Bitmap]::new($source)
+  } catch {
+    Write-AuraUiLog -Message 'A loading-screen mark could not be decoded.'
+    return $null
+  } finally {
+    if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
+}
+
+function New-AuraUiLoadingArtworkBitmap {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = $null
+  $source = $null
+  try {
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $source = [Drawing.Image]::FromStream($stream, $true, $true)
+    if ($source.Width -lt 1 -or $source.Height -lt 1 -or
+        $source.Width -gt 32768 -or $source.Height -gt 32768) { return $null }
+    return [Drawing.Bitmap]::new($source)
+  } catch {
+    # WebP decoding is codec-dependent on Windows. The loading screen remains
+    # usable and keeps its validated colours when a local codec is unavailable.
+    Write-AuraUiLog -Message 'A loading-screen artwork file could not be decoded; the colour fallback was used.'
+    return $null
+  } finally {
+    if ($null -ne $source) { $source.Dispose() }
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
+}
+
 function Get-AuraUiLoadingProfile {
   param([string]$ThemeIdOverride)
   $themeId = if ([string]::IsNullOrWhiteSpace($ThemeIdOverride)) {
@@ -1540,6 +1620,8 @@ function Get-AuraUiLoadingProfile {
   if ($null -eq $theme) { $theme = Get-AuraUiThemeByName -Name 'default'; $themeId = 'default' }
   $appearance = if (Test-AuraUiDarkChrome) { 'dark' } else { 'light' }
   $studioStyle = Get-AuraUiPropertyValue -InputObject $theme -Names @('studioStyle')
+  $loadingDefinition = $null
+  $loadingAssetRoot = $null
   if ([string]::IsNullOrWhiteSpace($ThemeIdOverride) -and (Get-AuraUiEnabled)) {
     $permanentThemeIds = @(Get-AuraUiPermanentThemeIds)
     $selectedTheme = Get-AuraUiThemeByName -Name (Get-AuraUiSelectedThemeName)
@@ -1558,6 +1640,28 @@ function Get-AuraUiLoadingProfile {
     } elseif ($selectedHasPermanentProfile) {
       $selectedStyle = Get-AuraUiPropertyValue -InputObject $selectedTheme -Names @('studioStyle')
       if ($null -ne $selectedStyle) { $studioStyle = $selectedStyle }
+    }
+    $loadingValue = if ($editorActive) {
+      Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('loadingScreenStyle')
+    } else {
+      Get-AuraUiPropertyValue -InputObject $selectedTheme -Names @('loadingScreen')
+    }
+    if ($null -ne $loadingValue) {
+      try {
+        $loadingDefinition = ConvertTo-AuraUiLoadingScreenDefinition -Value $loadingValue
+        if ($loadingDefinition.mode -ceq 'custom') {
+          if ($editorActive) {
+            $loadingAssetRoot = Join-Path $StudioEditorRoot 'active'
+          } elseif ($null -ne $selectedTheme -and "$($selectedTheme.source)" -ceq 'user' -and
+              "$($selectedTheme.name)" -cmatch '^[a-z][a-z0-9-]{1,39}$') {
+            $loadingAssetRoot = Join-Path $UserThemesRoot "$($selectedTheme.name)"
+          }
+        }
+      } catch {
+        Write-AuraUiLog -Message 'A loading-screen definition was rejected; Aura used the inherited profile.'
+        $loadingDefinition = $null
+        $loadingAssetRoot = $null
+      }
     }
   }
   $palette = Get-AuraUiPropertyValue -InputObject $studioStyle -Names @($appearance)
@@ -1587,6 +1691,18 @@ function Get-AuraUiLoadingProfile {
       ThemeId = $themeId
       Appearance = $appearance
       Cue = 'none'
+      CustomLoadingScreen = $false
+      Layout = 'centered'
+      MarkSource = 'none'
+      MarkPath = $null
+      MarkSize = 88
+      ProgressStyle = 'bar'
+      ProgressMotion = 'still'
+      ArtworkPath = $null
+      ArtworkOpacity = 0.0
+      ArtworkFit = 'cover'
+      ArtworkFocalX = 50
+      ArtworkFocalY = 50
       HighContrast = $true
       Background = [Drawing.SystemColors]::Window
       Surface = [Drawing.SystemColors]::Control
@@ -1610,10 +1726,63 @@ function Get-AuraUiLoadingProfile {
       Accent = '#4721A1'; AccentText = '#FFFFFF'; Border = '#21243B'
     }
   }
+  if ($null -ne $loadingDefinition -and $loadingDefinition.mode -ceq 'custom') {
+    $loadingPalette = Get-AuraUiPropertyValue -InputObject $loadingDefinition -Names @($appearance)
+    $motif = if ($loadingDefinition.motif -ceq 'inherit') {
+      "$($cueByTheme[$themeId])"
+    } else { [string]$loadingDefinition.motif }
+    $markPath = if ($loadingDefinition.mark.source -ceq 'custom' -and $loadingAssetRoot) {
+      Resolve-AuraUiLoadingAssetPath `
+        -RelativePath ([string]$loadingDefinition.mark.asset) -Kind mark -AllowedRoot $loadingAssetRoot
+    } else { $null }
+    $artwork = Get-AuraUiPropertyValue -InputObject $loadingPalette -Names @('artwork')
+    $artworkPath = if ($null -ne $artwork -and $loadingAssetRoot) {
+      Resolve-AuraUiLoadingAssetPath `
+        -RelativePath ([string]$artwork.asset) -Kind artwork -AllowedRoot $loadingAssetRoot
+    } else { $null }
+    return [PSCustomObject]@{
+      ThemeId = $themeId
+      Appearance = $appearance
+      Cue = $motif
+      CustomLoadingScreen = $true
+      Layout = [string]$loadingDefinition.layout
+      MarkSource = [string]$loadingDefinition.mark.source
+      MarkPath = $markPath
+      MarkSize = [int]$loadingDefinition.mark.size
+      ProgressStyle = [string]$loadingDefinition.progress.style
+      ProgressMotion = [string]$loadingDefinition.progress.motion
+      ArtworkPath = $artworkPath
+      ArtworkOpacity = if ($null -ne $artwork) { [double]$artwork.opacity } else { 0.0 }
+      ArtworkFit = if ($null -ne $artwork) { [string]$artwork.fit } else { 'cover' }
+      ArtworkFocalX = if ($null -ne $artwork) { [int]$artwork.focalX } else { 50 }
+      ArtworkFocalY = if ($null -ne $artwork) { [int]$artwork.focalY } else { 50 }
+      HighContrast = $false
+      Background = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.background)
+      Surface = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.surface)
+      Text = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.text)
+      Muted = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.border)
+      Accent = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.accent)
+      AccentSecondary = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.accent)
+      AccentText = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.accentText)
+      Border = [Drawing.ColorTranslator]::FromHtml([string]$loadingPalette.border)
+    }
+  }
   return [PSCustomObject]@{
     ThemeId = $themeId
     Appearance = $appearance
     Cue = "$($cueByTheme[$themeId])"
+    CustomLoadingScreen = $false
+    Layout = 'centered'
+    MarkSource = 'theme'
+    MarkPath = $null
+    MarkSize = 88
+    ProgressStyle = 'bar'
+    ProgressMotion = 'calm'
+    ArtworkPath = $null
+    ArtworkOpacity = 0.0
+    ArtworkFit = 'cover'
+    ArtworkFocalX = 50
+    ArtworkFocalY = 50
     HighContrast = $false
     Background = [Drawing.ColorTranslator]::FromHtml(
       (Get-AuraUiLoadingColorValue -InputObject $palette -Property 'canvas' -Fallback $fallback.Background))
@@ -1635,6 +1804,8 @@ function Get-AuraUiLoadingProfile {
 
 function Test-AuraUiLoadingAnimationEnabled {
   if ([System.Windows.Forms.SystemInformation]::HighContrast) { return $false }
+  if ($null -ne $script:LoadingProfile -and
+      "$($script:LoadingProfile.ProgressMotion)" -ceq 'still') { return $false }
   try {
     $windowMetrics = Get-ItemProperty `
       -LiteralPath 'HKCU:\Control Panel\Desktop\WindowMetrics' `
@@ -1719,6 +1890,58 @@ function New-AuraUiLoadingMarkBitmap {
   }
 }
 
+function Paint-AuraUiLoadingArtwork {
+  param(
+    [Parameter(Mandatory = $true)][Drawing.Graphics]$Graphics,
+    [Parameter(Mandatory = $true)][Drawing.Rectangle]$Bounds
+  )
+  $image = $script:LoadingArtworkImage
+  $profile = $script:LoadingProfile
+  if ($null -eq $image -or $image.Width -lt 1 -or $image.Height -lt 1 -or
+      $null -eq $profile -or [double]$profile.ArtworkOpacity -le 0) { return }
+  $fit = "$($profile.ArtworkFit)"
+  $focalX = [Math]::Max(0, [Math]::Min(100, [double]$profile.ArtworkFocalX)) / 100.0
+  $focalY = [Math]::Max(0, [Math]::Min(100, [double]$profile.ArtworkFocalY)) / 100.0
+  $source = [Drawing.RectangleF]::new(0, 0, $image.Width, $image.Height)
+  $destination = [Drawing.RectangleF]::new(0, 0, $Bounds.Width, $Bounds.Height)
+  if ($fit -ceq 'contain') {
+    $scale = [Math]::Min($Bounds.Width / [double]$image.Width, $Bounds.Height / [double]$image.Height)
+    $drawWidth = [float]($image.Width * $scale)
+    $drawHeight = [float]($image.Height * $scale)
+    $destination = [Drawing.RectangleF]::new(
+      [float](($Bounds.Width - $drawWidth) * $focalX),
+      [float](($Bounds.Height - $drawHeight) * $focalY),
+      $drawWidth,
+      $drawHeight)
+  } else {
+    $targetRatio = $Bounds.Width / [double]$Bounds.Height
+    $sourceRatio = $image.Width / [double]$image.Height
+    if ($sourceRatio -gt $targetRatio) {
+      $cropWidth = [float]($image.Height * $targetRatio)
+      $source = [Drawing.RectangleF]::new(
+        [float](($image.Width - $cropWidth) * $focalX), 0, $cropWidth, [float]$image.Height)
+    } elseif ($sourceRatio -lt $targetRatio) {
+      $cropHeight = [float]($image.Width / $targetRatio)
+      $source = [Drawing.RectangleF]::new(
+        0, [float](($image.Height - $cropHeight) * $focalY), [float]$image.Width, $cropHeight)
+    }
+  }
+  $attributes = [Drawing.Imaging.ImageAttributes]::new()
+  try {
+    $matrix = [Drawing.Imaging.ColorMatrix]::new()
+    $matrix.Matrix33 = [single][Math]::Max(0, [Math]::Min(0.65, [double]$profile.ArtworkOpacity))
+    $attributes.SetColorMatrix($matrix, [Drawing.Imaging.ColorMatrixFlag]::Default, [Drawing.Imaging.ColorAdjustType]::Bitmap)
+    $Graphics.DrawImage(
+      $image,
+      [Drawing.Rectangle]::Round($destination),
+      $source.X, $source.Y, $source.Width, $source.Height,
+      [Drawing.GraphicsUnit]::Pixel,
+      $attributes)
+  } finally {
+    $attributes.Dispose()
+  }
+}
+
 function Paint-AuraUiLoadingPanel {
   param(
     [Parameter(Mandatory = $true)][Drawing.Graphics]$Graphics,
@@ -1750,6 +1973,7 @@ function Paint-AuraUiLoadingPanel {
   $graphicsState = $null
   try {
     $Graphics.FillRectangle($gradient, $Bounds)
+    Paint-AuraUiLoadingArtwork -Graphics $Graphics -Bounds $Bounds
     $scale = [double](Get-AuraUiLoadingScale)
     $graphicsState = $Graphics.Save()
     $Graphics.ScaleTransform([float]$scale, [float]$scale)
@@ -1992,12 +2216,17 @@ function Set-AuraUiLoadingLayout {
   $centerX = [Math]::Floor($script:LoadingPanel.ClientSize.Width / 2)
   $centerY = [Math]::Floor($script:LoadingPanel.ClientSize.Height / 2)
   $highContrast = $null -ne $script:LoadingProfile -and [bool]$script:LoadingProfile.HighContrast
+  $split = -not $highContrast -and $null -ne $script:LoadingProfile -and
+    "$($script:LoadingProfile.Layout)" -ceq 'split' -and $script:LoadingPanel.ClientSize.Width -ge 720
   $readingControlHeight = [Math]::Max($script:LoadingProgress.Height, $script:RetryButton.Height)
   $labelGap = [Math]::Max(6, [int][Math]::Round(8 * $scale))
   $readingGap = [Math]::Max(10, [int][Math]::Round(14 * $scale))
   $normalContentHeight = $script:LoadingMark.Height + $labelGap +
     $script:LoadingLabel.Height + $readingGap + $readingControlHeight
-  $labelTop = if ($highContrast) {
+  $contentCenterX = if ($split) {
+    [Math]::Floor($script:LoadingPanel.ClientSize.Width * 0.66)
+  } else { $centerX }
+  $labelTop = if ($highContrast -or $split) {
     [Math]::Max(
       [int][Math]::Round(20 * $scale),
       [Math]::Floor($centerY - (($script:LoadingLabel.Height + $readingGap + $readingControlHeight) / 2)))
@@ -2009,29 +2238,43 @@ function Set-AuraUiLoadingLayout {
       $centerX - [Math]::Floor($script:LoadingMark.Width / 2), $markTop)
     $markTop + $script:LoadingMark.Height + $labelGap
   }
-  if ($highContrast) {
+  if ($split) {
+    $script:LoadingMark.Location = [Drawing.Point]::new(
+      [Math]::Floor(($script:LoadingPanel.ClientSize.Width * 0.32) - ($script:LoadingMark.Width / 2)),
+      [Math]::Floor($centerY - ($script:LoadingMark.Height / 2)))
+  } elseif ($highContrast) {
     $script:LoadingMark.Location = [Drawing.Point]::new(
       $centerX - [Math]::Floor($script:LoadingMark.Width / 2), $labelTop)
   }
   $script:LoadingLabel.Location = [Drawing.Point]::new(
-    [Math]::Max(0, $centerX - [Math]::Floor($script:LoadingLabel.Width / 2)),
+    [Math]::Max(0, $contentCenterX - [Math]::Floor($script:LoadingLabel.Width / 2)),
     $labelTop)
   $script:LoadingProgress.Location = [Drawing.Point]::new(
-    $centerX - [Math]::Floor($script:LoadingProgress.Width / 2),
+    $contentCenterX - [Math]::Floor($script:LoadingProgress.Width / 2),
     $labelTop + $script:LoadingLabel.Height + $readingGap)
   $script:RetryButton.Location = [Drawing.Point]::new(
-    $centerX - [Math]::Floor($script:RetryButton.Width / 2),
+    $contentCenterX - [Math]::Floor($script:RetryButton.Width / 2),
     $labelTop + $script:LoadingLabel.Height +
       [Math]::Max(
         [int][Math]::Round(4 * $scale),
         [Math]::Floor(($readingGap + $script:LoadingProgress.Height -
           $script:RetryButton.Height) / 2)))
-  $indicatorWidth = [Math]::Max(54, [Math]::Floor($script:LoadingProgress.Width * 0.28))
+  $indicatorWidth = if ($null -ne $script:LoadingProfile -and
+      "$($script:LoadingProfile.ProgressStyle)" -ceq 'pulse') {
+    [Math]::Max(14, [Math]::Floor($script:LoadingProgress.Width * 0.34))
+  } else {
+    [Math]::Max(54, [Math]::Floor($script:LoadingProgress.Width * 0.28))
+  }
   $script:LoadingProgressIndicator.Size = [Drawing.Size]::new($indicatorWidth, $script:LoadingProgress.Height)
   Set-AuraUiRoundedControlRegion -Control $script:LoadingProgress -Radius (3 * $scale)
   Set-AuraUiRoundedControlRegion -Control $script:LoadingProgressIndicator -Radius (3 * $scale)
   if (-not (Test-AuraUiLoadingAnimationEnabled)) {
     $script:LoadingProgressIndicator.Left = [Math]::Floor(($script:LoadingProgress.Width - $indicatorWidth) / 2)
+  }
+  if ($null -ne $script:CloseLoadingPreviewButton -and -not $script:CloseLoadingPreviewButton.IsDisposed) {
+    $script:CloseLoadingPreviewButton.Location = [Drawing.Point]::new(
+      [Math]::Max(12, $script:LoadingPanel.ClientSize.Width - $script:CloseLoadingPreviewButton.Width - 20),
+      20)
   }
 }
 
@@ -2039,14 +2282,24 @@ function Update-AuraUiLoadingTheme {
   if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
   try {
     $profile = Get-AuraUiLoadingProfile
-    $nextMark = if ($profile.HighContrast) { $null } else {
+    $nextMark = if ($profile.HighContrast -or "$($profile.MarkSource)" -ceq 'none') {
+      $null
+    } elseif ("$($profile.MarkSource)" -ceq 'custom' -and $profile.MarkPath) {
+      New-AuraUiLoadingCustomMarkBitmap -Path ([string]$profile.MarkPath)
+    } else {
       New-AuraUiLoadingMarkBitmap -ThemeId "$($profile.ThemeId)"
     }
-    if (-not $profile.HighContrast -and $null -eq $nextMark -and
+    if ($null -eq $nextMark -and -not [bool]$profile.CustomLoadingScreen -and
         "$($profile.ThemeId)" -cne 'default') {
       $profile = Get-AuraUiLoadingProfile -ThemeIdOverride 'default'
       $nextMark = New-AuraUiLoadingMarkBitmap -ThemeId 'default'
+    } elseif ($null -eq $nextMark -and [bool]$profile.CustomLoadingScreen -and
+        "$($profile.MarkSource)" -ceq 'theme' -and "$($profile.ThemeId)" -cne 'default') {
+      $nextMark = New-AuraUiLoadingMarkBitmap -ThemeId 'default'
     }
+    $nextArtwork = if (-not $profile.HighContrast -and $profile.ArtworkPath) {
+      New-AuraUiLoadingArtworkBitmap -Path ([string]$profile.ArtworkPath)
+    } else { $null }
     $script:LoadingProfile = $profile
     Update-AuraUiWindowChrome `
       -Dark ([string]::Equals("$($profile.Appearance)", 'dark', [StringComparison]::Ordinal)) `
@@ -2056,6 +2309,12 @@ function Update-AuraUiLoadingTheme {
     $script:LoadingProgress.BackColor = ConvertTo-AuraUiBlendedColor `
       -From $profile.Surface -To $profile.Border -Amount 0.18
     $script:LoadingProgressIndicator.BackColor = $profile.Accent
+    $script:LoadingMark.Size = [Drawing.Size]::new([int]$profile.MarkSize, [int]$profile.MarkSize)
+    $script:LoadingProgress.Size = if ("$($profile.ProgressStyle)" -ceq 'pulse') {
+      [Drawing.Size]::new(54, 8)
+    } else {
+      [Drawing.Size]::new(320, 6)
+    }
     $script:RetryButton.FlatAppearance.BorderColor = $profile.Border
     $script:RetryButton.FlatAppearance.MouseOverBackColor = ConvertTo-AuraUiBlendedColor `
       -From $profile.Accent -To $profile.AccentText -Amount 0.1
@@ -2064,10 +2323,19 @@ function Update-AuraUiLoadingTheme {
     $script:RetryButton.BackColor = $profile.Accent
     $script:RetryButton.ForeColor = $profile.AccentText
     $script:RetryButton.UseVisualStyleBackColor = [bool]$profile.HighContrast
-    $script:LoadingMark.Visible = -not [bool]$profile.HighContrast
+    if ($null -ne $script:CloseLoadingPreviewButton -and -not $script:CloseLoadingPreviewButton.IsDisposed) {
+      $script:CloseLoadingPreviewButton.FlatAppearance.BorderColor = $profile.Border
+      $script:CloseLoadingPreviewButton.BackColor = $profile.Surface
+      $script:CloseLoadingPreviewButton.ForeColor = $profile.Text
+      $script:CloseLoadingPreviewButton.UseVisualStyleBackColor = [bool]$profile.HighContrast
+    }
+    $script:LoadingMark.Visible = -not [bool]$profile.HighContrast -and $null -ne $nextMark
     $previousMark = $script:LoadingMark.Image
     $script:LoadingMark.Image = $nextMark
     if ($null -ne $previousMark) { $previousMark.Dispose() }
+    $previousArtwork = $script:LoadingArtworkImage
+    $script:LoadingArtworkImage = $nextArtwork
+    if ($null -ne $previousArtwork) { $previousArtwork.Dispose() }
     if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
       $script:Form.BackColor = $profile.Background
     }
@@ -2091,6 +2359,7 @@ function Show-AuraUiLoading {
     [ValidateSet('Home', 'Code')][string]$RetrySurface = 'Home'
   )
   if ($null -eq $script:LoadingPanel -or $script:LoadingPanel.IsDisposed) { return }
+  if ($script:LoadingScreenPreviewActive) { Stop-AuraUiLoadingScreenPreview -Reason navigation }
   Update-AuraUiLoadingTheme
   $script:LoadingLabel.Text = $Message
   $script:LoadingProgress.AccessibleName = $Message
@@ -2114,6 +2383,10 @@ function Show-AuraUiLoading {
 }
 
 function Hide-AuraUiLoading {
+  if ($script:LoadingScreenPreviewActive) {
+    Stop-AuraUiLoadingScreenPreview -Reason ready
+    return
+  }
   if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Stop() }
   if ($null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed) {
     $script:LoadingPanel.Visible = $false
@@ -2122,6 +2395,64 @@ function Hide-AuraUiLoading {
     if ($null -ne $background) { $background.Dispose() }
   }
   Update-AuraUiLauncherPosition
+}
+
+function Stop-AuraUiLoadingScreenPreview {
+  param([string]$Reason = 'closed')
+  $wasActive = [bool]$script:LoadingScreenPreviewActive
+  $script:LoadingScreenPreviewActive = $false
+  if ($null -ne $script:LoadingScreenPreviewTimer) { $script:LoadingScreenPreviewTimer.Stop() }
+  if ($null -ne $script:CloseLoadingPreviewButton -and
+      -not $script:CloseLoadingPreviewButton.IsDisposed) {
+    $script:CloseLoadingPreviewButton.Visible = $false
+  }
+  if ($wasActive -and $null -ne $script:LoadingAnimationTimer) {
+    $script:LoadingAnimationTimer.Stop()
+  }
+  if ($wasActive -and $null -ne $script:LoadingPanel -and -not $script:LoadingPanel.IsDisposed) {
+    $script:LoadingPanel.Visible = $false
+    $background = $script:LoadingPanel.BackgroundImage
+    $script:LoadingPanel.BackgroundImage = $null
+    if ($null -ne $background) { $background.Dispose() }
+  }
+  if ($wasActive -and $null -ne $script:WebView -and -not $script:WebView.IsDisposed) {
+    try { [void]$script:WebView.Focus() } catch {}
+  }
+  if ($wasActive) { Update-AuraUiLauncherPosition }
+}
+
+function Show-AuraUiLoadingScreenPreview {
+  if (-not $script:PageReady -or -not $script:WebReady -or $script:RescueActive -or
+      -not (Get-AuraUiEnabled) -or
+      $null -eq $script:WebView -or $script:WebView.IsDisposed -or
+      -not (Test-AuraUiClaudeUri -Value $script:WebView.Source) -or
+      (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) {
+    return $false
+  }
+  Stop-AuraUiLoadingScreenPreview -Reason replaced
+  Update-AuraUiLoadingTheme
+  $script:LoadingScreenPreviewActive = $true
+  $script:LoadingLabel.Text = "$($script:UiCopy.openingClaude)"
+  $script:LoadingProgress.AccessibleName = $script:LoadingLabel.Text
+  $script:RetryButton.Visible = $false
+  $script:LoadingProgress.Visible = $true
+  $script:CloseLoadingPreviewButton.Text = "$($script:UiCopy.closeLoadingPreview)"
+  $script:CloseLoadingPreviewButton.AccessibleName = $script:CloseLoadingPreviewButton.Text
+  $script:CloseLoadingPreviewButton.Visible = $true
+  Set-AuraUiLoadingLayout
+  if (Test-AuraUiLoadingAnimationEnabled) {
+    $script:LoadingAnimationTimer.Start()
+  } else {
+    $script:LoadingAnimationTimer.Stop()
+  }
+  $script:LoadingPanel.Visible = $true
+  $script:LoadingPanel.BringToFront()
+  $script:LoadingScreenPreviewTimer.Stop()
+  $script:LoadingScreenPreviewTimer.Start()
+  Show-AuraUiMain
+  [void]$script:CloseLoadingPreviewButton.Focus()
+  Update-AuraUiLauncherPosition
+  return $true
 }
 
 function Get-AuraUiNavigationCompletionDisposition {
@@ -5660,6 +5991,136 @@ function Test-AuraUiStudioExactProperties {
   return $true
 }
 
+function ConvertTo-AuraUiLoadingScreenDefinition {
+  param(
+    [Parameter(Mandatory = $true)][object]$Value,
+    [string]$Label = 'Loading screen'
+  )
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      $Value.mode -isnot [string]) {
+    throw "$Label must be an object with a mode."
+  }
+  if ($Value.mode -ceq 'inherit') {
+    if (-not (Test-AuraUiStudioExactProperties -Message $Value -Names @('mode'))) {
+      throw "$Label inherit mode has an invalid shape."
+    }
+    return [PSCustomObject][ordered]@{ mode = 'inherit' }
+  }
+  if ($Value.mode -cne 'custom' -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value -Names @(
+        'mode', 'layout', 'motif', 'mark', 'progress', 'light', 'dark'))) {
+    throw "$Label custom mode has an invalid shape."
+  }
+  if ($Value.layout -isnot [string] -or $Value.layout -cnotin @('centered', 'split') -or
+      $Value.motif -isnot [string] -or $Value.motif -cnotin @(
+        'inherit', 'none', 'orbit', 'editorial-rule', 'facet', 'ink-frame',
+        'horizon', 'folio', 'ribbon', 'capsule')) {
+    throw "$Label layout or motif is invalid."
+  }
+  if ($Value.mark -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value.mark -Names @('source', 'asset', 'size')) -or
+      $Value.mark.source -isnot [string] -or $Value.mark.source -cnotin @('theme', 'custom', 'none')) {
+    throw "$Label mark is invalid."
+  }
+  $markSize = ConvertTo-AuraUiStudioInteger -Value $Value.mark.size -Minimum 48 -Maximum 112 -Label "$Label mark size"
+  if ($Value.mark.source -ceq 'custom') {
+    if ($Value.mark.asset -isnot [string] -or
+        $Value.mark.asset -cnotmatch '^loading/mark-[a-f0-9]{64}\.png$') {
+      throw "$Label custom mark asset is invalid."
+    }
+  } elseif ($null -ne $Value.mark.asset) {
+    throw "$Label mark asset must be null unless its source is custom."
+  }
+  if ($Value.progress -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value.progress -Names @('style', 'motion')) -or
+      $Value.progress.style -isnot [string] -or $Value.progress.style -cnotin @('bar', 'pulse') -or
+      $Value.progress.motion -isnot [string] -or $Value.progress.motion -cnotin @('calm', 'still')) {
+    throw "$Label progress treatment is invalid."
+  }
+  $appearances = [ordered]@{}
+  foreach ($appearance in @('light', 'dark')) {
+    $palette = $Value.$appearance
+    if ($palette -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $palette -Names @(
+          'background', 'surface', 'text', 'accent', 'accentText', 'border', 'artwork'))) {
+      throw "$Label $appearance appearance is invalid."
+    }
+    $colors = [ordered]@{}
+    foreach ($name in @('background', 'surface', 'text', 'accent', 'accentText', 'border')) {
+      $color = $palette.$name
+      if ($color -isnot [string] -or $color -cnotmatch '^#[0-9A-Fa-f]{6}$') {
+        throw "$Label $appearance $name colour is invalid."
+      }
+      $colors[$name] = $color.ToUpperInvariant()
+    }
+    $artwork = $null
+    if ($null -ne $palette.artwork) {
+      if ($palette.artwork -isnot [System.Management.Automation.PSCustomObject] -or
+          -not (Test-AuraUiStudioExactProperties -Message $palette.artwork -Names @(
+            'asset', 'opacity', 'fit', 'focalX', 'focalY')) -or
+          $palette.artwork.asset -isnot [string] -or
+          $palette.artwork.asset -cnotmatch '^loading/artwork-[a-f0-9]{64}\.webp$' -or
+          $palette.artwork.fit -isnot [string] -or $palette.artwork.fit -cnotin @('cover', 'contain')) {
+        throw "$Label $appearance artwork is invalid."
+      }
+      $artwork = [PSCustomObject][ordered]@{
+        asset = [string]$palette.artwork.asset
+        opacity = ConvertTo-AuraUiStudioNumber -Value $palette.artwork.opacity -Minimum 0 -Maximum 0.65 -Label "$Label $appearance artwork opacity"
+        fit = [string]$palette.artwork.fit
+        focalX = ConvertTo-AuraUiStudioInteger -Value $palette.artwork.focalX -Minimum 0 -Maximum 100 -Label "$Label $appearance artwork focal x"
+        focalY = ConvertTo-AuraUiStudioInteger -Value $palette.artwork.focalY -Minimum 0 -Maximum 100 -Label "$Label $appearance artwork focal y"
+      }
+    }
+    $appearances[$appearance] = [PSCustomObject][ordered]@{
+      background = $colors.background
+      surface = $colors.surface
+      text = $colors.text
+      accent = $colors.accent
+      accentText = $colors.accentText
+      border = $colors.border
+      artwork = $artwork
+    }
+  }
+  return [PSCustomObject][ordered]@{
+    mode = 'custom'
+    layout = [string]$Value.layout
+    motif = [string]$Value.motif
+    mark = [PSCustomObject][ordered]@{
+      source = [string]$Value.mark.source
+      asset = $Value.mark.asset
+      size = $markSize
+    }
+    progress = [PSCustomObject][ordered]@{
+      style = [string]$Value.progress.style
+      motion = [string]$Value.progress.motion
+    }
+    light = $appearances.light
+    dark = $appearances.dark
+  }
+}
+
+function Assert-AuraUiLoadingAssetPreviews {
+  param([Parameter(Mandatory = $true)][object]$Value)
+  if ($Value -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Value -Names @('mark', 'lightArtwork', 'darkArtwork'))) {
+    throw 'Aura Studio loading-screen asset previews have an invalid shape.'
+  }
+  foreach ($entry in @(
+      @('mark', 'mark', 'png'),
+      @('lightArtwork', 'artwork', 'webp'),
+      @('darkArtwork', 'artwork', 'webp'))) {
+    $name = $entry[0]
+    $valueText = $Value.$name
+    if ($null -eq $valueText) { continue }
+    $kind = $entry[1]
+    $extension = $entry[2]
+    if ($valueText -isnot [string] -or
+        $valueText -cnotmatch "^https://aura\.editor/active/loading-$kind-(?<digest>[a-f0-9]{64})\.$extension\?v=\k<digest>$") {
+      throw "Aura Studio loading-screen asset preview $name is invalid."
+    }
+  }
+}
+
 function Assert-AuraUiStudioResponsiveLayouts {
   param([AllowNull()][object]$Layouts)
   if ($null -eq $Layouts) { return @() }
@@ -5981,7 +6442,7 @@ function ConvertTo-AuraUiStudioEditorState {
     'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
     'launcherPreviewUrl', 'launcherStylePreviewUrl', 'interfaceSurfaces', 'interfaceStyle',
     'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
-    'responsiveLayouts',
+    'responsiveLayouts', 'loadingScreen', 'loadingScreenStyle', 'loadingScreenAssets', 'loadingScreenStyleAssets',
     'lastAction', 'actionSucceeded', 'error')
   $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($name in $actual) {
@@ -5997,7 +6458,7 @@ function ConvertTo-AuraUiStudioEditorState {
       'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
       'launcherPreviewUrl', 'launcherStylePreviewUrl', 'interfaceSurfaces', 'interfaceStyle',
       'identityPreviewUrl', 'identityStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
-      'responsiveLayouts')
+      'responsiveLayouts', 'loadingScreen', 'loadingScreenStyle', 'loadingScreenAssets', 'loadingScreenStyleAssets')
     foreach ($name in $required) {
       if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
     }
@@ -6089,6 +6550,10 @@ function ConvertTo-AuraUiStudioEditorState {
       }
     }
     $responsiveLayoutIds = @(Assert-AuraUiStudioResponsiveLayouts -Layouts $State.responsiveLayouts)
+    [void](ConvertTo-AuraUiLoadingScreenDefinition -Value $State.loadingScreen -Label 'Aura Studio loading screen')
+    [void](ConvertTo-AuraUiLoadingScreenDefinition -Value $State.loadingScreenStyle -Label 'Aura Studio applied loading screen')
+    Assert-AuraUiLoadingAssetPreviews -Value $State.loadingScreenAssets
+    Assert-AuraUiLoadingAssetPreviews -Value $State.loadingScreenStyleAssets
     $instantPrompts = @($State.instantPrompts)
     if ($instantPrompts.Count -gt 12) { throw 'Aura Studio editor state contains too many instant prompts.' }
     $instantPromptIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -6179,6 +6644,7 @@ function ConvertTo-AuraUiStudioEditorState {
       ($State.lastAction -isnot [string] -or $State.lastAction -cnotin @(
         'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
         'enable-responsive-layouts', 'mutate-responsive-layout',
+        'set-loading-screen', 'pick-loading-screen-mark', 'pick-loading-screen-artwork', 'preview-theme-loading-screen',
         'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
         'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
         'delete-user-theme', 'set-greeting-phrases', 'reset-greeting'))) {
@@ -6294,6 +6760,7 @@ function Update-AuraUiStudioEditorSessionTracking {
 
 function Restore-AuraUiStudioPreviewState {
   Stop-AuraUiEditorOverlay -Reason studio-closed
+  Stop-AuraUiLoadingScreenPreview -Reason studio-closed
   if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
     try { $script:Form.TopMost = $false }
     catch { Write-AuraUiLog -Message "Aura preview topmost state could not be cleared: $($_.Exception.Message)" }
@@ -6315,6 +6782,9 @@ function Sync-AuraUiStudioEditorDraft {
   $result = Get-AuraUiStudioEditorCoreState
   Update-AuraUiStudioEditorSessionTracking -State $result.State
   $script:StudioEditorState = $result.State
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) {
+    Stop-AuraUiLoadingScreenPreview -Reason editor-ended
+  }
   if ($null -ne $result.Payload) {
     $payloadChanged = -not [string]::Equals($script:Payload, $result.Payload, [StringComparison]::Ordinal)
     Set-AuraUiPayloadState -Payload $result.Payload
@@ -6337,6 +6807,8 @@ function Get-AuraUiStudioEditorStatus {
       'pick-instant-prompt-icon' { return "$($script:UiCopy.themeLayerImageFailed)" }
       'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
       'pick-sidebar-identity-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
+      'pick-loading-screen-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
+      'pick-loading-screen-artwork' { return "$($script:UiCopy.themeLayerImageFailed)" }
       default { return "$($script:UiCopy.themeEditFailed)" }
     }
   }
@@ -6347,6 +6819,8 @@ function Get-AuraUiStudioEditorStatus {
     'pick-instant-prompt-icon' { return "$($script:UiCopy.themeLayerImageImported)" }
     'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
     'pick-sidebar-identity-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
+    'pick-loading-screen-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
+    'pick-loading-screen-artwork' { return "$($script:UiCopy.themeLayerImageImported)" }
     'save-theme-edit' { return "$($script:UiCopy.themeEditSaved)" }
     'discard-theme-edit' { return "$($script:UiCopy.themeEditDiscarded)" }
     'delete-user-theme' { return "$($script:UiCopy.themeDeleted)" }
@@ -6361,6 +6835,9 @@ function Complete-AuraUiStudioEditorAction {
   )
   Update-AuraUiStudioEditorSessionTracking -State $Result.State
   $script:StudioEditorState = $Result.State
+  if ((Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('active')) -ne $true) {
+    Stop-AuraUiLoadingScreenPreview -Reason editor-ended
+  }
   if ($Result.ConfigChanged) {
     $script:Config = Get-Content -LiteralPath $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Set-AuraUiPreferredColorScheme
@@ -7250,6 +7727,128 @@ function Invoke-AuraUiPickThemeLauncherMark {
   }
 }
 
+function Invoke-AuraUiSetLoadingScreen {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  return Invoke-AuraUiStudioEditorRequest -Request $Request
+}
+
+function Invoke-AuraUiPickLoadingScreenMark {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  Assert-AuraUiStudioEditorSession -Request $Request
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  $targetPath = $null
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseLoadingScreenMarkTitle)"
+    $dialog.Filter = 'PNG (*.png)|*.png'
+    $dialog.CheckFileExists = $true
+    $dialog.Multiselect = $false
+    $dialog.RestoreDirectory = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      $script:StudioEditorState['lastAction'] = 'pick-loading-screen-mark'
+      $script:StudioEditorState['actionSucceeded'] = $true
+      $script:StudioEditorState['error'] = 'picker-cancelled'
+      Send-AuraUiStudioState -Action 'pick-loading-screen-mark' -ActionSucceeded $true
+      return $false
+    }
+    $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
+    if ($sourceItem.PSIsContainer -or
+        ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $sourceItem.Length -le 0 -or $sourceItem.Length -ge 400000) {
+      throw 'The selected loading-screen mark must be a regular PNG file smaller than 400 KB.'
+    }
+    $targetPath = Join-Path $StudioEditorImportRoot ('loading-mark-{0}.png' -f [Guid]::NewGuid().ToString('N'))
+    [IO.File]::Copy($sourceItem.FullName, $targetPath, $false)
+    return Invoke-AuraUiStudioEditorRequest -Request $Request -AssetPath $targetPath
+  } finally {
+    $dialog.Dispose()
+    if ($targetPath -and (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+      try {
+        $target = Get-Item -LiteralPath $targetPath -Force
+        if (($target.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
+            [string]::Equals($target.DirectoryName, [IO.Path]::GetFullPath($StudioEditorImportRoot), [StringComparison]::OrdinalIgnoreCase)) {
+          [IO.File]::Delete($target.FullName)
+        }
+      } catch { Write-AuraUiLog -Message "Studio loading-screen mark cleanup failed: $($_.Exception.Message)" }
+    }
+  }
+}
+
+function Invoke-AuraUiPickLoadingScreenArtwork {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  Assert-AuraUiStudioEditorSession -Request $Request
+  [void](Assert-AuraUiStudioEditorRoots -Create)
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
+  $targetPath = $null
+  try {
+    $dialog.Title = "$($script:UiCopy.chooseLoadingScreenArtworkTitle)"
+    $dialog.Filter = "$($script:UiCopy.imagesFilter)|*.png;*.jpg;*.jpeg;*.webp;*.avif"
+    $dialog.CheckFileExists = $true
+    $dialog.Multiselect = $false
+    $dialog.RestoreDirectory = $true
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      $script:StudioEditorState['lastAction'] = 'pick-loading-screen-artwork'
+      $script:StudioEditorState['actionSucceeded'] = $true
+      $script:StudioEditorState['error'] = 'picker-cancelled'
+      Send-AuraUiStudioState -Action 'pick-loading-screen-artwork' -ActionSucceeded $true
+      return $false
+    }
+    $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
+    if ($sourceItem.PSIsContainer -or
+        ($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $sourceItem.Length -le 0 -or $sourceItem.Length -gt $StudioEditorImageMaxBytes) {
+      throw 'The selected loading-screen artwork is not a supported regular image file.'
+    }
+    $targetPath = Join-Path $StudioEditorImportRoot ('loading-artwork-{0}.webp' -f [Guid]::NewGuid().ToString('N'))
+    $conversionJson = Invoke-AuraUiNode -CommandArguments @(
+      $ThemeAssetConverter, '--studio-import', $sourceItem.FullName,
+      '--target', $targetPath, '--output-root', $StudioEditorRoot)
+    try { $conversion = $conversionJson | ConvertFrom-Json } catch { throw 'The artwork converter returned invalid JSON.' }
+    if ($conversion -isnot [System.Management.Automation.PSCustomObject] -or
+        -not (Test-AuraUiStudioExactProperties -Message $conversion -Names @('path', 'bytes', 'width', 'height'))) {
+      throw 'The artwork converter returned an invalid response shape.'
+    }
+    $convertedPath = [IO.Path]::GetFullPath([string]$conversion.path)
+    if (-not [string]::Equals($convertedPath, [IO.Path]::GetFullPath($targetPath), [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'The artwork converter returned an unexpected output path.'
+    }
+    [void](ConvertTo-AuraUiStudioInteger -Value $conversion.bytes -Minimum 1 -Maximum 399999 -Label 'Converted loading artwork bytes')
+    return Invoke-AuraUiStudioEditorRequest -Request $Request -AssetPath $convertedPath
+  } finally {
+    $dialog.Dispose()
+    if ($targetPath -and (Test-Path -LiteralPath $targetPath -PathType Leaf)) {
+      try {
+        $target = Get-Item -LiteralPath $targetPath -Force
+        if (($target.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -and
+            [string]::Equals($target.DirectoryName, [IO.Path]::GetFullPath($StudioEditorImportRoot), [StringComparison]::OrdinalIgnoreCase)) {
+          [IO.File]::Delete($target.FullName)
+        }
+      } catch { Write-AuraUiLog -Message "Studio loading-screen artwork cleanup failed: $($_.Exception.Message)" }
+    }
+  }
+}
+
+function Invoke-AuraUiPreviewThemeLoadingScreen {
+  param([Parameter(Mandatory = $true)][object]$Request)
+  Assert-AuraUiStudioEditorSession -Request $Request
+  $succeeded = Show-AuraUiLoadingScreenPreview
+  $script:StudioEditorState['lastAction'] = 'preview-theme-loading-screen'
+  $script:StudioEditorState['actionSucceeded'] = [bool]$succeeded
+  $script:StudioEditorState['error'] = if ($succeeded) { $null } else { 'preview-unavailable' }
+  Send-AuraUiStudioState `
+    -Status (Get-AuraUiStudioEditorStatus -Action 'preview-theme-loading-screen' -Succeeded ([bool]$succeeded)) `
+    -Tone $(if ($succeeded) { 'ok' } else { 'error' }) `
+    -Action 'preview-theme-loading-screen' -ActionSucceeded ([bool]$succeeded)
+  return [bool]$succeeded
+}
+
 function Invoke-AuraUiPickThemeSidebarIdentityMark {
   param(
     [Parameter(Mandatory = $true)][object]$Request,
@@ -7551,9 +8150,10 @@ function Send-AuraUiStudioState {
     [ValidateSet(
       '', 'set-image-framing', 'set-card-preview-crop', 'set-avatar', 'set-avatar-framing',
       'set-personal-wordmark', 'clear-personal-wordmark', 'set-personal-wordmark-framing',
-      'export-terminal-themes',
+      'export-terminal-themes', 'export-theme-package',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
       'enable-responsive-layouts', 'mutate-responsive-layout',
+      'set-loading-screen', 'pick-loading-screen-mark', 'pick-loading-screen-artwork', 'preview-theme-loading-screen',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')][string]$Action = '',
@@ -8571,6 +9171,117 @@ function Copy-AuraUiThemeKit {
   }
 }
 
+function Test-AuraUiThemePackageKitPath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  return $Path -cmatch '^(theme\.json|card-preview\.webp|launcher-mark\.png|sidebar-identity\.png|(?:background|hero|corner-top-right|corner-bottom|card-[1-3]|brand-mark)\.(?:png|webp|avif)|artwork/layer-[a-f0-9]{32}\.webp|loading/(?:mark-[a-f0-9]{64}\.png|artwork-[a-f0-9]{64}\.webp))$'
+}
+
+function Assert-AuraUiThemePackageResult {
+  param(
+    [Parameter(Mandatory = $true)][object]$Result,
+    [AllowEmptyString()][string]$ExpectedTheme = '',
+    [switch]$Export
+  )
+  $names = if ($Export) {
+    @('pass', 'theme', 'schemaVersion', 'files', 'bytes')
+  } else {
+    @('pass', 'theme', 'schemaVersion', 'files')
+  }
+  if ($Result -isnot [System.Management.Automation.PSCustomObject] -or
+      -not (Test-AuraUiStudioExactProperties -Message $Result -Names $names) -or
+      $Result.pass -isnot [bool] -or -not $Result.pass -or
+      $Result.theme -isnot [string] -or $Result.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$' -or
+      $Result.schemaVersion -is [bool] -or $Result.schemaVersion -is [string] -or
+      $Result.schemaVersion -is [char]) {
+    throw 'The theme package helper returned an invalid result.'
+  }
+  [void](ConvertTo-AuraUiStudioInteger -Value $Result.schemaVersion -Minimum 1 -Maximum 1 `
+    -Label 'Theme package schema version')
+  if ($ExpectedTheme -and
+      -not [string]::Equals([string]$Result.theme, $ExpectedTheme, [StringComparison]::Ordinal)) {
+    throw 'The theme package helper returned the wrong theme.'
+  }
+  $files = @($Result.files)
+  if ($files.Count -lt 1 -or $files.Count -gt 24 -or $files -cnotcontains 'theme.json') {
+    throw 'The theme package helper returned an invalid file list.'
+  }
+  $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($file in $files) {
+    if ($file -isnot [string] -or -not (Test-AuraUiThemePackageKitPath -Path $file) -or
+        -not $seen.Add([string]$file)) {
+      throw 'The theme package helper returned an unsafe file list.'
+    }
+  }
+  if ($Export) {
+    [void](ConvertTo-AuraUiStudioInteger -Value $Result.bytes -Minimum 1 -Maximum 2000000 -Label 'Theme package bytes')
+  }
+  return [string]$Result.theme
+}
+
+function Get-AuraUiThemePackageStagingPath {
+  param(
+    [Parameter(Mandatory = $true)][ValidateSet('import', 'export')][string]$Kind,
+    [switch]$File
+  )
+  [void](Assert-AuraUiThemeInstallRoot -Create)
+  $dataRootPath = [IO.Path]::GetFullPath($DataRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  $dataItem = Get-Item -LiteralPath $dataRootPath -Force
+  if (-not $dataItem.PSIsContainer -or
+      ($dataItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'Claude Aura package staging must remain in regular app data.'
+  }
+  $suffix = if ($File) { '.aura' } else { '' }
+  $leaf = ".package-$Kind-$([Guid]::NewGuid().ToString('N'))$suffix"
+  $candidate = [IO.Path]::GetFullPath((Join-Path $dataRootPath $leaf))
+  if (-not [string]::Equals([IO.Path]::GetDirectoryName($candidate), $dataRootPath,
+      [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Claude Aura package staging resolved outside app data.'
+  }
+  return $candidate
+}
+
+function Remove-AuraUiThemePackageStaging {
+  param(
+    [AllowEmptyString()][string]$Path,
+    [Parameter(Mandatory = $true)][ValidateSet('import', 'export')][string]$Kind
+  )
+  if (-not $Path) { return }
+  try {
+    $dataRootPath = [IO.Path]::GetFullPath($DataRoot).TrimEnd(
+      [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $candidate = [IO.Path]::GetFullPath($Path)
+    $leaf = [IO.Path]::GetFileName($candidate)
+    $pattern = if ($Kind -ceq 'export') {
+      '^\.package-export-[a-f0-9]{32}\.aura$'
+    } else {
+      '^\.package-import-[a-f0-9]{32}$'
+    }
+    if ($leaf -cnotmatch $pattern -or
+        -not [string]::Equals([IO.Path]::GetDirectoryName($candidate), $dataRootPath,
+          [StringComparison]::OrdinalIgnoreCase)) { return }
+    if ($Kind -ceq 'export') {
+      if ([IO.File]::Exists($candidate)) {
+        $item = Get-Item -LiteralPath $candidate -Force
+        if (-not $item.PSIsContainer -and
+            ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+          [IO.File]::Delete($candidate)
+        }
+      }
+      return
+    }
+    if ([IO.Directory]::Exists($candidate)) {
+      $item = Get-Item -LiteralPath $candidate -Force
+      if ($item.PSIsContainer -and
+          ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+        [IO.Directory]::Delete($candidate, $true)
+      }
+    }
+  } catch {
+    Write-AuraUiLog -Message "Theme package staging cleanup failed: $($_.Exception.Message)"
+  }
+}
+
 function Remove-AuraUiInstalledTheme {
   param(
     [Parameter(Mandatory = $true)][string]$Path,
@@ -8625,21 +9336,45 @@ function Restore-AuraUiConfigSnapshot {
 
 function Invoke-AuraUiImportTheme {
   param([AllowNull()][System.Windows.Forms.IWin32Window]$Owner)
-  $dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
+  $dialog = [System.Windows.Forms.OpenFileDialog]::new()
   $installedPath = $null
   $importedId = $null
   $previousConfigJson = $null
+  $packageStaging = $null
   try {
     $previousConfigJson = [IO.File]::ReadAllText($ConfigPath, [Text.Encoding]::UTF8)
-    $dialog.Description = "$($script:UiCopy.chooseThemeFolder)"
-    $dialog.ShowNewFolderButton = $false
+    $dialog.Title = "$($script:UiCopy.chooseThemePackage)"
+    $dialog.Filter = 'Claude Aura (*.aura; theme.json)|*.aura;theme.json'
+    $dialog.FilterIndex = 1
+    $dialog.Multiselect = $false
+    $dialog.CheckFileExists = $true
+    $dialog.CheckPathExists = $true
+    $dialog.ValidateNames = $true
+    $dialog.RestoreDirectory = $true
     if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
       Send-AuraUiStudioState
       return $false
     }
+    $selectedPath = [IO.Path]::GetFullPath([string]$dialog.FileName)
+    $sourcePath = $null
+    $packageTheme = $null
+    if ([string]::Equals([IO.Path]::GetExtension($selectedPath), '.aura',
+        [StringComparison]::OrdinalIgnoreCase)) {
+      $packageStaging = Get-AuraUiThemePackageStagingPath -Kind import
+      $packageJson = Invoke-AuraUiNode -CommandArguments @(
+        $ThemeCli, 'package-extract', $selectedPath, '--out', $packageStaging
+      ) -PrivateDiagnostics
+      $packageTheme = Assert-AuraUiThemePackageResult -Result ($packageJson | ConvertFrom-Json)
+      $sourcePath = $packageStaging
+    } elseif ([string]::Equals([IO.Path]::GetFileName($selectedPath), 'theme.json',
+        [StringComparison]::OrdinalIgnoreCase)) {
+      $sourcePath = [IO.Path]::GetDirectoryName($selectedPath)
+    } else {
+      throw 'Choose a .aura package or a theme.json kit file.'
+    }
     Send-AuraUiStudioState -Status "$($script:UiCopy.installingTheme)" -Tone busy
     $validationJson = Invoke-AuraUiNode -CommandArguments @(
-      $ThemeCli, 'validate', $dialog.SelectedPath, '--locale', $script:Locale,
+      $ThemeCli, 'validate', $sourcePath, '--locale', $script:Locale,
       '--user-themes', $UserThemesRoot)
     $validation = $validationJson | ConvertFrom-Json
     if ($validation.pass -isnot [bool] -or -not $validation.pass -or
@@ -8647,10 +9382,14 @@ function Invoke-AuraUiImportTheme {
       throw 'The theme validator did not return a valid theme id.'
     }
     $importedId = [string]$validation.theme
+    if ($packageTheme -and
+        -not [string]::Equals($packageTheme, $importedId, [StringComparison]::Ordinal)) {
+      throw 'The package manifest theme does not match its validated kit.'
+    }
     if ($null -ne (Get-AuraUiThemeByName -Name $importedId)) {
       throw ("$($script:UiCopy.themeAlreadyInstalled)" -f $importedId)
     }
-    $installedPath = Copy-AuraUiThemeKit -Source $dialog.SelectedPath -Id $importedId
+    $installedPath = Copy-AuraUiThemeKit -Source $sourcePath -Id $importedId
     [void](Update-AuraUiThemes)
     $importedTheme = Get-AuraUiThemeByName -Name $importedId
     if ($null -eq $importedTheme -or "$($importedTheme.source)" -cne 'user') {
@@ -8675,6 +9414,7 @@ function Invoke-AuraUiImportTheme {
     Send-AuraUiStudioState -Status ("$($script:UiCopy.themeInstallFailed)" -f $detail) -Tone error
     return $false
   } finally {
+    Remove-AuraUiThemePackageStaging -Path $packageStaging -Kind import
     $dialog.Dispose()
   }
 }
@@ -8805,6 +9545,69 @@ function Invoke-AuraUiExportTerminalThemes {
   } finally {
     if ($null -ne $lightDialog) { $lightDialog.Dispose() }
     if ($null -ne $darkDialog) { $darkDialog.Dispose() }
+  }
+}
+
+function Invoke-AuraUiExportThemePackage {
+  param(
+    [Parameter(Mandatory = $true)][object]$Request,
+    [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
+  )
+  $dialog = $null
+  $stagingPath = $null
+  try {
+    $theme = Get-AuraUiStudioKnownTheme -Theme ([string]$Request.theme) -UserOnly
+    $themeId = [string]$theme.name
+    $dialog = [System.Windows.Forms.SaveFileDialog]::new()
+    $dialog.Title = "$($script:UiCopy.exportThemePackageTitle)"
+    $dialog.Filter = 'Claude Aura theme (*.aura)|*.aura'
+    $dialog.FilterIndex = 1
+    $dialog.DefaultExt = 'aura'
+    $dialog.AddExtension = $true
+    $dialog.CheckPathExists = $true
+    $dialog.OverwritePrompt = $true
+    $dialog.ValidateNames = $true
+    $dialog.RestoreDirectory = $true
+    $dialog.FileName = "$themeId.aura"
+    if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
+      Send-AuraUiStudioState -Action 'export-theme-package' -ActionSucceeded $false
+      return $false
+    }
+    $targetPath = [IO.Path]::GetFullPath([string]$dialog.FileName)
+    if (-not [string]::Equals([IO.Path]::GetExtension($targetPath), '.aura',
+        [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'Theme package output must use the .aura extension.'
+    }
+    if ([IO.File]::Exists($targetPath)) {
+      $targetItem = Get-Item -LiteralPath $targetPath -Force
+      if ($targetItem.PSIsContainer -or
+          ($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw 'Theme package output must be a regular file.'
+      }
+    }
+    $stagingPath = Get-AuraUiThemePackageStagingPath -Kind export -File
+    $resultJson = Invoke-AuraUiNode -CommandArguments @(
+      $ThemeCli, 'package-export', $themeId, '--out', $stagingPath,
+      '--user-themes', $UserThemesRoot
+    ) -PrivateDiagnostics
+    [void](Assert-AuraUiThemePackageResult `
+      -Result ($resultJson | ConvertFrom-Json) -ExpectedTheme $themeId -Export)
+    $stagingItem = Get-Item -LiteralPath $stagingPath -Force
+    if ($stagingItem.PSIsContainer -or
+        ($stagingItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        $stagingItem.Length -lt 1 -or $stagingItem.Length -gt 2000000) {
+      throw 'Theme package staging output is invalid.'
+    }
+    [IO.File]::Copy($stagingPath, $targetPath, $true)
+    Send-AuraUiStudioState -Action 'export-theme-package' -ActionSucceeded $true
+    return $true
+  } catch {
+    Write-AuraUiLog -Message 'Theme package export failed.'
+    Send-AuraUiStudioState -Tone error -Action 'export-theme-package' -ActionSucceeded $false
+    return $false
+  } finally {
+    Remove-AuraUiThemePackageStaging -Path $stagingPath -Kind export
+    if ($null -ne $dialog) { $dialog.Dispose() }
   }
 }
 
@@ -9218,6 +10021,7 @@ function Invoke-AuraUiSetEnabled {
     Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
   } else {
     Stop-AuraUiEditorOverlay -Reason disabled
+    Stop-AuraUiLoadingScreenPreview -Reason disabled
     Stop-AuraUiLauncherLayoutProbe
     Update-AuraUiLauncherPosition
     $cleanup = '(() => { const state = window.__CLAUDE_AURA_STATE__; if (state?.cleanup) return state.cleanup(); window.__CLAUDE_AURA_DISABLED__ = true; return true; })()'
@@ -9293,6 +10097,11 @@ function Update-AuraUiLocalizedChrome {
     if ($null -ne $script:RetryButton -and -not $script:RetryButton.IsDisposed) {
       $script:RetryButton.Text = "$($script:UiCopy.retry)"
       $script:RetryButton.AccessibleName = "$($script:UiCopy.retry)"
+    }
+    if ($null -ne $script:CloseLoadingPreviewButton -and
+        -not $script:CloseLoadingPreviewButton.IsDisposed) {
+      $script:CloseLoadingPreviewButton.Text = "$($script:UiCopy.closeLoadingPreview)"
+      $script:CloseLoadingPreviewButton.AccessibleName = $script:CloseLoadingPreviewButton.Text
     }
     Update-AuraUiRescueWindowCopy
     Update-AuraUiRescueWindowTheme
@@ -9402,6 +10211,18 @@ function Assert-AuraUiStudioEditorMessage {
   [void](ConvertTo-AuraUiStudioInteger -Value $Message.revision -Minimum 0 -Maximum 2147483647 -Label 'Editor revision')
 
   switch -CaseSensitive ($type) {
+    'set-loading-screen' {
+      [void](ConvertTo-AuraUiLoadingScreenDefinition -Value $Message.loadingScreen)
+      return
+    }
+    'pick-loading-screen-mark' { return }
+    'pick-loading-screen-artwork' {
+      if ($Message.appearance -isnot [string] -or $Message.appearance -cnotin @('light', 'dark')) {
+        throw 'Aura Studio loading-screen artwork appearance is invalid.'
+      }
+      return
+    }
+    'preview-theme-loading-screen' { return }
     'enable-responsive-layouts' {
       return
     }
@@ -10025,6 +10846,7 @@ function Get-AuraUiStudioMessage {
   $expectedProperties = @(switch -CaseSensitive ($type) {
     'set-theme' { 'type'; 'theme'; break }
     'export-terminal-themes' { 'type'; 'theme'; break }
+    'export-theme-package' { 'type'; 'theme'; break }
     'set-appearance' { 'type'; 'appearance'; break }
     'set-locale' { 'type'; 'locale'; break }
     'set-enabled' { 'type'; 'enabled'; break }
@@ -10046,6 +10868,10 @@ function Get-AuraUiStudioMessage {
     'set-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'preset'; 'property'; 'value'; break }
     'enable-responsive-layouts' { 'type'; 'session'; 'revision'; break }
     'mutate-responsive-layout' { 'type'; 'session'; 'revision'; 'operation'; 'id'; 'value'; break }
+    'set-loading-screen' { 'type'; 'session'; 'revision'; 'loadingScreen'; break }
+    'pick-loading-screen-mark' { 'type'; 'session'; 'revision'; break }
+    'pick-loading-screen-artwork' { 'type'; 'session'; 'revision'; 'appearance'; break }
+    'preview-theme-loading-screen' { 'type'; 'session'; 'revision'; break }
     'apply-theme-patch' { 'type'; 'session'; 'revision'; 'changes'; break }
     'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; 'appearance'; 'context'; break }
     'pick-instant-prompt-icon' { 'type'; 'session'; 'revision'; 'id'; break }
@@ -10103,6 +10929,7 @@ function Get-AuraUiStudioMessage {
   if ($type -in @(
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
       'enable-responsive-layouts', 'mutate-responsive-layout',
+      'set-loading-screen', 'pick-loading-screen-mark', 'pick-loading-screen-artwork', 'preview-theme-loading-screen',
       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
       'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme',
       'set-greeting-phrases', 'reset-greeting')) {
@@ -10112,13 +10939,13 @@ function Get-AuraUiStudioMessage {
       ($message.locale -isnot [string] -or $message.locale -cnotin $StudioLocaleIds)) {
     throw 'Studio locale is invalid.'
   }
-  if ($type -ceq 'export-terminal-themes') {
+  if ($type -in @('export-terminal-themes', 'export-theme-package')) {
     if ($sourceUri.AbsolutePath -cne '/index.html' -or
         -not (Test-AuraUiStudioDocumentUri -Uri $sourceUri -AllowFragment)) {
-      throw 'Terminal theme export message source is not allowed.'
+      throw 'Theme export message source is not allowed.'
     }
     if ($message.theme -isnot [string] -or $message.theme -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
-      throw 'Terminal theme export id is invalid.'
+      throw 'Theme export id is invalid.'
     }
   }
   if ($type -in @('start-window-edit', 'stop-window-edit')) {
@@ -10282,12 +11109,26 @@ function Invoke-AuraUiStudioMessage {
       [void](Invoke-AuraUiExportTerminalThemes -Request $message -Owner $script:StudioForm)
       break
     }
+    'export-theme-package' {
+      [void](Invoke-AuraUiExportThemePackage -Request $message -Owner $script:StudioForm)
+      break
+    }
     'create-theme-copy' { [void](Invoke-AuraUiCreateThemeCopy -Request $message); break }
     'begin-theme-edit' { [void](Invoke-AuraUiBeginThemeEdit -Request $message); break }
     'set-theme-token' { [void](Invoke-AuraUiSetThemeToken -Request $message); break }
     'set-theme-layer' { [void](Invoke-AuraUiSetThemeLayer -Request $message); break }
     'enable-responsive-layouts' { [void](Invoke-AuraUiResponsiveLayoutAction -Request $message); break }
     'mutate-responsive-layout' { [void](Invoke-AuraUiResponsiveLayoutAction -Request $message); break }
+    'set-loading-screen' { [void](Invoke-AuraUiSetLoadingScreen -Request $message); break }
+    'pick-loading-screen-mark' {
+      [void](Invoke-AuraUiPickLoadingScreenMark -Request $message -Owner $script:StudioForm)
+      break
+    }
+    'pick-loading-screen-artwork' {
+      [void](Invoke-AuraUiPickLoadingScreenArtwork -Request $message -Owner $script:StudioForm)
+      break
+    }
+    'preview-theme-loading-screen' { [void](Invoke-AuraUiPreviewThemeLoadingScreen -Request $message); break }
     'apply-theme-patch' { [void](Invoke-AuraUiApplyThemePatch -Request $message); break }
     'pick-theme-layer-image' {
       [void](Invoke-AuraUiPickThemeLayerImage -Request $message -Owner $script:StudioForm)
@@ -10588,6 +11429,7 @@ $script:StudioMessageTypes = @(
   'open-aura',
   'open-desktop',
   'import-theme',
+  'export-theme-package',
   'export-terminal-themes',
   'create-theme-copy',
   'begin-theme-edit',
@@ -10595,6 +11437,10 @@ $script:StudioMessageTypes = @(
   'set-theme-layer',
   'enable-responsive-layouts',
   'mutate-responsive-layout',
+  'set-loading-screen',
+  'pick-loading-screen-mark',
+  'pick-loading-screen-artwork',
+  'preview-theme-loading-screen',
   'apply-theme-patch',
   'pick-theme-layer-image',
   'pick-theme-launcher-mark',
@@ -10692,8 +11538,12 @@ $script:LoadingLabel = $null
 $script:LoadingProgress = $null
 $script:LoadingProgressIndicator = $null
 $script:LoadingAnimationTimer = $null
+$script:LoadingScreenPreviewTimer = $null
+$script:LoadingScreenPreviewActive = $false
 $script:LoadingProfile = $null
+$script:LoadingArtworkImage = $null
 $script:RetryButton = $null
+$script:CloseLoadingPreviewButton = $null
 $script:LoadingRetrySurface = 'Home'
 $script:MainIcon = $null
 $script:StudioIcon = $null
@@ -11118,6 +11968,16 @@ public static class AuraUiAsyncDispatch {
   $script:Form.ControlBox = $true
   $script:Form.MinimizeBox = $true
   $script:Form.MaximizeBox = $true
+  $script:Form.KeyPreview = $true
+  $script:Form.add_KeyDown({
+    param($sender, $eventArgs)
+    if ($script:LoadingScreenPreviewActive -and
+        $eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Escape) {
+      Stop-AuraUiLoadingScreenPreview -Reason escape
+      $eventArgs.Handled = $true
+      $eventArgs.SuppressKeyPress = $true
+    }
+  })
   $script:Form.add_SizeChanged({
     if ($script:Form.WindowState -ne [System.Windows.Forms.FormWindowState]::Minimized) {
       $script:AuraLastWindowState = $script:Form.WindowState
@@ -11313,6 +12173,11 @@ public static class AuraUiAsyncDispatch {
     }
     $script:LoadingProgressIndicator.Left = $nextLeft
   })
+  $script:LoadingScreenPreviewTimer = [System.Windows.Forms.Timer]::new()
+  $script:LoadingScreenPreviewTimer.Interval = 8000
+  $script:LoadingScreenPreviewTimer.add_Tick({
+    Stop-AuraUiLoadingScreenPreview -Reason timeout
+  })
   $script:RetryButton = [System.Windows.Forms.Button]::new()
   $script:RetryButton.Text = "$($script:UiCopy.retry)"
   $script:RetryButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
@@ -11327,11 +12192,23 @@ public static class AuraUiAsyncDispatch {
   $script:RetryButton.TabStop = $true
   $script:RetryButton.Size = [Drawing.Size]::new(96, 38)
   $script:RetryButton.Visible = $false
+  $script:CloseLoadingPreviewButton = [System.Windows.Forms.Button]::new()
+  $script:CloseLoadingPreviewButton.Text = "$($script:UiCopy.closeLoadingPreview)"
+  $script:CloseLoadingPreviewButton.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $script:CloseLoadingPreviewButton.FlatAppearance.BorderSize = 1
+  $script:CloseLoadingPreviewButton.Cursor = [System.Windows.Forms.Cursors]::Hand
+  $script:CloseLoadingPreviewButton.AccessibleName = $script:CloseLoadingPreviewButton.Text
+  $script:CloseLoadingPreviewButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+  $script:CloseLoadingPreviewButton.TabStop = $true
+  $script:CloseLoadingPreviewButton.Size = [Drawing.Size]::new(132, 38)
+  $script:CloseLoadingPreviewButton.Visible = $false
+  $script:CloseLoadingPreviewButton.add_Click({ Stop-AuraUiLoadingScreenPreview -Reason button })
   $script:LoadingPanel.Controls.AddRange(@(
     $script:LoadingMark,
     $script:LoadingLabel,
     $script:LoadingProgress,
-    $script:RetryButton
+    $script:RetryButton,
+    $script:CloseLoadingPreviewButton
   ))
   $script:LoadingPanel.add_Resize({
     Set-AuraUiLoadingLayout
@@ -11852,6 +12729,7 @@ public static class AuraUiAsyncDispatch {
                       'export-terminal-themes',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                       'enable-responsive-layouts', 'mutate-responsive-layout',
+                      'set-loading-screen', 'pick-loading-screen-mark', 'pick-loading-screen-artwork', 'preview-theme-loading-screen',
                       'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
@@ -11874,6 +12752,7 @@ public static class AuraUiAsyncDispatch {
                 } elseif ($failedAction -in @(
                     'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
                     'enable-responsive-layouts', 'mutate-responsive-layout',
+                    'set-loading-screen', 'pick-loading-screen-mark', 'pick-loading-screen-artwork', 'preview-theme-loading-screen',
                     'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-sidebar-identity-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                     'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                     'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
@@ -11953,8 +12832,9 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_NavigationStarting({
           param($sender, $eventArgs)
-          Stop-AuraUiEditorOverlay -Reason navigation
           Advance-AuraPromptShelfPageEpoch
+          Stop-AuraUiLoadingScreenPreview -Reason navigation
+          Stop-AuraUiEditorOverlay -Reason navigation
           Stop-AuraUiLauncherLayoutProbe
           if ($script:PageReady) {
             $script:NavigationRecoverySurface = Get-AuraUiNavigationRecoverySurface `
@@ -12143,16 +13023,18 @@ public static class AuraUiAsyncDispatch {
         # source or history transition; Request-AuraUiMirror coalesces bursts
         # and keeps its existing editor-session/generation guards.
         $core.add_SourceChanged({
-          Stop-AuraUiEditorOverlay -Reason navigation
           Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
+          Stop-AuraUiLoadingScreenPreview -Reason navigation
+          Stop-AuraUiEditorOverlay -Reason navigation
           Request-AuraUiGreetingProbe
           Request-AuraUiLauncherLayoutProbe
         })
         $core.add_HistoryChanged({
-          Stop-AuraUiEditorOverlay -Reason navigation
           Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
+          Stop-AuraUiLoadingScreenPreview -Reason navigation
+          Stop-AuraUiEditorOverlay -Reason navigation
           Request-AuraUiGreetingProbe
           Request-AuraUiLauncherLayoutProbe
         })
@@ -12461,6 +13343,11 @@ public static class AuraUiAsyncDispatch {
       $script:LoadingAnimationTimer.Dispose()
       $script:LoadingAnimationTimer = $null
     }
+    if ($script:LoadingScreenPreviewTimer) {
+      $script:LoadingScreenPreviewTimer.Stop()
+      $script:LoadingScreenPreviewTimer.Dispose()
+      $script:LoadingScreenPreviewTimer = $null
+    }
     if ($script:LoadingMark -and $script:LoadingMark.Image) {
       $script:LoadingMark.Image.Dispose()
       $script:LoadingMark.Image = $null
@@ -12468,6 +13355,10 @@ public static class AuraUiAsyncDispatch {
     if ($script:LoadingPanel -and $script:LoadingPanel.BackgroundImage) {
       $script:LoadingPanel.BackgroundImage.Dispose()
       $script:LoadingPanel.BackgroundImage = $null
+    }
+    if ($script:LoadingArtworkImage) {
+      $script:LoadingArtworkImage.Dispose()
+      $script:LoadingArtworkImage = $null
     }
     if ($script:TrayIcon) {
       $script:TrayIcon.Visible = $false
@@ -12556,6 +13447,13 @@ public static class AuraUiAsyncDispatch {
     } catch {}
     $script:LoadingAnimationTimer = $null
   }
+  if ($null -ne $script:LoadingScreenPreviewTimer) {
+    try {
+      $script:LoadingScreenPreviewTimer.Stop()
+      $script:LoadingScreenPreviewTimer.Dispose()
+    } catch {}
+    $script:LoadingScreenPreviewTimer = $null
+  }
   if ($null -ne $script:LoadingMark -and $null -ne $script:LoadingMark.Image) {
     try {
       $script:LoadingMark.Image.Dispose()
@@ -12567,6 +13465,10 @@ public static class AuraUiAsyncDispatch {
       $script:LoadingPanel.BackgroundImage.Dispose()
       $script:LoadingPanel.BackgroundImage = $null
     } catch {}
+  }
+  if ($null -ne $script:LoadingArtworkImage) {
+    try { $script:LoadingArtworkImage.Dispose() } catch {}
+    $script:LoadingArtworkImage = $null
   }
   foreach ($tracker in @($script:MainIconWindow, $script:StudioIconWindow, $script:LauncherDpiWindow)) {
     if ($null -ne $tracker) { try { $tracker.Dispose() } catch {} }

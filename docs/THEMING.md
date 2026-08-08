@@ -163,6 +163,75 @@ changed.
 You are done when the custom card is gone, Aura uses Default, and reopening
 Studio does not bring the deleted theme back.
 
+## Share a theme as one `.aura` file
+
+Only saved user themes can be exported. On the theme's Studio card, choose
+**Export theme...**, then keep the suggested `<theme-id>.aura` name. To install
+one, choose **Create a theme** > **Install theme...** and select either the
+`.aura` file or a folder kit's `theme.json` file. Built-in themes must first be
+duplicated and saved, so an export never depends on files inside the installed
+application.
+
+An `.aura` file is a ZIP container. Aura writes ordinary stored ZIP entries;
+the importer accepts stored or deflated entries only. The root
+`manifest.json` has this exact version-1 shape:
+
+```json
+{
+  "format": "claude-aura-theme",
+  "schemaVersion": 1,
+  "themeId": "quiet-moss",
+  "createdWith": "0.3.0",
+  "files": [
+    {
+      "path": "theme.json",
+      "size": 18420,
+      "sha256": "64 lowercase hexadecimal characters"
+    }
+  ]
+}
+```
+
+`files` is sorted by its forward-slash path and lists every other archive
+entry exactly once. `schemaVersion` is the package-manifest version; the
+theme-kit schema remains `theme.json`'s `schemaVersion`. Packages round-trip
+kit schemas v1 through v6 without upgrading them.
+
+The version-1 file allowlist is deliberately small:
+
+- `theme.json`, optional `card-preview.webp`, `launcher-mark.png`, and
+  `sidebar-identity.png`;
+- legacy root artwork slots: `background`, `hero`, `corner-top-right`,
+  `corner-bottom`, `card-1` through `card-3`, and `brand-mark`, using the
+  image extensions already accepted by the kit validator;
+- content-addressed `artwork/layer-<32 lowercase hex>.webp` files; and
+- content-addressed `loading/mark-<sha256>.png` and
+  `loading/artwork-<sha256>.webp` files.
+
+Interface overrides, filters, responsive layouts, widgets, and portable
+greeting/loading-screen settings live inside the validated `theme.json` and
+therefore need no executable package format. Personal wallpaper, avatar,
+display-name phrases, shuffle state, window layout, Studio preferences,
+configuration, account data, and host filesystem paths are never included.
+
+Before creating any install staging folder, Aura rejects an archive if its
+manifest version is unknown, a SHA-256 or ZIP CRC does not match, a path is
+absolute or uses `..`, a file is outside the allowlist, entries overlap or use
+unsupported ZIP features, or content exceeds these bounds:
+
+- 24 kit files;
+- 400,000 bytes per kit file;
+- 1,800,000 bytes across kit files;
+- 64,000 bytes for `manifest.json`; and
+- 2,000,000 bytes for the complete archive.
+
+After those checks, Aura extracts into a new app-owned staging folder, runs
+the same Light/Dark kit and payload validation used for a folder install, and
+then uses the existing staged atomic installer. A failure removes staging and
+leaves the current theme and configuration unchanged. Package content is read
+as data only: it is never executed or evaluated, and non-empty `customCss`
+remains invalid.
+
 ## Route B: build and install a folder kit
 
 This route is for contributors or people who want a portable local theme kit.
@@ -257,9 +326,8 @@ no UI screenshot, preview board, contact sheet, or image golden.
 1. Open **Claude Aura Studio**.
 2. If **Meet Claude Aura** opens, choose **English**, then choose **Skip**.
 3. Choose **Create a theme**.
-4. Choose **Install theme from folder...**.
-5. Select the exact `themes\demo-proof` folder - the folder that directly
-   contains `theme.json`.
+4. Choose **Install theme...**.
+5. Select the exact `themes\demo-proof\theme.json` file.
 6. Choose **Themes** and wait for the **Demo Proof** card to say **Selected**.
 7. Choose **Back to Claude Aura** and check the real Aura window on live
    `claude.ai`.
@@ -334,7 +402,7 @@ failure.
 | What you see | What to do |
 | --- | --- |
 | `Theme id already exists: demo-proof` | Check whether the two exact `demo-proof` scaffold paths are yours. Delete only those paths, or choose a new lowercase kebab-case ID. |
-| Studio says `theme.json` is missing | Select `themes\demo-proof`, not its parent `themes` folder. |
+| Studio says `theme.json` is missing | Select the exact `themes\demo-proof\theme.json` file. |
 | The launcher asset is rejected | Confirm the file is named `launcher-mark.png`, is a static transparent 96 x 96 PNG, and both JSON asset values match it. |
 | Aura keeps the last valid preview | Read the highlighted Studio issue, fix that one field, and wait for the preview-up-to-date status. |
 | The custom theme disappears after restart | Open Studio and confirm it was saved or installed, not left as an unsaved draft. |

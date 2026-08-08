@@ -27,9 +27,13 @@
   const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
   const LAUNCHER_ASSET_PATTERN = /^(?:assets\/theme-art\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png|launcher-mark\.png)$/;
   const PREVIEW_PATH_PATTERN = /^\/active\/(?:[a-z0-9][a-z0-9-]{0,63}\/)*[a-z0-9][a-z0-9-]{0,80}\.webp$/;
+  const LOADING_MARK_ASSET_PATTERN = /^loading\/mark-[a-f0-9]{64}\.png$/;
+  const LOADING_ARTWORK_ASSET_PATTERN = /^loading\/artwork-[a-f0-9]{64}\.webp$/;
   const ACTIONS = new Set([
     "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
-    "enable-responsive-layouts", "mutate-responsive-layout", "apply-theme-patch",
+    "enable-responsive-layouts", "mutate-responsive-layout",
+    "set-loading-screen", "pick-loading-screen-mark", "pick-loading-screen-artwork", "preview-theme-loading-screen",
+    "apply-theme-patch",
     "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer",
     "move-theme-layer", "undo-theme-edit",
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
@@ -508,6 +512,7 @@
     "interface.greeting": Object.freeze({ branch: "interface", surfaceId: "greeting", labelKey: "targetGreeting" }),
     "background.layer": Object.freeze({ branch: "background", surfaceId: "background-layer", labelKey: "targetBackgroundLayer" }),
     "widgets.app-identity": Object.freeze({ branch: "widgets", surfaceId: "aura-launcher", labelKey: "targetAppIdentity" }),
+    "widgets.loading-screen": Object.freeze({ branch: "widgets", surfaceId: "loading-screen", labelKey: "loadingScreenTitle" }),
     "widgets.instant-prompts": Object.freeze({ branch: "widgets", surfaceId: "quick-prompts", labelKey: "instantPromptsTitle" }),
   });
 
@@ -619,6 +624,15 @@
       captureGeometry: "new-chat-area",
       selectionBehavior: "stage-instant-prompt",
     },
+    {
+      id: "widgets.loading-screen",
+      surfaceId: "loading-screen",
+      branch: "widgets",
+      views: ["new-chat", "conversation"],
+      axes: ["appearance"],
+      captureGeometry: "local-preview",
+      selectionBehavior: "picker",
+    },
   ]);
   if (!EDITOR_CAPABILITY_REGISTRY) throw new Error("Invalid Aura editor capability registry");
   const CAPABILITY_BY_ID = new Map(EDITOR_CAPABILITY_REGISTRY.map((entry) => [entry.id, entry]));
@@ -633,6 +647,83 @@
       if (!/^\?v=[a-f0-9]{32,64}$/.test(url.search) || url.hash) return undefined;
       return url.href;
     } catch { return undefined; }
+  }
+
+  function normalizeLoadingScreen(value) {
+    if (!plainRecord(value) || typeof value.mode !== "string") return null;
+    if (value.mode === "inherit") return exactShape(value, ["mode"]) ? { mode: "inherit" } : null;
+    if (value.mode !== "custom"
+        || !exactShape(value, ["mode", "layout", "motif", "mark", "progress", "light", "dark"])
+        || !enumValue(value.layout, ["centered", "split"])
+        || !enumValue(value.motif, [
+          "inherit", "none", "orbit", "editorial-rule", "facet", "ink-frame",
+          "horizon", "folio", "ribbon", "capsule",
+        ])
+        || !exactShape(value.mark, ["source", "asset", "size"])
+        || !enumValue(value.mark.source, ["theme", "custom", "none"])
+        || !integer(value.mark.size, 48, 112)
+        || !exactShape(value.progress, ["style", "motion"])
+        || !enumValue(value.progress.style, ["bar", "pulse"])
+        || !enumValue(value.progress.motion, ["calm", "still"])) return null;
+    if (value.mark.source === "custom") {
+      if (typeof value.mark.asset !== "string" || !LOADING_MARK_ASSET_PATTERN.test(value.mark.asset)) return null;
+    } else if (value.mark.asset !== null) return null;
+    const normalizeAppearance = (appearance) => {
+      if (!exactShape(appearance, [
+        "background", "surface", "text", "accent", "accentText", "border", "artwork",
+      ])) return null;
+      for (const key of ["background", "surface", "text", "accent", "accentText", "border"]) {
+        if (typeof appearance[key] !== "string" || !COLOR_PATTERN.test(appearance[key])) return null;
+      }
+      let artwork = null;
+      if (appearance.artwork !== null) {
+        if (!exactShape(appearance.artwork, ["asset", "opacity", "fit", "focalX", "focalY"])
+            || typeof appearance.artwork.asset !== "string"
+            || !LOADING_ARTWORK_ASSET_PATTERN.test(appearance.artwork.asset)
+            || !inRange(appearance.artwork.opacity, 0, 0.65)
+            || !enumValue(appearance.artwork.fit, ["cover", "contain"])
+            || !integer(appearance.artwork.focalX, 0, 100)
+            || !integer(appearance.artwork.focalY, 0, 100)) return null;
+        artwork = { ...appearance.artwork };
+      }
+      return { ...appearance, artwork };
+    };
+    const light = normalizeAppearance(value.light);
+    const dark = normalizeAppearance(value.dark);
+    return light && dark ? {
+      mode: "custom",
+      layout: value.layout,
+      motif: value.motif,
+      mark: { ...value.mark },
+      progress: { ...value.progress },
+      light,
+      dark,
+    } : null;
+  }
+
+  function normalizeLoadingAssetPreviews(value) {
+    if (!exactShape(value, ["mark", "lightArtwork", "darkArtwork"])) return null;
+    const result = {};
+    for (const [key, kind, extension] of [
+      ["mark", "mark", "png"],
+      ["lightArtwork", "artwork", "webp"],
+      ["darkArtwork", "artwork", "webp"],
+    ]) {
+      const candidate = value[key];
+      if (candidate === null) {
+        result[key] = null;
+        continue;
+      }
+      if (typeof candidate !== "string" || candidate.length > 320) return null;
+      try {
+        const url = new URL(candidate);
+        const match = new RegExp(`^/active/loading-${kind}-([a-f0-9]{64})\\.${extension}$`).exec(url.pathname);
+        if (url.origin !== "https://aura.editor" || url.username || url.password
+            || !match || url.search !== `?v=${match[1]}` || url.hash) return null;
+        result[key] = url.href;
+      } catch { return null; }
+    }
+    return result;
   }
 
   function normalizeModeTokens(value) {
@@ -1373,7 +1464,8 @@
       "active", "id", "sourceId", "source", "isNew", "session", "revision", "dirty", "canUndo", "canRedo",
       "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
       "launcherStylePreviewUrl", "interfaceSurfaces", "interfaceStyle", "identityPreviewUrl",
-      "identityStylePreviewUrl", "responsiveLayouts", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
+      "identityStylePreviewUrl", "responsiveLayouts", "loadingScreen", "loadingScreenStyle",
+      "loadingScreenAssets", "loadingScreenStyleAssets", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
     ];
     const activeOptional = [...optional, "editKind"];
     if (!exactShape(value, required, activeOptional) || !ID_PATTERN.test(value.id)
@@ -1390,6 +1482,10 @@
     if (!label || !exactShape(value.tokens, ["light", "dark"])) return undefined;
     const responsiveLayouts = normalizeResponsiveLayouts(value.responsiveLayouts);
     if (responsiveLayouts === undefined) return undefined;
+    const loadingScreen = normalizeLoadingScreen(value.loadingScreen);
+    const loadingScreenStyle = normalizeLoadingScreen(value.loadingScreenStyle);
+    const loadingScreenAssets = normalizeLoadingAssetPreviews(value.loadingScreenAssets);
+    const loadingScreenStyleAssets = normalizeLoadingAssetPreviews(value.loadingScreenStyleAssets);
     const metadata = normalizeMetadata(value.metadata);
     const light = normalizeModeTokens(value.tokens.light);
     const dark = normalizeModeTokens(value.tokens.dark);
@@ -1410,6 +1506,7 @@
         || !launcherPreviewUrl || !launcherStylePreviewUrl
         || interfaceSurfaces === undefined || interfaceStyle === undefined
         || identityPreviewUrl === undefined || identityStylePreviewUrl === undefined
+        || !loadingScreen || !loadingScreenStyle || !loadingScreenAssets || !loadingScreenStyleAssets
         || !shared || !greetingPreferences
         || instantPrompts.some((prompt) => !prompt)
         || new Set(instantPrompts.map((prompt) => prompt.id)).size !== instantPrompts.length
@@ -1436,6 +1533,10 @@
       identityPreviewUrl,
       identityStylePreviewUrl,
       responsiveLayouts,
+      loadingScreen,
+      loadingScreenStyle,
+      loadingScreenAssets,
+      loadingScreenStyleAssets,
       shared,
       greetingPreferences,
       instantPrompts,
@@ -1535,6 +1636,36 @@
     const launcherPreview = document.getElementById("editor-launcher-preview");
     const launcherMark = document.getElementById("editor-launcher-mark");
     const replaceLauncherMarkButton = document.getElementById("editor-launcher-replace");
+    const loadingModeInputs = [...document.querySelectorAll('input[name="loading-screen-mode"]')];
+    const loadingSource = document.getElementById("loading-screen-source");
+    const loadingCustomControls = document.getElementById("loading-screen-custom-controls");
+    const loadingSchematic = document.getElementById("loading-screen-schematic");
+    const loadingArtworkPreview = document.getElementById("loading-screen-artwork-preview");
+    const loadingMotifPreview = document.getElementById("loading-screen-motif-preview");
+    const loadingMarkPreview = document.getElementById("loading-screen-mark-preview");
+    const loadingMarkPreviewImage = loadingMarkPreview?.querySelector("img");
+    const loadingMarkPreviewFallback = loadingMarkPreview?.querySelector("span");
+    const loadingProgressPreview = document.getElementById("loading-screen-progress-preview");
+    const loadingLayoutInput = document.getElementById("loading-screen-layout");
+    const loadingMotifInput = document.getElementById("loading-screen-motif");
+    const loadingMarkSourceInput = document.getElementById("loading-screen-mark-source");
+    const loadingMarkSizeInput = document.getElementById("loading-screen-mark-size");
+    const loadingMarkSizeOutput = document.getElementById("loading-screen-mark-size-output");
+    const loadingProgressStyleInput = document.getElementById("loading-screen-progress-style");
+    const loadingProgressMotionInput = document.getElementById("loading-screen-progress-motion");
+    const loadingReviewButton = document.getElementById("loading-screen-review");
+    const loadingMarkPickButton = document.getElementById("loading-screen-mark-pick");
+    const loadingArtworkPickButton = document.getElementById("loading-screen-artwork-pick");
+    const loadingArtworkRemoveButton = document.getElementById("loading-screen-artwork-remove");
+    const loadingArtworkOpacityInput = document.getElementById("loading-screen-artwork-opacity");
+    const loadingArtworkOpacityOutput = document.getElementById("loading-screen-artwork-opacity-output");
+    const loadingArtworkFitInput = document.getElementById("loading-screen-artwork-fit");
+    const loadingArtworkFocalXInput = document.getElementById("loading-screen-artwork-focal-x");
+    const loadingArtworkFocalXOutput = document.getElementById("loading-screen-artwork-focal-x-output");
+    const loadingArtworkFocalYInput = document.getElementById("loading-screen-artwork-focal-y");
+    const loadingArtworkFocalYOutput = document.getElementById("loading-screen-artwork-focal-y-output");
+    const loadingArtworkControls = editor.querySelector(".loading-screen-artwork-controls");
+    const loadingColorFields = [];
     const surfaceControlHosts = Object.freeze({
       sidebar: document.getElementById("editor-sidebar-surface-controls"),
       sidebarIdentity: document.getElementById("editor-sidebar-identity-controls"),
@@ -1773,6 +1904,42 @@
       }));
     };
 
+    const loadingColorDefinitions = Object.freeze([
+      ["background", "loadingScreenBackground"],
+      ["surface", "loadingScreenSurface"],
+      ["text", "loadingScreenText"],
+      ["accent", "loadingScreenAccent"],
+      ["accentText", "loadingScreenAccentText"],
+      ["border", "loadingScreenBorder"],
+    ]);
+    for (const appearance of ["light", "dark"]) {
+      const host = editor.querySelector(`[data-loading-appearance="${appearance}"] .loading-screen-colors`);
+      if (!host) continue;
+      for (const [property, labelKey] of loadingColorDefinitions) {
+        const label = document.createElement("label");
+        label.className = "color-field";
+        const text = document.createElement("span");
+        text.textContent = tr(labelKey);
+        const picker = document.createElement("input");
+        picker.type = "color";
+        picker.dataset.loadingColor = property;
+        picker.dataset.loadingAppearance = appearance;
+        picker.dataset.editorField = `loadingScreen.${appearance}.${property}`;
+        const exact = document.createElement("input");
+        exact.type = "text";
+        exact.maxLength = 7;
+        exact.inputMode = "text";
+        exact.spellcheck = false;
+        exact.dataset.loadingColorText = property;
+        exact.dataset.loadingAppearance = appearance;
+        exact.dataset.editorField = `loadingScreen.${appearance}.${property}`;
+        exact.setAttribute("aria-label", `${tr(labelKey)} HEX`);
+        label.append(text, picker, exact);
+        host.append(label);
+        loadingColorFields.push({ appearance, property, picker, exact, label });
+      }
+    }
+
     const setInheritedSelectPresentation = (select, inherited, value) => {
       let option = select.querySelector("option[data-editor-inherited-option]");
       if (!inherited) {
@@ -1811,6 +1978,7 @@
     const PENDING_WATCHDOG_MS = 12000;
     const WATCHDOG_EXEMPT_ACTIONS = new Set([
       "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon",
+      "pick-loading-screen-mark", "pick-loading-screen-artwork",
     ]);
     const clearPendingWatchdog = () => {
       if (!pendingWatchdog) return;
@@ -1938,6 +2106,134 @@
     };
 
     const mutationBase = () => state ? { session: state.session, revision: state.revision } : null;
+    const loadingCueByTheme = Object.freeze({
+      default: "orbit",
+      "japanese-film-editorial": "editorial-rule",
+      "korean-prestige": "facet",
+      "cartoon-studio": "ink-frame",
+      "anime-twilight": "horizon",
+      "study-library": "folio",
+      "japanese-idol": "ribbon",
+      "korean-idol": "capsule",
+    });
+    const cloneLoading = (value) => JSON.parse(JSON.stringify(value));
+    const defaultLoadingScreen = () => {
+      const mode = (appearance) => {
+        const style = state.studioStyle[appearance];
+        return {
+          background: style.canvas,
+          surface: style.raised,
+          text: style.text,
+          accent: style.accent,
+          accentText: style.accentText,
+          // Using the readable foreground here gives a validation-safe first
+          // custom draft even when the theme's decorative border is subtle.
+          border: style.text,
+          artwork: null,
+        };
+      };
+      return {
+        mode: "custom",
+        layout: "centered",
+        motif: "inherit",
+        mark: { source: "theme", asset: null, size: 72 },
+        progress: { style: "bar", motion: "calm" },
+        light: mode("light"),
+        dark: mode("dark"),
+      };
+    };
+    const loadingScreenDraft = () => state.loadingScreen.mode === "custom"
+      ? cloneLoading(state.loadingScreen)
+      : defaultLoadingScreen();
+    const postLoadingScreen = (next) => {
+      const base = mutationBase();
+      return Boolean(base && post({ type: "set-loading-screen", ...base, loadingScreen: next }));
+    };
+    const requestLoadingMark = () => {
+      const base = mutationBase();
+      if (base) post({ type: "pick-loading-screen-mark", ...base });
+    };
+    const requestLoadingArtwork = () => {
+      const base = mutationBase();
+      if (base) post({ type: "pick-loading-screen-artwork", ...base, appearance: selectedMode });
+    };
+    const reflectLoadingScreen = () => {
+      if (!state || !loadingSchematic) return;
+      const inherited = state.loadingScreen.mode === "inherit";
+      const screen = inherited ? defaultLoadingScreen() : state.loadingScreen;
+      const appearance = screen[selectedMode];
+      const cue = screen.motif === "inherit"
+        ? loadingCueByTheme[state.sourceId] ?? "orbit"
+        : screen.motif;
+      for (const input of loadingModeInputs) input.checked = input.value === state.loadingScreen.mode;
+      loadingCustomControls.hidden = inherited;
+      loadingSource.textContent = state.sourceId;
+      loadingLayoutInput.value = screen.layout;
+      loadingMotifInput.value = screen.motif;
+      loadingMarkSourceInput.value = screen.mark.source;
+      loadingMarkSizeInput.value = String(screen.mark.size);
+      loadingMarkSizeOutput.value = `${screen.mark.size}px`;
+      loadingProgressStyleInput.value = screen.progress.style;
+      loadingProgressMotionInput.value = screen.progress.motion;
+      loadingSchematic.dataset.layout = screen.layout;
+      loadingSchematic.style.setProperty("--loading-background", appearance.background);
+      loadingSchematic.style.setProperty("--loading-surface", appearance.surface);
+      loadingSchematic.style.setProperty("--loading-text", appearance.text);
+      loadingSchematic.style.setProperty("--loading-accent", appearance.accent);
+      loadingSchematic.style.setProperty("--loading-border", appearance.border);
+      loadingSchematic.style.setProperty("--loading-mark-size", `${Math.round(screen.mark.size * 0.72)}px`);
+      loadingMotifPreview.dataset.motif = cue;
+      loadingProgressPreview.dataset.style = screen.progress.style;
+      loadingProgressPreview.dataset.motion = screen.progress.motion;
+      const markUrl = screen.mark.source === "custom"
+        ? state.loadingScreenAssets.mark
+        : screen.mark.source === "theme" ? state.launcherPreviewUrl : null;
+      loadingMarkPreview.dataset.source = screen.mark.source;
+      if (markUrl) {
+        loadingMarkPreviewImage.src = markUrl;
+        loadingMarkPreviewImage.hidden = false;
+        loadingMarkPreviewFallback.hidden = true;
+      } else {
+        loadingMarkPreviewImage.removeAttribute("src");
+        loadingMarkPreviewImage.hidden = true;
+        loadingMarkPreviewFallback.hidden = screen.mark.source === "none";
+      }
+      const artworkUrl = selectedMode === "dark"
+        ? state.loadingScreenAssets.darkArtwork
+        : state.loadingScreenAssets.lightArtwork;
+      if (!inherited && appearance.artwork && artworkUrl) {
+        loadingArtworkPreview.src = artworkUrl;
+        loadingArtworkPreview.hidden = false;
+        loadingSchematic.style.setProperty("--loading-artwork-opacity", String(appearance.artwork.opacity));
+        loadingSchematic.style.setProperty("--loading-artwork-fit", appearance.artwork.fit);
+        loadingSchematic.style.setProperty(
+          "--loading-artwork-position",
+          `${appearance.artwork.focalX}% ${appearance.artwork.focalY}%`,
+        );
+      } else {
+        loadingArtworkPreview.removeAttribute("src");
+        loadingArtworkPreview.hidden = true;
+        loadingSchematic.style.setProperty("--loading-artwork-opacity", "0");
+      }
+      for (const field of loadingColorFields) {
+        const value = screen[field.appearance][field.property];
+        field.picker.value = value;
+        field.exact.value = value;
+        const card = field.label.closest("[data-loading-appearance]");
+        card?.classList.toggle("advanced-only", field.appearance !== selectedMode);
+      }
+      const artwork = screen[selectedMode].artwork;
+      loadingArtworkOpacityInput.value = String(artwork?.opacity ?? 0.35);
+      loadingArtworkOpacityOutput.value = `${Math.round((artwork?.opacity ?? 0.35) * 100)}%`;
+      loadingArtworkFitInput.value = artwork?.fit ?? "cover";
+      loadingArtworkFocalXInput.value = String(artwork?.focalX ?? 50);
+      loadingArtworkFocalXOutput.value = `${artwork?.focalX ?? 50}%`;
+      loadingArtworkFocalYInput.value = String(artwork?.focalY ?? 50);
+      loadingArtworkFocalYOutput.value = `${artwork?.focalY ?? 50}%`;
+      loadingArtworkControls.hidden = !artwork;
+      loadingArtworkRemoveButton.hidden = !artwork;
+      loadingMarkPickButton.hidden = screen.mark.source !== "custom";
+    };
     const requestLauncherMark = () => {
       const base = mutationBase();
       if (base) post({ type: "pick-theme-launcher-mark", ...base });
@@ -2654,6 +2950,7 @@
       if (field === "shared.backgroundScope") return "background.layer";
       if (field === "layers" || field.startsWith("layers[")) return "background.layer";
       if (field === "launcher" || field.startsWith("launcher.")) return "widgets.app-identity";
+      if (field === "loadingScreen" || field.startsWith("loadingScreen.")) return "widgets.loading-screen";
       if (field === "instantPrompts" || field.startsWith("instantPrompts[")) return "widgets.instant-prompts";
       return null;
     };
@@ -2671,6 +2968,7 @@
         const index = state?.instantPrompts?.findIndex((prompt) => prompt.id === selectedInstantPromptId) ?? -1;
         return index >= 0 ? `instantPrompts[${index}]` : "instantPrompts";
       }
+      if (target === "widgets.loading-screen") return `loadingScreen.${selectedMode}`;
       return "launcher";
     };
     const normalizeInspectorField = (field) => {
@@ -2754,6 +3052,8 @@
         ? layerScopeLabel(selectedLayer)
         : inspectorTarget === "widgets.instant-prompts"
           ? `${tr("allModesScope")} · ${tr("contextNewChat")} · ${responsiveActive() ? frameDisplayLabel() : `${tr("frameStandard")} + ${tr("frameWide")}`}`
+        : inspectorTarget === "widgets.loading-screen"
+          ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("loadingScreenHostSurface")}`
         : inspectorTarget === "interface.sidebar"
           ? `${tr(selectedMode === "dark" ? "appearanceDark" : "appearanceLight")} · ${tr("allPagesScope")}`
         : inspectorTarget === "interface.sidebar-identity"
@@ -2769,6 +3069,8 @@
             : `${tr("allModesScope")} · ${tr("allPagesScope")}`;
       contextSource.textContent = inspectorTarget === "interface.sidebar-identity" && inspectorField === "personalWordmark"
         ? tr(hasPersonalWordmark?.() ? "wordmarkSaved" : "themeOriginalSource")
+        : inspectorTarget === "widgets.loading-screen"
+          ? tr(state.loadingScreen.mode === "inherit" ? "themeOriginalSource" : "customizedSource")
         : fieldUsesThemeOriginal(inspectorField)
           ? tr("themeOriginalSource") : tr("customizedSource");
       const fieldFrame = /^layers\[\d+]\.frames\.([a-z][a-z0-9-]{0,31})\./.exec(inspectorField)?.[1]
@@ -2952,6 +3254,7 @@
         '[data-editor-targets~="interface.theme"],'
         + '[data-editor-targets~="background.layer"],'
         + '[data-editor-targets~="widgets.app-identity"],'
+        + '[data-editor-targets~="widgets.loading-screen"],'
         + '[data-editor-targets~="widgets.instant-prompts"],'
         + ".editor-guide-section, .editor-add-artwork, .layer-shared-controls",
       )) {
@@ -7582,6 +7885,16 @@
       if (replaceSidebarIdentityButton) {
         replaceSidebarIdentityButton.disabled = builtInLayout || busy || blocked;
       }
+      for (const control of [
+        ...loadingModeInputs, loadingLayoutInput, loadingMotifInput, loadingMarkSourceInput,
+        loadingMarkSizeInput, loadingProgressStyleInput, loadingProgressMotionInput,
+        loadingReviewButton, loadingMarkPickButton, loadingArtworkPickButton,
+        loadingArtworkRemoveButton, loadingArtworkOpacityInput, loadingArtworkFitInput,
+        loadingArtworkFocalXInput, loadingArtworkFocalYInput,
+        ...loadingColorFields.flatMap(({ picker, exact }) => [picker, exact]),
+      ]) {
+        if (control) control.disabled = builtInLayout || busy || blocked;
+      }
       for (const { input, textInput, reset } of surfaceControlNodes.values()) {
         input.disabled = builtInLayout || busy || blocked;
         if (textInput) textInput.disabled = builtInLayout || busy || blocked;
@@ -7615,6 +7928,7 @@
       reflectShared();
       reflectGreeting();
       reflectLauncher();
+      reflectLoadingScreen();
       reflectMetadata();
       reflectCardPreview();
       renderInstantPromptEditor();
@@ -7996,6 +8310,7 @@
       reflectTokens();
       reflectSurfaceControls();
       reflectGreeting();
+      reflectLoadingScreen();
       refreshInspectorContext();
       renderStage();
     }));
@@ -8156,6 +8471,90 @@
     }
     replaceLauncherMarkButton?.addEventListener("click", requestLauncherMark);
     replaceSidebarIdentityButton?.addEventListener("click", requestSidebarIdentityMark);
+    const updateLoadingScreen = (mutate) => {
+      if (!state || isBlockingAction()) return false;
+      const next = loadingScreenDraft();
+      mutate(next);
+      return postLoadingScreen(next);
+    };
+    loadingModeInputs.forEach((input) => input.addEventListener("change", () => {
+      if (!input.checked) return;
+      postLoadingScreen(input.value === "inherit" ? { mode: "inherit" } : defaultLoadingScreen());
+    }));
+    loadingLayoutInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      next.layout = loadingLayoutInput.value;
+    }));
+    loadingMotifInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      next.motif = loadingMotifInput.value;
+    }));
+    loadingMarkSourceInput?.addEventListener("change", () => {
+      if (loadingMarkSourceInput.value === "custom") {
+        requestLoadingMark();
+        return;
+      }
+      updateLoadingScreen((next) => {
+        next.mark.source = loadingMarkSourceInput.value;
+        next.mark.asset = null;
+      });
+    });
+    loadingMarkSizeInput?.addEventListener("input", () => {
+      loadingMarkSizeOutput.value = `${loadingMarkSizeInput.value}px`;
+    });
+    loadingMarkSizeInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      next.mark.size = loadingMarkSizeInput.valueAsNumber;
+    }));
+    loadingProgressStyleInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      next.progress.style = loadingProgressStyleInput.value;
+    }));
+    loadingProgressMotionInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      next.progress.motion = loadingProgressMotionInput.value;
+    }));
+    for (const field of loadingColorFields) {
+      field.picker.addEventListener("input", () => {
+        field.exact.value = field.picker.value.toUpperCase();
+      });
+      field.picker.addEventListener("change", () => updateLoadingScreen((next) => {
+        next[field.appearance][field.property] = field.picker.value.toUpperCase();
+      }));
+      field.exact.addEventListener("change", () => {
+        const value = field.exact.value.trim().toUpperCase();
+        if (!COLOR_PATTERN.test(value)) {
+          field.exact.setAttribute("aria-invalid", "true");
+          announce(tr("validationColorFix"), "error");
+          return;
+        }
+        field.exact.removeAttribute("aria-invalid");
+        field.picker.value = value;
+        updateLoadingScreen((next) => { next[field.appearance][field.property] = value; });
+      });
+    }
+    loadingMarkPickButton?.addEventListener("click", requestLoadingMark);
+    loadingArtworkPickButton?.addEventListener("click", requestLoadingArtwork);
+    loadingArtworkRemoveButton?.addEventListener("click", () => updateLoadingScreen((next) => {
+      next[selectedMode].artwork = null;
+    }));
+    loadingArtworkOpacityInput?.addEventListener("input", () => {
+      loadingArtworkOpacityOutput.value = `${Math.round(loadingArtworkOpacityInput.valueAsNumber * 100)}%`;
+    });
+    loadingArtworkOpacityInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      if (next[selectedMode].artwork) next[selectedMode].artwork.opacity = loadingArtworkOpacityInput.valueAsNumber;
+    }));
+    loadingArtworkFitInput?.addEventListener("change", () => updateLoadingScreen((next) => {
+      if (next[selectedMode].artwork) next[selectedMode].artwork.fit = loadingArtworkFitInput.value;
+    }));
+    for (const [input, output, property] of [
+      [loadingArtworkFocalXInput, loadingArtworkFocalXOutput, "focalX"],
+      [loadingArtworkFocalYInput, loadingArtworkFocalYOutput, "focalY"],
+    ]) {
+      input?.addEventListener("input", () => { output.value = `${input.value}%`; });
+      input?.addEventListener("change", () => updateLoadingScreen((next) => {
+        if (next[selectedMode].artwork) next[selectedMode].artwork[property] = input.valueAsNumber;
+      }));
+    }
+    loadingReviewButton?.addEventListener("click", () => {
+      const base = mutationBase();
+      if (base) post({ type: "preview-theme-loading-screen", ...base });
+    });
     scopeInputs.forEach((input) => input.addEventListener("change", () => {
       if (!input.checked) return;
       setBackgroundScope(input.value);
@@ -8813,6 +9212,7 @@
       isActive: () => Boolean(state),
       normalizeEditorState,
       normalizeStudioStyle,
+      normalizeLoadingScreen,
       normalizeInterfaceSurfaces,
       capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
       registeredViews: REGISTERED_VIEW_IDS,
@@ -8823,6 +9223,7 @@
     createController,
     normalizeEditorState,
     normalizeStudioStyle,
+    normalizeLoadingScreen,
     normalizeInterfaceSurfaces,
     normalizeOverlayMessage,
     normalizeOverlaySelection,

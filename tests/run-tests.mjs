@@ -20,6 +20,7 @@ const suiteFiles = [
   "greeting-runtime.test.mjs",
   "surface-overrides.test.mjs",
   "responsive-layouts.test.mjs",
+  "loading-screen.test.mjs",
   "instant-prompts.test.mjs",
   "editor-overlay.test.mjs",
   "prepaint.test.mjs",

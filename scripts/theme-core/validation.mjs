@@ -65,6 +65,11 @@ import {
   validateResponsiveFrames,
   validateResponsiveLayouts,
 } from "./responsive-layouts.mjs";
+import {
+  LOADING_SCREEN_ARTWORK_ASSET_PATTERN,
+  LOADING_SCREEN_MARK_ASSET_PATTERN,
+  validateLoadingScreen,
+} from "./loading-screen.mjs";
 
 // Internal-only capability used by the source-checkout built-in layout editor.
 // It is deliberately not re-exported by scripts/theme-core.mjs, so ordinary
@@ -1415,7 +1420,7 @@ export function validateStudioThemeKitDocument(
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
     "$comment", "schemaVersion", "id", "labels", "descriptions", "swatches", "preview",
-    "studioPreview", "newChatLayout", "newChatGreetingStyle", "interfaceSurfaces", "instantPrompts", "responsiveLayouts", "backgroundScope", "artworkLayers",
+    "studioPreview", "newChatLayout", "newChatGreetingStyle", "interfaceSurfaces", "instantPrompts", "responsiveLayouts", "loadingScreen", "backgroundScope", "artworkLayers",
     "sourceRecipe", "controlOverrides", "theme",
   ]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`${source} has an unsupported property`);
@@ -1428,11 +1433,20 @@ export function validateStudioThemeKitDocument(
   if (raw.schemaVersion < 5 && Object.hasOwn(raw, "responsiveLayouts")) {
     throw new Error(`${source}.responsiveLayouts requires schemaVersion 5`);
   }
-  if (raw.schemaVersion === 5 && !Object.hasOwn(raw, "responsiveLayouts")) {
-    throw new Error(`${source}.responsiveLayouts is required for schemaVersion 5`);
+  if (raw.schemaVersion >= 5 && !Object.hasOwn(raw, "responsiveLayouts")) {
+    throw new Error(`${source}.responsiveLayouts is required for schemaVersion 5 or later`);
   }
-  const responsiveLayouts = raw.schemaVersion === 5
+  const responsiveLayouts = raw.schemaVersion >= 5
     ? validateResponsiveLayouts(raw.responsiveLayouts, `${source}.responsiveLayouts`)
+    : null;
+  if (raw.schemaVersion < 6 && Object.hasOwn(raw, "loadingScreen")) {
+    throw new Error(`${source}.loadingScreen requires schemaVersion 6`);
+  }
+  if (raw.schemaVersion === 6 && !Object.hasOwn(raw, "loadingScreen")) {
+    throw new Error(`${source}.loadingScreen is required for schemaVersion 6`);
+  }
+  const loadingScreen = raw.schemaVersion === 6
+    ? validateLoadingScreen(raw.loadingScreen, `${source}.loadingScreen`)
     : null;
   if (typeof raw.id !== "string" || !THEME_ID_PATTERN.test(raw.id)) {
     throw new Error(`${source}.id must be lowercase kebab-case`);
@@ -1521,6 +1535,7 @@ export function validateStudioThemeKitDocument(
     interfaceSurfaces,
     instantPrompts: validateInstantPrompts(raw.instantPrompts, `${source}.instantPrompts`, { responsiveLayouts }),
     ...(responsiveLayouts ? { responsiveLayouts } : {}),
+    ...(loadingScreen ? { loadingScreen } : {}),
     backgroundScope: strictEnum(
       raw.backgroundScope,
       new Set(["sidebar", "content", "full-window"]),
@@ -1831,6 +1846,14 @@ export async function validateUserThemeArtwork(kitRoot, entry, theme, label) {
       path: card.icon,
       label: `${label}.instantPrompts[${index}].icon`,
     }] : []),
+    ...(entry.loadingScreen?.mode === "custom"
+      ? [entry.loadingScreen.light, entry.loadingScreen.dark].flatMap((appearance, index) =>
+        appearance.artwork ? [{
+          path: appearance.artwork.asset,
+          label: `${label}.loadingScreen.${index === 0 ? "light" : "dark"}.artwork.asset`,
+          loadingArtwork: true,
+        }] : [])
+      : []),
   ];
   let sourceTotal = 0;
   let embeddedTotal = 0;
@@ -1840,6 +1863,18 @@ export async function validateUserThemeArtwork(kitRoot, entry, theme, label) {
     const relativePath = artworkItems[index].path;
     if (!validatedPaths.has(relativePath)) {
       const sizes = await validateUserArtworkFile(kitRoot, relativePath, itemLabel);
+      if (artworkItems[index].loadingArtwork) {
+        const bytes = await fs.readFile(path.resolve(kitRoot, relativePath));
+        if (!LOADING_SCREEN_ARTWORK_ASSET_PATTERN.test(relativePath)
+            || detectImageMime(bytes) !== "image/webp") {
+          throw new Error(`${itemLabel} must be a content-addressed WebP file`);
+        }
+        if (isAnimatedImage(bytes)) throw new Error(`${itemLabel} must be a static WebP file`);
+        const digest = LOADING_SCREEN_ARTWORK_ASSET_PATTERN.exec(relativePath)[1];
+        if (createHash("sha256").update(bytes).digest("hex") !== digest) {
+          throw new Error(`${itemLabel} digest does not match its contents`);
+        }
+      }
       sourceTotal += sizes.sourceBytes;
       embeddedTotal += sizes.embeddedBytes;
       validatedPaths.add(relativePath);
@@ -1870,6 +1905,23 @@ export async function validateUserThemeArtwork(kitRoot, entry, theme, label) {
       throw new Error(`${label}.interfaceSurfaces.sidebarIdentity markDigest does not match sidebar-identity.png`);
     }
     sourceTotal += identitySizes.sourceBytes;
+  }
+  if (entry.loadingScreen?.mode === "custom" && entry.loadingScreen.mark.source === "custom") {
+    const relativePath = entry.loadingScreen.mark.asset;
+    if (!LOADING_SCREEN_MARK_ASSET_PATTERN.test(relativePath)) {
+      throw new Error(`${label}.loadingScreen.mark.asset must be a content-addressed PNG file`);
+    }
+    const markSizes = await validateUserLauncherFile(
+      kitRoot,
+      relativePath,
+      `${label}.loadingScreen.mark.asset`,
+    );
+    const bytes = await fs.readFile(path.resolve(kitRoot, relativePath));
+    const digest = LOADING_SCREEN_MARK_ASSET_PATTERN.exec(relativePath)[1];
+    if (createHash("sha256").update(bytes).digest("hex") !== digest) {
+      throw new Error(`${label}.loadingScreen.mark.asset digest does not match its contents`);
+    }
+    sourceTotal += markSizes.sourceBytes;
   }
   if (sourceTotal >= MAX_USER_ARTWORK_TOTAL_BYTES) {
     throw new Error(`${label} source artwork must total less than 1.4 MB`);

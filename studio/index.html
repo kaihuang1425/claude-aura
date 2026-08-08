@@ -227,7 +227,7 @@
       <p class="lede" data-i18n="createLede">Start with Default in the visual editor, then choose colors, style, and artwork. No code or theme folder is required.</p>
       <div class="actions-row">
         <button type="button" id="start-theme" class="primary-button" data-i18n="startTheme">Customize Default</button>
-        <button type="button" id="import-theme" class="ghost-button" data-i18n="importTheme">Install theme from folder…</button>
+        <button type="button" id="import-theme" class="ghost-button" data-i18n="installThemePackage">Install theme…</button>
       </div>
       <details class="create-inline-guide">
         <summary data-i18n="createGuide">How visual creation works</summary>
@@ -804,6 +804,105 @@
             <span><span data-editor-i18n="launcherBorderWidth">Border width</span> <output id="editor-launcher-border-width-output" for="editor-launcher-border-width"></output></span>
             <input id="editor-launcher-border-width" type="range" min="1" max="3" step="1" data-editor-launcher="borderWidth" data-editor-focus="launcher-border-width">
           </label>
+        </div>
+      </section>
+
+      <section class="editor-section editor-loading-screen" data-editor-branch="widgets" data-editor-targets="widgets.loading-screen" aria-labelledby="editor-loading-screen-title">
+        <div class="editor-section-head">
+          <div>
+            <h2 id="editor-loading-screen-title" data-editor-i18n="loadingScreenTitle">Loading screen</h2>
+            <p class="help" data-editor-i18n="loadingScreenHelp">Customize Aura's host-owned cover. This schematic is not the Claude canvas or visual acceptance evidence.</p>
+          </div>
+          <button type="button" id="loading-screen-review" class="primary-button" data-editor-i18n="loadingScreenReview">Review in Aura</button>
+        </div>
+        <fieldset class="editor-inline-fieldset">
+          <legend data-editor-i18n="loadingScreenMode">Style source</legend>
+          <label><input type="radio" name="loading-screen-mode" value="inherit" checked> <span data-editor-i18n="loadingScreenInherit">Use theme style</span></label>
+          <label><input type="radio" name="loading-screen-mode" value="custom"> <span data-editor-i18n="loadingScreenCustom">Custom</span></label>
+        </fieldset>
+        <p class="editor-context-notice loading-screen-source"><strong data-editor-i18n="loadingScreenInheritedFrom">Inherited from</strong> <output id="loading-screen-source"></output></p>
+        <div id="loading-screen-schematic" class="loading-screen-schematic" role="img" data-editor-i18n-aria-label="loadingScreenSchematicLabel" aria-label="Aura loading-screen schematic">
+          <img id="loading-screen-artwork-preview" class="loading-screen-artwork" alt="" draggable="false" hidden>
+          <div id="loading-screen-motif-preview" class="loading-screen-motif" aria-hidden="true"></div>
+          <div id="loading-screen-mark-preview" class="loading-screen-mark" aria-hidden="true"><img alt="" draggable="false" hidden><span>A</span></div>
+          <div class="loading-screen-contrast-surface">
+            <strong data-editor-i18n="loadingScreenStatusSample">Loading Claude…</strong>
+            <span id="loading-screen-progress-preview" class="loading-screen-progress" aria-hidden="true"><i></i></span>
+          </div>
+          <small data-editor-i18n="loadingScreenSchematicNotice">Aura-owned schematic · not a Claude preview</small>
+        </div>
+        <div id="loading-screen-custom-controls" class="loading-screen-controls" hidden>
+          <div class="editor-control-grid">
+            <label class="editor-field" for="loading-screen-layout">
+              <span data-editor-i18n="loadingScreenLayout">Layout</span>
+              <select id="loading-screen-layout">
+                <option value="centered" data-editor-i18n="loadingScreenCentered">Centered</option>
+                <option value="split" data-editor-i18n="loadingScreenSplit">Split</option>
+              </select>
+            </label>
+            <label class="editor-field" for="loading-screen-mark-source">
+              <span data-editor-i18n="loadingScreenMark">Mark</span>
+              <select id="loading-screen-mark-source">
+                <option value="theme" data-editor-i18n="loadingScreenThemeMark">Theme mark</option>
+                <option value="custom" data-editor-i18n="loadingScreenCustomMark">Custom mark</option>
+                <option value="none" data-editor-i18n="loadingScreenNoMark">No mark</option>
+              </select>
+            </label>
+            <label class="editor-field" for="loading-screen-progress-style">
+              <span data-editor-i18n="loadingScreenProgress">Progress</span>
+              <select id="loading-screen-progress-style">
+                <option value="bar" data-editor-i18n="loadingScreenProgressBar">Bar</option>
+                <option value="pulse" data-editor-i18n="loadingScreenProgressPulse">Pulse</option>
+              </select>
+            </label>
+            <label class="editor-field advanced-only" for="loading-screen-motif">
+              <span data-editor-i18n="loadingScreenMotif">Motif</span>
+              <select id="loading-screen-motif">
+                <option value="inherit" data-editor-i18n="loadingScreenMotifInherit">Theme motif</option>
+                <option value="none" data-editor-i18n="loadingScreenMotifNone">None</option>
+                <option value="orbit">Orbit</option>
+                <option value="editorial-rule">Editorial rule</option>
+                <option value="facet">Facet</option>
+                <option value="ink-frame">Ink frame</option>
+                <option value="horizon">Horizon</option>
+                <option value="folio">Folio</option>
+                <option value="ribbon">Ribbon</option>
+                <option value="capsule">Capsule</option>
+              </select>
+            </label>
+            <label class="editor-field advanced-only" for="loading-screen-mark-size">
+              <span><span data-editor-i18n="loadingScreenMarkSize">Mark size</span> <output id="loading-screen-mark-size-output"></output></span>
+              <input id="loading-screen-mark-size" type="range" min="48" max="112" step="1">
+            </label>
+            <label class="editor-field advanced-only" for="loading-screen-progress-motion">
+              <span data-editor-i18n="loadingScreenMotion">Motion</span>
+              <select id="loading-screen-progress-motion">
+                <option value="calm" data-editor-i18n="loadingScreenMotionCalm">Calm</option>
+                <option value="still" data-editor-i18n="loadingScreenMotionStill">Still</option>
+              </select>
+            </label>
+          </div>
+          <div class="editor-loading-asset-actions">
+            <button type="button" id="loading-screen-mark-pick" class="ghost-button" data-editor-i18n="loadingScreenChooseMark">Choose custom mark</button>
+            <button type="button" id="loading-screen-artwork-pick" class="ghost-button" data-editor-i18n="loadingScreenChooseArtwork">Choose artwork</button>
+            <button type="button" id="loading-screen-artwork-remove" class="ghost-button" data-editor-i18n="loadingScreenRemoveArtwork">Remove artwork</button>
+          </div>
+          <div class="loading-screen-palette-grid">
+            <fieldset data-loading-appearance="light">
+              <legend data-editor-i18n="lightMode">Light</legend>
+              <div class="loading-screen-colors"></div>
+            </fieldset>
+            <fieldset data-loading-appearance="dark" class="advanced-only">
+              <legend data-editor-i18n="darkMode">Dark</legend>
+              <div class="loading-screen-colors"></div>
+            </fieldset>
+          </div>
+          <div class="loading-screen-artwork-controls advanced-only">
+            <label class="editor-field" for="loading-screen-artwork-opacity"><span><span data-editor-i18n="loadingScreenArtworkOpacity">Artwork opacity</span> <output id="loading-screen-artwork-opacity-output"></output></span><input id="loading-screen-artwork-opacity" type="range" min="0" max="0.65" step="0.01"></label>
+            <label class="editor-field" for="loading-screen-artwork-fit"><span data-editor-i18n="loadingScreenArtworkFit">Artwork fit</span><select id="loading-screen-artwork-fit"><option value="cover" data-editor-i18n="loadingScreenCover">Cover</option><option value="contain" data-editor-i18n="loadingScreenContain">Contain</option></select></label>
+            <label class="editor-field" for="loading-screen-artwork-focal-x"><span><span data-editor-i18n="loadingScreenFocalX">Horizontal focus</span> <output id="loading-screen-artwork-focal-x-output"></output></span><input id="loading-screen-artwork-focal-x" type="range" min="0" max="100" step="1"></label>
+            <label class="editor-field" for="loading-screen-artwork-focal-y"><span><span data-editor-i18n="loadingScreenFocalY">Vertical focus</span> <output id="loading-screen-artwork-focal-y-output"></output></span><input id="loading-screen-artwork-focal-y" type="range" min="0" max="100" step="1"></label>
+          </div>
         </div>
       </section>
 

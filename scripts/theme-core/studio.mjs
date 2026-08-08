@@ -51,6 +51,7 @@ import {
   detectImageMime,
   hexToHsl,
   hslToHex,
+  isAnimatedImage,
   isPathWithin,
   isPlainObject,
   normalizeLocale,
@@ -101,6 +102,14 @@ import {
   validateResponsiveFrames,
   validateResponsiveLayouts,
 } from "./responsive-layouts.mjs";
+import {
+  LOADING_SCREEN_ARTWORK_ASSET_PATTERN,
+  LOADING_SCREEN_INHERIT,
+  LOADING_SCREEN_MARK_ASSET_PATTERN,
+  loadingScreenAssetPaths,
+  upgradeStudioDocumentToLoadingScreen,
+  validateLoadingScreen,
+} from "./loading-screen.mjs";
 
 const execStudioFile = promisify(execFile);
 
@@ -122,12 +131,98 @@ export function studioPaths(editorRoot) {
     artwork: path.join(active, "artwork"),
     launcherMarks: path.join(active, "launcher-marks"),
     identityMarks: path.join(active, "identity-marks"),
+    loading: path.join(active, "loading"),
     previewRoot: path.join(root, "preview"),
     previewActive: path.join(root, "preview", "active"),
     imports: path.join(root, "imports"),
     state: path.join(active, STUDIO_STATE_FILENAME),
     theme: path.join(active, THEME_KIT_FILENAME),
   };
+}
+
+async function resolveStudioLoadingDirectory(paths, { create = false } = {}) {
+  const activeStat = await pathKind(paths.active);
+  if (!activeStat?.isDirectory() || activeStat.isSymbolicLink()) {
+    throw new Error("Editor active folder must be a regular directory");
+  }
+  const realActive = await fs.realpath(paths.active);
+  let loadingStat = await pathKind(paths.loading);
+  if (!loadingStat && create) {
+    await fs.mkdir(paths.loading);
+    loadingStat = await fs.lstat(paths.loading);
+  }
+  if (!loadingStat?.isDirectory() || loadingStat.isSymbolicLink()) {
+    throw new Error("Editor loading-screen storage must be a regular directory");
+  }
+  const realLoading = await fs.realpath(paths.loading);
+  if (!isPathWithin(realActive, realLoading)) {
+    throw new Error("Editor loading-screen storage escaped the active theme");
+  }
+  return { realActive, realLoading };
+}
+
+async function resolveStoredStudioLoadingAsset(paths, relativePath) {
+  const mark = LOADING_SCREEN_MARK_ASSET_PATTERN.exec(relativePath);
+  const artwork = LOADING_SCREEN_ARTWORK_ASSET_PATTERN.exec(relativePath);
+  if (!mark && !artwork) throw new Error("Editor loading-screen asset path is invalid");
+  const { realActive, realLoading } = await resolveStudioLoadingDirectory(paths);
+  const candidate = path.resolve(paths.active, relativePath);
+  const stat = await fs.lstat(candidate);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size >= MAX_USER_RASTER_ARTWORK_BYTES) {
+    throw new Error("Stored loading-screen asset must be a regular file smaller than 400 KB");
+  }
+  const realCandidate = await fs.realpath(candidate);
+  if (!isPathWithin(realActive, realCandidate) || !isPathWithin(realLoading, realCandidate)
+      || path.dirname(realCandidate) !== realLoading) {
+    throw new Error("Stored loading-screen asset escaped its owned folder");
+  }
+  const bytes = await fs.readFile(realCandidate);
+  const digest = (mark ?? artwork)[1];
+  if (crypto.createHash("sha256").update(bytes).digest("hex") !== digest) {
+    throw new Error("Stored loading-screen asset digest does not match its contents");
+  }
+  if (mark) validateLauncherPngBytes(bytes, "Stored loading-screen mark");
+  else {
+    if (detectImageMime(bytes) !== "image/webp") throw new Error("Stored loading-screen artwork must be WebP");
+    if (isAnimatedImage(bytes)) throw new Error("Stored loading-screen artwork must be static");
+    studioWebpDimensions(bytes, "Stored loading-screen artwork");
+  }
+  return { path: realCandidate, bytes, digest, kind: mark ? "mark" : "artwork" };
+}
+
+function retainedStudioLoadingAssets(internal) {
+  const documents = [
+    internal?.baselineDocument,
+    internal?.currentDocument,
+    internal?.lastValidDocument,
+    ...(internal?.undo ?? []),
+    ...(internal?.redo ?? []),
+    ...(internal?.appliedUndo ?? []).filter(Boolean),
+    ...(internal?.appliedRedo ?? []).filter(Boolean),
+  ];
+  return new Set(documents.flatMap((document) => document?.schemaVersion === 6
+    ? loadingScreenAssetPaths(document.loadingScreen)
+    : []));
+}
+
+async function garbageCollectStudioLoadingAssets(paths, internal) {
+  if (!(await pathKind(paths.loading))) return;
+  const retained = retainedStudioLoadingAssets(internal);
+  const { realLoading } = await resolveStudioLoadingDirectory(paths);
+  for (const entry of await fs.readdir(realLoading, { withFileTypes: true })) {
+    const relativePath = `loading/${entry.name}`;
+    if (retained.has(relativePath) || !entry.isFile() || entry.isSymbolicLink()) continue;
+    if (!LOADING_SCREEN_MARK_ASSET_PATTERN.test(relativePath)
+        && !LOADING_SCREEN_ARTWORK_ASSET_PATTERN.test(relativePath)) continue;
+    const candidate = path.join(realLoading, entry.name);
+    const realCandidate = await fs.realpath(candidate);
+    if (path.dirname(realCandidate) !== realLoading) throw new Error("Loading-screen cleanup escaped its owned folder");
+    await fs.rm(candidate, { force: true });
+  }
+}
+
+async function collectStudioLoadingAssetsAfterCommit(paths, internal) {
+  try { await garbageCollectStudioLoadingAssets(paths, internal); } catch {}
 }
 
 async function resolveStudioIdentityMarksDirectory(paths, { create = false } = {}) {
@@ -1032,7 +1127,7 @@ export function mutateStudioGreetingDocument(document, change) {
     "greeting operation",
   );
   const appearance = strictEnum(change.appearance, new Set(["light", "dark"]), "greeting appearance");
-  const responsiveLayouts = document.schemaVersion === 5
+  const responsiveLayouts = document.schemaVersion >= 5
     ? validateResponsiveLayouts(document.responsiveLayouts)
     : null;
   const frame = strictEnum(
@@ -1288,6 +1383,35 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
   };
   const currentIdentityPreviewUrl = await identityPreviewUrl(document);
   const appliedIdentityPreviewUrl = await identityPreviewUrl(internal.lastValidDocument);
+  const loadingAssetPreviews = async (sourceDocument) => {
+    const result = { mark: null, lightArtwork: null, darkArtwork: null };
+    if (sourceDocument.schemaVersion !== 6 || sourceDocument.loadingScreen.mode !== "custom") return result;
+    const screen = sourceDocument.loadingScreen;
+    const assignments = [
+      ["mark", screen.mark.source === "custom" ? screen.mark.asset : null],
+      ["lightArtwork", screen.light.artwork?.asset ?? null],
+      ["darkArtwork", screen.dark.artwork?.asset ?? null],
+    ];
+    for (const [key, relativePath] of assignments) {
+      if (!relativePath) continue;
+      const stored = await resolveStoredStudioLoadingAsset(paths, relativePath);
+      const extension = stored.kind === "mark" ? "png" : "webp";
+      const filename = `loading-${stored.kind}-${stored.digest}.${extension}`;
+      const target = path.join(paths.previewActive, filename);
+      const existing = await pathKind(target);
+      if (existing && (!existing.isFile() || existing.isSymbolicLink())) {
+        throw new Error("Editor loading-screen previews must be regular files");
+      }
+      if (!existing || !(await fs.readFile(target)).equals(stored.bytes)) {
+        await atomicWriteStudioBytes(target, stored.bytes);
+      }
+      retained.add(filename);
+      result[key] = `https://aura.editor/active/${filename}?v=${stored.digest}`;
+    }
+    return result;
+  };
+  const currentLoadingAssets = await loadingAssetPreviews(document);
+  const appliedLoadingAssets = await loadingAssetPreviews(internal.lastValidDocument);
   for (const entry of await fs.readdir(paths.previewActive, { withFileTypes: true })) {
     if (entry.isFile() && /^layer-[a-f0-9]{32}\.webp$/.test(entry.name) && !retained.has(entry.name)) {
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
@@ -1299,6 +1423,10 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
     }
     if (entry.isFile() && /^identity-[a-f0-9]{64}\.png$/.test(entry.name) && !retained.has(entry.name)) {
+      await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
+    }
+    if (entry.isFile() && /^loading-(?:mark|artwork)-[a-f0-9]{64}\.(?:png|webp)$/.test(entry.name)
+        && !retained.has(entry.name)) {
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
     }
   }
@@ -1315,7 +1443,7 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       opacity: layer.opacity,
       mask: layer.mask,
       mobile: layer.mobile,
-      ...(document.schemaVersion === 5 ? { anchor: layer.anchor } : {}),
+      ...(document.schemaVersion >= 5 ? { anchor: layer.anchor } : {}),
       filters: layer.filters ? cloneJson(layer.filters) : null,
       bytes: bytes[index],
       previewUrl: `https://aura.editor/active/${preview.filename}?v=${preview.digest}`,
@@ -1363,9 +1491,17 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
     interfaceStyle: internal.lastValidDocument.interfaceSurfaces
       ? cloneJson(internal.lastValidDocument.interfaceSurfaces)
       : null,
-    responsiveLayouts: document.schemaVersion === 5
+    responsiveLayouts: document.schemaVersion >= 5
       ? cloneJson(document.responsiveLayouts)
       : null,
+    loadingScreen: document.schemaVersion === 6
+      ? cloneJson(document.loadingScreen)
+      : cloneJson(LOADING_SCREEN_INHERIT),
+    loadingScreenStyle: internal.lastValidDocument.schemaVersion === 6
+      ? cloneJson(internal.lastValidDocument.loadingScreen)
+      : cloneJson(LOADING_SCREEN_INHERIT),
+    loadingScreenAssets: currentLoadingAssets,
+    loadingScreenStyleAssets: appliedLoadingAssets,
     identityPreviewUrl: currentIdentityPreviewUrl,
     identityStylePreviewUrl: appliedIdentityPreviewUrl,
     shared: {
@@ -1384,7 +1520,7 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
       greeting: studioGreetingState(
         document.newChatGreetingStyle,
         studioGreetingCompactMarkAvailable(document),
-        document.schemaVersion === 5 ? document.responsiveLayouts : null,
+        document.schemaVersion >= 5 ? document.responsiveLayouts : null,
       ),
       inherited: Object.fromEntries(["fontUi", "fontDisplay", "radius", "shadow"]
         .map((token) => [
@@ -1435,6 +1571,7 @@ export function studioContrastFeedback(theme) {
 export async function persistStudioInternal(paths, internal, {
   collectLauncherMarks = true,
   collectIdentityMarks = true,
+  collectLoadingAssets = true,
 } = {}) {
   await assertStudioActivePaths(paths, { requireActive: true });
   await atomicWriteJson(paths.theme, internal.currentDocument);
@@ -1442,6 +1579,7 @@ export async function persistStudioInternal(paths, internal, {
   await assertStudioActivePaths(paths, { requireActive: true, requireState: true });
   if (collectLauncherMarks) await collectStudioLauncherMarksAfterCommit(paths, internal);
   if (collectIdentityMarks) await collectStudioIdentityMarksAfterCommit(paths, internal);
+  if (collectLoadingAssets) await collectStudioLoadingAssetsAfterCommit(paths, internal);
 }
 
 async function upgradeStudioSchemaV1Document(raw, label, paths) {
@@ -1584,6 +1722,9 @@ export async function loadStudioInternal(editorRoot) {
     const migrated = await validateAndUpgradeStudioDocuments(internal, paths);
     await initializeStudioLauncherTracking(internal, paths);
     await initializeStudioIdentityTracking(internal, paths);
+    for (const relativePath of retainedStudioLoadingAssets(internal)) {
+      await resolveStoredStudioLoadingAsset(paths, relativePath);
+    }
     if (migrated) {
       await atomicWriteJson(paths.theme, internal.currentDocument);
       await atomicWriteJson(paths.state, internal);
@@ -2345,7 +2486,7 @@ async function studioDocumentFromResolvedSource({
 }) {
   const labels = copyLabels ? appendCopyLabel(theme.labels) : cloneJson(theme.labels);
   let document = {
-    schemaVersion: entry.source === "user" && [2, 3, 4, 5].includes(entry.schemaVersion)
+    schemaVersion: entry.source === "user" && [2, 3, 4, 5, 6].includes(entry.schemaVersion)
       ? entry.schemaVersion
       : 4,
     id: targetId,
@@ -2357,8 +2498,11 @@ async function studioDocumentFromResolvedSource({
     newChatLayout: theme.newChatLayout ? cloneJson(theme.newChatLayout) : null,
     newChatGreetingStyle: theme.newChatGreetingStyle ? cloneJson(theme.newChatGreetingStyle) : null,
     interfaceSurfaces: theme.interfaceSurfaces ? cloneJson(theme.interfaceSurfaces) : null,
-    ...(entry.source === "user" && entry.schemaVersion === 5
+    ...(entry.source === "user" && entry.schemaVersion >= 5
       ? { responsiveLayouts: cloneJson(theme.responsiveLayouts) }
+      : {}),
+    ...(entry.source === "user" && entry.schemaVersion === 6
+      ? { loadingScreen: cloneJson(theme.loadingScreen) }
       : {}),
     instantPrompts: entry.source === "builtin" ? [] : cloneJson(theme.instantPrompts ?? []),
     backgroundScope: theme.backgroundScope ?? "full-window",
@@ -2446,7 +2590,7 @@ async function studioDocumentFromResolvedSource({
       mask: sourceLayer.mask ?? "soft-right",
       mobile: sourceLayer.mobile ?? "reduce",
       ...(sourceLayer.filters ? { filters: cloneJson(sourceLayer.filters) } : {}),
-      ...(document.schemaVersion === 5 ? { anchor: sourceLayer.anchor } : {}),
+      ...(document.schemaVersion >= 5 ? { anchor: sourceLayer.anchor } : {}),
       frames,
       ...(sourceLayer.legacy ? { legacy: cloneJson(sourceLayer.legacy) } : sourceLayer.frames ? {} : {
         legacy: {
@@ -2479,6 +2623,20 @@ async function studioDocumentFromResolvedSource({
       ...card,
       icon: card.icon ? remapped.get(card.icon) : null,
     }));
+  }
+  if (document.schemaVersion === 6) {
+    await resolveStudioLoadingDirectory(paths, { create: true });
+    for (const relativePath of loadingScreenAssetPaths(document.loadingScreen)) {
+      const sourcePath = path.resolve(theme.sourceDirectory, relativePath);
+      const targetPath = path.resolve(paths.active, relativePath);
+      if (!isPathWithin(theme.sourceDirectory, sourcePath) || !isPathWithin(paths.active, targetPath)) {
+        throw new Error("Theme loading-screen asset escaped its owned folder");
+      }
+      if (!(reuseActiveFiles && sourcePath === targetPath)) {
+        await fs.copyFile(sourcePath, targetPath, fsConstants.COPYFILE_EXCL);
+      }
+      await resolveStoredStudioLoadingAsset(paths, relativePath);
+    }
   }
   validateStudioThemeKitDocument(document, "editor theme", { builtinLayoutCapability });
   return document;
@@ -2562,8 +2720,15 @@ export async function studioFeedback(document, context, bundle) {
     if (!identityStat.isFile() || identityStat.isSymbolicLink()) throw new Error("Editor sidebar identity must be a regular file");
     identityBytes = identityStat.size;
   }
+  let loadingBytes = 0;
+  if (document.schemaVersion === 6) {
+    for (const relativePath of loadingScreenAssetPaths(document.loadingScreen)) {
+      const stored = await resolveStoredStudioLoadingAsset(paths, relativePath);
+      loadingBytes += stored.bytes.length;
+    }
+  }
   const sourceArtworkBytes = [...uniquePaths.values()]
-    .reduce((total, value) => total + value, launcherBytes + identityBytes);
+    .reduce((total, value) => total + value, launcherBytes + identityBytes + loadingBytes);
   const layers = layerBytes.map((bytes, id) => ({ id, bytes, limit: MAX_USER_RASTER_ARTWORK_BYTES, pass: bytes < MAX_USER_RASTER_ARTWORK_BYTES }));
   const budget = {
     chromeBytes,
@@ -3221,7 +3386,7 @@ export function mutateStudioLayerDocument(document, change) {
       else layer.mobile = strictEnum(change.value, STUDIO_LAYER_MOBILE, "layer mobile behavior");
       return;
     }
-    const responsiveLayouts = document.schemaVersion === 5
+    const responsiveLayouts = document.schemaVersion >= 5
       ? validateResponsiveLayouts(document.responsiveLayouts)
       : null;
     const frameIds = responsiveLayouts
@@ -3280,7 +3445,7 @@ export function mutateStudioSurfaceDocument(document, change) {
   const slot = strictEnum(change.slot, new Set(["base", "appearance", "view", "frame"]), "surface slot");
   const allowedAxis = slot === "appearance" ? new Set(["light", "dark"])
     : slot === "view" ? new Set(["new-chat", "conversation"])
-      : new Set(document.schemaVersion === 5
+      : new Set(document.schemaVersion >= 5
         ? validateResponsiveLayouts(document.responsiveLayouts).sets.map(({ id }) => id)
         : ["standard", "wide"]);
   if (slot === "base" && change.axis !== null) throw new Error("Base surface axis must be null");
@@ -3311,7 +3476,7 @@ export function mutateStudioSurfaceDocument(document, change) {
     "interfaceSurfaces",
     {
       sourceRecipe: document.sourceRecipe,
-      responsiveLayouts: document.schemaVersion === 5 ? document.responsiveLayouts : null,
+      responsiveLayouts: document.schemaVersion >= 5 ? document.responsiveLayouts : null,
     },
   );
 }
@@ -3357,7 +3522,7 @@ export async function enableResponsiveLayouts(context) {
   assertStudioRevision(loaded, context);
   await ensureStudioGreetingTracking(loaded, context.configPath);
   assertBuiltinLayoutSession(context, loaded);
-  if (loaded.currentDocument.schemaVersion === 5) {
+  if (loaded.currentDocument.schemaVersion >= 5) {
     throw new Error("Responsive layouts are already enabled");
   }
   const internal = cloneJson(loaded);
@@ -3398,9 +3563,18 @@ export async function enableResponsiveLayouts(context) {
   };
 }
 
+export async function setLoadingScreen(context) {
+  const loadingScreen = validateLoadingScreen(context.loadingScreen, "loadingScreen");
+  return mutateStudio(context, "set-loading-screen", (document) => {
+    const upgraded = upgradeStudioDocumentToLoadingScreen(document, loadingScreen);
+    for (const key of Object.keys(document)) delete document[key];
+    Object.assign(document, upgraded);
+  });
+}
+
 export async function mutateResponsiveLayout(context) {
   return mutateStudio(context, "mutate-responsive-layout", (document) => {
-    if (document.schemaVersion !== 5) throw new Error("Enable responsive layouts before editing the track");
+    if (document.schemaVersion < 5) throw new Error("Enable responsive layouts before editing the track");
     const current = validateResponsiveLayouts(document.responsiveLayouts);
     const operation = strictEnum(
       context.operation,
@@ -3497,7 +3671,7 @@ export function mutateStudioMetadataLocaleDocument(document, change) {
 }
 
 export function mutateStudioInstantPromptDocument(document, change) {
-  const instantPromptValidation = document.schemaVersion === 5
+  const instantPromptValidation = document.schemaVersion >= 5
     ? { responsiveLayouts: document.responsiveLayouts }
     : {};
   const operation = strictEnum(
@@ -3514,7 +3688,7 @@ export function mutateStudioInstantPromptDocument(document, change) {
     }
     if (change.field !== null || change.locale !== null) throw new Error("Instant prompt add fields must be null");
     const value = cloneJson(change.value);
-    if (document.schemaVersion === 5
+    if (document.schemaVersion >= 5
         && value?.layout?.frames?.normal
         && value?.layout?.frames?.wide
         && document.responsiveLayouts.sets.some(({ id }) => id === "standard")
@@ -3560,7 +3734,7 @@ export function mutateStudioInstantPromptDocument(document, change) {
     if (change.locale !== null) throw new Error("Instant prompt layout locale must be null");
     const candidate = cloneJson(prompts[index]);
     candidate.layout = change.value;
-    if (document.schemaVersion === 5
+    if (document.schemaVersion >= 5
         && candidate.layout?.frames?.normal
         && candidate.layout?.frames?.wide
         && document.responsiveLayouts.sets.some(({ id }) => id === "standard")
@@ -3771,7 +3945,7 @@ export async function attachThemeLayerImage(context) {
           : { anchor: "center", focalX: 50, focalY: 50, positionX: 0, positionY: 0, scale: 1 },
       ],
     ));
-    const responsive = document.schemaVersion === 5
+    const responsive = document.schemaVersion >= 5
       ? validateResponsiveLayouts(document.responsiveLayouts)
       : null;
     const frames = responsive
@@ -3864,7 +4038,7 @@ export async function attachThemeSidebarIdentityMark(context) {
         "interfaceSurfaces",
         {
           sourceRecipe: document.sourceRecipe,
-          responsiveLayouts: document.schemaVersion === 5 ? document.responsiveLayouts : null,
+          responsiveLayouts: document.schemaVersion >= 5 ? document.responsiveLayouts : null,
         },
       );
     });
@@ -3880,6 +4054,77 @@ export async function attachThemeSidebarIdentityMark(context) {
     }
     throw error;
   }
+}
+
+async function storeStudioLoadingMark(sourcePath, paths) {
+  const source = path.resolve(sourcePath);
+  if (!isPathWithin(paths.root, source)) throw new Error("The loading-screen mark must remain inside editor data");
+  const [realRoot, realSource] = await Promise.all([fs.realpath(paths.root), fs.realpath(source)]);
+  if (!isPathWithin(realRoot, realSource)) throw new Error("The loading-screen mark escaped editor data");
+  const stat = await fs.lstat(realSource);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.size >= MAX_USER_RASTER_ARTWORK_BYTES) {
+    throw new Error("The loading-screen mark must be a regular PNG smaller than 400 KB");
+  }
+  const bytes = await fs.readFile(realSource);
+  validateLauncherPngBytes(bytes, "Studio loading-screen mark");
+  const digest = crypto.createHash("sha256").update(bytes).digest("hex");
+  await resolveStudioLoadingDirectory(paths, { create: true });
+  const relativePath = `loading/mark-${digest}.png`;
+  const target = path.resolve(paths.active, relativePath);
+  if (!(await pathKind(target))) await atomicWriteStudioBytes(target, bytes);
+  await resolveStoredStudioLoadingAsset(paths, relativePath);
+  return relativePath;
+}
+
+async function storeStudioLoadingArtwork(sourcePath, paths) {
+  const source = await validateStudioHostAsset(sourcePath, paths.root);
+  const bytes = await fs.readFile(source);
+  if (isAnimatedImage(bytes)) throw new Error("Loading-screen artwork must be a static WebP");
+  studioWebpDimensions(bytes, "Studio loading-screen artwork");
+  const digest = crypto.createHash("sha256").update(bytes).digest("hex");
+  await resolveStudioLoadingDirectory(paths, { create: true });
+  const relativePath = `loading/artwork-${digest}.webp`;
+  const target = path.resolve(paths.active, relativePath);
+  if (!(await pathKind(target))) await atomicWriteStudioBytes(target, bytes);
+  await resolveStoredStudioLoadingAsset(paths, relativePath);
+  return relativePath;
+}
+
+export async function attachLoadingScreenMark(context) {
+  const internal = await loadStudioInternal(context.editorRoot);
+  assertStudioRevision(internal, context);
+  if (internal.currentDocument.schemaVersion !== 6
+      || internal.currentDocument.loadingScreen.mode !== "custom") {
+    throw new Error("Choose a custom loading screen before selecting its mark");
+  }
+  const paths = studioPaths(context.editorRoot);
+  const asset = await storeStudioLoadingMark(context.assetPath, paths);
+  return mutateStudio(context, "pick-loading-screen-mark", (document) => {
+    document.loadingScreen.mark.source = "custom";
+    document.loadingScreen.mark.asset = asset;
+  });
+}
+
+export async function attachLoadingScreenArtwork(context) {
+  const internal = await loadStudioInternal(context.editorRoot);
+  assertStudioRevision(internal, context);
+  const appearance = strictEnum(context.appearance, new Set(["light", "dark"]), "loading-screen appearance");
+  if (internal.currentDocument.schemaVersion !== 6
+      || internal.currentDocument.loadingScreen.mode !== "custom") {
+    throw new Error("Choose a custom loading screen before selecting its artwork");
+  }
+  const paths = studioPaths(context.editorRoot);
+  const asset = await storeStudioLoadingArtwork(context.assetPath, paths);
+  return mutateStudio(context, "pick-loading-screen-artwork", (document) => {
+    const previous = document.loadingScreen[appearance].artwork;
+    document.loadingScreen[appearance].artwork = {
+      asset,
+      opacity: previous?.opacity ?? 0.35,
+      fit: previous?.fit ?? "cover",
+      focalX: previous?.focalX ?? 50,
+      focalY: previous?.focalY ?? 50,
+    };
+  });
 }
 
 export async function removeThemeLayer(context) {
@@ -4089,6 +4334,19 @@ export async function stageStudioTheme(document, activeDirectory, stageDirectory
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
     copied.add(card.icon);
+  }
+  if (document.schemaVersion === 6) {
+    for (const relativePath of loadingScreenAssetPaths(document.loadingScreen)) {
+      if (copied.has(relativePath)) continue;
+      const source = path.resolve(activeDirectory, relativePath);
+      const target = path.resolve(stageDirectory, relativePath);
+      if (!isPathWithin(activeDirectory, source) || !isPathWithin(stageDirectory, target)) {
+        throw new Error("Theme loading-screen asset escaped its owned folder");
+      }
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
+      copied.add(relativePath);
+    }
   }
   if (document.theme.launcher.asset === "launcher-mark.png") {
     const source = path.resolve(activeDirectory, document.theme.launcher.asset);
@@ -5122,6 +5380,7 @@ async function executeStudioRequestInternal({
   await guardBuiltinStudioRequest(context, request);
   const assetRequestTypes = new Set([
     "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon",
+    "pick-loading-screen-mark", "pick-loading-screen-artwork",
   ]);
   if (assetPath !== null && !assetRequestTypes.has(request.type)) {
     throw new Error("An asset is allowed only for an editor image picker action");
@@ -5146,6 +5405,9 @@ async function executeStudioRequestInternal({
   } else if (request.type === "mutate-responsive-layout") {
     assertStudioRequest(request, ["session", "revision", "operation", "id", "value"]);
     result = await mutateResponsiveLayout({ ...context, ...request });
+  } else if (request.type === "set-loading-screen") {
+    assertStudioRequest(request, ["session", "revision", "loadingScreen"]);
+    result = await setLoadingScreen({ ...context, ...request });
   } else if (request.type === "apply-theme-patch") {
     assertStudioRequest(request, ["session", "revision", "changes"]);
     result = await applyThemePatch({ ...context, ...request });
@@ -5165,6 +5427,14 @@ async function executeStudioRequestInternal({
     assertStudioRequest(request, ["session", "revision", "id"]);
     if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-instant-prompt-icon");
     result = await attachInstantPromptIcon({ ...context, ...request, assetPath });
+  } else if (request.type === "pick-loading-screen-mark") {
+    assertStudioRequest(request, ["session", "revision"]);
+    if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-loading-screen-mark");
+    result = await attachLoadingScreenMark({ ...context, ...request, assetPath });
+  } else if (request.type === "pick-loading-screen-artwork") {
+    assertStudioRequest(request, ["session", "revision", "appearance"]);
+    if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-loading-screen-artwork");
+    result = await attachLoadingScreenArtwork({ ...context, ...request, assetPath });
   } else if (request.type === "remove-theme-layer") {
     assertStudioRequest(request, ["session", "revision", "index"]);
     if (assetPath !== null) throw new Error("An asset is allowed only for an editor image picker action");

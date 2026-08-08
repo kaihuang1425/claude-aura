@@ -62,6 +62,24 @@ export {
   upgradeStudioDocumentToResponsive,
 } from "./theme-core/responsive-layouts.mjs";
 export {
+  LOADING_SCREEN_CUE_IDS,
+  LOADING_SCREEN_INHERIT,
+  LOADING_SCREEN_MARK_ASSET_PATTERN,
+  LOADING_SCREEN_ARTWORK_ASSET_PATTERN,
+  validateLoadingScreen,
+  loadingScreenAssetPaths,
+  upgradeStudioDocumentToLoadingScreen,
+} from "./theme-core/loading-screen.mjs";
+export {
+  AURA_PACKAGE_FORMAT,
+  AURA_PACKAGE_MANIFEST_VERSION,
+  AURA_PACKAGE_MANIFEST_PATH,
+  AURA_PACKAGE_LIMITS,
+  validateAuraThemePackageManifest,
+  createAuraThemePackage,
+  extractAuraThemePackage,
+} from "./theme-core/package.mjs";
+export {
   readThemeKit,
   readThemeRegistry,
   listThemes,
@@ -108,12 +126,15 @@ export {
   setThemeLayer,
   enableResponsiveLayouts,
   mutateResponsiveLayout,
+  setLoadingScreen,
   applyThemePatch,
   setGreetingPhrases,
   resetGreeting,
   attachThemeLayerImage,
   attachThemeSidebarIdentityMark,
   attachInstantPromptIcon,
+  attachLoadingScreenMark,
+  attachLoadingScreenArtwork,
   removeThemeLayer,
   moveThemeLayer,
   undoThemeEdit,

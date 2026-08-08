@@ -1,4 +1,6 @@
 {
+  "chooseThemePackage": "Choose a .aura package or a theme.json kit file.",
+  "exportThemePackageTitle": "Export Claude Aura theme",
   "theme": "Theme",
   "themeFallbackDescription": "A distinct look for Claude Aura.",
   "openingClaude": "Opening Claude...",
@@ -65,6 +67,8 @@
   "themeAlreadyInstalled": "A theme named {0} is already installed.",
   "chooseThemeLayerImageTitle": "Choose theme artwork",
   "chooseThemeLauncherMarkTitle": "Choose app mark",
+  "chooseLoadingScreenMarkTitle": "Choose loading-screen mark",
+  "chooseLoadingScreenArtworkTitle": "Choose loading-screen artwork",
   "chooseSidebarIdentityMarkTitle": "Choose sidebar identity mark",
   "themeCopyReady": "Theme copy is ready to customize.",
   "themeEditReady": "Theme editor is ready.",
@@ -103,6 +107,7 @@
   "themeNotChangedTitle": "Theme was not changed",
   "themeNotChangedMessage": "That theme could not be applied. Your previous look is still available.",
   "retry": "Retry",
+  "closeLoadingPreview": "Close preview",
   "backgroundNotChangedTitle": "Background was not changed",
   "chooseBackgroundTitle": "Choose a Claude Aura background",
   "chooseAvatarTitle": "Choose a Claude Aura avatar",

@@ -415,13 +415,16 @@ URLs, custom CSS, and filesystem paths never style the Studio shell. Theme-card
 media, the editor's labelled asset guide/stage, and the validated launcher mark
 remain their own bounded product surfaces.
 
-### Studio-authored schemas v2 through v5
+### Studio-authored schemas v2 through v6
 
 Studio creates and continues saving a non-responsive edited `theme.json` with
 `schemaVersion: 4`. It accepts schema v1 through v4 without upgrading the
 installed document merely because it was opened. Only **Enable responsive
 layouts** or a responsive edit upgrades the complete current, baseline,
 last-valid, applied, Undo, and Redo family to schema v5 as one transaction.
+Only a deliberate **Loading screen** edit upgrades that same complete family
+to schema v6. Opening, previewing, or saving unrelated fields never performs
+either upgrade.
 Schema v3 carries the schema-v2 document forward and adds optional
 `newChatGreetingStyle`; `null` means Claude-native presentation. Schema v4 adds localized metadata, bounded
 interface surfaces, and background filters. Localized metadata may use a
@@ -468,6 +471,43 @@ targets skip missing frames and inherit rather than copying an effective value.
 Adding metadata therefore cannot move an unrelated target; duplicate copies
 only sparse explicit frames, Reset removes them, and delete removes every frame
 for that set.
+
+Schema v6 retains the complete schema-v5 document and adds exactly one
+`loadingScreen` discriminated union. Schema-v1 through v5 documents resolve as
+`{ mode: "inherit" }` without an open-time rewrite. The inherited result is the
+fixed permanent loading profile named by a valid `sourceRecipe`, or Default
+when no frozen source exists. Reset writes the exact inherit arm; it never
+copies resolved colours or geometry into a custom override.
+
+The other arm is the exact object `{ mode: "custom", layout, motif, mark,
+progress, light, dark }`. `layout` is `centered` or `split`; `motif` is
+`inherit`, `none`, or one of the eight fixed cue IDs. `mark` is exactly
+`{ source, asset, size }`, where source is `theme`, `custom`, or `none`, size is
+48–112 logical px, and only the custom source may name one digest-owned
+`loading/mark-<sha256>.png`. `progress` is exactly `{ style, motion }`, with
+`bar|pulse` and `calm|still` respectively.
+
+Each of `light` and `dark` is exactly `{ background, surface, text, accent,
+accentText, border, artwork }`. Colours are opaque six-digit hex values and
+must pass the loading-cover contrast checks. `artwork` is null or exactly
+`{ asset, opacity, fit, focalX, focalY }`: a digest-owned static WebP below
+400 KB, opacity 0–0.65, `cover|contain`, and integer focal coordinates 0–100.
+At most two loading artwork files and one transparent 96×96 loading mark may
+be referenced. They count toward the existing per-layer and 1.4 MB theme
+budgets. Unknown keys, URLs, CSS, HTML, scripts, selectors, remote resources,
+linked paths, animation, alpha colours, non-finite values, bad digests, and
+wrong formats are rejected.
+
+Studio exposes this host surface under **Widgets → Loading screen**. Its local
+view is explicitly a schematic, never a Claude canvas reconstruction. Pickers
+are host-owned and return only digest URLs. **Review in Aura** is accepted only
+for an active editor revision on an already-ready live page; it shows the
+last-valid draft with a focusable close button, Escape handling, and an
+eight-second timeout. Preview, real loading, and Retry never store status copy,
+change navigation IDs, delay the existing fail-open page reveal, or give the
+page filesystem authority. Navigation, Studio close, Original look, and any
+preview error remove the preview. High contrast uses system colours and no
+custom media; reduced animation and `still` use stationary progress.
 
 Each interface surface uses the sparse wrapper `{ base, appearance, view,
 frame }`, but validation exposes only the axes owned by that surface. Shared
@@ -673,7 +713,8 @@ node scripts/theme-cli.mjs qa my-theme
 
 Audits the actual production files, validates both Light and Dark payloads, and
 writes `status.json`. It does not generate a preview, board, contact sheet, or
-other UI image. Then open Aura Studio and use **Install theme from folder**.
+other UI image. Then open Aura Studio, choose **Install theme...**, and select
+the kit's exact `theme.json` file (or a validated `.aura` package).
 Apply the theme in the actual Aura WebView2 window on live `claude.ai`; that is
 the only supported visual review. Your theme applies immediately, survives
 restarts, and lives in your user data folder

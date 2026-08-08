@@ -16,13 +16,14 @@ export const SUPPORTED_LOCALES = Object.freeze(["en", "zh-CN", "zh-HKTW"]);
 export const STUDIO_METADATA_LOCALES = Object.freeze([
   "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
 ]);
-export const STUDIO_THEME_SCHEMA_VERSION = 5;
+export const STUDIO_THEME_SCHEMA_VERSION = 6;
 // Studio-authored kit documents. v2 predates the WO-21 greeting surface; v3
 // adds the optional newChatGreetingStyle; v4 makes localized metadata sparse
-// and user-selected; v5 adds explicitly enabled responsive layout sets. Older
+// and user-selected; v5 adds explicitly enabled responsive layout sets; v6
+// adds the bounded host-owned loading-screen union. Older
 // kits remain byte-stable until a responsive edit. Legacy hand-authored kits
 // stay schemaVersion 1 and load through the registry path.
-export const STUDIO_KIT_SCHEMA_VERSIONS = new Set([2, 3, 4, 5]);
+export const STUDIO_KIT_SCHEMA_VERSIONS = new Set([2, 3, 4, 5, 6]);
 // WO-21 new-chat greeting style allowlists. The portable theme carries only
 // presentation; personal phrases and names stay host-owned and never enter here.
 export const GREETING_FONT_CATEGORIES = new Set([

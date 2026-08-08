@@ -1,4 +1,8 @@
 // user-kits tests. Extracted from the former monolithic tests/run-tests.mjs.
+// Portable package checks share this process because they exercise the same
+// kit reader and Studio fixtures; keeping a second child suite adds overhead
+// without adding isolation.
+import "./theme-package.test.mjs";
 import { test, runIfMain } from "./support/harness.mjs";
 import { deflateSync } from "node:zlib";
 import {

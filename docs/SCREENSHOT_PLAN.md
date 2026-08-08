@@ -705,6 +705,14 @@ failure, and Retry states in Light/Dark. Confirm high contrast removes custom
 media, reduced animation keeps stationary progress, and injection or asset
 failure never delays revealing usable live `claude.ai`.
 
+The adjacent WO-28 manifest entry records schema version, inherited source,
+layout, cue ID, mark source and digest when custom, progress style/motion,
+Light/Dark palette, artwork digest/opacity/fit/focal point, editor
+session/revision, Undo count, preview dismissal path, and timeout result. It
+records no local path, selector, page text, account data, or conversation
+content. Studio schematic captures may document the controls but cannot replace
+the paired whole-window actual-Aura states.
+
 For WO-22, export the latest schema-v6 temporary theme and import it into a
 clean profile. Confirm its content-addressed sidebar mark, Interface overrides,
   bounded filters, responsive mode/layout sets, portable greeting style, Instant

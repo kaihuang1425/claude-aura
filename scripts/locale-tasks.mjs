@@ -23,6 +23,7 @@ export const SOURCE_LOCALE = "en";
 export const AUTHORED_LOCALES = Object.freeze(["en", "zh-CN", "zh-HKTW"]);
 export const SECTIONS = Object.freeze(["shell", "editor"]);
 export const STUDIO_LOCALE_DIR = path.join(PROJECT_ROOT, "studio", "locales");
+export const HOST_LOCALE_DIR = path.join(PROJECT_ROOT, "windows", "locales");
 export const BASELINE_PATH = path.join(STUDIO_LOCALE_DIR, "en-keys.json");
 
 export const LOCALE_NAMES = Object.freeze({
@@ -79,6 +80,32 @@ export async function readAllLocales() {
   const tags = await listStudioLocales();
   const entries = await Promise.all(tags.map(async (tag) => [tag, await readLocale(tag)]));
   return Object.fromEntries(entries);
+}
+
+export async function listHostLocales() {
+  const entries = await fs.readdir(HOST_LOCALE_DIR);
+  return entries.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).sort();
+}
+
+export async function readHostLocale(tag) {
+  const value = JSON.parse(await fs.readFile(path.join(HOST_LOCALE_DIR, `${tag}.json`), "utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`windows/locales/${tag}.json must contain one copy object`);
+  }
+  return { ...value };
+}
+
+export async function readAllHostLocales() {
+  const tags = await listHostLocales();
+  return Object.fromEntries(await Promise.all(tags.map(async (tag) => [tag, await readHostLocale(tag)])));
+}
+
+export async function writeHostLocale(tag, copy) {
+  await fs.writeFile(
+    path.join(HOST_LOCALE_DIR, `${tag}.json`),
+    `${JSON.stringify(copy, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 export async function readBaseline() {
@@ -162,6 +189,47 @@ export function inspectLocale(tag, copy, english, baseline) {
   return { tag, missing, extra, empty, stale, placeholderMismatch };
 }
 
+function hostMap(copy) {
+  return new Map(Object.entries(copy ?? {}).map(([key, value]) => [`host.${key}`, value]));
+}
+
+function inspectMaps(tag, source, target, base) {
+  const missing = [];
+  const stale = [];
+  const empty = [];
+  const placeholderMismatch = [];
+  for (const [id, englishText] of source) {
+    const value = target.get(id);
+    if (value === undefined) {
+      missing.push(id);
+      continue;
+    }
+    if (typeof value !== "string" || !value.trim() || CONTROL_CHARACTERS.test(value)) {
+      empty.push(id);
+      continue;
+    }
+    if (placeholders(englishText) !== placeholders(value)) placeholderMismatch.push(id);
+    if (base && base.has(id) && base.get(id) !== englishText) stale.push(id);
+  }
+  const extra = [...target.keys()].filter((id) => !source.has(id));
+  return { tag, missing, extra, empty, stale, placeholderMismatch };
+}
+
+export function inspectHostLocale(tag, copy, english, baseline) {
+  return inspectMaps(tag, hostMap(english), hostMap(copy), baseline ? hostMap(baseline) : null);
+}
+
+export function hostBaselineDrift(english, baseline) {
+  if (!baseline) return { missing: [], changed: [], removed: [] };
+  const source = hostMap(english);
+  const base = hostMap(baseline);
+  return {
+    missing: [...source.keys()].filter((id) => !base.has(id)),
+    changed: [...source].filter(([id, text]) => base.has(id) && base.get(id) !== text).map(([id]) => id),
+    removed: [...base.keys()].filter((id) => !source.has(id)),
+  };
+}
+
 export function localeHasIssues(report) {
   return report.missing.length > 0 || report.extra.length > 0 || report.empty.length > 0
     || report.stale.length > 0 || report.placeholderMismatch.length > 0;
@@ -193,13 +261,20 @@ const PACKET_INSTRUCTIONS = [
 
 async function commandCheck() {
   const locales = await readAllLocales();
+  const hostLocales = await readAllHostLocales();
   const english = locales[SOURCE_LOCALE];
+  const englishHost = hostLocales[SOURCE_LOCALE];
   if (!english) throw new Error("studio/locales/en.js is missing");
+  if (!englishHost) throw new Error("windows/locales/en.json is missing");
   const baseline = await readBaseline();
   const drift = baselineDrift(english, baseline);
+  const hostDrift = hostBaselineDrift(englishHost, baseline?.host);
   const reports = Object.entries(locales)
     .filter(([tag]) => tag !== SOURCE_LOCALE)
     .map(([tag, copy]) => inspectLocale(tag, copy, english, baseline));
+  const hostReports = Object.entries(hostLocales)
+    .filter(([tag]) => tag !== SOURCE_LOCALE)
+    .map(([tag, copy]) => inspectHostLocale(tag, copy, englishHost, baseline?.host));
 
   let failed = false;
   const driftCount = drift.missing.length + drift.changed.length + drift.removed.length;
@@ -210,6 +285,13 @@ async function commandCheck() {
     for (const id of [...drift.missing, ...drift.changed].slice(0, 10)) console.log(`  ${id}`);
     console.log("  Run: node scripts/locale-tasks.mjs export");
   }
+  const hostDriftCount = hostDrift.missing.length + hostDrift.changed.length + hostDrift.removed.length;
+  if (hostDriftCount > 0) {
+    failed = true;
+    console.log(`English host copy moved since the last translation round: ${hostDrift.missing.length} added, `
+      + `${hostDrift.changed.length} changed, ${hostDrift.removed.length} removed.`);
+    for (const id of [...hostDrift.missing, ...hostDrift.changed].slice(0, 10)) console.log(`  ${id}`);
+  }
   for (const report of reports) {
     if (!localeHasIssues(report)) continue;
     failed = true;
@@ -219,6 +301,20 @@ async function commandCheck() {
     if (report.empty.length) parts.push(`${report.empty.length} empty`);
     if (report.stale.length) parts.push(`${report.stale.length} stale`);
     if (report.placeholderMismatch.length) parts.push(`${report.placeholderMismatch.length} broken placeholders`);
+    console.log(`${report.tag.padEnd(8)} ${parts.join(", ")}`);
+    for (const id of [...report.missing, ...report.extra, ...report.empty, ...report.placeholderMismatch].slice(0, 6)) {
+      console.log(`  ${id}`);
+    }
+  }
+  for (const report of hostReports) {
+    if (!localeHasIssues(report)) continue;
+    failed = true;
+    const parts = [];
+    if (report.missing.length) parts.push(`${report.missing.length} host missing`);
+    if (report.extra.length) parts.push(`${report.extra.length} host unknown`);
+    if (report.empty.length) parts.push(`${report.empty.length} host empty`);
+    if (report.stale.length) parts.push(`${report.stale.length} host stale`);
+    if (report.placeholderMismatch.length) parts.push(`${report.placeholderMismatch.length} host placeholders`);
     console.log(`${report.tag.padEnd(8)} ${parts.join(", ")}`);
     for (const id of [...report.missing, ...report.extra, ...report.empty, ...report.placeholderMismatch].slice(0, 6)) {
       console.log(`  ${id}`);
@@ -235,33 +331,57 @@ async function commandCheck() {
 async function commandExport(argv) {
   const requested = argv.locale ? [argv.locale] : null;
   const locales = await readAllLocales();
+  const hostLocales = await readAllHostLocales();
   const english = locales[SOURCE_LOCALE];
+  const englishHost = hostLocales[SOURCE_LOCALE];
   const baseline = await readBaseline();
   const tags = requested ?? (await listStudioLocales()).filter((tag) => !isAuthoredLocale(tag));
   const source = flatten(english);
+  const hostSource = hostMap(englishHost);
   const packetLocales = {};
   let total = 0;
   for (const tag of tags) {
     if (isAuthoredLocale(tag) && !requested) continue;
     const copy = locales[tag] ?? { shell: {}, editor: {} };
     const report = inspectLocale(tag, copy, english, baseline);
+    const hostCopy = hostLocales[tag] ?? {};
+    const hostReport = inspectHostLocale(tag, hostCopy, englishHost, baseline?.host);
     const wanted = argv.all
       ? [...source.keys()]
       : [...new Set([...report.missing, ...report.empty, ...report.stale, ...report.placeholderMismatch])];
-    if (wanted.length === 0) continue;
+    const hostWanted = argv.all
+      ? [...hostSource.keys()]
+      : [...new Set([
+        ...hostReport.missing, ...hostReport.empty, ...hostReport.stale, ...hostReport.placeholderMismatch,
+      ])];
+    if (wanted.length === 0 && hostWanted.length === 0) continue;
     const target = flatten(copy);
     const base = baseline ? flatten(baseline) : null;
+    const hostTarget = hostMap(hostCopy);
+    const hostBase = baseline?.host ? hostMap(baseline.host) : null;
+    const entries = wanted.map((id) => {
+      const [section, key] = [id.slice(0, id.indexOf(".")), id.slice(id.indexOf(".") + 1)];
+      const entry = { section, key, english: source.get(id), translation: "" };
+      if (target.has(id)) entry.current = target.get(id);
+      if (base?.has(id) && base.get(id) !== source.get(id)) entry.englishBefore = base.get(id);
+      return entry;
+    });
+    entries.push(...hostWanted.map((id) => {
+      const key = id.slice("host.".length);
+      const entry = { section: "host", key, english: hostSource.get(id), translation: "" };
+      if (hostTarget.has(id)) entry.current = hostTarget.get(id);
+      if (hostBase?.has(id) && hostBase.get(id) !== hostSource.get(id)) {
+        entry.englishBefore = hostBase.get(id);
+      }
+      return entry;
+    }));
     packetLocales[tag] = {
       displayName: localeDisplayName(tag),
-      entries: wanted.sort().map((id) => {
-        const [section, key] = [id.slice(0, id.indexOf(".")), id.slice(id.indexOf(".") + 1)];
-        const entry = { section, key, english: source.get(id), translation: "" };
-        if (target.has(id)) entry.current = target.get(id);
-        if (base?.has(id) && base.get(id) !== source.get(id)) entry.englishBefore = base.get(id);
-        return entry;
-      }),
+      entries: entries.sort((left, right) => `${left.section}.${left.key}`.localeCompare(
+        `${right.section}.${right.key}`, "en",
+      )),
     };
-    total += wanted.length;
+    total += wanted.length + hostWanted.length;
   }
   if (total === 0) {
     console.log("Nothing to hand out: every delegated language is current.");
@@ -293,8 +413,11 @@ async function commandImport(argv) {
     throw new Error("The packet is not a schemaVersion 1 locale packet");
   }
   const locales = await readAllLocales();
+  const hostLocales = await readAllHostLocales();
   const english = locales[SOURCE_LOCALE];
+  const englishHost = hostLocales[SOURCE_LOCALE];
   const source = flatten(english);
+  const hostSource = hostMap(englishHost);
   const problems = [];
   const pending = [];
   for (const [tag, block] of Object.entries(packet.locales)) {
@@ -304,10 +427,12 @@ async function commandImport(argv) {
     }
     const copy = locales[tag]
       ?? Object.fromEntries(SECTIONS.map((section) => [section, {}]));
+    const hostCopy = { ...(hostLocales[tag] ?? {}) };
     for (const entry of block.entries ?? []) {
       const id = `${entry.section}.${entry.key}`;
-      if (!source.has(id)) {
-        problems.push(`${tag}: ${id} is not a key in ${SOURCE_LOCALE}.js`);
+      const selectedSource = entry.section === "host" ? hostSource : source;
+      if (!selectedSource.has(id)) {
+        problems.push(`${tag}: ${id} is not a current English interface key`);
         continue;
       }
       const value = entry.translation;
@@ -319,11 +444,13 @@ async function commandImport(argv) {
         problems.push(`${tag}: ${id} contains control characters`);
         continue;
       }
-      if (placeholders(source.get(id)) !== placeholders(value)) {
+      if (placeholders(selectedSource.get(id)) !== placeholders(value)) {
         problems.push(`${tag}: ${id} lost or invented a {0} placeholder`);
         continue;
       }
-      copy[entry.section][entry.key] = value.trim();
+      if (entry.section === "host") hostCopy[entry.key] = value.trim();
+      else if (SECTIONS.includes(entry.section)) copy[entry.section][entry.key] = value.trim();
+      else problems.push(`${tag}: ${id} has an unsupported locale section`);
     }
     // Key order follows English so the files stay diffable against each other.
     const ordered = Object.fromEntries(SECTIONS.map((section) => [
@@ -336,7 +463,14 @@ async function commandImport(argv) {
         + `(${report.missing.length} missing, ${report.empty.length} empty)`);
       continue;
     }
-    pending.push([tag, ordered]);
+    const orderedHost = Object.fromEntries(Object.keys(englishHost).map((key) => [key, hostCopy[key]]));
+    const hostReport = inspectHostLocale(tag, orderedHost, englishHost, null);
+    if (localeHasIssues(hostReport)) {
+      problems.push(`${tag}: host copy is still incomplete after import `
+        + `(${hostReport.missing.length} missing, ${hostReport.empty.length} empty)`);
+      continue;
+    }
+    pending.push([tag, ordered, orderedHost]);
   }
   if (problems.length > 0) {
     console.error("The packet was rejected; no file was written.");
@@ -344,7 +478,10 @@ async function commandImport(argv) {
     if (problems.length > 20) console.error(`  ...and ${problems.length - 20} more`);
     return 1;
   }
-  for (const [tag, copy] of pending) await writeLocale(tag, copy);
+  for (const [tag, copy, hostCopy] of pending) {
+    await writeLocale(tag, copy);
+    await writeHostLocale(tag, hostCopy);
+  }
   console.log(`Imported ${pending.length} languages: ${pending.map(([tag]) => tag).join(", ")}`);
   console.log("Run `node scripts/locale-tasks.mjs check` and then `npm test`.");
   return 0;
@@ -352,8 +489,9 @@ async function commandImport(argv) {
 
 async function commandBaseline() {
   const english = await readLocale(SOURCE_LOCALE);
-  await fs.writeFile(BASELINE_PATH, `${JSON.stringify(english, null, 2)}\n`, "utf8");
-  console.log(`Recorded ${flatten(english).size} English strings as the translated baseline.`);
+  const host = await readHostLocale(SOURCE_LOCALE);
+  await fs.writeFile(BASELINE_PATH, `${JSON.stringify({ ...english, host }, null, 2)}\n`, "utf8");
+  console.log(`Recorded ${flatten(english).size + Object.keys(host).length} English strings as the translated baseline.`);
   return 0;
 }
 

@@ -8,8 +8,10 @@
     "set-image", "clear-image", "set-avatar", "clear-avatar", "set-avatar-framing",
     "set-personal-wordmark", "clear-personal-wordmark", "set-personal-wordmark-framing",
     "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-desktop",
-    "import-theme", "export-terminal-themes", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
-    "enable-responsive-layouts", "mutate-responsive-layout", "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer", "move-theme-layer",
+    "import-theme", "export-theme-package", "export-terminal-themes", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
+    "enable-responsive-layouts", "mutate-responsive-layout",
+    "set-loading-screen", "pick-loading-screen-mark", "pick-loading-screen-artwork", "preview-theme-loading-screen",
+    "apply-theme-patch", "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-sidebar-identity-mark", "pick-instant-prompt-icon", "remove-theme-layer", "move-theme-layer",
     "undo-theme-edit", "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
     "start-window-edit", "stop-window-edit",
@@ -258,6 +260,7 @@
   let appearancePending = false;
   let localePending = null;
   let terminalThemeExportPending = false;
+  let themePackageExportPending = false;
   let introductionOffered = false;
   let introductionIsAutomatic = false;
   let introductionCompletionDestination = null;
@@ -733,7 +736,7 @@
   const hostThemeColorPattern = /^#[0-9a-f]{6}$/i;
   const hostThemeKeys = new Set([
     "name", "label", "description", "labels", "descriptions", "swatches", "preview", "launcher", "studioPreview",
-    "studioPreviewFrame", "studioStyle", "source", "sourceRecipe",
+    "studioPreviewFrame", "studioStyle", "loadingScreen", "source", "sourceRecipe",
   ]);
   // Theme metadata can opt into any Studio interface locale. English remains
   // the required fallback when a theme has not supplied the active locale.
@@ -845,6 +848,16 @@
       if (!studioStyle) return null;
     }
 
+    let loadingScreen;
+    if (value.loadingScreen !== undefined) {
+      if (value.loadingScreen === null) {
+        loadingScreen = null;
+      } else {
+        loadingScreen = window.CLAUDE_AURA_EDITOR?.normalizeLoadingScreen?.(value.loadingScreen);
+        if (!loadingScreen) return null;
+      }
+    }
+
     let source;
     if (value.source !== undefined) {
       if (value.source !== null && value.source !== "builtin" && value.source !== "user") return null;
@@ -868,6 +881,7 @@
       ...(preview === undefined ? {} : { preview }),
       ...(launcher === undefined ? {} : { launcher }),
       ...(studioStyle === undefined ? {} : { studioStyle }),
+      ...(loadingScreen === undefined ? {} : { loadingScreen }),
       ...(studioPreview === undefined ? {} : { studioPreview }),
       ...(studioPreviewFrame === undefined ? {} : { studioPreviewFrame }),
       ...(source === undefined ? {} : { source }),
@@ -915,6 +929,12 @@
     terminalThemeExportPending = Boolean(pending);
     for (const button of grid.querySelectorAll("[data-terminal-theme-export]")) {
       button.disabled = terminalThemeExportPending;
+    }
+  };
+  const setThemePackageExportPending = (pending) => {
+    themePackageExportPending = Boolean(pending);
+    for (const button of grid.querySelectorAll("[data-theme-package-export]")) {
+      button.disabled = themePackageExportPending;
     }
   };
   const syncThemeCardActions = (card, theme) => {
@@ -978,6 +998,24 @@
       remove.addEventListener("click", () => editorController?.requestDelete(
         theme.name, localized(theme.labels, theme.label), remove));
       actions.append(action, remove);
+      if (source === "user") {
+        const exportPackage = document.createElement("button");
+        exportPackage.type = "button";
+        exportPackage.className = "ghost-button";
+        exportPackage.dataset.themePackageExport = "";
+        exportPackage.textContent = t("exportThemePackage");
+        exportPackage.setAttribute("aria-label", `${exportPackage.textContent}: ${themeLabel}`);
+        exportPackage.disabled = themePackageExportPending;
+        exportPackage.addEventListener("click", () => {
+          if (themePackageExportPending) return;
+          setThemePackageExportPending(true);
+          setStatus(t("themePackageExporting"), "busy");
+          if (!send({ type: "export-theme-package", theme: theme.name })) {
+            setThemePackageExportPending(false);
+          }
+        });
+        actions.appendChild(exportPackage);
+      }
     }
     const exportTerminalThemes = document.createElement("button");
     exportTerminalThemes.type = "button";
@@ -1939,10 +1977,22 @@
           }
         }
         state.studioPreviewCrops = incomingCrops;
+        const themePackageExportAcknowledged = themePackageExportPending
+          && data.action === "export-theme-package"
+          && typeof data.actionSucceeded === "boolean";
         const terminalThemeExportAcknowledged = terminalThemeExportPending
           && data.action === "export-terminal-themes"
           && typeof data.actionSucceeded === "boolean";
-        if (terminalThemeExportAcknowledged) {
+        if (themePackageExportAcknowledged) {
+          setThemePackageExportPending(false);
+          if (data.actionSucceeded && data.tone !== "error") {
+            setStatus(t("themePackageExported"));
+          } else if (data.tone === "error") {
+            setStatus(t("themePackageExportFailed"), "error");
+          } else {
+            setStatus(t("statusReady"));
+          }
+        } else if (terminalThemeExportAcknowledged) {
           setTerminalThemeExportPending(false);
           if (data.actionSucceeded && data.tone !== "error") {
             setStatus(t("terminalThemesExported"));

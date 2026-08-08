@@ -13,6 +13,8 @@ import {
   SOURCE_LOCALE,
   baselineDrift,
   flatten,
+  hostBaselineDrift,
+  inspectHostLocale,
   inspectLocale,
   listStudioLocales,
   localeHasIssues,
@@ -122,6 +124,15 @@ test("Windows host copy covers its languages completely", async () => {
       assert.equal(got, wanted, `${tag}.${key} lost or invented a {0} placeholder`);
     }
   }
+  const baseline = await readBaseline();
+  assert.deepEqual(hostBaselineDrift(hostCopy.en, baseline?.host), {
+    missing: [], changed: [], removed: [],
+  }, "Windows English copy moved since the delegated host translation round");
+  for (const [tag, copy] of Object.entries(hostCopy)) {
+    if (tag === SOURCE_LOCALE) continue;
+    const report = inspectHostLocale(tag, copy, hostCopy.en, baseline?.host);
+    assert(!localeHasIssues(report), `${tag} host copy is not current`);
+  }
 
   // Every host language must also exist in Studio, or the two windows disagree.
   const studio = await listStudioLocales();
@@ -135,6 +146,9 @@ test("the English baseline mirrors the English locale file", async () => {
   const baseline = await readBaseline();
   assert.deepEqual([...flatten(baseline).entries()], [...flatten(locales[SOURCE_LOCALE]).entries()],
     "studio/locales/en-keys.json is stale; run `npm run locale:baseline` once the translations land");
+  const hostCopy = await readHostCopy();
+  assert.deepEqual(baseline?.host, hostCopy.en,
+    "studio/locales/en-keys.json is missing the Windows-host English baseline");
 });
 
 runIfMain(import.meta.url);

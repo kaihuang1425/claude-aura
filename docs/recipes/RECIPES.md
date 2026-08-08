@@ -112,7 +112,7 @@ opens the host action menu with Studio and Prompt Shelf visible, and right-click
 opens the same menu. Theme styling never changes those host-owned interaction
 dimensions or semantics.
 
-Host loading cover (WO-18 fixed permanent recipes; not user-schema fields):
+Host loading cover (WO-18 fixed permanent recipes; inherited by schema v6):
 
 - Fill the entire Aura content area with a 28° gradient from the effective
   `studioStyle.canvas` to `studioStyle.raised`. Use `studioStyle.text` for the
@@ -157,6 +157,28 @@ their validated palette overrides still colour the base surface and primary
 accent. High contrast uses Windows system colours with no mark or cue. A
 missing asset or invalid profile falls back without changing the existing
 DOMContentLoaded/NavigationCompleted reveal lifecycle.
+
+Schema-v6 custom loading-cover seed and limits (WO-28):
+
+- The first deliberate customization copies only the effective safe starting
+  values into a new override: `layout: centered`, `motif: inherit`, theme mark
+  at 72 logical px, and `progress: { style: bar, motion: calm }`.
+- Light and Dark seed `background`, `surface`, `text`, `accent`, and
+  `accentText` from the last-valid Studio projection. `border` seeds from the
+  readable text colour so the first custom draft is validation-safe. Artwork
+  starts null. Reset returns to `{ mode: inherit }` instead of retaining these
+  resolved numbers.
+- A custom cover may choose centered/split, inherit/none/one fixed cue, a
+  theme/custom/no mark at 48–112 px, bar/pulse progress, and calm/still motion.
+  Custom media is limited to one transparent static 96×96 PNG and at most one
+  static WebP per appearance. Each file is below 400 KB and digest-owned;
+  artwork opacity is 0–0.65, fit is cover/contain, and both focal coordinates
+  are 0–100.
+- The localized status and Retry controls remain host-owned. Artwork stays
+  decorative beneath a fixed contrast surface. High contrast removes custom
+  colours, cue, mark, and artwork; Windows reduced animation and `still` both
+  center a visible stationary indicator. Missing or undecodable media falls
+  back without changing the live-page reveal lifecycle.
 
 In-page wordmarks (all-eight built-in expansion authorized 2026-07-23):
 

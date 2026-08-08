@@ -598,6 +598,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "open-aura",
     "open-desktop",
     "import-theme",
+    "export-theme-package",
     "export-terminal-themes",
     "create-theme-copy",
     "begin-theme-edit",
@@ -605,6 +606,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "set-theme-layer",
     "enable-responsive-layouts",
     "mutate-responsive-layout",
+    "set-loading-screen",
+    "pick-loading-screen-mark",
+    "pick-loading-screen-artwork",
+    "preview-theme-loading-screen",
     "apply-theme-patch",
     "pick-theme-layer-image",
     "pick-theme-launcher-mark",
@@ -666,9 +671,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     ["type", "theme"],
     "Terminal export must accept only its exact theme identifier",
   );
+  const packageExportShape = expectedPropertiesMatch[1].match(
+    /'export-theme-package'\s*\{([^}]*)\}/,
+  );
+  assert(packageExportShape, "Studio exact message-shape switch is missing export-theme-package");
+  assert.deepEqual(
+    [...packageExportShape[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1]),
+    ["type", "theme"],
+    "Theme package export must accept only its exact theme identifier",
+  );
   assert.match(ui,
-    /\$type -ceq 'export-terminal-themes'[\s\S]{0,320}?\$sourceUri\.AbsolutePath -cne '\/index\.html'[\s\S]{0,240}?Test-AuraUiStudioDocumentUri -Uri \$sourceUri -AllowFragment[\s\S]{0,320}?\$message\.theme -isnot \[string\][\s\S]{0,220}?\^\[a-z\]\[a-z0-9-\]\{1,39\}\$/,
-    "Terminal export must validate its exact Studio document and bounded theme id");
+    /\$type -in @\('export-terminal-themes', 'export-theme-package'\)[\s\S]{0,320}?\$sourceUri\.AbsolutePath -cne '\/index\.html'[\s\S]{0,240}?Test-AuraUiStudioDocumentUri -Uri \$sourceUri -AllowFragment[\s\S]{0,320}?\$message\.theme -isnot \[string\][\s\S]{0,220}?\^\[a-z\]\[a-z0-9-\]\{1,39\}\$/,
+    "Theme exports must validate their exact Studio document and bounded theme id");
   const expectedPromptShelfMessageShapes = {
     "prompt-shelf-read": ["type", "version", "requestId"],
     "prompt-shelf-create": ["type", "version", "requestId", "session", "revision", "commandEpoch", "text"],
@@ -718,6 +732,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "set-theme-layer": ["type", "session", "revision", "index", "preset", "property", "value"],
     "enable-responsive-layouts": ["type", "session", "revision"],
     "mutate-responsive-layout": ["type", "session", "revision", "operation", "id", "value"],
+    "set-loading-screen": ["type", "session", "revision", "loadingScreen"],
+    "pick-loading-screen-mark": ["type", "session", "revision"],
+    "pick-loading-screen-artwork": ["type", "session", "revision", "appearance"],
+    "preview-theme-loading-screen": ["type", "session", "revision"],
     "apply-theme-patch": ["type", "session", "revision", "changes"],
     "pick-theme-layer-image": ["type", "session", "revision", "index", "role", "appearance", "context"],
     "pick-theme-launcher-mark": ["type", "session", "revision"],
@@ -872,10 +890,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui, /\$script:MirrorProbeTask = \$script:WebView\.CoreWebView2\.ExecuteScriptAsync\(\$probe\)/,
     "Mirror geometry must come from a non-blocking layout probe of the live page");
   assert.match(ui,
-    /\$core\.add_SourceChanged\(\{[\s\S]{0,160}?Request-AuraUiContextMirror[\s\S]{0,160}?}\)/,
+    /\$core\.add_SourceChanged\(\{[\s\S]{0,200}?Request-AuraUiContextMirror[\s\S]{0,360}?}\)/,
     "Aura source changes must refresh the active editor's private mirror");
   assert.match(ui,
-    /\$core\.add_HistoryChanged\(\{[\s\S]{0,160}?Request-AuraUiContextMirror[\s\S]{0,160}?}\)/,
+    /\$core\.add_HistoryChanged\(\{[\s\S]{0,200}?Request-AuraUiContextMirror[\s\S]{0,360}?}\)/,
     "Aura SPA history changes must refresh the active editor's private mirror");
   assert.match(ui,
     /function Request-AuraUiContextMirror[\s\S]{0,420}?MirrorSemanticRetries\s*=\s*3[\s\S]{0,120}?MirrorSemanticPreviousContext/,
@@ -1018,9 +1036,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /id="editor-document-details" class="editor-document-details-panel"[^>]+hidden/,
     "Localized names and descriptions must remain available as document details");
-  assert.equal((studioHtml.match(/data-editor-branch="widgets"/g) ?? []).length, 2,
-    "Widgets must contain App identity and Instant prompts only");
-  assert.equal((studioHtml.match(/data-editor-targets="widgets\.[^"]+"/g) ?? []).length, 2);
+  assert.equal((studioHtml.match(/data-editor-branch="widgets"/g) ?? []).length, 3,
+    "Widgets must contain App identity, Instant prompts, and the loading screen");
+  assert.equal((studioHtml.match(/data-editor-targets="widgets\.[^"]+"/g) ?? []).length, 3);
   const widgetsMarkup = studioHtml.slice(
     studioHtml.indexOf('data-editor-branch="widgets"'),
     studioHtml.indexOf('data-editor-branch="background"'),
@@ -1209,10 +1227,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /function Invoke-AuraUiPickThemeSidebarIdentityMark[\s\S]{0,500}?UiCopy\.chooseSidebarIdentityMarkTitle[\s\S]{0,300}?PNG \(\*\.png\)\|\*\.png[\s\S]{0,800}?ReparsePoint[\s\S]{0,500}?400000[\s\S]{0,700}?\[IO\.File\]::Copy[\s\S]{0,500}?-AssetPath \$targetPath[\s\S]{0,1000}?Studio sidebar identity import cleanup failed/,
     "The sidebar identity picker must be separately named, PNG-only, size-bounded, copied into app data, and cleaned up");
-  assert.equal((ui.match(/StudioEditorState\['error'\]\s*=\s*'picker-cancelled'/g) ?? []).length, 3,
+  assert.equal((ui.match(/StudioEditorState\['error'\]\s*=\s*'picker-cancelled'/g) ?? []).length, 5,
     "Closing any theme image picker must be acknowledged as neutral cancellation");
   assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-theme-launcher-mark' -ActionSucceeded \$true/g) ?? []).length, 1);
   assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-sidebar-identity-mark' -ActionSucceeded \$true/g) ?? []).length, 1);
+  assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-loading-screen-mark' -ActionSucceeded \$true/g) ?? []).length, 1);
+  assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-loading-screen-artwork' -ActionSucceeded \$true/g) ?? []).length, 1);
   assert.match(ui, /Send-AuraUiStudioState -Action \$action -ActionSucceeded \$true/,
     "Layer and instant-prompt picker cancellation must settle through their exact requested action");
   assert.match(studioEditor,
@@ -2184,7 +2204,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /const setTerminalThemeExportPending[\s\S]{0,260}?\[data-terminal-theme-export\][\s\S]{0,180}?button\.disabled = terminalThemeExportPending/,
     "All export buttons must remain disabled while either native picker is open");
   assert.match(studioApp,
-    /terminalThemeExportPending[\s\S]{0,120}?data\.action === "export-terminal-themes"[\s\S]{0,100}?typeof data\.actionSucceeded === "boolean"[\s\S]{0,420}?terminalThemesExported[\s\S]{0,220}?terminalThemesExportFailed[\s\S]{0,180}?statusReady/,
+    /terminalThemeExportPending[\s\S]{0,120}?data\.action === "export-terminal-themes"[\s\S]{0,100}?typeof data\.actionSucceeded === "boolean"[\s\S]{0,900}?terminalThemesExported[\s\S]{0,220}?terminalThemesExportFailed[\s\S]{0,180}?statusReady/,
     "Studio must distinguish path-free export success, failure, and cancellation acknowledgements");
   const terminalExportCopy = (await readStudioCopy()).shell;
   assert.equal(terminalExportCopy.en.terminalThemesExported,
@@ -3414,6 +3434,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "background.layer",
       "widgets.app-identity",
       "widgets.instant-prompts",
+      "widgets.loading-screen",
     ],
     "The host-owned capability registry must contain every implemented visual target",
   );
@@ -3584,6 +3605,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     identityPreviewUrl: null,
     identityStylePreviewUrl: null,
     responsiveLayouts: null,
+    loadingScreen: { mode: "inherit" },
+    loadingScreenStyle: { mode: "inherit" },
+    loadingScreenAssets: { mark: null, lightArtwork: null, darkArtwork: null },
+    loadingScreenStyleAssets: { mark: null, lightArtwork: null, darkArtwork: null },
     shared: {
       fontUi: "system-sans", fontDisplay: "editorial-serif", radius: 12, blur: 16,
       shadow: "soft", backgroundScope: "content", prompt: { native: false, width: 0.7, x: 0, y: 0 },
@@ -3997,10 +4022,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Studio host must never accept a page-supplied file path");
   assert.match(ui, /\$UserThemesRoot\s*=\s*Join-Path\s+\$DataRoot\s+['"]themes['"]/,
     "Installed themes must live under the user data themes folder");
-  assert.match(ui, /\[System\.Windows\.Forms\.FolderBrowserDialog\]::new\(\)/,
-    "Theme kit paths must come from a host-owned folder picker");
-  assert.match(ui, /Invoke-AuraUiNode[\s\S]{0,400}?['"]validate['"][\s\S]{0,240}?\$dialog\.SelectedPath/,
-    "The host must validate the selected kit folder through the Node helper before copying it");
+  assert.match(ui,
+    /function Invoke-AuraUiImportTheme[\s\S]{0,500}?\[System\.Windows\.Forms\.OpenFileDialog\]::new\(\)[\s\S]{0,500}?\*\.aura;theme\.json[\s\S]{0,500}?\$dialog\.FileName/,
+    "Theme kit and package paths must come from the host-owned file picker");
+  assert.match(ui, /Invoke-AuraUiNode[\s\S]{0,500}?['"]validate['"][\s\S]{0,120}?\$sourcePath/,
+    "The host must validate the selected or extracted kit through the Node helper before copying it");
   assert.match(ui, /Assert-AuraUiThemeKitTree[\s\S]{0,1400}?ReparsePoint/,
     "Theme installation must reject junctions and symbolic links");
   assert.match(ui, /function Assert-AuraUiThemeInstallRoot[\s\S]{0,2400}?ReparsePoint/,
@@ -5244,7 +5270,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "$tokens=$null;$errors=$null",
       "$ast=[System.Management.Automation.Language.Parser]::ParseFile($uiPath,[ref]$tokens,[ref]$errors)",
       "if($errors.Count){throw 'Could not parse Aura UI for loading-cover regression'}",
-      "$names=@('Get-AuraUiPropertyValue','Get-AuraUiThemeByName','Get-AuraUiSelectedThemeName','Get-AuraUiEnabled','Get-AuraUiPermanentThemeIds','Get-AuraUiLoadingThemeId','Get-AuraUiLoadingColorValue','Get-AuraUiLoadingProfile','Get-AuraUiLoadingScale','New-AuraUiLoadingMarkBitmap','New-AuraUiRoundedRectanglePath','ConvertTo-AuraUiBlendedColor','Paint-AuraUiLoadingPanel','Update-AuraUiLoadingBackground','Set-AuraUiRoundedControlRegion','Set-AuraUiLoadingLayout')",
+      "$names=@('Get-AuraUiPropertyValue','Get-AuraUiThemeByName','Get-AuraUiSelectedThemeName','Get-AuraUiEnabled','Get-AuraUiPermanentThemeIds','Get-AuraUiLoadingThemeId','Get-AuraUiLoadingColorValue','Get-AuraUiLoadingProfile','Get-AuraUiLoadingScale','New-AuraUiLoadingMarkBitmap','New-AuraUiRoundedRectanglePath','ConvertTo-AuraUiBlendedColor','Paint-AuraUiLoadingArtwork','Paint-AuraUiLoadingPanel','Update-AuraUiLoadingBackground','Set-AuraUiRoundedControlRegion','Set-AuraUiLoadingLayout')",
       "foreach($name in $names){",
       "  $definition=$ast.Find({param($node)$node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)",
       "  if($null -eq $definition){throw \"Missing loading-cover function $name\"}",
@@ -5699,7 +5725,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
       "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','enable-responsive-layouts','mutate-responsive-layout','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-theme-package','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','enable-responsive-layouts','mutate-responsive-layout','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
       "$script:PromptShelfMaxTextLength=8000",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
       "$script:PersonalWordmarkSession=$session",
@@ -5719,6 +5745,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  [ordered]@{type='set-locale';locale='ja'},",
       "  [ordered]@{type='set-locale';locale='zh-HKTW'},",
       "  [ordered]@{type='complete-studio-introduction'},",
+      "  [ordered]@{type='export-theme-package';theme='user-theme'},",
       "  [ordered]@{type='export-terminal-themes';theme='default'},",
       "  [ordered]@{type='set-personal-wordmark';requestId=$requestId;session=$session;revision=0;operation='choose'},",
       "  [ordered]@{type='clear-personal-wordmark';requestId=$requestId;session=$session;revision=0},",
@@ -5767,6 +5794,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($terminalExport|ConvertTo-Json -Compress) -Source 'https://aura.studio/not-index.html?locale=en' } 'a terminal export from another Studio path'",
       "$terminalExportBadTheme=[ordered]@{type='export-terminal-themes';theme='Default'}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($terminalExportBadTheme|ConvertTo-Json -Compress) -Source $source } 'a noncanonical terminal export theme'",
+      "$packageExportWithPath=[ordered]@{type='export-theme-package';theme='user-theme';path='C:\\private\\theme.aura'}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($packageExportWithPath|ConvertTo-Json -Compress) -Source $source } 'a package export carrying a path'",
       "$promptRead=[ordered]@{type='prompt-shelf-read';version=1;requestId=$requestId}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($promptRead|ConvertTo-Json -Compress) -Source 'https://aura.studio/not-index.html' } 'a Prompt Shelf message from another Studio path'",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($promptRead|ConvertTo-Json -Compress) -Source 'https://aura.studio/index.html?locale=en&view=prompt-shelf&extra=1' } 'a Prompt Shelf message with an extra URL parameter'",

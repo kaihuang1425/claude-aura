@@ -1,4 +1,6 @@
 {
+  "chooseThemePackage": "選擇 .aura 主題套件或主題資料夾內的 theme.json 檔案。",
+  "exportThemePackageTitle": "匯出 Claude Aura 主題",
   "themeFallbackDescription": "Claude Aura 的獨特外觀。",
   "theme": "主題",
   "openingClaude": "正在開啟 Claude…",
@@ -65,6 +67,8 @@
   "themeAlreadyInstalled": "已安裝名為{0}的主題。",
   "chooseThemeLayerImageTitle": "選擇主題圖片",
   "chooseThemeLauncherMarkTitle": "選擇 App 識別圖",
+  "chooseLoadingScreenMarkTitle": "選擇載入畫面識別圖",
+  "chooseLoadingScreenArtworkTitle": "選擇載入畫面圖片",
   "chooseSidebarIdentityMarkTitle": "選擇側邊欄識別圖示",
   "themeCopyReady": "主題副本已可自訂。",
   "themeEditReady": "主題編輯器已就緒。",
@@ -103,6 +107,7 @@
   "themeNotChangedTitle": "主題未變更",
   "themeNotChangedMessage": "無法套用這個主題。先前的外觀仍可使用。",
   "retry": "重試",
+  "closeLoadingPreview": "關閉預覽",
   "backgroundNotChangedTitle": "背景未變更",
   "chooseBackgroundTitle": "選擇 Claude Aura 背景",
   "chooseAvatarTitle": "選擇 Claude Aura 頭像",

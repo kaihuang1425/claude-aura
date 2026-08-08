@@ -4,6 +4,8 @@ import path from "node:path";
 import { generateAssetAudit } from "./asset-audit.mjs";
 import {
   buildPayloadFromCompiled,
+  createAuraThemePackage,
+  extractAuraThemePackage,
   exportTerminalThemePair,
   exportTerminalThemes,
   compileTheme,
@@ -245,6 +247,8 @@ Commands:
   export-terminal <theme-id> [--out <dir>] [--user-themes <path>]
   export-terminal-pair <theme-id> --light <absolute-json-path> --dark <absolute-json-path>
       [--user-themes <path>]
+  package-export <theme-id> --out <absolute-.aura-path> --user-themes <path>
+  package-extract <absolute-.aura-path> --out <absolute-staging-folder>
   scaffold <id>
   qa <id>
   init --config <path> [--locale <tag>] [--user-themes <path>] [--payload]
@@ -274,7 +278,7 @@ Commands:
 
 async function main() {
 const { command, options, positionals } = parse(process.argv.slice(2));
-if (!["export-terminal", "export-terminal-pair", "qa", "scaffold", "validate"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
+if (!["export-terminal", "export-terminal-pair", "package-export", "package-extract", "qa", "scaffold", "validate"].includes(command) && positionals.length) throw new Error(`Unexpected argument: ${positionals[0]}`);
 const userThemesDir = options["user-themes"] === undefined ? null : path.resolve(options["user-themes"]);
 const emitWarning = (message) => process.stderr.write(`Warning: ${message}\n`);
 const runtimeOptions = { userThemesDir, onWarning: emitWarning };
@@ -476,6 +480,53 @@ if (command === "help" || command === "--help") {
     theme: themeId,
     files: result.files,
   }, null, 2));
+} else if (command === "package-export") {
+  if (positionals.length !== 1) {
+    throw new Error("Usage: theme-cli package-export <theme-id> --out <absolute-.aura-path> --user-themes <path>");
+  }
+  const allowed = new Set(["out", "user-themes"]);
+  const unsupported = Object.keys(options).find((key) => !allowed.has(key));
+  if (unsupported) throw new Error(`Unsupported package-export option: --${unsupported}`);
+  const themeId = positionals[0];
+  if (!THEME_ID_PATTERN.test(themeId)) throw new Error("Invalid theme id");
+  if (!userThemesDir) throw new Error("--user-themes is required");
+  if (typeof options.out !== "string" || !path.isAbsolute(options.out)) {
+    throw new Error("--out must be an absolute .aura path");
+  }
+  const theme = (await listThemes({ locale: "en", ...runtimeOptions }))
+    .find((candidate) => candidate.name === themeId);
+  if (!theme || theme.source !== "user") throw new Error(`User theme not found: ${themeId}`);
+  const result = await createAuraThemePackage({
+    kitDirectory: path.join(userThemesDir, themeId),
+    packagePath: path.resolve(options.out),
+  });
+  console.log(JSON.stringify({
+    pass: true,
+    theme: result.manifest.themeId,
+    schemaVersion: result.manifest.schemaVersion,
+    files: result.manifest.files.map((file) => file.path),
+    bytes: result.bytes,
+  }));
+} else if (command === "package-extract") {
+  if (positionals.length !== 1) {
+    throw new Error("Usage: theme-cli package-extract <absolute-.aura-path> --out <absolute-staging-folder>");
+  }
+  const allowed = new Set(["out"]);
+  const unsupported = Object.keys(options).find((key) => !allowed.has(key));
+  if (unsupported) throw new Error(`Unsupported package-extract option: --${unsupported}`);
+  if (!path.isAbsolute(positionals[0]) || typeof options.out !== "string" || !path.isAbsolute(options.out)) {
+    throw new Error("package-extract input and --out must be absolute paths");
+  }
+  const result = await extractAuraThemePackage({
+    packagePath: path.resolve(positionals[0]),
+    destinationDirectory: path.resolve(options.out),
+  });
+  console.log(JSON.stringify({
+    pass: true,
+    theme: result.theme,
+    schemaVersion: result.manifest.schemaVersion,
+    files: result.manifest.files.map((file) => file.path),
+  }));
 } else if (command === "list") {
   const locale = normalizeLocale(options.locale ?? "en");
   const themes = (await listThemes({ locale, ...runtimeOptions })).map(({
@@ -490,6 +541,7 @@ if (command === "help" || command === "--help") {
     studioPreview,
     studioPreviewFrame,
     sourceRecipe,
+    loadingScreen,
     artwork,
     source,
     light,
@@ -513,6 +565,7 @@ if (command === "help" || command === "--help") {
     studioPreview: studioPreview ?? null,
     studioPreviewFrame: studioPreviewFrame ? { ...studioPreviewFrame } : null,
     sourceRecipe: sourceRecipe ?? null,
+    loadingScreen: loadingScreen ?? null,
     source,
     artwork: artwork ? {
       path: artwork.path,
