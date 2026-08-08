@@ -1383,8 +1383,13 @@
     if (!window.navigation) advanceGreetingVisit?.();
     scheduleEnsure();
   };
+  let greetingNavigationKey = window.navigation?.currentEntry?.key;
   const onNavigationSignal = () => {
-    advanceGreetingVisit?.();
+    const nextKey = window.navigation?.currentEntry?.key;
+    if (nextKey !== greetingNavigationKey) {
+      greetingNavigationKey = nextKey;
+      advanceGreetingVisit?.();
+    }
     scheduleEnsure();
   };
   let t=0;

@@ -543,6 +543,80 @@
     return phrases;
   }
 
+  const GREETING_SOURCE_CHOICES = new Set(["claude", "custom", "disabled"]);
+
+  const greetingSourceChoice = (personal) => {
+    if (!personal?.enabled) return "disabled";
+    return personal.source === "custom" ? "custom" : "claude";
+  };
+
+  const greetingPreferencesForSourceChoice = (personal, choice) => {
+    if (!personal || !GREETING_SOURCE_CHOICES.has(choice)) return null;
+    return {
+      ...personal,
+      enabled: choice !== "disabled",
+      source: choice === "disabled" ? "custom" : choice,
+      shuffle: null,
+    };
+  };
+
+  const greetingThemeOverrideFor = (personal, themeId) => {
+    const overrides = personal?.themeOverrides;
+    return overrides && Object.hasOwn(overrides, themeId)
+      ? overrides[themeId]
+      : { mode: "global", phrases: [] };
+  };
+
+  const greetingMutationResult = (request, response) => {
+    if (!request || !response
+        || response.lastAction !== request.type
+        || response.session !== request.session
+        || !Number.isSafeInteger(request.revision)) return "waiting";
+    if (response.actionSucceeded !== false) {
+      return response.revision === request.revision + 1 ? "succeeded" : "waiting";
+    }
+    if (response.revision === request.revision
+        || response.revision === request.revision + 1) return "failed";
+    return "waiting";
+  };
+
+  const sameMutationRequest = (left, right) => Boolean(left && right
+    && left.type === right.type
+    && left.session === right.session
+    && left.revision === right.revision);
+
+  const greetingResyncCaughtUp = (request, response, localGreeting) => {
+    if (!request || !response) return false;
+    if (greetingMutationResult(request, response) === "succeeded") return true;
+    // A full editor Reset must never be inferred from coincidentally equal
+    // greeting data: it also replaces theme and metadata state.
+    if (request.type === "begin-theme-edit" && request.reset === true) return false;
+    if (request.type === "reset-greeting"
+        && response.revision > request.revision
+        && response.shared?.greeting?.native
+        && response.greetingPreferences?.enabled
+        && response.greetingPreferences?.source === "claude") return true;
+    return Boolean(localGreeting
+      && JSON.stringify(localGreeting) === JSON.stringify(response.greetingPreferences));
+  };
+
+  const patchResyncDecision = (request, response, retryAvailable) => {
+    if (!request || !response || response.session !== request.session
+        || !Number.isSafeInteger(request.revision)
+        || response.revision < request.revision) return "waiting";
+    const result = greetingMutationResult(request, response);
+    if (result === "succeeded") return "succeeded";
+    if (result === "failed") {
+      return response.revision === request.revision + 1
+        ? "failed-persisted"
+        : "failed-not-applied";
+    }
+    if (response.revision === request.revision) {
+      return retryAvailable ? "retry" : "defer";
+    }
+    return "uncertain";
+  };
+
   function normalizeShared(value) {
     const keys = ["fontUi", "fontDisplay", "radius", "blur", "shadow", "backgroundScope", "prompt", "greeting", "inherited"];
     const inheritedKeys = ["fontUi", "fontDisplay", "radius", "shadow"];
@@ -979,7 +1053,17 @@
     let greetingPreferenceDraftDirty = false;
     let greetingPreferenceInputDirty = false;
     let greetingPreferenceInputInvalid = false;
+    let greetingPreferenceErrorTarget = null;
     let greetingStyleIntent = null;
+    let greetingStyleLocked = false;
+    let greetingStageTimer = null;
+    let greetingStageRequested = false;
+    let greetingResyncPending = null;
+    let greetingResyncTimer = null;
+    let patchResyncPending = null;
+    let patchResyncTimer = null;
+    let greetingTimeoutRetries = 0;
+    let greetingActionFollowup = null;
     let activeGreetingControlScope = null;
     let greetingMirrorAxesDeferred = false;
     let metadataInputDirty = false;
@@ -1006,6 +1090,7 @@
     let stagePreviewSize = [...STAGE_SIZES.normal];
     let previewSizeIntent = null;
     let pendingAction = null;
+    let pendingRequest = null;
     let pendingWatchdog = null;
     let returnTheme = "default";
     let confirmCallback = null;
@@ -1017,15 +1102,18 @@
     const stageOverrides = new Map();
     const coalescedChanges = new Map();
     const deferredChanges = new Map();
+    const uncertainChanges = new Map();
     let changeFlushTimer = null;
     let inFlightChanges = [];
     let inFlightRevision = null;
     let inFlightSession = null;
+    let changeSendRetryCount = 0;
+    let patchResponseRetryCount = 0;
     let actionAfterPatch = null;
     const hasUnsavedEdits = () => hasUnsavedEditorWork({
       dirty: state?.dirty || greetingPreferenceDraftDirty || greetingPreferenceInputDirty
         || metadataInputDirty,
-      deferred: deferredChanges.size,
+      deferred: deferredChanges.size + uncertainChanges.size,
       coalesced: coalescedChanges.size,
       debounce: changeFlushTimer,
       inFlight: inFlightChanges.length,
@@ -1092,7 +1180,8 @@
     // undo, reset) that must settle before further interaction. Value patches
     // (apply-theme-patch) never change layer structure, so they sync in the
     // background without locking the editor.
-    const isBlockingAction = () => Boolean(pendingAction) && pendingAction !== "apply-theme-patch";
+    const isBlockingAction = () => Boolean(patchResyncPending)
+      || (Boolean(pendingAction) && pendingAction !== "apply-theme-patch");
     // A host reply can be lost: a stale session, a dropped bridge message, or a state
     // whose lastAction never matches what we sent. Without a watchdog `pendingAction`
     // stays set forever and flushThemeChanges then queues every later edit without ever
@@ -1104,20 +1193,83 @@
       clearTimeout(pendingWatchdog);
       pendingWatchdog = null;
     };
-    const setPending = (action = null) => {
+    const setPending = (action = null, request = null) => {
       pendingAction = action;
+      pendingRequest = action && request ? { ...request } : null;
       clearPendingWatchdog();
       if (action && !WATCHDOG_EXEMPT_ACTIONS.has(action)) {
         pendingWatchdog = setTimeout(() => {
           pendingWatchdog = null;
           if (!pendingAction) return;
+          const timedOutAction = pendingAction;
+          const timedOutRequest = pendingRequest;
+          const fullReset = timedOutAction === "begin-theme-edit"
+            && timedOutRequest?.reset === true;
+          if ((["set-greeting-phrases", "reset-greeting"].includes(timedOutAction)
+                || fullReset)
+              && timedOutRequest) {
+            const timeoutMessage = tr(fullReset
+              ? "editorActionTimedOut"
+              : "greetingActionTimedOut");
+            const retry = timedOutAction === "set-greeting-phrases"
+              && greetingTimeoutRetries < 1;
+            if (retry) greetingTimeoutRetries += 1;
+            greetingActionFollowup = null;
+            greetingResyncPending = { request: timedOutRequest, retry, fullReset };
+            greetingStageRequested = retry;
+            setPending(null);
+            editor.setAttribute("aria-busy", "true");
+            if (!send({ type: "get-state" })) {
+              greetingResyncPending = null;
+              greetingStageRequested = false;
+              editor.setAttribute("aria-busy", "false");
+              reflectButtonStates();
+            } else {
+              if (greetingResyncTimer) clearTimeout(greetingResyncTimer);
+              greetingResyncTimer = setTimeout(() => {
+                greetingResyncTimer = null;
+                if (!greetingResyncPending) return;
+                greetingResyncPending = null;
+                greetingStageRequested = false;
+                editor.setAttribute("aria-busy", "false");
+                reflectButtonStates();
+                announce(timeoutMessage, "error");
+              }, PENDING_WATCHDOG_MS);
+            }
+            announce(timeoutMessage, "error");
+            return;
+          }
+          if (timedOutAction === "apply-theme-patch") {
+            patchResponseRetryCount += 1;
+            patchResyncPending = {
+              request: timedOutRequest,
+              retry: patchResponseRetryCount <= 1,
+            };
+            setPending(null);
+            editor.setAttribute("aria-busy", "true");
+            if (!send({ type: "get-state" })) {
+              parkUncertainPatch();
+            } else {
+              if (patchResyncTimer) clearTimeout(patchResyncTimer);
+              patchResyncTimer = setTimeout(() => {
+                patchResyncTimer = null;
+                if (!patchResyncPending) return;
+                parkUncertainPatch();
+                announce(tr("editorActionTimedOut"), "error");
+              }, PENDING_WATCHDOG_MS);
+            }
+            announce(tr("editorActionTimedOut"), "error");
+            return;
+          }
           requeueInFlightChanges();
+          if (timedOutAction !== "apply-theme-patch") actionAfterPatch = null;
           setPending(null);
           announce(tr("editorActionTimedOut"), "error");
           flushThemeChanges();
         }, PENDING_WATCHDOG_MS);
       }
-      const blocking = Boolean(action) && action !== "apply-theme-patch";
+      const blocking = Boolean(patchResyncPending)
+        || (Boolean(action) && action !== "apply-theme-patch");
       editor.setAttribute("aria-busy", String(blocking));
       // Only structural actions disable every control; per-control busy gating
       // in reflectButtonStates handles background patches without a full freeze.
@@ -1125,7 +1277,7 @@
       reflectButtonStates();
     };
 
-    const post = (message) => {
+    const post = (message, { pendingBase = null } = {}) => {
       if (isBuiltInLayoutEdit()) {
         const allowed = BUILTIN_LAYOUT_MESSAGES.has(message.type)
           && (message.type !== "apply-theme-patch"
@@ -1142,7 +1294,7 @@
         actionAfterPatch = { ...message };
         flushStageKeyChanges();
         if (!pendingAction && (coalescedChanges.size || changeFlushTimer)) flushThemeChanges();
-        if (pendingAction || coalescedChanges.size || changeFlushTimer) {
+        if (pendingAction || patchResyncPending || coalescedChanges.size || changeFlushTimer) {
           announce(tr("editorBusy"), "busy");
           return true;
         }
@@ -1155,8 +1307,8 @@
         announce(tr("editorBusy"), "busy");
         return true;
       }
-      if (pendingAction || !send(message)) return false;
-      setPending(message.type);
+      if (pendingAction || patchResyncPending || !send(message)) return false;
+      setPending(message.type, pendingBase ? { ...message, ...pendingBase } : message);
       announce(tr("editorBusy"), "busy");
       return true;
     };
@@ -1204,6 +1356,26 @@
           : change.kind === "metadata-locale"
             ? `metadata-locale:${change.locale}`
             : `metadata:${change.field}:${change.locale}`;
+    const greetingChangeReflected = (change, snapshot) => {
+      if (change?.kind !== "greeting" || !snapshot?.shared?.greeting) return false;
+      if (change.operation === "reset") return snapshot.shared.greeting.native === true;
+      if (change.operation !== "set-frame" || snapshot.shared.greeting.native) return false;
+      const confirmed = snapshot.shared.greeting.frames?.[change.appearance]?.[change.frame];
+      return Boolean(confirmed && JSON.stringify(confirmed) === JSON.stringify(change.value));
+    };
+    const reconcileUncertainChanges = (snapshot) => {
+      let greetingSettled = false;
+      for (const [key, change] of uncertainChanges) {
+        if (!greetingChangeReflected(change, snapshot)) continue;
+        uncertainChanges.delete(key);
+        greetingSettled = true;
+      }
+      if (greetingSettled
+          && ![...uncertainChanges.values()].some((change) => change.kind === "greeting")) {
+        greetingStyleIntent = null;
+        greetingStyleLocked = false;
+      }
+    };
     const clearInFlightChanges = () => {
       inFlightChanges = [];
       inFlightRevision = null;
@@ -1214,7 +1386,8 @@
         clearTimeout(changeFlushTimer);
         changeFlushTimer = null;
       }
-      if (pendingAction || !coalescedChanges.size) return;
+      if (pendingAction || patchResyncPending || uncertainChanges.size
+          || !coalescedChanges.size) return;
       const batch = [...coalescedChanges.entries()].slice(0, 16);
       const base = mutationBase();
       if (!base) {
@@ -1223,6 +1396,10 @@
       }
       for (const [key] of batch) coalescedChanges.delete(key);
       inFlightChanges = batch.map(([, change]) => change);
+      if (greetingStyleIntent !== null
+          && inFlightChanges.some((change) => change.kind === "greeting")) {
+        greetingStyleLocked = true;
+      }
       const wireChanges = inFlightChanges.map((change) => {
         if (change.kind !== "layer") return change;
         const index = layerIndexForId(change.layerId);
@@ -1241,11 +1418,27 @@
       inFlightSession = base.session;
       if (!post({ type: "apply-theme-patch", ...base, changes: wireChanges })) {
         for (const [, change] of batch) coalescedChanges.set(themeChangeKey(change), change);
+        const greetingSendFailed = inFlightChanges.some((change) => change.kind === "greeting");
         clearInFlightChanges();
+        changeSendRetryCount += 1;
+        if (changeSendRetryCount < 2) {
+          changeFlushTimer = setTimeout(flushThemeChanges, 250);
+          announce(tr("editorBusy"), "busy");
+        } else {
+          for (const [key, change] of coalescedChanges) deferredChanges.set(key, change);
+          coalescedChanges.clear();
+          changeSendRetryCount = 0;
+          actionAfterPatch = null;
+          if (greetingSendFailed || greetingStyleIntent !== null) greetingStyleLocked = false;
+          announce(tr("editorActionFailed"), "error");
+        }
+      } else {
+        changeSendRetryCount = 0;
       }
       reflectButtonStates();
     };
     const queueThemeChanges = (changes, { immediate = false } = {}) => {
+      if (!pendingAction) patchResponseRetryCount = 0;
       const permittedChanges = isBuiltInLayoutEdit()
         ? changes.filter(builtInLayoutChangeAllowed)
         : changes;
@@ -1264,6 +1457,14 @@
           for (const queuedKey of [...coalescedChanges.keys()]) {
             if (queuedKey.startsWith("greeting:")) coalescedChanges.delete(queuedKey);
           }
+          for (const uncertainKey of [...uncertainChanges.keys()]) {
+            if (uncertainKey.startsWith("greeting:")) uncertainChanges.delete(uncertainKey);
+          }
+        } else if (change.kind === "greeting") {
+          uncertainChanges.delete("greeting:reset");
+          uncertainChanges.delete(key);
+        } else {
+          uncertainChanges.delete(key);
         }
         // Reinsert a replaced value so ordering remains the ordering of the
         // user's latest gestures. This matters when a global greeting reset
@@ -1366,6 +1567,35 @@
         if (!coalescedChanges.has(key) && !deferredChanges.has(key)) deferredChanges.set(key, change);
       }
       clearInFlightChanges();
+    };
+    const clearPatchResyncTracking = () => {
+      patchResyncPending = null;
+      if (patchResyncTimer) {
+        clearTimeout(patchResyncTimer);
+        patchResyncTimer = null;
+      }
+    };
+    const parkUncertainPatch = ({ knownNotApplied = false } = {}) => {
+      const hadGreetingPatch = inFlightChanges.some((change) => change.kind === "greeting");
+      clearPatchResyncTracking();
+      if (knownNotApplied) {
+        deferInFlightChanges();
+      } else {
+        for (const change of inFlightChanges) {
+          const key = themeChangeKey(change);
+          if (!uncertainChanges.has(key)) uncertainChanges.set(key, change);
+        }
+        clearInFlightChanges();
+      }
+      for (const [key, change] of coalescedChanges) {
+        if (!deferredChanges.has(key)) deferredChanges.set(key, change);
+      }
+      coalescedChanges.clear();
+      actionAfterPatch = null;
+      patchResponseRetryCount = 0;
+      if (hadGreetingPatch || greetingStyleIntent !== null) greetingStyleLocked = false;
+      editor.setAttribute("aria-busy", "false");
+      setPending(null);
     };
     const selectedArtworkRole = () => ROLE_IDS.includes(addLayerRoleSelect?.value)
       ? addLayerRoleSelect.value : "decoration";
@@ -2122,6 +2352,7 @@
     const dropStageWork = () => {
       coalescedChanges.clear();
       deferredChanges.clear();
+      uncertainChanges.clear();
       clearInFlightChanges();
       if (changeFlushTimer) { clearTimeout(changeFlushTimer); changeFlushTimer = null; }
       stageOverrides.clear();
@@ -2131,7 +2362,18 @@
       if (stageKeyTimer) { clearTimeout(stageKeyTimer); stageKeyTimer = null; }
       stageKeyPaths.clear();
       actionAfterPatch = null;
+      greetingActionFollowup = null;
+      greetingResyncPending = null;
+      if (greetingResyncTimer) { clearTimeout(greetingResyncTimer); greetingResyncTimer = null; }
+      patchResyncPending = null;
+      if (patchResyncTimer) { clearTimeout(patchResyncTimer); patchResyncTimer = null; }
+      greetingStageRequested = false;
+      if (greetingStageTimer) { clearTimeout(greetingStageTimer); greetingStageTimer = null; }
+      greetingTimeoutRetries = 0;
       greetingStyleIntent = null;
+      greetingStyleLocked = false;
+      changeSendRetryCount = 0;
+      patchResponseRetryCount = 0;
       activeGreetingControlScope = null;
       greetingMirrorAxesDeferred = false;
       if (previewResizeTimer) { clearTimeout(previewResizeTimer); previewResizeTimer = null; }
@@ -2976,7 +3218,8 @@
     };
 
     const clearSettledStageOverrides = () => {
-      if (!stageDrag && !coalescedChanges.size && !deferredChanges.size && !pendingAction
+      if (!stageDrag && !coalescedChanges.size && !deferredChanges.size
+          && !uncertainChanges.size && !pendingAction
           && !inFlightChanges.length && !stageKeyTimer && !stageKeyPaths.size) stageOverrides.clear();
     };
 
@@ -4147,8 +4390,25 @@
     };
 
     const greetingDraft = () => greetingPreferenceDraft ?? state?.greetingPreferences ?? null;
+    const clearGreetingInputState = (personal = state?.greetingPreferences ?? null) => {
+      greetingPreferenceDraft = personal ? structuredClone(personal) : null;
+      greetingPreferenceDraftDirty = false;
+      greetingPreferenceInputDirty = false;
+      greetingPreferenceInputInvalid = false;
+      greetingPreferenceErrorTarget = null;
+      greetingStageRequested = false;
+      if (greetingStageTimer) {
+        clearTimeout(greetingStageTimer);
+        greetingStageTimer = null;
+      }
+      greetingNameInput?.removeAttribute("aria-invalid");
+      greetingPhrasesInput?.removeAttribute("aria-invalid");
+      greetingOverrideInput?.removeAttribute("aria-invalid");
+      greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
+      if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+    };
     const greetingThemeOverride = (personal = greetingDraft()) => (
-      personal?.themeOverrides?.[state?.id] ?? { mode: "global", phrases: [] }
+      greetingThemeOverrideFor(personal, state?.id)
     );
     const greetingHasLocalFrameDraft = () => [...stageOverrides.keys()].some(
       (path) => path.startsWith("shared.greeting.frames."),
@@ -4159,7 +4419,11 @@
     const syncGreetingWordControls = (personal = greetingDraft()) => {
       if (!personal) return;
       const custom = personal.enabled && personal.source === "custom";
-      const locked = isBuiltInLayoutEdit() || isBlockingAction();
+      const locked = isBuiltInLayoutEdit() || Boolean(pendingAction)
+        || Boolean(greetingResyncPending) || Boolean(patchResyncPending)
+        || Boolean(changeFlushTimer)
+        || coalescedChanges.size > 0 || deferredChanges.size > 0
+        || uncertainChanges.size > 0 || inFlightChanges.length > 0;
       for (const input of greetingSourceInputs) input.disabled = locked;
       if (greetingNameInput) greetingNameInput.disabled = locked || !custom;
       if (greetingPhrasesInput) greetingPhrasesInput.disabled = locked || !custom;
@@ -4170,7 +4434,7 @@
       }
     };
     const syncGreetingFrameControls = () => {
-      const locked = isBuiltInLayoutEdit() || isBlockingAction() || greetingStyleIntent !== null;
+      const locked = isBuiltInLayoutEdit() || isBlockingAction() || greetingStyleLocked;
       const native = greetingUsesNativeLayout();
       if (greetingEnableInput) greetingEnableInput.disabled = locked;
       for (const input of greetingInputs) input.disabled = locked || native;
@@ -4236,9 +4500,7 @@
       reflectGreetingPreview(greeting, greetingNative);
       const personal = greetingDraft();
       if (!personal) return;
-      const personalSource = personal.enabled && personal.source === "custom"
-        ? "custom"
-        : "claude";
+      const personalSource = greetingSourceChoice(personal);
       for (const input of greetingSourceInputs) input.checked = input.value === personalSource;
       const override = greetingThemeOverride(personal);
       if (greetingNameInput && !greetingPreferenceInputDirty
@@ -5048,9 +5310,9 @@
     const reflectButtonStates = () => {
       if (!state) return;
       reflectDirtyState();
-      const busy = Boolean(pendingAction || coalescedChanges.size || changeFlushTimer
-        || stageKeyTimer || stageKeyPaths.size);
-      const blocked = deferredChanges.size > 0;
+      const busy = Boolean(pendingAction || greetingResyncPending || patchResyncPending
+        || coalescedChanges.size || changeFlushTimer || stageKeyTimer || stageKeyPaths.size);
+      const blocked = deferredChanges.size > 0 || uncertainChanges.size > 0;
       const builtInLayout = isBuiltInLayoutEdit();
       const localGreetingWork = !builtInLayout
         && (greetingPreferenceDraftDirty || greetingPreferenceInputDirty);
@@ -5109,29 +5371,50 @@
     const settlePendingAction = (normalized) => {
       const { error: actionError } = normalized;
       if (!pendingAction || normalized.lastAction !== pendingAction) return "waiting";
-      const succeeded = normalized.actionSucceeded !== false;
+      const settledRequest = pendingRequest;
+      const greetingMutation = ["set-greeting-phrases", "reset-greeting"].includes(pendingAction);
+      const historyMutation = ["undo-theme-edit", "redo-theme-edit"].includes(pendingAction);
+      const revisionBoundReset = pendingAction === "begin-theme-edit"
+        && settledRequest?.reset === true
+        && typeof settledRequest.session === "string"
+        && Number.isSafeInteger(settledRequest.revision);
+      const revisionBoundResult = greetingMutation || historyMutation || revisionBoundReset
+        ? greetingMutationResult(settledRequest, normalized)
+        : null;
+      if ((greetingMutation || historyMutation || revisionBoundReset)
+          && revisionBoundResult === "waiting") return "waiting";
+      const succeeded = greetingMutation || historyMutation || revisionBoundReset
+        ? revisionBoundResult === "succeeded"
+        : normalized.actionSucceeded !== false;
       if (pendingAction !== "apply-theme-patch") {
         const settledAction = pendingAction;
+        const followup = succeeded
+          && sameMutationRequest(greetingActionFollowup?.prerequisite, settledRequest)
+          ? greetingActionFollowup.message
+          : null;
+        actionAfterPatch = null;
         setPending(null);
         if (actionError === "picker-cancelled") {
           announce(tr("editorReady"));
           return "settled";
         }
-        if (!succeeded) dropStageWork();
+        if (!succeeded && !greetingMutation) dropStageWork();
+        if (greetingMutation) {
+          greetingActionFollowup = null;
+          greetingTimeoutRetries = 0;
+        }
         const successMessage = settledAction === "pick-theme-launcher-mark"
           ? tr("launcherMarkImported") : tr("editorReady");
         const failureMessage = settledAction === "pick-theme-launcher-mark"
           ? tr(actionError === "identity-apply-failed" ? "launcherMarkApplyFailed" : "launcherMarkFailed")
           : tr("editorActionFailed");
         announce(succeeded ? successMessage : failureMessage, succeeded ? "ok" : "error");
-        if (succeeded && actionAfterPatch) {
-          const followup = actionAfterPatch;
-          actionAfterPatch = null;
+        if (followup) {
           const base = mutationBase();
           const rebased = base && (Object.hasOwn(followup, "session") || Object.hasOwn(followup, "revision"))
             ? { ...followup, ...base }
             : followup;
-          post(rebased);
+          if (!post(rebased)) announce(tr("editorActionFailed"), "error");
         }
         return "settled";
       }
@@ -5148,7 +5431,11 @@
         // one-revision advance can acknowledge this patch rather than repeat
         // a previous patch result.
         if (normalized.revision !== inFlightRevision + 1) return "waiting";
-        if (inFlightChanges.some((change) => change.kind === "greeting")) greetingStyleIntent = null;
+        patchResponseRetryCount = 0;
+        if (inFlightChanges.some((change) => change.kind === "greeting")) {
+          greetingStyleIntent = null;
+          greetingStyleLocked = false;
+        }
         clearInFlightChanges();
         setPending(null);
         announce(tr("editorReady"));
@@ -5164,6 +5451,7 @@
         return "settled";
       }
       if (actionError === "request-rejected") {
+        patchResponseRetryCount = 0;
         if (normalized.revision > inFlightRevision) {
           // The host moved forward before this request arrived. Rebase once
           // against its confirmed revision; newer local values still win.
@@ -5174,8 +5462,18 @@
         }
         // A same-revision rejection may be permanent. Keep the local values
         // visible, stop automatic traffic, and retry only after a fresh edit.
+        const greetingPatchRejected = inFlightChanges.some((change) => change.kind === "greeting");
         deferInFlightChanges();
-        greetingStyleIntent = null;
+        const queuedGreetingPatch = [...coalescedChanges.values()].some(
+          (change) => change.kind === "greeting",
+        );
+        for (const [key, change] of coalescedChanges) {
+          if (!deferredChanges.has(key)) deferredChanges.set(key, change);
+        }
+        coalescedChanges.clear();
+        if (greetingPatchRejected || queuedGreetingPatch || greetingStyleIntent !== null) {
+          greetingStyleLocked = false;
+        }
         actionAfterPatch = null;
         setPending(null);
         announce(tr("editorActionFailed"), "error");
@@ -5183,7 +5481,11 @@
       }
       if (normalized.revision !== inFlightRevision + 1) return "waiting";
       // Contrast/budget failures are persisted edits, not transport failures.
-      if (inFlightChanges.some((change) => change.kind === "greeting")) greetingStyleIntent = null;
+      patchResponseRetryCount = 0;
+      if (inFlightChanges.some((change) => change.kind === "greeting")) {
+        greetingStyleIntent = null;
+        greetingStyleLocked = false;
+      }
       clearInFlightChanges();
       actionAfterPatch = null;
       setPending(null);
@@ -5194,6 +5496,17 @@
     const receive = (rawState, appearance = "system") => {
       const normalized = normalizeEditorState(rawState);
       if (normalized === undefined) {
+        if (patchResyncPending) parkUncertainPatch();
+        if (greetingResyncPending) {
+          greetingResyncPending = null;
+          if (greetingResyncTimer) {
+            clearTimeout(greetingResyncTimer);
+            greetingResyncTimer = null;
+          }
+          greetingStageRequested = false;
+          editor.setAttribute("aria-busy", "false");
+          reflectButtonStates();
+        }
         announce(tr("editorStateRejected"), "error");
         return false;
       }
@@ -5208,10 +5521,7 @@
           return true;
         }
         state = null;
-        greetingPreferenceDraft = null;
-        greetingPreferenceDraftDirty = false;
-        greetingPreferenceInputDirty = false;
-        greetingPreferenceInputInvalid = false;
+        clearGreetingInputState(null);
         metadataInputDirty = false;
         metadataInputInvalid = false;
         for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
@@ -5236,38 +5546,141 @@
         previewExpectedRequest = null;
       }
       returnTheme = normalized.isNew ? normalized.sourceId : normalized.id;
+      let retryGreetingAfterRefresh = false;
+      let patchFollowupAfterRefresh = null;
+      if (patchResyncPending) {
+        const resync = patchResyncPending;
+        if (normalized.session === resync.request.session
+            && normalized.revision >= resync.request.revision) {
+          const decision = patchResyncDecision(
+            resync.request,
+            normalized,
+            resync.retry,
+          );
+          if (decision === "succeeded") {
+            const hadGreetingPatch = inFlightChanges.some(
+              (change) => change.kind === "greeting",
+            );
+            clearPatchResyncTracking();
+            patchResponseRetryCount = 0;
+            if (hadGreetingPatch) {
+              greetingStyleIntent = null;
+              greetingStyleLocked = false;
+            }
+            clearInFlightChanges();
+            patchFollowupAfterRefresh = actionAfterPatch;
+            actionAfterPatch = null;
+            announce(tr("editorReady"));
+          } else if (decision === "failed-persisted") {
+            const hadGreetingPatch = inFlightChanges.some(
+              (change) => change.kind === "greeting",
+            );
+            clearPatchResyncTracking();
+            patchResponseRetryCount = 0;
+            if (hadGreetingPatch) {
+              greetingStyleIntent = null;
+              greetingStyleLocked = false;
+            }
+            clearInFlightChanges();
+            actionAfterPatch = null;
+            announce(tr("editorActionFailed"), "error");
+          } else if (decision === "failed-not-applied") {
+            parkUncertainPatch({ knownNotApplied: true });
+            announce(tr("editorActionFailed"), "error");
+          } else if (decision === "retry") {
+            clearPatchResyncTracking();
+            requeueInFlightChanges();
+          } else if (decision === "defer") {
+            parkUncertainPatch({ knownNotApplied: true });
+            announce(tr("editorActionTimedOut"), "error");
+          } else {
+            // The host advanced without an exact acknowledgement. Do not
+            // replay an ambiguous patch and create a duplicate Undo entry.
+            parkUncertainPatch();
+            announce(tr("editorActionTimedOut"), "error");
+          }
+        } else if (normalized.session !== resync.request.session) {
+          clearPatchResyncTracking();
+          dropStageWork();
+          clearGreetingInputState(normalized.greetingPreferences);
+          clearMetadataOverrides();
+          metadataInputDirty = false;
+          metadataInputInvalid = false;
+          for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
+        }
+      }
+      if (greetingResyncPending) {
+        const resync = greetingResyncPending;
+        if (normalized.session === resync.request.session
+            && normalized.revision >= resync.request.revision) {
+          greetingResyncPending = null;
+          if (greetingResyncTimer) {
+            clearTimeout(greetingResyncTimer);
+            greetingResyncTimer = null;
+          }
+          greetingActionFollowup = null;
+          const localGreeting = greetingDraft();
+          const hostCaughtUp = greetingResyncCaughtUp(
+            resync.request,
+            normalized,
+            localGreeting,
+          );
+          if (hostCaughtUp) {
+            clearGreetingInputState(normalized.greetingPreferences);
+            if (resync.fullReset) {
+              clearMetadataOverrides();
+              metadataInputDirty = false;
+              metadataInputInvalid = false;
+              for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
+            }
+            greetingTimeoutRetries = 0;
+          } else if (resync.retry) {
+            greetingStageRequested = true;
+            retryGreetingAfterRefresh = true;
+          }
+        } else if (normalized.session !== resync.request.session) {
+          greetingResyncPending = null;
+          if (greetingResyncTimer) {
+            clearTimeout(greetingResyncTimer);
+            greetingResyncTimer = null;
+          }
+          greetingActionFollowup = null;
+          greetingTimeoutRetries = 0;
+          clearGreetingInputState(normalized.greetingPreferences);
+          if (resync.fullReset) {
+            clearMetadataOverrides();
+            metadataInputDirty = false;
+            metadataInputInvalid = false;
+            for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
+          }
+        }
+      }
       const greetingAcknowledged = ["set-greeting-phrases", "reset-greeting"].includes(pendingAction)
-        && normalized.lastAction === pendingAction
-        && normalized.actionSucceeded !== false;
+        && greetingMutationResult(pendingRequest, normalized) === "succeeded";
       const priorLayerIds = new Set(state?.layers?.map((layer) => layer.id) ?? []);
       const pickedLayerId = pendingAction === "pick-theme-layer-image"
         && normalized.lastAction === pendingAction
         && normalized.actionSucceeded !== false
         ? normalized.layers.find((layer) => !priorLayerIds.has(layer.id))?.id ?? null
         : null;
-      const metadataResetAcknowledged = pendingAction === "begin-theme-edit"
-        && normalized.lastAction === pendingAction;
+      const fullResetAcknowledged = pendingAction === "begin-theme-edit"
+        && pendingRequest?.reset === true
+        && greetingMutationResult(pendingRequest, normalized) === "succeeded";
       const metadataHistoryAcknowledged = ["undo-theme-edit", "redo-theme-edit"].includes(pendingAction)
-        && normalized.lastAction === pendingAction;
+        && greetingMutationResult(pendingRequest, normalized) === "succeeded";
       if (entering
           || (!greetingPreferenceDraftDirty && !greetingPreferenceInputDirty)
-          || greetingAcknowledged) {
-        greetingPreferenceDraft = structuredClone(normalized.greetingPreferences);
-        greetingPreferenceDraftDirty = false;
-        greetingPreferenceInputDirty = false;
-        greetingPreferenceInputInvalid = false;
-        greetingNameInput?.removeAttribute("aria-invalid");
-        greetingPhrasesInput?.removeAttribute("aria-invalid");
-        greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
-        if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+          || greetingAcknowledged || fullResetAcknowledged || metadataHistoryAcknowledged) {
+        clearGreetingInputState(normalized.greetingPreferences);
       }
-      if (entering || metadataResetAcknowledged || metadataHistoryAcknowledged) {
+      if (entering || fullResetAcknowledged || metadataHistoryAcknowledged) {
         clearMetadataOverrides();
         metadataInputDirty = false;
         metadataInputInvalid = false;
         for (const input of metadataInputs()) input.removeAttribute("aria-invalid");
       }
       state = normalized;
+      reconcileUncertainChanges(normalized);
       if (pickedLayerId) selectedLayerId = pickedLayerId;
       syncBuiltInLayoutPresentation({ entering });
       selectStageMirror();
@@ -5278,12 +5691,29 @@
         normalized.launcherStylePreviewUrl,
       );
       const settlement = settlePendingAction(normalized);
-      if (settlement === "waiting" && !pendingAction) setPending(null);
+      if (settlement === "waiting" && !pendingAction
+          && !greetingResyncPending && !patchResyncPending) setPending(null);
       clearSettledStageOverrides();
       showEditor();
       reflect(entering ? null : focusKey);
       if (entering) announce(tr("editorReady"));
+      if (patchFollowupAfterRefresh) {
+        const base = mutationBase();
+        const rebased = base
+          && (Object.hasOwn(patchFollowupAfterRefresh, "session")
+            || Object.hasOwn(patchFollowupAfterRefresh, "revision"))
+          ? { ...patchFollowupAfterRefresh, ...base }
+          : patchFollowupAfterRefresh;
+        if (!post(rebased)) announce(tr("editorActionFailed"), "error");
+      }
       if (settlement !== "blocked" && settlement !== "stopped") flushThemeChanges();
+      if ((retryGreetingAfterRefresh || greetingStageRequested) && !greetingStageTimer) {
+        greetingStageTimer = setTimeout(() => {
+          greetingStageTimer = null;
+          if (greetingTextInputs.includes(document.activeElement)) return;
+          stageGreetingPreferenceDraft({ retry: retryGreetingAfterRefresh });
+        }, 0);
+      }
       return true;
     };
 
@@ -5377,6 +5807,7 @@
           const key = `metadata:${field}:${locale}`;
           coalescedChanges.delete(key);
           deferredChanges.delete(key);
+          uncertainChanges.delete(key);
         }
       }
       renderedMetadataLocaleSignature = "";
@@ -5509,10 +5940,20 @@
       }
     };
     greetingEnableInput?.addEventListener("change", () => {
-      if (isBlockingAction() || greetingStyleIntent !== null) return;
+      if (isBlockingAction() || greetingStyleLocked) return;
       greetingStyleIntent = greetingEnableInput.checked;
-      if (greetingEnableInput.checked) queueGreetingFrame(greetingFrameFromControls(), { immediate: true });
-      else {
+      greetingStyleLocked = true;
+      if (greetingEnableInput.checked) {
+        const frame = greetingFrameFromControls();
+        if (!frame) {
+          greetingStyleIntent = null;
+          greetingStyleLocked = false;
+          reflectGreeting();
+          reflectButtonStates();
+          return;
+        }
+        queueGreetingFrame(frame, { immediate: true });
+      } else {
         clearGreetingFrameOverrides();
         queueThemeChange({
           kind: "greeting",
@@ -5525,48 +5966,47 @@
       reflectGreeting();
       reflectButtonStates();
     });
-    greetingResetButton?.addEventListener("click", () => {
-      const base = mutationBase();
-      if (base) {
-        clearGreetingFrameOverrides();
-        post({ type: "reset-greeting", ...base });
-      }
-    });
-    const showGreetingInputError = () => {
+    const showGreetingInputError = (target = greetingPreferenceErrorTarget ?? greetingPhrasesInput) => {
+      greetingPreferenceErrorTarget = target;
+      target?.setAttribute?.("aria-invalid", "true");
       if (!greetingPhrasesStatus) return;
-      greetingPhrasesStatus.textContent = tr("greetingPhrasesEmpty");
+      greetingPhrasesStatus.textContent = tr(
+        target === greetingNameInput ? "greetingNameInvalid" : "greetingPhrasesEmpty",
+      );
       greetingPhrasesStatus.hidden = false;
+    };
+    const clearGreetingInputError = () => {
+      greetingPreferenceErrorTarget = null;
+      greetingNameInput?.removeAttribute("aria-invalid");
+      greetingPhrasesInput?.removeAttribute("aria-invalid");
+      greetingOverrideInput?.removeAttribute("aria-invalid");
+      greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
+      if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
     };
     const updateGreetingPreferenceDraft = () => {
       if (!state) return null;
       const current = structuredClone(greetingDraft() ?? state.greetingPreferences);
-      const source = greetingSourceInputs.find((input) => input.checked)?.value ?? current.source;
-      const enabled = source === "custom";
+      const sourceChoice = greetingSourceInputs.find((input) => input.checked)?.value
+        ?? greetingSourceChoice(current);
+      const selected = greetingPreferencesForSourceChoice(current, sourceChoice);
       const overrideMode = greetingOverrideInput?.value ?? greetingThemeOverride(current).mode;
-      if (typeof enabled !== "boolean"
-          || !["claude", "custom"].includes(source)
-          || !["global", "claude", "custom"].includes(overrideMode)) {
+      if (!selected || !["global", "claude", "custom"].includes(overrideMode)) {
         greetingPreferenceInputDirty = true;
         greetingPreferenceInputInvalid = true;
-        showGreetingInputError();
+        showGreetingInputError(greetingPhrasesInput);
         return null;
       }
+      const { enabled, source } = selected;
       // Disabled personalization and Claude wording do not consume the custom
       // fields. Preserve the last valid stored lists so switching away is an
       // explicit recovery path for invalid in-progress text.
       if (!enabled || source === "claude") {
-        current.enabled = enabled;
-        current.source = source;
-        current.shuffle = null;
-        greetingPreferenceDraft = current;
-        greetingPreferenceDraftDirty = JSON.stringify(current) !== JSON.stringify(state.greetingPreferences);
+        greetingPreferenceDraft = selected;
+        greetingPreferenceDraftDirty = JSON.stringify(selected) !== JSON.stringify(state.greetingPreferences);
         greetingPreferenceInputDirty = greetingPreferenceDraftDirty;
         greetingPreferenceInputInvalid = false;
-        greetingNameInput?.removeAttribute("aria-invalid");
-        greetingPhrasesInput?.removeAttribute("aria-invalid");
-        greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
-        if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
-        return current;
+        clearGreetingInputError();
+        return selected;
       }
       const displayName = (greetingNameInput?.value ?? "").normalize("NFC").trim();
       const globalPhrases = parseGreetingPhrases(greetingPhrasesInput?.value);
@@ -5583,7 +6023,9 @@
       if (invalidName || invalidGlobal || invalidOverride) {
         greetingPreferenceInputDirty = true;
         greetingPreferenceInputInvalid = true;
-        showGreetingInputError();
+        showGreetingInputError(invalidName
+          ? greetingNameInput
+          : invalidOverride ? greetingOverridePhrasesInput : greetingPhrasesInput);
         return null;
       }
       current.enabled = enabled;
@@ -5599,22 +6041,29 @@
       greetingPreferenceDraftDirty = JSON.stringify(current) !== JSON.stringify(state.greetingPreferences);
       greetingPreferenceInputDirty = greetingPreferenceDraftDirty;
       greetingPreferenceInputInvalid = false;
-      if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+      clearGreetingInputError();
       return current;
     };
-    const greetingPreferenceDraftValid = (personal) => {
-      if (!personal) return false;
-      if (!personal.enabled || personal.source === "claude") return true;
+    const greetingPreferenceDraftErrorTarget = (personal) => {
+      if (!personal) return greetingPhrasesInput;
+      if (!personal.enabled || personal.source === "claude") return null;
       const override = greetingThemeOverride(personal);
-      if (override.mode === "claude") return true;
+      if (override.mode === "claude") return null;
       const phrases = override.mode === "custom" ? override.phrases : personal.globalPhrases;
       const usable = phrases.flatMap((phrase) => {
         if (!personal.displayName && /\{name\}/u.test(phrase)) return [];
         return [phrase.replace(/\{name\}/gu, personal.displayName)];
       });
-      return usable.length > 0
-        && new TextEncoder().encode(JSON.stringify(usable)).length <= GREETING_MAX_COMPILED_BYTES;
+      if (!usable.length) {
+        return !personal.displayName && phrases.some((phrase) => /\{name\}/u.test(phrase))
+          ? greetingNameInput
+          : override.mode === "custom" ? greetingOverridePhrasesInput : greetingPhrasesInput;
+      }
+      return new TextEncoder().encode(JSON.stringify(usable)).length > GREETING_MAX_COMPILED_BYTES
+        ? override.mode === "custom" ? greetingOverridePhrasesInput : greetingPhrasesInput
+        : null;
     };
+    const greetingPreferenceDraftValid = (personal) => !greetingPreferenceDraftErrorTarget(personal);
     const postGreetingPreferences = (personal, base = mutationBase()) => {
       if (!base || !personal) return false;
       const override = greetingThemeOverride(personal);
@@ -5629,18 +6078,77 @@
         overridePhrases: override.phrases,
       });
     };
+    const stageGreetingPreferenceDraft = ({ followup = null, retry = false } = {}) => {
+      if (!state || isBuiltInLayoutEdit()) return false;
+      if (pendingAction || greetingResyncPending || patchResyncPending
+          || deferredChanges.size || uncertainChanges.size || coalescedChanges.size
+          || changeFlushTimer || inFlightChanges.length || stageKeyTimer || stageKeyPaths.size) {
+        greetingStageRequested = true;
+        return false;
+      }
+      const personal = greetingPreferenceInputDirty
+        ? updateGreetingPreferenceDraft()
+        : greetingDraft();
+      const errorTarget = greetingPreferenceInputInvalid
+        ? greetingPreferenceErrorTarget
+        : greetingPreferenceDraftErrorTarget(personal);
+      if (!personal || errorTarget) {
+        greetingPreferenceInputInvalid = true;
+        showGreetingInputError(errorTarget);
+        return false;
+      }
+      greetingPreferenceInputInvalid = false;
+      if (!greetingPreferenceDraftDirty) {
+        greetingStageRequested = false;
+        if (!followup) return true;
+        const base = mutationBase();
+        return Boolean(base && post({ ...followup, ...base }));
+      }
+      const base = mutationBase();
+      if (!base) return false;
+      greetingActionFollowup = null;
+      const posted = postGreetingPreferences(personal, base);
+      if (!posted || pendingAction !== "set-greeting-phrases" || !pendingRequest) {
+        greetingStageRequested = !followup && !retry;
+        if (greetingStageRequested && !greetingStageTimer) {
+          greetingStageTimer = setTimeout(() => {
+            greetingStageTimer = null;
+            stageGreetingPreferenceDraft({ retry: true });
+          }, 250);
+        }
+        if (retry) announce(tr("editorActionFailed"), "error");
+        return false;
+      }
+      greetingStageRequested = false;
+      if (!retry) greetingTimeoutRetries = 0;
+      if (followup) {
+        greetingActionFollowup = {
+          prerequisite: {
+            type: pendingRequest.type,
+            session: pendingRequest.session,
+            revision: pendingRequest.revision,
+          },
+          message: { ...followup },
+        };
+      }
+      return true;
+    };
     for (const input of greetingSourceInputs) {
       input.addEventListener("change", () => {
         if (!input.checked) return;
         updateGreetingPreferenceDraft();
         reflectGreeting();
         reflectButtonStates();
+        stageGreetingPreferenceDraft();
       });
     }
     const previewGreetingWords = () => {
       const personal = updateGreetingPreferenceDraft();
-      if (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)) {
-        showGreetingInputError();
+      const errorTarget = greetingPreferenceInputInvalid
+        ? greetingPreferenceErrorTarget
+        : greetingPreferenceDraftErrorTarget(personal);
+      if (errorTarget) {
+        showGreetingInputError(errorTarget);
       }
       reflectGreetingPreview(activeGreetingFrame(), !greetingEnableInput?.checked);
       reflectButtonStates();
@@ -5648,10 +6156,59 @@
     greetingNameInput?.addEventListener("input", previewGreetingWords);
     greetingPhrasesInput?.addEventListener("input", previewGreetingWords);
     greetingOverridePhrasesInput?.addEventListener("input", previewGreetingWords);
+    const greetingTextInputs = [
+      greetingNameInput,
+      greetingPhrasesInput,
+      greetingOverridePhrasesInput,
+    ].filter(Boolean);
+    const greetingStageExemptTargets = new Set([
+      saveButton,
+      cancelButton,
+      undoButton,
+      redoButton,
+      resetButton,
+      backButton,
+      greetingResetButton,
+      greetingOverrideInput,
+      ...greetingSourceInputs,
+    ].filter(Boolean));
+    const scheduleGreetingDraftStage = (event) => {
+      if (event?.relatedTarget && greetingStageExemptTargets.has(event.relatedTarget)) return;
+      greetingStageRequested = true;
+      if (greetingStageTimer) clearTimeout(greetingStageTimer);
+      greetingStageTimer = setTimeout(() => {
+        greetingStageTimer = null;
+        if (greetingTextInputs.includes(document.activeElement)) return;
+        stageGreetingPreferenceDraft();
+      }, 0);
+    };
+    for (const input of greetingTextInputs) input.addEventListener("focusout", scheduleGreetingDraftStage);
     greetingOverrideInput?.addEventListener("change", () => {
       updateGreetingPreferenceDraft();
       reflectGreeting();
       reflectButtonStates();
+      stageGreetingPreferenceDraft();
+    });
+    greetingResetButton?.addEventListener("click", () => {
+      if (greetingStageTimer) {
+        clearTimeout(greetingStageTimer);
+        greetingStageTimer = null;
+      }
+      const base = mutationBase();
+      if (!base) return;
+      clearGreetingFrameOverrides();
+      const personal = greetingPreferenceInputDirty
+        ? updateGreetingPreferenceDraft()
+        : greetingDraft();
+      if (personal && !greetingPreferenceInputInvalid
+          && greetingPreferenceDraftValid(personal)
+          && greetingPreferenceDraftDirty) {
+        if (!stageGreetingPreferenceDraft({
+          followup: { type: "reset-greeting", ...base },
+        })) announce(tr("editorActionFailed"), "error");
+        return;
+      }
+      if (!post({ type: "reset-greeting", ...base })) announce(tr("editorActionFailed"), "error");
     });
     // The panel and stage read one scoped local draft, so a host reflection or
     // responsive-axis change cannot repaint part of an active gesture.
@@ -5753,14 +6310,7 @@
       if (undoButton.disabled) return;
       if (!isBuiltInLayoutEdit()
           && (greetingPreferenceDraftDirty || greetingPreferenceInputDirty) && state) {
-        greetingPreferenceDraft = structuredClone(state.greetingPreferences);
-        greetingPreferenceDraftDirty = false;
-        greetingPreferenceInputDirty = false;
-        greetingPreferenceInputInvalid = false;
-        greetingNameInput?.removeAttribute("aria-invalid");
-        greetingPhrasesInput?.removeAttribute("aria-invalid");
-        greetingOverridePhrasesInput?.removeAttribute("aria-invalid");
-        if (greetingPhrasesStatus) greetingPhrasesStatus.hidden = true;
+        clearGreetingInputState(state.greetingPreferences);
         reflectGreeting();
         reflectButtonStates();
         return;
@@ -5789,11 +6339,20 @@
         announce(tr("validationMetadataFix"), "error");
         return;
       }
-      if (!state?.feedback.valid || (!builtInLayout
-          && (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal)))) {
-        if (!builtInLayout && (greetingPreferenceInputInvalid || !greetingPreferenceDraftValid(personal))) {
-          showGreetingInputError();
-        }
+      const localGreetingError = !builtInLayout
+        ? greetingPreferenceInputInvalid
+          ? greetingPreferenceErrorTarget ?? greetingPhrasesInput
+          : greetingPreferenceDraftErrorTarget(personal)
+        : null;
+      if (localGreetingError) {
+        showGreetingInputError(localGreetingError);
+        setInspectorPage("interface", { resetScroll: true });
+        setInspectorTarget("interface.greeting");
+        requestAnimationFrame(() => focusBelowInspector(localGreetingError ?? greetingPhrasesStatus));
+        announce(tr("saveBlocked"), "error");
+        return;
+      }
+      if (!state?.feedback.valid) {
         setInspectorPage("review", { resetScroll: true });
         quickFeedback.hidden = true;
         errorSummary.hidden = false;
@@ -5804,8 +6363,9 @@
       const base = mutationBase();
       if (!base) return;
       if (!builtInLayout && greetingPreferenceDraftDirty) {
-        actionAfterPatch = { type: "save-theme-edit", ...base };
-        postGreetingPreferences(personal, base);
+        if (!stageGreetingPreferenceDraft({
+          followup: { type: "save-theme-edit", ...base },
+        })) announce(tr("editorActionFailed"), "error");
         return;
       }
       post({ type: "save-theme-edit", ...base });
@@ -5814,7 +6374,16 @@
     redoButton.addEventListener("click", performRedo);
     resetButton.addEventListener("click", () => showConfirm({
       titleText: tr("confirmResetTitle"), bodyText: tr("confirmResetBody"), actionText: tr("confirmResetAction"),
-      opener: resetButton, callback: () => state && post({ type: "begin-theme-edit", theme: state.id, reset: true }),
+      opener: resetButton,
+      callback: () => {
+        const base = mutationBase();
+        if (state && base) {
+          if (!post(
+            { type: "begin-theme-edit", theme: state.id, reset: true },
+            { pendingBase: base },
+          )) announce(tr("editorActionFailed"), "error");
+        }
+      },
     }));
     saveButton.addEventListener("click", performSave);
 
@@ -5968,6 +6537,13 @@
     normalizeCapabilityRegistry,
     reconcileDuplicateTokenValue,
     backgroundScopeUiActive,
+    greetingSourceChoice,
+    greetingPreferencesForSourceChoice,
+    greetingThemeOverrideFor,
+    greetingMutationResult,
+    sameMutationRequest,
+    greetingResyncCaughtUp,
+    patchResyncDecision,
     capabilityRegistry: EDITOR_CAPABILITY_REGISTRY,
   });
 })();

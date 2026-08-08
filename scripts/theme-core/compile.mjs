@@ -560,6 +560,8 @@ const RENDERER_IDENTIFIER_ALIASES = Object.freeze([
   ["offset", "G1"],
   ["roots", "G2"],
   ["parent", "G3"],
+  ["greetingNavigationKey", "H0"],
+  ["nextKey", "H1"],
   ["createExperimentalCodeAdapter", "H2"],
   ["codeEnvironment", "H3"],
   ["codeDescriptor", "H4"],

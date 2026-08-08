@@ -799,110 +799,114 @@
       <section class="editor-section editor-greeting-context" data-editor-branch="interface" data-editor-targets="interface.greeting" aria-labelledby="editor-greeting-title">
         <h2 id="editor-greeting-title" data-editor-i18n="greetingPanel">Greeting</h2>
         <p class="help" data-editor-i18n="greetingPanelHelp">Style the greeting above the prompt on a new chat. Light, Dark, Standard, and Wide each have independent styling and placement.</p>
-        <label class="editor-toggle-field" for="editor-greeting-enabled">
-          <input type="checkbox" id="editor-greeting-enabled" data-editor-focus="greeting-enabled" data-editor-field="shared.greeting.enabled">
-          <span data-editor-i18n="greetingEnable">Style the greeting</span>
-        </label>
-        <p id="editor-greeting-native" class="editor-inherited-note" data-editor-i18n="greetingNativeHelp" hidden>Using Claude's original greeting style. Turn on styling to customize its appearance.</p>
-        <p id="editor-greeting-collision-warning" class="editor-greeting-collision-warning" role="note" data-editor-i18n="greetingArtworkCollisionWarning" hidden>This custom theme also has artwork. Review the greeting in Aura at each size; Studio will not guess whether the artwork leaves enough room.</p>
         <figure class="editor-greeting-preview">
           <figcaption data-editor-i18n="greetingPreview">Preview</figcaption>
           <p id="editor-greeting-sample" data-editor-i18n="greetingPreviewSample" data-greeting-preview-ready="false">Good evening</p>
         </figure>
-
-        <div class="editor-greeting-personal">
-          <h3 data-editor-i18n="greetingWords">Greeting words</h3>
+        <div class="editor-greeting-personal editor-greeting-group editor-greeting-wording" role="group" aria-labelledby="editor-greeting-words-title">
+          <h3 id="editor-greeting-words-title" data-editor-i18n="greetingWords">Greeting words</h3>
           <p class="help" data-editor-i18n="greetingWordsHelp">Saved only on this device, never inside the theme. Use one shared list or choose theme-specific words; Aura picks one line for each new chat.</p>
           <div class="editor-greeting-source" role="group" aria-labelledby="editor-greeting-source-label">
             <span id="editor-greeting-source-label" class="sr-only" data-editor-i18n="greetingWords">Greeting words</span>
-            <label><input type="radio" name="greeting-source" value="claude" data-editor-focus="greeting-source-claude"> <span data-editor-i18n="greetingSourceClaude">Use Claude's greeting</span></label>
-            <label><input type="radio" name="greeting-source" value="custom" data-editor-focus="greeting-source-custom"> <span data-editor-i18n="greetingSourceCustom">Use my own words</span></label>
+            <label class="editor-greeting-source-card"><input type="radio" name="greeting-source" value="claude" data-editor-focus="greeting-source-claude"> <span data-editor-i18n="greetingSourceClaude">Use Claude's greeting</span></label>
+            <label class="editor-greeting-source-card"><input type="radio" name="greeting-source" value="custom" data-editor-focus="greeting-source-custom"> <span data-editor-i18n="greetingSourceCustom">Use my own words</span></label>
+            <label class="editor-greeting-source-card"><input type="radio" name="greeting-source" value="disabled" data-editor-focus="greeting-source-disabled"> <span data-editor-i18n="greetingSourceDisabled">Pause my words</span></label>
           </div>
           <div class="editor-control-grid editor-greeting-words">
             <label class="editor-field" for="editor-greeting-name">
               <span data-editor-i18n="greetingName">Your name</span>
-              <input id="editor-greeting-name" type="text" maxlength="80" autocomplete="off" data-editor-focus="greeting-name">
-              <small class="help" data-editor-i18n="greetingNameHelp">Used wherever a line contains {name}. Lines with {name} are skipped while this is empty.</small>
+              <input id="editor-greeting-name" type="text" maxlength="80" autocomplete="off" aria-describedby="editor-greeting-name-help editor-greeting-phrases-status" data-editor-focus="greeting-name">
+              <small id="editor-greeting-name-help" class="help" data-editor-i18n="greetingNameHelp">Optional. Used for {name}; up to 40 characters. Lines with {name} are skipped while this is empty.</small>
             </label>
             <label class="editor-field" for="editor-greeting-phrases">
               <span data-editor-i18n="greetingPhrases">Your lines</span>
-              <textarea id="editor-greeting-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-phrases"></textarea>
-              <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
+              <textarea id="editor-greeting-phrases" rows="5" spellcheck="false" aria-describedby="editor-greeting-phrases-help editor-greeting-phrases-status" data-editor-focus="greeting-phrases"></textarea>
+              <small id="editor-greeting-phrases-help" class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
             </label>
-            <label class="editor-field advanced-only" for="editor-greeting-override">
+            <label class="editor-field" for="editor-greeting-override">
               <span data-editor-i18n="greetingOverride">Words for this theme</span>
-              <select id="editor-greeting-override" data-editor-focus="greeting-override">
+              <select id="editor-greeting-override" aria-describedby="editor-greeting-phrases-status" data-editor-focus="greeting-override">
                 <option value="global" data-editor-i18n="greetingOverrideGlobal">Use the global list</option>
                 <option value="claude" data-editor-i18n="greetingSourceClaude">Use Claude's greeting</option>
                 <option value="custom" data-editor-i18n="greetingOverrideCustom">Use a list for this theme</option>
               </select>
             </label>
-            <label id="editor-greeting-override-phrases-field" class="editor-field advanced-only" for="editor-greeting-override-phrases" hidden>
+            <label id="editor-greeting-override-phrases-field" class="editor-field" for="editor-greeting-override-phrases" hidden>
               <span data-editor-i18n="greetingOverrideCustom">Use a list for this theme</span>
-              <textarea id="editor-greeting-override-phrases" rows="5" spellcheck="false" data-editor-focus="greeting-override-phrases"></textarea>
-              <small class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
+              <textarea id="editor-greeting-override-phrases" rows="5" spellcheck="false" aria-describedby="editor-greeting-override-phrases-help editor-greeting-phrases-status" data-editor-focus="greeting-override-phrases"></textarea>
+              <small id="editor-greeting-override-phrases-help" class="help" data-editor-i18n="greetingPhrasesHelp">One line per greeting, up to 12 lines and 120 characters each.</small>
             </label>
           </div>
-          <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" hidden></p>
+          <p id="editor-greeting-phrases-status" class="editor-inherited-note" role="status" aria-live="polite" hidden></p>
         </div>
-        <button type="button" id="editor-greeting-reset" class="ghost-button" data-editor-i18n="greetingResetClaude">Reset to Claude</button>
-        <div class="editor-control-grid editor-greeting-controls">
-          <label class="editor-field" for="editor-greeting-font">
-            <span data-editor-i18n="greetingFont">Font</span>
-            <select id="editor-greeting-font" data-editor-greeting="font" data-editor-focus="greeting-font" data-editor-field="shared.greeting.font"></select>
-          </label>
-          <label class="editor-field" for="editor-greeting-color">
-            <span data-editor-i18n="greetingColor">Colour role</span>
-            <select id="editor-greeting-color" data-editor-greeting="color" data-editor-focus="greeting-color" data-editor-field="shared.greeting.color"></select>
-          </label>
-          <label class="editor-field" for="editor-greeting-size">
-            <span><span data-editor-i18n="greetingSize">Size</span> <output id="editor-greeting-size-output" for="editor-greeting-size"></output></span>
-            <input id="editor-greeting-size" type="range" min="24" max="72" step="1" data-editor-greeting="fontSize" data-editor-focus="greeting-fontSize" data-editor-field="shared.greeting.fontSize">
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-weight">
-            <span data-editor-i18n="greetingWeight">Weight</span>
-            <select id="editor-greeting-weight" data-editor-greeting="weight" data-editor-focus="greeting-weight" data-editor-field="shared.greeting.weight"></select>
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-align">
-            <span data-editor-i18n="greetingAlign">Alignment</span>
-            <select id="editor-greeting-align" data-editor-greeting="align" data-editor-focus="greeting-align" data-editor-field="shared.greeting.align"></select>
-          </label>
-          <label class="editor-toggle-field advanced-only" for="editor-greeting-italic">
-            <input type="checkbox" id="editor-greeting-italic" data-editor-greeting="italic" data-editor-focus="greeting-italic" data-editor-field="shared.greeting.italic">
-            <span data-editor-i18n="greetingItalic">Italic</span>
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-tracking">
-            <span><span data-editor-i18n="greetingTracking">Letter spacing</span> <output id="editor-greeting-tracking-output" for="editor-greeting-tracking"></output></span>
-            <input id="editor-greeting-tracking" type="range" min="-0.06" max="0.12" step="0.005" data-editor-greeting="letterSpacing" data-editor-focus="greeting-letterSpacing" data-editor-field="shared.greeting.letterSpacing">
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-line-height">
-            <span><span data-editor-i18n="greetingLineHeight">Line height</span> <output id="editor-greeting-line-height-output" for="editor-greeting-line-height"></output></span>
-            <input id="editor-greeting-line-height" type="range" min="0.9" max="1.5" step="0.01" data-editor-greeting="lineHeight" data-editor-focus="greeting-lineHeight" data-editor-field="shared.greeting.lineHeight">
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-max-width">
-            <span><span data-editor-i18n="greetingMaxWidth">Max width</span> <output id="editor-greeting-max-width-output" for="editor-greeting-max-width"></output></span>
-            <input id="editor-greeting-max-width" type="range" min="0.35" max="0.9" step="0.01" data-editor-greeting="maxWidthRatio" data-editor-focus="greeting-maxWidthRatio" data-editor-field="shared.greeting.maxWidthRatio">
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-x">
-            <span><span data-editor-i18n="greetingOffsetX">Horizontal offset</span> <output id="editor-greeting-x-output" for="editor-greeting-x"></output></span>
-            <input id="editor-greeting-x" type="range" min="-0.45" max="0.45" step="0.01" data-editor-greeting="xRatio" data-editor-focus="greeting-xRatio" data-editor-field="shared.greeting.xRatio">
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-y">
-            <span><span data-editor-i18n="greetingOffsetY">Vertical offset</span> <output id="editor-greeting-y-output" for="editor-greeting-y"></output></span>
-            <input id="editor-greeting-y" type="range" min="-0.4" max="0.45" step="0.01" data-editor-greeting="yRatio" data-editor-focus="greeting-yRatio" data-editor-field="shared.greeting.yRatio">
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-decoration">
-            <span data-editor-i18n="greetingDecoration">Decoration</span>
-            <select id="editor-greeting-decoration" data-editor-greeting="decoration" data-editor-focus="greeting-decoration" data-editor-field="shared.greeting.decoration"></select>
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-mark">
-            <span data-editor-i18n="greetingMark">Mark</span>
-            <select id="editor-greeting-mark" data-editor-greeting="markSource" data-editor-focus="greeting-markSource" data-editor-field="shared.greeting.markSource"></select>
-          </label>
-          <label class="editor-field advanced-only" for="editor-greeting-mark-scale">
-            <span><span data-editor-i18n="greetingMarkScale">Mark size</span> <output id="editor-greeting-mark-scale-output" for="editor-greeting-mark-scale"></output></span>
-            <input id="editor-greeting-mark-scale" type="range" min="0.5" max="1.5" step="0.05" data-editor-greeting="markScale" data-editor-focus="greeting-markScale" data-editor-field="shared.greeting.markScale">
-          </label>
+        <div class="editor-greeting-group editor-greeting-appearance" role="group" aria-labelledby="editor-greeting-appearance-title">
+          <div class="editor-greeting-group-header">
+            <h3 id="editor-greeting-appearance-title"><label for="editor-greeting-enabled" data-editor-i18n="greetingEnable">Style the greeting</label></h3>
+            <input type="checkbox" id="editor-greeting-enabled" aria-labelledby="editor-greeting-appearance-title" data-editor-focus="greeting-enabled" data-editor-field="shared.greeting.enabled">
+          </div>
+          <p id="editor-greeting-native" class="editor-inherited-note" data-editor-i18n="greetingNativeHelp" hidden>Using Claude's original greeting style. Turn on styling to customize its appearance.</p>
+          <p id="editor-greeting-collision-warning" class="editor-greeting-collision-warning" role="note" data-editor-i18n="greetingArtworkCollisionWarning" hidden>This custom theme also has artwork. Review the greeting in Aura at each size; Studio will not guess whether the artwork leaves enough room.</p>
+          <div class="editor-control-grid editor-greeting-controls">
+            <label class="editor-field" for="editor-greeting-font">
+              <span data-editor-i18n="greetingFont">Font</span>
+              <select id="editor-greeting-font" data-editor-greeting="font" data-editor-focus="greeting-font" data-editor-field="shared.greeting.font"></select>
+            </label>
+            <label class="editor-field" for="editor-greeting-color">
+              <span data-editor-i18n="greetingColor">Colour role</span>
+              <select id="editor-greeting-color" data-editor-greeting="color" data-editor-focus="greeting-color" data-editor-field="shared.greeting.color"></select>
+            </label>
+            <label class="editor-field" for="editor-greeting-size">
+              <span><span data-editor-i18n="greetingSize">Size</span> <output id="editor-greeting-size-output" for="editor-greeting-size"></output></span>
+              <input id="editor-greeting-size" type="range" min="24" max="72" step="1" data-editor-greeting="fontSize" data-editor-focus="greeting-fontSize" data-editor-field="shared.greeting.fontSize">
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-weight">
+              <span data-editor-i18n="greetingWeight">Weight</span>
+              <select id="editor-greeting-weight" data-editor-greeting="weight" data-editor-focus="greeting-weight" data-editor-field="shared.greeting.weight"></select>
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-align">
+              <span data-editor-i18n="greetingAlign">Alignment</span>
+              <select id="editor-greeting-align" data-editor-greeting="align" data-editor-focus="greeting-align" data-editor-field="shared.greeting.align"></select>
+            </label>
+            <label class="editor-toggle-field advanced-only" for="editor-greeting-italic">
+              <input type="checkbox" id="editor-greeting-italic" data-editor-greeting="italic" data-editor-focus="greeting-italic" data-editor-field="shared.greeting.italic">
+              <span data-editor-i18n="greetingItalic">Italic</span>
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-tracking">
+              <span><span data-editor-i18n="greetingTracking">Letter spacing</span> <output id="editor-greeting-tracking-output" for="editor-greeting-tracking"></output></span>
+              <input id="editor-greeting-tracking" type="range" min="-0.06" max="0.12" step="0.005" data-editor-greeting="letterSpacing" data-editor-focus="greeting-letterSpacing" data-editor-field="shared.greeting.letterSpacing">
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-line-height">
+              <span><span data-editor-i18n="greetingLineHeight">Line height</span> <output id="editor-greeting-line-height-output" for="editor-greeting-line-height"></output></span>
+              <input id="editor-greeting-line-height" type="range" min="0.9" max="1.5" step="0.01" data-editor-greeting="lineHeight" data-editor-focus="greeting-lineHeight" data-editor-field="shared.greeting.lineHeight">
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-max-width">
+              <span><span data-editor-i18n="greetingMaxWidth">Max width</span> <output id="editor-greeting-max-width-output" for="editor-greeting-max-width"></output></span>
+              <input id="editor-greeting-max-width" type="range" min="0.35" max="0.9" step="0.01" data-editor-greeting="maxWidthRatio" data-editor-focus="greeting-maxWidthRatio" data-editor-field="shared.greeting.maxWidthRatio">
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-x">
+              <span><span data-editor-i18n="greetingOffsetX">Horizontal offset</span> <output id="editor-greeting-x-output" for="editor-greeting-x"></output></span>
+              <input id="editor-greeting-x" type="range" min="-0.45" max="0.45" step="0.01" data-editor-greeting="xRatio" data-editor-focus="greeting-xRatio" data-editor-field="shared.greeting.xRatio">
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-y">
+              <span><span data-editor-i18n="greetingOffsetY">Vertical offset</span> <output id="editor-greeting-y-output" for="editor-greeting-y"></output></span>
+              <input id="editor-greeting-y" type="range" min="-0.4" max="0.45" step="0.01" data-editor-greeting="yRatio" data-editor-focus="greeting-yRatio" data-editor-field="shared.greeting.yRatio">
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-decoration">
+              <span data-editor-i18n="greetingDecoration">Decoration</span>
+              <select id="editor-greeting-decoration" data-editor-greeting="decoration" data-editor-focus="greeting-decoration" data-editor-field="shared.greeting.decoration"></select>
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-mark">
+              <span data-editor-i18n="greetingMark">Mark</span>
+              <select id="editor-greeting-mark" data-editor-greeting="markSource" data-editor-focus="greeting-markSource" data-editor-field="shared.greeting.markSource"></select>
+            </label>
+            <label class="editor-field advanced-only" for="editor-greeting-mark-scale">
+              <span><span data-editor-i18n="greetingMarkScale">Mark size</span> <output id="editor-greeting-mark-scale-output" for="editor-greeting-mark-scale"></output></span>
+              <input id="editor-greeting-mark-scale" type="range" min="0.5" max="1.5" step="0.05" data-editor-greeting="markScale" data-editor-focus="greeting-markScale" data-editor-field="shared.greeting.markScale">
+            </label>
+          </div>
+        </div>
+        <div class="editor-greeting-reset-row">
+          <button type="button" id="editor-greeting-reset" class="ghost-button" data-editor-i18n="greetingResetClaude">Reset to Claude</button>
         </div>
       </section>
 

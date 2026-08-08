@@ -1177,7 +1177,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /actionError === "picker-cancelled"[\s\S]{0,500}?settledAction === "pick-theme-launcher-mark"[\s\S]{0,300}?launcherMarkImported[\s\S]{0,400}?identity-apply-failed[\s\S]{0,200}?launcherMarkApplyFailed/,
     "The editor must preserve neutral cancellation and actionable mark replacement results");
   const guardedPost = studioEditor.slice(
-    studioEditor.indexOf("const post = (message)"),
+    studioEditor.indexOf("const post = (message"),
     studioEditor.indexOf("const mutationBase"),
   );
   const patchSettlement = studioEditor.slice(
@@ -2321,7 +2321,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The mutation queue must keep the latest value for each logical field");
   assert.match(studioEditor, /type:\s*"apply-theme-patch"[\s\S]{0,180}?changes/,
     "Every queued editor gesture must cross the bridge as one bounded theme patch");
-  assert.match(studioEditor, /state\s*=\s*normalized[\s\S]{0,900}?flushThemeChanges\(\)/,
+  assert.match(studioEditor, /state\s*=\s*normalized[\s\S]{0,1500}?flushThemeChanges\(\)/,
     "Queued rapid edits must resume with the host-confirmed revision after each patch response");
   assert.match(studioEditor,
     /const settlement = settlePendingAction\(normalized\)[\s\S]{0,180}?clearSettledStageOverrides\(\)[\s\S]{0,120}?reflect\(/,
@@ -2364,7 +2364,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.equal((studioHtml.match(/type="radio" name="stage-context"/g) ?? []).length, 2,
     "The stage must expose native new-chat and conversation context toggles");
   assert.match(studioEditor,
-    /window\.CLAUDE_AURA_EDITOR\s*=\s*Object\.freeze\(\{\s*createController,\s*normalizeEditorState,\s*normalizeStudioStyle,\s*normalizeCapabilityRegistry,\s*reconcileDuplicateTokenValue,\s*backgroundScopeUiActive,\s*capabilityRegistry:\s*EDITOR_CAPABILITY_REGISTRY,?\s*\}\)/,
+    /window\.CLAUDE_AURA_EDITOR\s*=\s*Object\.freeze\(\{[\s\S]{0,500}?createController,[\s\S]{0,500}?normalizeEditorState,[\s\S]{0,500}?normalizeStudioStyle,[\s\S]{0,500}?normalizeCapabilityRegistry,[\s\S]{0,500}?reconcileDuplicateTokenValue,[\s\S]{0,500}?backgroundScopeUiActive,[\s\S]{0,500}?capabilityRegistry:\s*EDITOR_CAPABILITY_REGISTRY,?\s*\}\)/,
     "The editor module must expose its controller, strict validators, and read-only capability registry");
 
   const editorActionMatch = studioEditor.match(/const ACTIONS\s*=\s*new Set\(\[([\s\S]*?)\]\);/);
@@ -2380,7 +2380,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(pendingWatchdogBlock, "the editor pending-action gate could not be isolated");
   assert.match(pendingWatchdogBlock, /pendingWatchdog = setTimeout\(/,
     "a pending editor action must arm a watchdog so a lost reply cannot strand the session");
-  assert.match(pendingWatchdogBlock, /requeueInFlightChanges\(\)[\s\S]{0,120}?flushThemeChanges\(\)/,
+  assert.match(pendingWatchdogBlock, /requeueInFlightChanges\(\)[\s\S]{0,300}?flushThemeChanges\(\)/,
     "a timed-out action must requeue its in-flight changes and flush them again");
   assert.match(pendingWatchdogBlock, /WATCHDOG_EXEMPT_ACTIONS\.has\(action\)/,
     "file-picker actions wait on the user and must be exempt from the watchdog");
@@ -2619,17 +2619,20 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(shortcutBlock, /key === "y" \|\| \(key === "z" && event\.shiftKey\)[\s\S]{0,80}?performRedo\(\)/,
     "Ctrl/Cmd+Y and Ctrl/Cmd+Shift+Z must redo");
   assert.match(studioEditor,
-    /const hasUnsavedEdits = \(\) => hasUnsavedEditorWork\(\{[\s\S]{0,120}?state\?\.dirty[\s\S]{0,160}?coalescedChanges\.size[\s\S]{0,180}?inFlightChanges\.length[\s\S]{0,160}?stageKeyPaths\.size[\s\S]{0,100}?stageKeyTimer/,
+    /const hasUnsavedEdits = \(\) => hasUnsavedEditorWork\(\{[\s\S]{0,120}?state\?\.dirty[\s\S]{0,260}?coalescedChanges\.size[\s\S]{0,180}?inFlightChanges\.length[\s\S]{0,160}?stageKeyPaths\.size[\s\S]{0,100}?stageKeyTimer/,
     "Exit must treat queued, debounced, and in-flight edits as unsaved, not only host-acknowledged dirty state");
   assert.match(studioEditor,
     /const requestExit = \(opener\) => \{\s*if \(!hasUnsavedEdits\(\)\) \{ discard\(\); return; \}/,
     "Leaving with any unsaved edit must prompt for confirmation before discarding");
   assert.match(studioEditor,
-    /const isBlockingAction = \(\) => Boolean\(pendingAction\) && pendingAction !== "apply-theme-patch";/,
-    "Only structural actions block the editor; background value patches must not");
-  const setPendingBlock = studioEditor.match(/const setPending = \(action = null\) => \{[\s\S]*?\n\s*};/)?.[0] ?? "";
-  assert.match(setPendingBlock, /const blocking = Boolean\(action\) && action !== "apply-theme-patch";/,
-    "setPending must distinguish a blocking structural action from a background patch");
+    /const isBlockingAction = \(\) => Boolean\(patchResyncPending\)[\s\S]{0,100}?\(Boolean\(pendingAction\) && pendingAction !== "apply-theme-patch"\);/,
+    "Structural actions and uncertain patch resyncs must block the editor; background value patches must not");
+  const setPendingBlock = studioEditor.match(
+    /const setPending = \(action = null(?:,\s*request = null)?\) => \{[\s\S]*?\n    };/,
+  )?.[0] ?? "";
+  assert.match(setPendingBlock,
+    /const blocking = Boolean\(patchResyncPending\)[\s\S]{0,100}?\(Boolean\(action\) && action !== "apply-theme-patch"\);/,
+    "setPending must distinguish blocking structural or resync work from a background patch");
   assert.match(setPendingBlock, /for \(const button of editor\.querySelectorAll\("button"\)\) button\.disabled = blocking;/,
     "setPending must only disable every control for a structural action, letting background patches sync without a freeze");
   assert.match(studioEditor,
@@ -6228,10 +6231,166 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
   const editorCssSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "editor.css"), "utf8");
   const coreSource = await fs.readFile(path.join(PROJECT_ROOT, "scripts", "theme-core", "studio.mjs"), "utf8");
   const htmlSource = await fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8");
+  const greetingEditorWindow = {};
+  new Function("window", editorSource)(greetingEditorWindow);
+  const greetingEditorApi = greetingEditorWindow.CLAUDE_AURA_EDITOR;
+  const personalGreeting = {
+    enabled: false,
+    source: "custom",
+    displayName: "Kai",
+    globalPhrases: ["Hello, {name}"],
+    themeOverrides: {},
+    shuffle: null,
+  };
+  assert.equal(greetingEditorApi.greetingSourceChoice(personalGreeting), "disabled");
+  assert.deepEqual(
+    greetingEditorApi.greetingPreferencesForSourceChoice(personalGreeting, "claude"),
+    { ...personalGreeting, enabled: true, source: "claude" },
+    "Choosing Claude must not be conflated with disabling personal greetings",
+  );
+  assert.deepEqual(
+    greetingEditorApi.greetingPreferencesForSourceChoice(personalGreeting, "disabled"),
+    personalGreeting,
+    "The paused choice must preserve custom wording for later reuse",
+  );
+  assert.deepEqual(
+    greetingEditorApi.greetingThemeOverrideFor(personalGreeting, "constructor"),
+    { mode: "global", phrases: [] },
+    "A prototype-named theme without an own override must use the shared list",
+  );
+  const greetingRequest = {
+    type: "set-greeting-phrases",
+    session: "11111111-1111-4111-8111-111111111111",
+    revision: 7,
+  };
+  assert.equal(greetingEditorApi.greetingMutationResult(greetingRequest, {
+    ...greetingRequest,
+    lastAction: greetingRequest.type,
+    revision: 8,
+    actionSucceeded: true,
+  }), "succeeded");
+  assert.equal(greetingEditorApi.greetingMutationResult(greetingRequest, {
+    ...greetingRequest,
+    lastAction: greetingRequest.type,
+    revision: 9,
+    actionSucceeded: true,
+  }), "waiting", "A later response must not acknowledge this exact request");
+  assert.equal(greetingEditorApi.greetingMutationResult(greetingRequest, {
+    ...greetingRequest,
+    session: "22222222-2222-4222-8222-222222222222",
+    lastAction: greetingRequest.type,
+    revision: 8,
+    actionSucceeded: true,
+  }), "waiting", "A response from another Studio session must not settle the request");
+  assert.equal(greetingEditorApi.greetingMutationResult(greetingRequest, {
+    ...greetingRequest,
+    lastAction: greetingRequest.type,
+    actionSucceeded: false,
+  }), "failed");
+  assert.equal(greetingEditorApi.sameMutationRequest(greetingRequest, { ...greetingRequest }), true);
+  assert.equal(greetingEditorApi.sameMutationRequest(
+    greetingRequest,
+    { ...greetingRequest, revision: 8 },
+  ), false);
+  const fullResetRequest = { ...greetingRequest, type: "begin-theme-edit", reset: true };
+  assert.equal(greetingEditorApi.greetingMutationResult(fullResetRequest, {
+    ...fullResetRequest,
+    lastAction: "begin-theme-edit",
+    actionSucceeded: true,
+  }), "waiting", "A sticky prior Reset state must not settle a new Reset");
+  assert.equal(greetingEditorApi.greetingMutationResult(fullResetRequest, {
+    ...fullResetRequest,
+    lastAction: "begin-theme-edit",
+    revision: 8,
+    actionSucceeded: true,
+  }), "succeeded");
+  assert.equal(greetingEditorApi.greetingResyncCaughtUp(
+    fullResetRequest,
+    {
+      ...fullResetRequest,
+      lastAction: "begin-theme-edit",
+      revision: 8,
+      actionSucceeded: true,
+    },
+    personalGreeting,
+  ), true, "A successful full Reset discovered by refresh must replace local editor buffers");
+  assert.equal(greetingEditorApi.greetingResyncCaughtUp(
+    fullResetRequest,
+    {
+      ...fullResetRequest,
+      lastAction: "begin-theme-edit",
+      actionSucceeded: true,
+      greetingPreferences: personalGreeting,
+    },
+    personalGreeting,
+  ), false, "Equal greeting data at the old revision must not impersonate a full Reset");
+  const undoRequest = { ...greetingRequest, type: "undo-theme-edit" };
+  assert.equal(greetingEditorApi.greetingMutationResult(undoRequest, {
+    ...undoRequest,
+    lastAction: "undo-theme-edit",
+    actionSucceeded: true,
+  }), "waiting", "A sticky prior Undo state must not settle a new Undo");
+  assert.equal(greetingEditorApi.greetingMutationResult(undoRequest, {
+    ...undoRequest,
+    lastAction: "undo-theme-edit",
+    revision: 8,
+    actionSucceeded: true,
+  }), "succeeded");
+  const patchRequest = { ...greetingRequest, type: "apply-theme-patch" };
+  assert.equal(greetingEditorApi.patchResyncDecision(patchRequest, {
+    ...patchRequest,
+    lastAction: "apply-theme-patch",
+    revision: 8,
+    actionSucceeded: true,
+  }, true), "succeeded", "An applied patch must settle instead of replaying");
+  assert.equal(greetingEditorApi.patchResyncDecision(patchRequest, {
+    ...patchRequest,
+    lastAction: "set-greeting-phrases",
+    revision: 8,
+    actionSucceeded: true,
+  }, true), "uncertain", "An advanced revision without the exact acknowledgement must not replay");
+  assert.equal(greetingEditorApi.patchResyncDecision(patchRequest, {
+    ...patchRequest,
+    lastAction: "set-greeting-phrases",
+    actionSucceeded: true,
+  }, true), "retry", "A refresh-confirmed unchanged revision may retry once");
+  assert.equal(greetingEditorApi.patchResyncDecision(patchRequest, {
+    ...patchRequest,
+    lastAction: "set-greeting-phrases",
+    actionSucceeded: true,
+  }, false), "defer", "A second unchanged timeout must wait for a fresh user edit");
+  assert.equal(greetingEditorApi.greetingResyncCaughtUp(
+    { ...greetingRequest, type: "reset-greeting" },
+    {
+      revision: 8,
+      shared: { greeting: { native: true } },
+      greetingPreferences: { enabled: true, source: "claude" },
+    },
+    personalGreeting,
+  ), true, "A successful Reset discovered by refresh must replace an invalid local draft");
   assert.match(htmlSource, /id="editor-greeting-name"[^>]+maxlength="80"/,
     "The name input must admit up to 40 supplementary-plane Unicode scalars");
-  assert.equal((htmlSource.match(/name="greeting-source"/g) ?? []).length, 2,
-    "Greeting wording must use one mutually exclusive Claude/custom choice");
+  assert.equal((htmlSource.match(/name="greeting-source"/g) ?? []).length, 3,
+    "Greeting wording must expose distinct Claude, custom, and paused choices");
+  assert.match(htmlSource,
+    /name="greeting-source" value="disabled"[^>]+data-editor-focus="greeting-source-disabled"/,
+    "Paused personal wording must remain a first-class keyboard-accessible choice");
+  assert.doesNotMatch(htmlSource,
+    /class="[^"]*advanced-only[^"]*"[^>]+for="editor-greeting-override"/,
+    "Quick mode must reveal the effective current-theme wording scope");
+  assert.match(htmlSource,
+    /id="editor-greeting-phrases-status"[^>]+role="status"[^>]+aria-live="polite"/,
+    "Greeting validation must be announced as an associated live error");
+  for (const id of [
+    "editor-greeting-name",
+    "editor-greeting-phrases",
+    "editor-greeting-override",
+    "editor-greeting-override-phrases",
+  ]) {
+    assert.match(htmlSource,
+      new RegExp(`id="${id}"[^>]+aria-describedby="[^"]*editor-greeting-phrases-status`),
+      `${id} must be associated with the greeting validation message`);
+  }
   assert.doesNotMatch(htmlSource, /editor-greeting-personal-enabled/,
     "Greeting wording must not retain a second conflicting enable switch");
   assert.match(htmlSource, /id="editor-greeting-collision-warning"[^>]+role="note"/,
@@ -6273,7 +6432,7 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /greetingCollisionWarning\.hidden = greetingNative[\s\S]{0,180}?state\.layers\.length === 0/,
     "The custom-artwork collision warning must follow actual style and artwork state");
   assert.match(editorSource,
-    /greetingEnableInput\?\.addEventListener\("change"[\s\S]{0,420}?kind:\s*"greeting"[\s\S]{0,180}?operation:\s*"reset"/,
+    /greetingEnableInput\?\.addEventListener\("change"[\s\S]{0,760}?kind:\s*"greeting"[\s\S]{0,180}?operation:\s*"reset"/,
     "Turning off portable styling must emit only the greeting theme reset patch");
   const greetingEnableHandler = editorSource.match(
     /greetingEnableInput\?\.addEventListener\("change"[\s\S]*?\n    \}\);/,
@@ -6281,7 +6440,7 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
   assert.doesNotMatch(greetingEnableHandler, /type:\s*"reset-greeting"/,
     "Turning off style must not also reset personal wording");
   assert.match(editorSource,
-    /greetingResetButton\?\.addEventListener\("click"[\s\S]{0,180}?type:\s*"reset-greeting"/,
+    /greetingResetButton\?\.addEventListener\("click"[\s\S]{0,1000}?type:\s*"reset-greeting"/,
     "Only the explicit Reset to Claude control should reset style and wording together");
   const parserSource = editorSource.match(
     /function parseGreetingPhrases\(text\) \{[\s\S]*?\n  \}/,
@@ -6300,7 +6459,7 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     assert.equal(parsePhrases(value), null, `The greeting parser silently altered a ${label}`);
   }
   assert.match(editorSource,
-    /greetingPreferenceInputDirty = true;\s*greetingPreferenceInputInvalid = true;[\s\S]{0,100}?showGreetingInputError\(\)/,
+    /greetingPreferenceInputDirty = true;\s*greetingPreferenceInputInvalid = true;[\s\S]{0,120}?showGreetingInputError\(/,
     "Invalid visible greeting input must remain tracked instead of falling back to the prior draft");
   assert.match(editorSource,
     /const personal = greetingPreferenceInputDirty[\s\S]{0,800}?greetingPreferenceInputInvalid[\s\S]{0,500}?saveBlocked/,
@@ -6315,8 +6474,47 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /const savedGreetingPreferences = reconcileStudioGreetingShuffle\([\s\S]{0,180}?greetingPreferences:\s*savedGreetingPreferences/,
     "Save must commit the staged personal envelope while preserving a newer runtime shuffle");
   assert.match(editorSource,
-    /actionAfterPatch = \{ type: "save-theme-edit", \.\.\.base \};[\s\S]{0,180}?postGreetingPreferences/,
+    /stageGreetingPreferenceDraft\(\{[\s\S]{0,160}?followup:\s*\{ type: "save-theme-edit", \.\.\.base \}/,
     "the first Save click must flush personal words and chain the save");
+  assert.match(editorSource,
+    /sameMutationRequest\(greetingActionFollowup\?\.prerequisite, settledRequest\)/,
+    "Save follow-up must be tied to the exact wording request it depends on");
+  assert.match(editorSource,
+    /for \(const input of greetingTextInputs\) input\.addEventListener\("focusout", scheduleGreetingDraftStage\)/,
+    "Valid wording must enter the host-owned Studio draft when text editing completes");
+  assert.match(editorSource,
+    /const stageGreetingPreferenceDraft = \([\s\S]{0,2800}?postGreetingPreferences\(personal, base\)/,
+    "Valid wording must enter the host-owned Studio transaction");
+  assert.match(editorSource,
+    /greetingActionFollowup = \{[\s\S]{0,180}?prerequisite:\s*\{[\s\S]{0,180}?session:\s*pendingRequest\.session[\s\S]{0,120}?revision:\s*pendingRequest\.revision/,
+    "Wording staging and its optional action must share one exact request prerequisite");
+  assert.match(editorSource,
+    /const fullReset = timedOutAction === "begin-theme-edit"[\s\S]{0,180}?timedOutRequest\?\.reset === true/,
+    "Toolbar Reset must be included in revision-bound timeout recovery");
+  assert.match(editorSource,
+    /greetingResyncPending = \{ request: timedOutRequest, retry, fullReset \}[\s\S]{0,900}?send\(\{ type: "get-state" \}\)/,
+    "A timed-out wording or Reset request must refresh host state before any bounded retry");
+  assert.match(editorSource,
+    /greetingResyncTimer = setTimeout\([\s\S]{0,500}?greetingResyncPending = null[\s\S]{0,180}?greetingStageRequested = false/,
+    "A dropped refresh response must terminate without locking greeting controls forever");
+  assert.match(editorSource,
+    /const hostCaughtUp = greetingResyncCaughtUp\([\s\S]{0,160}?resync\.request,[\s\S]{0,100}?normalized,[\s\S]{0,100}?localGreeting/,
+    "A reset that completes after timeout must replace any invalid local wording buffer");
+  assert.match(editorSource,
+    /if \(resync\.fullReset\) \{[\s\S]{0,160}?clearMetadataOverrides\(\);[\s\S]{0,160}?metadataInputDirty = false/,
+    "A full Reset discovered after timeout must clear every stale local editor buffer");
+  assert.match(editorSource,
+    /const fullResetAcknowledged = pendingAction === "begin-theme-edit"[\s\S]{0,180}?pendingRequest\?\.reset === true[\s\S]{0,180}?greetingMutationResult\(pendingRequest, normalized\) === "succeeded"/,
+    "Toolbar Reset must identify the exact successful reset request");
+  assert.match(editorSource,
+    /const metadataHistoryAcknowledged = \["undo-theme-edit", "redo-theme-edit"\]\.includes\(pendingAction\)[\s\S]{0,160}?greetingMutationResult\(pendingRequest, normalized\) === "succeeded"/,
+    "Undo and Redo must ignore sticky responses from an earlier history request");
+  assert.match(editorSource,
+    /\{ type: "begin-theme-edit", theme: state\.id, reset: true \},[\s\S]{0,80}?\{ pendingBase: base \}/,
+    "Toolbar Reset must retain its pre-reset session and revision outside the strict wire message");
+  assert.match(editorSource,
+    /greetingAcknowledged \|\| fullResetAcknowledged \|\| metadataHistoryAcknowledged\) \{[\s\S]{0,100}?clearGreetingInputState\(normalized\.greetingPreferences\)/,
+    "Toolbar Reset must clear local greeting buffers only after its successful reset acknowledgement");
   assert.match(editorSource,
     /greetingExactInputs[\s\S]{0,2200}?gestureScope \?\?= greetingScopeFromFieldPath\(exact\.dataset\.editorField\)[\s\S]{0,600}?const \{ appearance, frameId \} = gestureScope;[\s\S]{0,220}?queueGreetingFrame\([\s\S]{0,100}?greetingFrameFromControls\(field, value, appearance, frameId\),[\s\S]{0,100}?\{ appearance, frameId \}/,
     "exact numeric greeting edits must emit a complete frame for their captured axes");
@@ -6345,14 +6543,44 @@ test("WO-21 Studio keeps greeting frames and personal drafts transactional", asy
     /const greetingUsesNativeLayout = \(\) => greetingStyleIntent === null[\s\S]{0,180}?state\?\.shared\?\.greeting\?\.native && !greetingHasLocalFrameDraft\(\)/,
     "a stale host reflection must not hide an unacknowledged local greeting edit");
   assert.match(editorSource,
-    /const syncGreetingFrameControls = \(\) => \{[\s\S]{0,260}?isBlockingAction\(\)[\s\S]{0,120}?greetingStyleIntent !== null[\s\S]{0,260}?greetingInputs[\s\S]{0,160}?greetingExactInputs/,
+    /const syncGreetingFrameControls = \(\) => \{[\s\S]{0,260}?isBlockingAction\(\)[\s\S]{0,120}?greetingStyleLocked[\s\S]{0,260}?greetingInputs[\s\S]{0,160}?greetingExactInputs/,
     "greeting appearance controls must lock while Save or a style toggle is settling");
   assert.match(editorSource,
-    /greetingEnableInput\?\.addEventListener\("change"[\s\S]{0,180}?greetingStyleIntent = greetingEnableInput\.checked[\s\S]{0,500}?reflectGreeting\(\)[\s\S]{0,100}?reflectButtonStates\(\)/,
-    "the greeting style toggle must expose one optimistic intent until its patch settles");
+    /greetingEnableInput\?\.addEventListener\("change"[\s\S]{0,180}?greetingStyleIntent = greetingEnableInput\.checked[\s\S]{0,100}?greetingStyleLocked = true[\s\S]{0,620}?reflectGreeting\(\)[\s\S]{0,100}?reflectButtonStates\(\)/,
+    "the greeting style toggle must expose optimistic intent with a separate in-flight lock");
   assert.match(editorSource,
-    /const greetingAcknowledged = \["set-greeting-phrases", "reset-greeting"\]\.includes\(pendingAction\)[\s\S]{0,160}?normalized\.actionSucceeded !== false/,
-    "a rejected wording or reset request must not acknowledge and erase the recoverable draft");
+    /changeSendRetryCount \+= 1[\s\S]{0,360}?changeFlushTimer = setTimeout\(flushThemeChanges, 250\)[\s\S]{0,500}?greetingStyleLocked = false/,
+    "a bridge-send failure must retry once, then unlock the optimistic greeting controls");
+  assert.match(editorSource,
+    /const greetingPatchRejected = inFlightChanges\.some[\s\S]{0,180}?deferInFlightChanges\(\);[\s\S]{0,700}?greetingStyleLocked = false/,
+    "a same-revision greeting rejection must preserve the visible intent while unlocking another edit");
+  assert.match(editorSource,
+    /if \(timedOutAction === "apply-theme-patch"\)[\s\S]{0,300}?patchResyncPending = \{[\s\S]{0,180}?retry: patchResponseRetryCount <= 1[\s\S]{0,320}?send\(\{ type: "get-state" \}\)/,
+    "a patch response timeout must refresh host state before deciding whether one retry is safe");
+  assert.match(editorSource,
+    /const decision = patchResyncDecision\(\s*resync\.request,\s*normalized,\s*resync\.retry,/,
+    "patch refresh must use the executable revision decision helper");
+  assert.match(editorSource,
+    /decision === "retry"[\s\S]{0,120}?clearPatchResyncTracking\(\);[\s\S]{0,120}?requeueInFlightChanges\(\)/,
+    "an unacknowledged patch may retry only after refresh confirms that the revision did not advance");
+  assert.match(editorSource,
+    /const uncertainChanges = new Map\(\)/,
+    "ambiguous patches need separate dirty accounting");
+  assert.match(editorSource,
+    /if \(!uncertainChanges\.has\(key\)\) uncertainChanges\.set\(key, change\)/,
+    "an ambiguous advanced patch must stay uncertain instead of being replayed");
+  assert.match(editorSource,
+    /reconcileUncertainChanges\(normalized\)/,
+    "an ambiguous advanced patch must stay visibly uncertain without automatic replay");
+  assert.match(editorSource,
+    /const greetingAcknowledged = \["set-greeting-phrases", "reset-greeting"\]\.includes\(pendingAction\)[\s\S]{0,160}?greetingMutationResult\(pendingRequest, normalized\) === "succeeded"/,
+    "only the exact successful wording or reset request may acknowledge the recoverable draft");
+  assert.match(editorSource,
+    /const errorTarget = greetingPreferenceInputInvalid[\s\S]{0,180}?greetingPreferenceDraftErrorTarget\(personal\)[\s\S]{0,120}?showGreetingInputError\(errorTarget\)/,
+    "Live semantic greeting errors must identify their actual associated control");
+  assert.match(editorSource,
+    /target === greetingNameInput \? "greetingNameInvalid" : "greetingPhrasesEmpty"/,
+    "The greeting name field must announce its own correction instead of list rules");
   assert.match(editorSource,
     /const greetingGestureActive = Boolean\(activeGreetingControlScope\)[\s\S]{0,120}?stageDrag\?\.selection\?\.kind === "greeting"[\s\S]{0,180}?greetingMirrorAxesDeferred = true/,
     "live mirror axes must wait until an active greeting gesture finishes");
@@ -6443,20 +6671,6 @@ test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", as
     assert.equal(result.state.shared.greeting.native, false);
     assert.equal(result.state.greetingPreferences.source, "custom");
 
-    const beforeClaudeResetRevision = result.state.revision;
-    result = await invoke(mutate(result, "reset-greeting"));
-    assert.equal(result.state.revision, beforeClaudeResetRevision + 1);
-    assert.equal(result.state.shared.greeting.native, true);
-    assert.equal(result.state.greetingPreferences.source, "claude");
-    assert.equal(result.state.greetingPreferences.displayName, emojiName,
-      "Reset to Claude discarded a reusable personal name");
-    assert.deepEqual(result.state.greetingPreferences.globalPhrases, ["Welcome, {name}"]);
-    result = await invoke(mutate(result, "undo-theme-edit"));
-    assert.equal(result.state.shared.greeting.native, false,
-      "One Undo did not restore greeting style after Reset to Claude");
-    assert.equal(result.state.greetingPreferences.source, "custom",
-      "One Undo did not restore personal wording after Reset to Claude");
-
     result = await invoke(mutate(result, "set-greeting-phrases", {
       enabled: false,
       source: result.state.greetingPreferences.source,
@@ -6465,10 +6679,38 @@ test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", as
       overrideMode: result.state.greetingPreferences.themeOverrides[themeId].mode,
       overridePhrases: result.state.greetingPreferences.themeOverrides[themeId].phrases,
     }));
-    assert.equal(result.state.greetingPreferences.enabled, false,
-      "The personal-enabled control did not participate in Studio history");
-    result = await invoke(mutate(result, "undo-theme-edit"));
+    assert.equal(result.state.greetingPreferences.enabled, false);
+    assert.equal(result.state.greetingPreferences.source, "custom");
+
+    const beforeClaudeResetRevision = result.state.revision;
+    result = await invoke(mutate(result, "reset-greeting"));
+    assert.equal(result.state.revision, beforeClaudeResetRevision + 1);
+    assert.equal(result.state.shared.greeting.native, true);
     assert.equal(result.state.greetingPreferences.enabled, true);
+    assert.equal(result.state.greetingPreferences.source, "claude");
+    assert.equal(result.state.greetingPreferences.displayName, emojiName,
+      "Reset to Claude discarded a reusable personal name");
+    assert.deepEqual(result.state.greetingPreferences.globalPhrases, ["Welcome, {name}"]);
+    result = await invoke(mutate(result, "undo-theme-edit"));
+    assert.equal(result.state.shared.greeting.native, false,
+      "One Undo did not restore greeting style after Reset to Claude");
+    assert.equal(result.state.greetingPreferences.enabled, false,
+      "One Undo did not restore disabled personalization after Reset to Claude");
+    assert.equal(result.state.greetingPreferences.source, "custom",
+      "One Undo did not restore personal wording after Reset to Claude");
+
+    result = await invoke(mutate(result, "set-greeting-phrases", {
+      enabled: true,
+      source: result.state.greetingPreferences.source,
+      displayName: result.state.greetingPreferences.displayName,
+      globalPhrases: result.state.greetingPreferences.globalPhrases,
+      overrideMode: result.state.greetingPreferences.themeOverrides[themeId].mode,
+      overridePhrases: result.state.greetingPreferences.themeOverrides[themeId].phrases,
+    }));
+    assert.equal(result.state.greetingPreferences.enabled, true,
+      "The paused wording state did not participate in Studio history");
+    result = await invoke(mutate(result, "undo-theme-edit"));
+    assert.equal(result.state.greetingPreferences.enabled, false);
 
     const runtimeShuffle = {
       themeId,

@@ -669,6 +669,29 @@ test("plain-div greeting binds outside the composer group and swaps with exactly
   assert.equal(app.replacements().length, 0);
 });
 
+test("same-entry Navigation API events do not advance the greeting visit", async () => {
+  const app = await runtime();
+  app.flushFrame();
+  app.flushFrame();
+  const state = app.window.__CLAUDE_AURA_STATE__;
+  const phrase = app.replacements()[0].querySelector(`[${T}]`).textContent;
+  const epoch = state.getGreetingProbe().visitEpoch;
+
+  app.navigationListeners.forEach((listener) => listener());
+  state.ensure();
+
+  assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase);
+  assert.equal(state.getGreetingProbe().visitEpoch, epoch);
+
+  app.window.navigation.currentEntry = { key: "visit-2" };
+  app.navigationListeners.forEach((listener) => listener());
+  state.ensure();
+
+  assert.notEqual(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase);
+  assert(state.getGreetingProbe().visitEpoch > epoch);
+  state.cleanup();
+});
+
 test("native and compact marks follow text without changing greeting geometry", async () => {
   for (const phrases of [null, ["Only phrase"]]) {
     const options = { phrases, greetingX: 0, greetingY: 0 };

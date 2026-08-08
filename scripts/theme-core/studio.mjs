@@ -4162,6 +4162,7 @@ export async function resetGreeting(context) {
     return {
       greetingPreferences: {
         ...cloneJson(internal.greetingCurrent),
+        enabled: true,
         source: "claude",
         shuffle: null,
       },
