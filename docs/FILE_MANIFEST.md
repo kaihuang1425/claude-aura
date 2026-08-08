@@ -325,6 +325,7 @@ the retired reconstructed preview are not deliverables.
 - `scripts/theme-core/code-adapter.mjs`
 - `scripts/theme-core/constants.mjs`
 - `scripts/theme-core/greeting.mjs`
+- `scripts/theme-core/instant-prompts.mjs`
 - `scripts/theme-core/registry.mjs`
 - `scripts/theme-core/studio.mjs`
 - `scripts/theme-core/terminal.mjs`
@@ -343,6 +344,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/greeting-runtime.test.mjs`
 - `tests/greeting.test.mjs`
 - `tests/installer.test.mjs`
+- `tests/instant-prompts.test.mjs`
 - `tests/locales.test.mjs`
 - `tests/payload.test.mjs`
 - `tests/platform.test.mjs`

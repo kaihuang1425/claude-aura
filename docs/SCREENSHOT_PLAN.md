@@ -574,10 +574,11 @@ sessions.
 
 ### Phase 2 instant prompts (HUMAN CHECKPOINT E)
 
-This is future WO-19 evidence only. It does not expand HUMAN CHECKPOINT D or
-authorize Phase 2 before WO-16. First record the widget-schema, insertion,
-cleanup, persistence, localization, and accessibility mechanical results
-required by WO-19.
+This is WO-19's live visual evidence gate. Source, schema, insertion, cleanup,
+persistence, localization, and accessibility checks can establish mechanical
+completion, but they do not pass this checkpoint. If the owner directs the
+queue to continue without live evidence, record the checkpoint as skipped and
+leave it unpassed.
 
 In the installed Aura application on live `claude.ai`, record Instant prompts
 under the existing **Widgets** branch in Light and Dark on New chat. Select the

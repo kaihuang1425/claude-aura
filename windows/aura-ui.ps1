@@ -5848,7 +5848,7 @@ function ConvertTo-AuraUiStudioEditorState {
   $allowed = @(
     'active', 'id', 'sourceId', 'source', 'isNew', 'editKind', 'session', 'revision', 'dirty',
     'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
-    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'layers', 'feedback',
+    'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback',
     'lastAction', 'actionSucceeded', 'error')
   $actual = @($State.PSObject.Properties | ForEach-Object { $_.Name })
   foreach ($name in $actual) {
@@ -5862,7 +5862,7 @@ function ConvertTo-AuraUiStudioEditorState {
     $required = @(
       'active', 'id', 'sourceId', 'source', 'isNew', 'session', 'revision', 'dirty',
       'canUndo', 'canRedo', 'label', 'metadata', 'tokens', 'studioStyle', 'launcher', 'launcherStyle',
-      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'layers', 'feedback')
+      'launcherPreviewUrl', 'launcherStylePreviewUrl', 'shared', 'greetingPreferences', 'instantPrompts', 'layers', 'feedback')
     foreach ($name in $required) {
       if ($actual -cnotcontains $name) { throw "Aura Studio editor state is missing $name." }
     }
@@ -5940,6 +5940,59 @@ function ConvertTo-AuraUiStudioEditorState {
         throw "Aura Studio editor state has an invalid $name."
       }
     }
+    $instantPrompts = @($State.instantPrompts)
+    if ($instantPrompts.Count -gt 12) { throw 'Aura Studio editor state contains too many instant prompts.' }
+    $instantPromptIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($instantPrompt in $instantPrompts) {
+      if ($instantPrompt -isnot [System.Management.Automation.PSCustomObject] -or
+          -not (Test-AuraUiStudioExactProperties -Message $instantPrompt `
+            -Names @('id', 'labels', 'prompts', 'icon', 'iconPreviewUrl')) -or
+          $instantPrompt.id -isnot [string] -or
+          $instantPrompt.id -cnotmatch '^prompt-[a-f0-9]{32}$' -or
+          -not $instantPromptIds.Add([string]$instantPrompt.id)) {
+        throw 'Aura Studio editor state has an invalid or duplicate instant prompt identity.'
+      }
+      $promptLocales = @{}
+      foreach ($field in @('labels', 'prompts')) {
+        $localized = $instantPrompt.$field
+        if ($localized -isnot [System.Management.Automation.PSCustomObject]) {
+          throw "Aura Studio editor state has invalid instant prompt $field."
+        }
+        $locales = @($localized.PSObject.Properties | ForEach-Object { $_.Name })
+        if ($locales.Count -lt 1 -or $locales.Count -gt $StudioLocaleIds.Count -or
+            $locales -cnotcontains 'en' -or
+            @($locales | Where-Object { $_ -cnotin $StudioLocaleIds }).Count -gt 0) {
+          throw "Aura Studio editor state has invalid instant prompt $field locales."
+        }
+        $promptLocales[$field] = $locales
+        $maximum = if ($field -ceq 'labels') { 48 } else { 1200 }
+        foreach ($locale in $locales) {
+          $text = $localized.$locale
+          $controlPattern = if ($field -ceq 'labels') { '[\x00-\x1F\x7F-\x9F]' } else { '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]' }
+          if ($text -isnot [string] -or -not $text.Trim() -or $text.Length -gt $maximum -or
+              $text -match $controlPattern) {
+            throw "Aura Studio editor state has invalid instant prompt $field.$locale."
+          }
+        }
+      }
+      if ($promptLocales.labels.Count -ne $promptLocales.prompts.Count -or
+          @($promptLocales.labels | Where-Object { $_ -cnotin $promptLocales.prompts }).Count -gt 0) {
+        throw 'Aura Studio editor state instant prompt locales do not match.'
+      }
+      $hasIcon = $instantPrompt.icon -is [string] -and
+        $instantPrompt.icon -cmatch '^artwork/layer-[a-f0-9]{32}\.webp$'
+      if ($null -ne $instantPrompt.icon -and -not $hasIcon) {
+        throw 'Aura Studio editor state has an invalid instant prompt icon.'
+      }
+      if ($hasIcon) {
+        if ($instantPrompt.iconPreviewUrl -isnot [string] -or
+            $instantPrompt.iconPreviewUrl -cnotmatch '^https://aura\.editor/active/prompt-[a-f0-9]{32}\.webp\?v=[a-f0-9]{64}$') {
+          throw 'Aura Studio editor state has an invalid instant prompt icon preview.'
+        }
+      } elseif ($null -ne $instantPrompt.iconPreviewUrl) {
+        throw 'Aura Studio editor state has an unexpected instant prompt icon preview.'
+      }
+    }
     $layers = @($State.layers)
     if ($layers.Count -gt 8) { throw 'Aura Studio editor state contains too many layers.' }
     $layerIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -5962,7 +6015,7 @@ function ConvertTo-AuraUiStudioEditorState {
   if ($null -ne $State.PSObject.Properties['lastAction'] -and $null -ne $State.lastAction -and
       ($State.lastAction -isnot [string] -or $State.lastAction -cnotin @(
         'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-        'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
+        'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
         'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
         'delete-user-theme', 'set-greeting-phrases', 'reset-greeting'))) {
     throw 'Aura Studio editor state has an invalid last action.'
@@ -6115,6 +6168,7 @@ function Get-AuraUiStudioEditorStatus {
       'save-theme-edit' { return "$($script:UiCopy.themeEditSaveFailed)" }
       'delete-user-theme' { return "$($script:UiCopy.themeDeleteFailed)" }
       'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageFailed)" }
+      'pick-instant-prompt-icon' { return "$($script:UiCopy.themeLayerImageFailed)" }
       'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkFailed)" }
       default { return "$($script:UiCopy.themeEditFailed)" }
     }
@@ -6123,6 +6177,7 @@ function Get-AuraUiStudioEditorStatus {
     'create-theme-copy' { return "$($script:UiCopy.themeCopyReady)" }
     'begin-theme-edit' { return "$($script:UiCopy.themeEditReady)" }
     'pick-theme-layer-image' { return "$($script:UiCopy.themeLayerImageImported)" }
+    'pick-instant-prompt-icon' { return "$($script:UiCopy.themeLayerImageImported)" }
     'pick-theme-launcher-mark' { return "$($script:UiCopy.themeLauncherMarkImported)" }
     'save-theme-edit' { return "$($script:UiCopy.themeEditSaved)" }
     'discard-theme-edit' { return "$($script:UiCopy.themeEditDiscarded)" }
@@ -6278,6 +6333,10 @@ function Invoke-AuraUiPickThemeLayerImage {
     [AllowNull()][System.Windows.Forms.IWin32Window]$Owner
   )
   Assert-AuraUiStudioEditorSession -Request $Request
+  $action = [string]$Request.type
+  if ($action -cnotin @('pick-theme-layer-image', 'pick-instant-prompt-icon')) {
+    throw 'Aura Studio image picker action is invalid.'
+  }
   [void](Assert-AuraUiStudioEditorRoots -Create)
   $dialog = [System.Windows.Forms.OpenFileDialog]::new()
   $targetPath = $null
@@ -6288,10 +6347,10 @@ function Invoke-AuraUiPickThemeLayerImage {
     $dialog.Multiselect = $false
     $dialog.RestoreDirectory = $true
     if ($dialog.ShowDialog($Owner) -ne [System.Windows.Forms.DialogResult]::OK) {
-      $script:StudioEditorState['lastAction'] = 'pick-theme-layer-image'
+      $script:StudioEditorState['lastAction'] = $action
       $script:StudioEditorState['actionSucceeded'] = $true
       $script:StudioEditorState['error'] = 'picker-cancelled'
-      Send-AuraUiStudioState -Action 'pick-theme-layer-image' -ActionSucceeded $true
+      Send-AuraUiStudioState -Action $action -ActionSucceeded $true
       return $false
     }
     $sourceItem = Get-Item -LiteralPath $dialog.FileName -Force
@@ -6635,7 +6694,7 @@ function Send-AuraUiStudioState {
       'set-personal-wordmark', 'clear-personal-wordmark', 'set-personal-wordmark-framing',
       'export-terminal-themes',
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
+      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')][string]$Action = '',
     [bool]$ActionSucceeded = $true,
@@ -8668,6 +8727,82 @@ function Assert-AuraUiStudioEditorMessage {
             }
             break
           }
+          'instant-prompt' {
+            if (-not (Test-AuraUiStudioExactProperties -Message $change `
+                  -Names @('kind', 'operation', 'id', 'field', 'locale', 'value')) -or
+                $change.operation -isnot [string] -or
+                $change.operation -cnotin @('add', 'update', 'remove', 'move', 'clear-icon') -or
+                $change.id -isnot [string] -or
+                $change.id -cnotmatch '^prompt-[a-f0-9]{32}$') {
+              throw 'Aura Studio instant prompt patches have an invalid shape.'
+            }
+            if ($change.operation -ceq 'add') {
+              $card = $change.value
+              if ($null -ne $change.field -or $null -ne $change.locale -or
+                  $card -isnot [System.Management.Automation.PSCustomObject] -or
+                  -not (Test-AuraUiStudioExactProperties -Message $card `
+                    -Names @('id', 'labels', 'prompts', 'icon')) -or
+                  $card.id -isnot [string] -or
+                  -not [string]::Equals([string]$card.id, [string]$change.id, [StringComparison]::Ordinal)) {
+                throw 'Aura Studio instant prompt add is invalid.'
+              }
+              $cardLocales = @{}
+              foreach ($field in @('labels', 'prompts')) {
+                $localized = $card.$field
+                if ($localized -isnot [System.Management.Automation.PSCustomObject]) {
+                  throw 'Aura Studio instant prompt localized text is invalid.'
+                }
+                $locales = @($localized.PSObject.Properties | ForEach-Object { $_.Name })
+                if ($locales.Count -lt 1 -or $locales.Count -gt $StudioLocaleIds.Count -or
+                    $locales -cnotcontains 'en' -or
+                    @($locales | Where-Object { $_ -cnotin $StudioLocaleIds }).Count -gt 0) {
+                  throw 'Aura Studio instant prompt locales are invalid.'
+                }
+                $cardLocales[$field] = $locales
+                $maximum = if ($field -ceq 'labels') { 48 } else { 1200 }
+                $controlPattern = if ($field -ceq 'labels') { '[\x00-\x1F\x7F-\x9F]' } else { '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]' }
+                foreach ($locale in $locales) {
+                  $text = $localized.$locale
+                  if ($text -isnot [string] -or -not $text.Trim() -or
+                      $text.Length -gt $maximum -or $text -match $controlPattern) {
+                    throw 'Aura Studio instant prompt text is invalid.'
+                  }
+                }
+              }
+              if ($cardLocales.labels.Count -ne $cardLocales.prompts.Count -or
+                  @($cardLocales.labels | Where-Object { $_ -cnotin $cardLocales.prompts }).Count -gt 0 -or
+                  ($null -ne $card.icon -and
+                    ($card.icon -isnot [string] -or
+                      $card.icon -cnotmatch '^artwork/layer-[a-f0-9]{32}\.webp$'))) {
+                throw 'Aura Studio instant prompt card is invalid.'
+              }
+              break
+            }
+            if ($change.operation -ceq 'update') {
+              if ($change.field -isnot [string] -or $change.field -cnotin @('label', 'prompt') -or
+                  $change.locale -isnot [string] -or $change.locale -cnotin $StudioLocaleIds -or
+                  $change.value -isnot [string] -or -not $change.value.Trim()) {
+                throw 'Aura Studio instant prompt update is invalid.'
+              }
+              $maximum = if ($change.field -ceq 'label') { 48 } else { 1200 }
+              $controlPattern = if ($change.field -ceq 'label') { '[\x00-\x1F\x7F-\x9F]' } else { '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]' }
+              if ($change.value.Length -gt $maximum -or $change.value -match $controlPattern) {
+                throw 'Aura Studio instant prompt update text is invalid.'
+              }
+              break
+            }
+            if ($change.operation -ceq 'move') {
+              if ($null -ne $change.field -or $null -ne $change.locale -or
+                  $change.value -isnot [string] -or $change.value -cnotin @('up', 'down')) {
+                throw 'Aura Studio instant prompt move is invalid.'
+              }
+              break
+            }
+            if ($null -ne $change.field -or $null -ne $change.locale -or $null -ne $change.value) {
+              throw 'Aura Studio instant prompt removal is invalid.'
+            }
+            break
+          }
           'greeting' {
             # One gesture sends one complete bounded Light/Dark + Standard/Wide
             # frame. The host validates that exact wire shape before Node sees it.
@@ -8797,6 +8932,12 @@ function Assert-AuraUiStudioEditorMessage {
       }
       break
     }
+    'pick-instant-prompt-icon' {
+      if ($Message.id -isnot [string] -or $Message.id -cnotmatch '^prompt-[a-f0-9]{32}$') {
+        throw 'Aura Studio instant prompt identity is invalid.'
+      }
+      break
+    }
     'pick-theme-launcher-mark' { break }
     'remove-theme-layer' {
       [void](ConvertTo-AuraUiStudioInteger -Value $Message.index -Minimum 0 -Maximum 7 -Label 'Theme layer index')
@@ -8852,6 +8993,7 @@ function Get-AuraUiStudioMessage {
     'set-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'preset'; 'property'; 'value'; break }
     'apply-theme-patch' { 'type'; 'session'; 'revision'; 'changes'; break }
     'pick-theme-layer-image' { 'type'; 'session'; 'revision'; 'index'; 'role'; 'appearance'; 'context'; break }
+    'pick-instant-prompt-icon' { 'type'; 'session'; 'revision'; 'id'; break }
     'pick-theme-launcher-mark' { 'type'; 'session'; 'revision'; break }
     'remove-theme-layer' { 'type'; 'session'; 'revision'; 'index'; break }
     'move-theme-layer' { 'type'; 'session'; 'revision'; 'index'; 'direction'; break }
@@ -8902,7 +9044,7 @@ function Get-AuraUiStudioMessage {
   }
   if ($type -in @(
       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
+      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer', 'undo-theme-edit',
       'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit', 'delete-user-theme',
       'set-greeting-phrases', 'reset-greeting')) {
     Assert-AuraUiStudioEditorMessage -Message $message
@@ -9075,6 +9217,10 @@ function Invoke-AuraUiStudioMessage {
     'set-theme-layer' { [void](Invoke-AuraUiSetThemeLayer -Request $message); break }
     'apply-theme-patch' { [void](Invoke-AuraUiApplyThemePatch -Request $message); break }
     'pick-theme-layer-image' {
+      [void](Invoke-AuraUiPickThemeLayerImage -Request $message -Owner $script:StudioForm)
+      break
+    }
+    'pick-instant-prompt-icon' {
       [void](Invoke-AuraUiPickThemeLayerImage -Request $message -Owner $script:StudioForm)
       break
     }
@@ -9372,6 +9518,7 @@ $script:StudioMessageTypes = @(
   'apply-theme-patch',
   'pick-theme-layer-image',
   'pick-theme-launcher-mark',
+  'pick-instant-prompt-icon',
   'remove-theme-layer',
   'move-theme-layer',
   'undo-theme-edit',
@@ -10608,7 +10755,7 @@ public static class AuraUiAsyncDispatch {
                       'set-personal-wordmark-framing',
                       'export-terminal-themes',
                       'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-                      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
+                      'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                       'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                       'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                     $failedAction = [string]$failedMessage.type
@@ -10629,7 +10776,7 @@ public static class AuraUiAsyncDispatch {
                   Send-AuraUiStudioState -Status "$($script:UiCopy.studioPreferencesNotSaved)" -Tone error
                 } elseif ($failedAction -in @(
                     'create-theme-copy', 'begin-theme-edit', 'set-theme-token', 'set-theme-layer', 'apply-theme-patch',
-                    'pick-theme-layer-image', 'pick-theme-launcher-mark', 'remove-theme-layer', 'move-theme-layer',
+                    'pick-theme-layer-image', 'pick-theme-launcher-mark', 'pick-instant-prompt-icon', 'remove-theme-layer', 'move-theme-layer',
                     'undo-theme-edit', 'redo-theme-edit', 'save-theme-edit', 'discard-theme-edit',
                     'delete-user-theme', 'set-greeting-phrases', 'reset-greeting')) {
                   $script:StudioEditorState['lastAction'] = $failedAction

@@ -30,6 +30,7 @@ import {
   STUDIO_LAYER_ROLES,
   STUDIO_LAYER_VIEWPORTS,
   STUDIO_MAX_HISTORY,
+  STUDIO_MAX_INSTANT_PROMPTS,
   STUDIO_MAX_LAYERS,
   STUDIO_MAX_PATCH_CHANGES,
   STUDIO_METADATA_LOCALES,
@@ -61,6 +62,7 @@ import {
   strictNumber,
   studioRadiusPolicy,
   validateLauncherPngBytes,
+  validateInstantPrompts,
   validateNewChatGreetingStyle,
   validateRegistryEntry,
   validateStudioThemeKitDocument,
@@ -921,7 +923,27 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
     if (!existingPreview) await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
     previews.push({ digest, filename });
   }
-  const retained = new Set(previews.map((item) => item.filename));
+  const instantPromptPreviews = new Map();
+  for (const card of document.instantPrompts ?? []) {
+    if (!card.icon || instantPromptPreviews.has(card.icon)) continue;
+    const source = path.resolve(paths.active, card.icon);
+    if (!isPathWithin(paths.active, source)) throw new Error("Editor prompt icon escaped the active theme folder");
+    const contents = await fs.readFile(source);
+    if (detectImageMime(contents) !== "image/webp") throw new Error("Editor prompt icon must be WebP");
+    const digest = crypto.createHash("sha256").update(contents).digest("hex");
+    const filename = `prompt-${digest.slice(0, 32)}.webp`;
+    const target = path.join(paths.previewActive, filename);
+    const existingPreview = await pathKind(target);
+    if (existingPreview && (!existingPreview.isFile() || existingPreview.isSymbolicLink())) {
+      throw new Error("Editor prompt icon previews must be regular app-owned files");
+    }
+    if (!existingPreview) await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
+    instantPromptPreviews.set(card.icon, { digest, filename });
+  }
+  const retained = new Set([
+    ...previews.map((item) => item.filename),
+    ...[...instantPromptPreviews.values()].map((item) => item.filename),
+  ]);
   const launcherPreviewUrl = async (launcher, digest) => {
     const builtIn = /^assets\/theme-art\/(default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png$/.exec(
       launcher?.asset ?? "",
@@ -970,6 +992,9 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
   );
   for (const entry of await fs.readdir(paths.previewActive, { withFileTypes: true })) {
     if (entry.isFile() && /^layer-[a-f0-9]{32}\.webp$/.test(entry.name) && !retained.has(entry.name)) {
+      await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
+    }
+    if (entry.isFile() && /^prompt-[a-f0-9]{32}\.webp$/.test(entry.name) && !retained.has(entry.name)) {
       await fs.rm(path.join(paths.previewActive, entry.name), { force: true });
     }
     if (entry.isFile() && /^launcher-[a-f0-9]{64}\.png$/.test(entry.name) && !retained.has(entry.name)) {
@@ -1055,6 +1080,15 @@ export async function canonicalStudioState(internal, editorRoot, configPath = nu
         ])),
     },
     greetingPreferences: cloneJson(internal.greetingCurrent),
+    instantPrompts: (document.instantPrompts ?? []).map((card) => {
+      const preview = card.icon ? instantPromptPreviews.get(card.icon) : null;
+      return {
+        ...cloneJson(card),
+        iconPreviewUrl: preview
+          ? `https://aura.editor/active/${preview.filename}?v=${preview.digest}`
+          : null,
+      };
+    }),
     layers,
     feedback: cloneJson(internal.feedback ?? emptyStudioFeedback()),
   };
@@ -1156,6 +1190,7 @@ async function upgradeStudioSchemaV1Document(raw, label, paths) {
     // Schema v1 predates portable greeting presentation. Personal greeting data
     // is never accepted here and therefore cannot migrate into a theme document.
     newChatGreetingStyle: null,
+    instantPrompts: cloneJson(entry.instantPrompts ?? []),
     artwork: entry.artwork ? cloneJson(entry.artwork) : null,
     artworkLayers: entry.artworkLayers ? cloneJson(entry.artworkLayers) : null,
     schemaVersion: 1,
@@ -1233,6 +1268,10 @@ async function validateAndUpgradeStudioDocuments(internal, paths) {
     // host-owned and never enter the theme document.
     if (!Object.hasOwn(document, "newChatGreetingStyle")) {
       document.newChatGreetingStyle = null;
+      changed = true;
+    }
+    if (!Object.hasOwn(document, "instantPrompts")) {
+      document.instantPrompts = [];
       changed = true;
     }
     if (document.schemaVersion !== STUDIO_THEME_SCHEMA_VERSION) {
@@ -2000,6 +2039,7 @@ async function sourceThemeForBuiltinAuthoring(themeId, authority, locale) {
     studioPreviewFrame: entry.studioPreviewFrame ? cloneJson(entry.studioPreviewFrame) : null,
     newChatLayout: entry.newChatLayout ? cloneJson(entry.newChatLayout) : null,
     newChatGreetingStyle: entry.newChatGreetingStyle ? cloneJson(entry.newChatGreetingStyle) : null,
+    instantPrompts: [],
     artwork: entry.artwork ? cloneJson(entry.artwork) : null,
     artworkLayers: entry.artworkLayers ? cloneJson(entry.artworkLayers) : null,
     schemaVersion: 1,
@@ -2047,6 +2087,7 @@ async function studioDocumentFromResolvedSource({
     studioPreview: null,
     newChatLayout: theme.newChatLayout ? cloneJson(theme.newChatLayout) : null,
     newChatGreetingStyle: theme.newChatGreetingStyle ? cloneJson(theme.newChatGreetingStyle) : null,
+    instantPrompts: entry.source === "builtin" ? [] : cloneJson(theme.instantPrompts ?? []),
     backgroundScope: theme.backgroundScope ?? "full-window",
     artworkLayers: [],
     sourceRecipe: entry.source === "builtin" ? entry.id : (theme.sourceRecipe ?? null),
@@ -2130,6 +2171,29 @@ async function studioDocumentFromResolvedSource({
       }),
     });
   }
+  if (document.instantPrompts.length) {
+    const iconPaths = [...new Set(document.instantPrompts.flatMap((card) => card.icon ? [card.icon] : []))];
+    const remapped = new Map();
+    for (const iconPath of iconPaths) {
+      const sourcePath = path.resolve(theme.artworkRoot, iconPath);
+      const allowedRoot = path.resolve(theme.artworkAllowedRoot);
+      const [realAllowedRoot, realSource] = await Promise.all([
+        fs.realpath(allowedRoot),
+        fs.realpath(sourcePath),
+      ]);
+      if (!isPathWithin(realAllowedRoot, realSource)) {
+        throw new Error("Theme prompt icon escaped its authorized source root");
+      }
+      const ownedPath = reuseActiveFiles && sourcePath === path.resolve(paths.active, iconPath)
+        ? iconPath
+        : await materializeSourceArtwork(sourcePath, paths);
+      remapped.set(iconPath, ownedPath);
+    }
+    document.instantPrompts = document.instantPrompts.map((card) => ({
+      ...card,
+      icon: card.icon ? remapped.get(card.icon) : null,
+    }));
+  }
   validateStudioThemeKitDocument(document, "editor theme", { builtinLayoutCapability });
   return document;
 }
@@ -2188,6 +2252,14 @@ export async function studioFeedback(document, context, bundle) {
   const layerBytes = await studioLayerBytes(document, paths.active);
   const uniquePaths = new Map();
   document.artworkLayers.forEach((layer, index) => uniquePaths.set(layer.path, layerBytes[index]));
+  for (const card of document.instantPrompts ?? []) {
+    if (!card.icon || uniquePaths.has(card.icon)) continue;
+    const iconPath = path.resolve(paths.active, card.icon);
+    if (!isPathWithin(paths.active, iconPath)) throw new Error("Editor prompt icon escaped the active theme folder");
+    const stat = await fs.lstat(iconPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Editor prompt icon must be a regular file");
+    uniquePaths.set(card.icon, stat.size);
+  }
   let launcherBytes = 0;
   if (document.theme.launcher.asset === "launcher-mark.png") {
     const launcherPath = path.resolve(paths.active, document.theme.launcher.asset);
@@ -2873,6 +2945,57 @@ export function mutateStudioMetadataLocaleDocument(document, change) {
   delete document.descriptions[locale];
 }
 
+export function mutateStudioInstantPromptDocument(document, change) {
+  const operation = strictEnum(
+    change.operation,
+    new Set(["add", "update", "remove", "move", "clear-icon"]),
+    "instant prompt operation",
+  );
+  const prompts = document.instantPrompts ?? (document.instantPrompts = []);
+  const index = prompts.findIndex((card) => card.id === change.id);
+  if (operation === "add") {
+    if (index !== -1) throw new Error("Instant prompt identity must be unique");
+    if (prompts.length >= STUDIO_MAX_INSTANT_PROMPTS) {
+      throw new Error(`A theme may contain at most ${STUDIO_MAX_INSTANT_PROMPTS} instant prompts`);
+    }
+    if (change.field !== null || change.locale !== null) throw new Error("Instant prompt add fields must be null");
+    prompts.push(validateInstantPrompts([change.value], "instant prompt add")[0]);
+    return;
+  }
+  if (index < 0) throw new Error("Instant prompt was not found");
+  if (operation === "remove") {
+    if (change.field !== null || change.locale !== null || change.value !== null) {
+      throw new Error("Instant prompt remove fields must be null");
+    }
+    prompts.splice(index, 1);
+    return;
+  }
+  if (operation === "move") {
+    if (change.field !== null || change.locale !== null || !["up", "down"].includes(change.value)) {
+      throw new Error("Instant prompt move must specify up or down");
+    }
+    const target = change.value === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= prompts.length) throw new Error("The instant prompt cannot move farther in that direction");
+    [prompts[index], prompts[target]] = [prompts[target], prompts[index]];
+    return;
+  }
+  if (operation === "clear-icon") {
+    if (change.field !== null || change.locale !== null || change.value !== null) {
+      throw new Error("Instant prompt clear-icon fields must be null");
+    }
+    prompts[index].icon = null;
+    return;
+  }
+  const field = strictEnum(change.field, new Set(["label", "prompt"]), "instant prompt field");
+  const locale = strictEnum(change.locale, new Set(STUDIO_METADATA_LOCALES), "instant prompt locale");
+  if (!Object.hasOwn(prompts[index].labels, locale) || !Object.hasOwn(prompts[index].prompts, locale)) {
+    throw new Error("Instant prompt locale is not enabled");
+  }
+  const candidate = cloneJson(prompts[index]);
+  candidate[field === "label" ? "labels" : "prompts"][locale] = change.value;
+  prompts[index] = validateInstantPrompts([candidate], "instant prompt update")[0];
+}
+
 export function assertStudioPatchChanges(changes) {
   if (!Array.isArray(changes) || changes.length < 1 || changes.length > STUDIO_MAX_PATCH_CHANGES) {
     throw new Error(`Theme patch must contain 1 to ${STUDIO_MAX_PATCH_CHANGES} changes`);
@@ -2883,6 +3006,7 @@ export function assertStudioPatchChanges(changes) {
     metadata: ["kind", "field", "locale", "value"],
     "metadata-locale": ["kind", "locale", "enabled"],
     greeting: ["kind", "operation", "appearance", "frame", "value"],
+    "instant-prompt": ["kind", "operation", "id", "field", "locale", "value"],
   };
   changes.forEach((change, index) => {
     if (!isPlainObject(change) || typeof change.kind !== "string" || !Object.hasOwn(shapes, change.kind)) {
@@ -3000,7 +3124,8 @@ export async function applyThemePatch(context) {
       else if (change.kind === "layer") mutateStudioLayerDocument(document, change);
       else if (change.kind === "greeting") mutateStudioGreetingDocument(document, change);
       else if (change.kind === "metadata") mutateStudioMetadataDocument(document, change);
-      else mutateStudioMetadataLocaleDocument(document, change);
+      else if (change.kind === "metadata-locale") mutateStudioMetadataLocaleDocument(document, change);
+      else mutateStudioInstantPromptDocument(document, change);
     }
   });
 }
@@ -3066,6 +3191,21 @@ export async function attachThemeLayerImage(context) {
       if (role === "background") document.artworkLayers[index].frames = frames;
       delete document.artworkLayers[index].legacy;
     }
+  });
+}
+
+export async function attachInstantPromptIcon(context) {
+  const internal = await loadStudioInternal(context.editorRoot);
+  assertStudioRevision(internal, context);
+  if (!internal.currentDocument.instantPrompts.some((card) => card.id === context.id)) {
+    throw new Error("Instant prompt was not found");
+  }
+  const source = await validateStudioHostAsset(context.assetPath, context.editorRoot);
+  const ownedPath = await copyWebpIntoEditor(source, studioPaths(context.editorRoot));
+  return mutateStudio(context, "pick-instant-prompt-icon", (document) => {
+    const prompt = document.instantPrompts.find((card) => card.id === context.id);
+    if (!prompt) throw new Error("Instant prompt was not found");
+    prompt.icon = ownedPath;
   });
 }
 
@@ -3286,6 +3426,17 @@ export async function stageStudioTheme(document, activeDirectory, stageDirectory
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
     copied.add(layer.path);
+  }
+  for (const card of document.instantPrompts ?? []) {
+    if (!card.icon || copied.has(card.icon)) continue;
+    const source = path.resolve(activeDirectory, card.icon);
+    const target = path.resolve(stageDirectory, card.icon);
+    if (!isPathWithin(activeDirectory, source) || !isPathWithin(stageDirectory, target)) {
+      throw new Error("Theme prompt icon escaped its owned folder");
+    }
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.copyFile(source, target, fsConstants.COPYFILE_EXCL);
+    copied.add(card.icon);
   }
   if (document.theme.launcher.asset === "launcher-mark.png") {
     const source = path.resolve(activeDirectory, document.theme.launcher.asset);
@@ -4299,7 +4450,9 @@ async function executeStudioRequestInternal({
     recoveryWait,
   };
   await guardBuiltinStudioRequest(context, request);
-  const assetRequestTypes = new Set(["pick-theme-layer-image", "pick-theme-launcher-mark"]);
+  const assetRequestTypes = new Set([
+    "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon",
+  ]);
   if (assetPath !== null && !assetRequestTypes.has(request.type)) {
     throw new Error("An asset is allowed only for an editor image picker action");
   }
@@ -4328,6 +4481,10 @@ async function executeStudioRequestInternal({
     assertStudioRequest(request, ["session", "revision"]);
     if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-theme-launcher-mark");
     result = await attachThemeLauncherMark({ ...context, ...request, assetPath });
+  } else if (request.type === "pick-instant-prompt-icon") {
+    assertStudioRequest(request, ["session", "revision", "id"]);
+    if (typeof assetPath !== "string" || !assetPath.trim()) throw new Error("--asset is required for pick-instant-prompt-icon");
+    result = await attachInstantPromptIcon({ ...context, ...request, assetPath });
   } else if (request.type === "remove-theme-layer") {
     assertStudioRequest(request, ["session", "revision", "index"]);
     if (assetPath !== null) throw new Error("An asset is allowed only for an editor image picker action");

@@ -86,6 +86,12 @@
   let avt = 0;
   let syncAvatar, clearAvatar;
   let syncGreeting, clearGreeting, advanceGreetingVisit, greetingMemory, greetingMatches = -1;
+  /*__AURA_INSTANT_PROMPTS_START__*/
+  let syncInstantPrompts, clearInstantPrompts;
+  const instantPromptController = __AURA_INSTANT_PROMPTS_FACTORY__(document, window, settings);
+  syncInstantPrompts = instantPromptController.sync;
+  clearInstantPrompts = instantPromptController.clear;
+  /*__AURA_INSTANT_PROMPTS_END__*/
   let getGreetingProbe = () => ({
     version: 1,
     digest: settings.digest,
@@ -1095,6 +1101,9 @@
       root.style.removeProperty("--aura-main-start");
       clearBrand();
       clearAvatar?.();
+      /*__AURA_INSTANT_PROMPTS_START__*/
+      clearInstantPrompts?.();
+      /*__AURA_INSTANT_PROMPTS_END__*/
       if (syncGreeting) syncGreeting("other", null, null, null);
       else clearGreeting?.(false);
       applyArtworkContext(currentContext);
@@ -1121,6 +1130,9 @@
     if (currentContext === "new-chat") applyPromptLayout(found.prompt, found.main);
     else clearPromptLayout();
     syncGreeting?.(currentContext, found.main, found.shell, found.prompt);
+    /*__AURA_INSTANT_PROMPTS_START__*/
+    syncInstantPrompts?.(currentContext, found);
+    /*__AURA_INSTANT_PROMPTS_END__*/
     applyArtworkContext(currentContext);
   };
 
@@ -1131,6 +1143,9 @@
   previous?.stopContextListeners?.();
   previous?.clearBrandWordmark?.();
   previous?.clearAvatarOverlay?.();
+  /*__AURA_INSTANT_PROMPTS_START__*/
+  previous?.clearInstantPrompts?.();
+  /*__AURA_INSTANT_PROMPTS_END__*/
   previous?.cg?.(false);
   previous?.clearMarkedElements?.();
   if (previous?.["timer"]) clearInterval(previous["timer"]);
@@ -1183,6 +1198,9 @@
     currentContext = context;
     clearBrand();
     clearAvatar?.();
+    /*__AURA_INSTANT_PROMPTS_START__*/
+    clearInstantPrompts?.();
+    /*__AURA_INSTANT_PROMPTS_END__*/
     clearGreeting?.(true);
     clearMarks();
     clearPromptLayout();
@@ -1346,6 +1364,9 @@
     ;
     if (scheduled) clearTimeout(scheduled);
     scheduled = null;
+    /*__AURA_INSTANT_PROMPTS_START__*/
+    clearInstantPrompts?.();
+    /*__AURA_INSTANT_PROMPTS_END__*/
     if (replacementOnly) return true;
     window.__CLAUDE_AURA_DISABLED__ = true;
     observer.disconnect();
@@ -1502,6 +1523,9 @@
     "discoverComposer": discoverComposer,
     clearBrandWordmark: clearBrand,
     clearAvatarOverlay: clearAvatar,
+    /*__AURA_INSTANT_PROMPTS_START__*/
+    clearInstantPrompts,
+    /*__AURA_INSTANT_PROMPTS_END__*/
     cg: (endVisit = true) => clearGreeting?.(endVisit),
     "greetingMemory": greetingMemory,
     "getGreetingProbe": getGreetingProbe,

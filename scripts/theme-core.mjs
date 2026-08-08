@@ -20,6 +20,9 @@ export {
   STUDIO_MAX_LAYERS,
   STUDIO_MAX_HISTORY,
   STUDIO_MAX_PATCH_CHANGES,
+  STUDIO_MAX_INSTANT_PROMPTS,
+  INSTANT_PROMPT_LABEL_MAX_CHARS,
+  INSTANT_PROMPT_TEXT_MAX_CHARS,
   STUDIO_FONT_UI_STACKS,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_SHADOWS,
@@ -31,6 +34,7 @@ export {
 export {
   validateTheme,
   validateNewChatGreetingStyle,
+  validateInstantPrompts,
   normalizeLocale,
 } from "./theme-core/validation.mjs";
 export {
@@ -55,6 +59,7 @@ export {
   resolveGreetingRuntime,
   DEFAULT_GREETING_PREFERENCES,
 } from "./theme-core/greeting.mjs";
+export { createInstantPromptController } from "./theme-core/instant-prompts.mjs";
 export {
   compileTheme,
   buildPayloadFromCompiled,
@@ -81,6 +86,7 @@ export {
   setGreetingPhrases,
   resetGreeting,
   attachThemeLayerImage,
+  attachInstantPromptIcon,
   removeThemeLayer,
   moveThemeLayer,
   undoThemeEdit,

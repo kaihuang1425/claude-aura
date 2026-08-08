@@ -25,7 +25,7 @@ document, the tooling is not finished.
    capability branches: **Interface** for the overall palette, materials,
    type, current new-chat prompt target, and **Greeting**; **Background** for
    canvas scope and artwork layers; and **Widgets** for Aura app identity and
-   the floating launcher. Future work registers Instant prompts in those same
+   the floating launcher plus **Instant prompts**. Capabilities stay in those
    branches instead of adding destinations or empty placeholders. The fixed
    command and stage header stays outside the inspector's one body scroller,
    so its scrollbar begins below the header. Light/Dark, page, and
@@ -243,10 +243,32 @@ custom wording only as plain text. Empty, invalid, missing, or ambiguous data,
 conversation navigation, forced colours, Original look, and cleanup all fail
 open to Claude's native greeting.
 
+### Instant prompts
+
+Under **Widgets** > **Instant prompts**, add up to twelve reusable prompt
+tickets. Each ticket has one stable identity, a short label, prompt text, and
+an optional locally imported icon. Studio exposes one label and prompt field
+for every language enabled in the theme; English remains the fallback.
+Tickets can be reordered or removed without changing the identities of the
+remaining tickets.
+
+The preview places the ticket rail immediately above the new-chat composer.
+Choose a ticket on the canvas or through the keyboard target picker to route
+that same ticket to the inspector. **Default**, **Hover**, **Focus**,
+**Pressed**, and **Expanded** preview states are local checks for the selected
+ticket; they do not create theme modes or saved page variants.
+
+Instant prompts apply only to New chat. In Conversation, Studio keeps the
+selected ticket visible and disabled, labels it **New chat only**, and offers
+**Switch to New chat**. In Aura, activating a ticket focuses the real composer
+and inserts its prompt as text. Aura never sends it. Original look, navigation
+away from New chat, forced colours, or renderer cleanup removes the complete
+Aura-owned ticket block and its listener.
+
 ### Branch growth after 1.0
 
 The branch map stays fixed as the editor grows. **Greeting** is registered
-under Interface. WO-19 registers **Instant prompts** under Widgets; WO-20 adds
+under Interface. **Instant prompts** is registered under Widgets; WO-20 adds
 temporary selection and manipulation inside the actual Aura page. WO-25 then
 adds Interface targets for Sidebar, Sidebar identity, and Prompt block plus
 bounded Background hue, saturation, brightness, contrast, and blur controls.

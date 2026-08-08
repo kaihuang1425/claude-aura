@@ -6,6 +6,7 @@ import {
   AURA_VERSION,
   BUILTIN_GREETING_MARK_ASSETS,
   DEFAULT_CONFIG,
+  INSTANT_PROMPT_RUNTIME_TEXT_MAX_BYTES,
   PROJECT_ROOT,
   STUDIO_FONT_DISPLAY_STACKS,
 } from "./constants.mjs";
@@ -38,6 +39,7 @@ import {
   codeContextFromUrl,
   createInertCodeAdapter,
 } from "./code-adapter.mjs";
+import { createInstantPromptController } from "./instant-prompts.mjs";
 
 // Marks the strippable WO-21 greeting subsystem inside the renderer template, and the
 // nested custom-phrases sub-block that native-greeting-only themes do not need.
@@ -57,6 +59,8 @@ const CODE_ADAPTER_ACTIVE_PATTERN = /\/\*__AURA_CODE_ACTIVE_START__\*\/[\s\S]*?\
 const PERSONAL_WORDMARK_PATTERN = /\/\*__AURA_PERSONAL_WORDMARK_START__\*\/[\s\S]*?\/\*__AURA_PERSONAL_WORDMARK_END__\*\//g;
 const BUILTIN_WORDMARK_PATTERN = /\/\*__AURA_BUILTIN_WORDMARK_START__\*\/[\s\S]*?\/\*__AURA_BUILTIN_WORDMARK_END__\*\//g;
 const WORDMARK_MARKER_PATTERN = /\/\*__AURA_(?:PERSONAL|BUILTIN)_WORDMARK_(?:START|END)__\*\//g;
+const INSTANT_PROMPTS_BLOCK_PATTERN = /\/\*__AURA_INSTANT_PROMPTS_START__\*\/[\s\S]*?\/\*__AURA_INSTANT_PROMPTS_END__\*\//g;
+const INSTANT_PROMPTS_CSS_PATTERN = /\/\*__AURA_INSTANT_PROMPTS_CSS_START__\*\/[\s\S]*?\/\*__AURA_INSTANT_PROMPTS_CSS_END__\*\//;
 
 const WALLPAPER_VARIABLES = Object.freeze({
   gradient: "--aura-wallpaper-gradient",
@@ -870,6 +874,31 @@ export function filterThemeVariantCss(source, themeId, variantId = themeId, incl
     : selected.replaceAll(selector, `[data-claude-aura-variant="${variantId}"]`);
 }
 
+async function resolveInstantPrompts(theme, locale) {
+  if (!Array.isArray(theme.instantPrompts) || theme.instantPrompts.length === 0) return [];
+  const normalizedLocale = normalizeLocale(locale);
+  const cards = await Promise.all(theme.instantPrompts.map(async (card) => {
+    const icon = card.icon ? await resolveArtwork({
+      artwork: { path: card.icon },
+      artworkRoot: theme.artworkRoot,
+      artworkAllowedRoot: theme.artworkAllowedRoot,
+    }) : null;
+    return {
+      id: card.id,
+      label: card.labels[normalizedLocale] ?? card.labels.en,
+      prompt: card.prompts[normalizedLocale] ?? card.prompts.en,
+      iconDataUrl: icon?.dataUrl ?? null,
+    };
+  }));
+  const textBytes = Buffer.byteLength(JSON.stringify(
+    cards.map(({ id, label, prompt }) => [id, label, prompt]),
+  ), "utf8");
+  if (textBytes > INSTANT_PROMPT_RUNTIME_TEXT_MAX_BYTES) {
+    throw new Error(`Instant prompt runtime text must be at most ${INSTANT_PROMPT_RUNTIME_TEXT_MAX_BYTES} bytes`);
+  }
+  return cards;
+}
+
 export async function compileTheme({
   configPath,
   config: configOverride = null,
@@ -918,6 +947,7 @@ export async function compileTheme({
     artworkLayers,
     brandWordmark,
     greetingCompactMark,
+    instantPrompts,
     baseCss,
     allVariantCss,
   ] = await Promise.all([
@@ -928,6 +958,7 @@ export async function compileTheme({
     resolveArtworkLayers(theme),
     resolveBrandWordmark(theme),
     resolveGreetingCompactMark(theme),
+    resolveInstantPrompts(theme, locale),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8"),
     fs.readFile(path.join(PROJECT_ROOT, "assets", "theme-variants.css"), "utf8"),
   ]);
@@ -953,7 +984,10 @@ export async function compileTheme({
   // Personal avatar overlay rules ride along only when an avatar is set, so the
   // common payload carries none of their bytes (the reserve ceiling is tight).
   const avatarCss = avatar ? AVATAR_OVERLAY_CSS : "";
-  const css = `${variableCss}\n\n${baseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${greetingCss ? `\n${greetingCss}\n` : ""}${avatarCss ? `\n${avatarCss}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
+  const activeBaseCss = instantPrompts.length
+    ? baseCss
+    : baseCss.replace(INSTANT_PROMPTS_CSS_PATTERN, "");
+  const css = `${variableCss}\n\n${activeBaseCss}\n\n${variantCss}${studioRecipeOverrides ? `\n${studioRecipeOverrides}\n` : ""}${greetingCss ? `\n${greetingCss}\n` : ""}${avatarCss ? `\n${avatarCss}\n` : ""}${theme.customCss ? `\n${theme.customCss}\n` : ""}`
     .replace(/^[ \t]+/gm, "");
   const settingsBase = {
     version: AURA_VERSION,
@@ -1007,6 +1041,7 @@ export async function compileTheme({
       : null,
     backgroundScope: theme.backgroundScope ?? "full-window",
     newChatLayout: theme.newChatLayout ? { ...theme.newChatLayout } : null,
+    instantPrompts,
     reduceMotion: config.reduceMotion,
   };
   // Personal avatar: per-user, never theme-owned. Attach the data URL only when a
@@ -1086,6 +1121,9 @@ export async function buildPayloadFromCompiled(compiled, {
     path.join(PROJECT_ROOT, "assets", "renderer-inject.js"),
     "utf8",
   );
+  if (!Array.isArray(compiled.settings.instantPrompts) || compiled.settings.instantPrompts.length === 0) {
+    rendererSource = rendererSource.replace(INSTANT_PROMPTS_BLOCK_PATTERN, "");
+  }
   // Gates 3 and 4 remain open. Keep production payloads inert even if the
   // dormant registry is edited; activation requires a separate reviewed change.
   const codeAdapterFactory = createInertCodeAdapter;
@@ -1102,6 +1140,7 @@ export async function buildPayloadFromCompiled(compiled, {
       `(${(experimentalCode?.factory ?? codeAdapterFactory).toString()})`,
     )
     .replace("__AURA_CODE_CONTEXT_FACTORY__", `(${codeContextFromUrl.toString()})`)
+    .replace("__AURA_INSTANT_PROMPTS_FACTORY__", `(${createInstantPromptController.toString()})`)
     .replace(
       "__AURA_CODE_SIGNATURES__",
       JSON.stringify(experimentalCode?.descriptor ?? null),
@@ -1174,6 +1213,9 @@ export async function buildPayloadFromCompiled(compiled, {
   // theme only styles the native greeting — so the default recipe payload stays lean.
   if (!runtimeSettings.g) template = template.replace(GREETING_BLOCK_PATTERN, "");
   else if (!runtimeSettings.g.p) template = template.replace(GREETING_PHRASES_PATTERN, "");
+  if (!Array.isArray(runtimeSettings.instantPrompts) || runtimeSettings.instantPrompts.length === 0) {
+    template = template.replace(INSTANT_PROMPTS_BLOCK_PATTERN, "");
+  }
   if (runtimeSettings.brandWordmark) {
     const wordmark = runtimeSettings.brandWordmark;
     runtimeSettings.b = [
@@ -1256,6 +1298,24 @@ export async function buildPayloadFromCompiled(compiled, {
     });
     runtimeSettings.u = urls;
   }
+  if (Array.isArray(runtimeSettings.instantPrompts) && runtimeSettings.instantPrompts.length) {
+    const urls = Array.isArray(runtimeSettings.u) ? runtimeSettings.u : [];
+    const urlIndexes = new Map(urls.map((url, index) => [url, index]));
+    runtimeSettings.P = runtimeSettings.instantPrompts.map((card) => {
+      let iconIndex = null;
+      if (typeof card.iconDataUrl === "string" && card.iconDataUrl) {
+        iconIndex = urlIndexes.get(card.iconDataUrl);
+        if (iconIndex === undefined) {
+          iconIndex = urls.length;
+          urls.push(card.iconDataUrl);
+          urlIndexes.set(card.iconDataUrl, iconIndex);
+        }
+      }
+      return [card.id, card.label, card.prompt, iconIndex];
+    });
+    if (urls.length) runtimeSettings.u = urls;
+  }
+  delete runtimeSettings.instantPrompts;
   if (runtimeSettings.newChatLayout) {
     const layout = runtimeSettings.newChatLayout;
     runtimeSettings.n = [layout.widthRatio, layout.offsetXRatio, layout.offsetYRatio];
@@ -1340,7 +1400,7 @@ export async function buildPayloadFromCompiled(compiled, {
   // intent. Reclaim chrome elsewhere or fail rather than silently changing the
   // requested result while reporting a successful apply.
   if (payload.includes("__AURA_CSS_JSON__") || payload.includes("__AURA_SETTINGS_JSON__")
-      || payload.includes("__AURA_CODE_")) {
+      || payload.includes("__AURA_CODE_") || payload.includes("__AURA_INSTANT_PROMPTS_")) {
     throw new Error("Renderer payload placeholders were not fully replaced");
   }
   const measuredBudget = enforceBudget

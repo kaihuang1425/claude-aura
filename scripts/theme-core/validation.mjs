@@ -16,6 +16,8 @@ import {
   GREETING_FONT_WEIGHTS,
   GREETING_MARK_SOURCES,
   HEX_COLOR,
+  INSTANT_PROMPT_LABEL_MAX_CHARS,
+  INSTANT_PROMPT_TEXT_MAX_CHARS,
   LEGACY_REQUIRED_TOKENS,
   MAX_CHROME_PAYLOAD_BYTES,
   MAX_USER_ARTWORK_TOTAL_BYTES,
@@ -25,6 +27,7 @@ import {
   STUDIO_ARTWORK_PATH_PATTERN,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
+  STUDIO_INSTANT_PROMPT_ID_PATTERN,
   STUDIO_KIT_SCHEMA_VERSIONS,
   STUDIO_LAYER_ANCHORS,
   STUDIO_LAYER_APPEARANCES,
@@ -35,6 +38,7 @@ import {
   STUDIO_LAYER_ROLES,
   STUDIO_LAYER_VIEWPORTS,
   STUDIO_MAX_LAYERS,
+  STUDIO_MAX_INSTANT_PROMPTS,
   STUDIO_METADATA_LOCALES,
   STUDIO_RECIPE_CONTROL_OVERRIDES,
   STUDIO_SHADOWS,
@@ -1094,6 +1098,64 @@ export function validateNewChatGreetingStyle(value, label) {
   };
 }
 
+// WO-19 portable instant prompts. Cards carry stable identities and localized
+// copy, but no user history, account data, send action, or remote resource.
+export function validateInstantPrompts(value, label = "instantPrompts") {
+  if (value === null || value === undefined) return [];
+  if (!Array.isArray(value) || value.length > STUDIO_MAX_INSTANT_PROMPTS) {
+    throw new Error(`${label} must contain at most ${STUDIO_MAX_INSTANT_PROMPTS} cards`);
+  }
+  const ids = new Set();
+  return value.map((card, index) => {
+    const cardLabel = `${label}[${index}]`;
+    assertExactKeys(card, ["id", "labels", "prompts", "icon"], cardLabel);
+    if (typeof card.id !== "string" || !STUDIO_INSTANT_PROMPT_ID_PATTERN.test(card.id)) {
+      throw new Error(`${cardLabel}.id must be prompt- followed by 32 lowercase hexadecimal characters`);
+    }
+    if (ids.has(card.id)) throw new Error(`${label} ids must be unique`);
+    ids.add(card.id);
+    if (!isPlainObject(card.labels) || !isPlainObject(card.prompts)) {
+      throw new Error(`${cardLabel}.labels and prompts must be objects`);
+    }
+    const labelLocales = Object.keys(card.labels);
+    const promptLocales = Object.keys(card.prompts);
+    if (!labelLocales.includes("en") || !promptLocales.includes("en")) {
+      throw new Error(`${cardLabel}.labels and prompts must include English`);
+    }
+    if (labelLocales.some((locale) => !STUDIO_METADATA_LOCALES.includes(locale))
+        || promptLocales.some((locale) => !STUDIO_METADATA_LOCALES.includes(locale))) {
+      throw new Error(`${cardLabel}.labels and prompts have an unsupported locale`);
+    }
+    if (labelLocales.length !== promptLocales.length
+        || labelLocales.some((locale) => !Object.hasOwn(card.prompts, locale))) {
+      throw new Error(`${cardLabel}.labels and prompts must use the same locales`);
+    }
+    const labels = {};
+    const prompts = {};
+    const unsafeControl = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
+    for (const locale of labelLocales) {
+      const localizedLabel = card.labels[locale];
+      const prompt = card.prompts[locale];
+      if (typeof localizedLabel !== "string" || !localizedLabel.trim()
+          || localizedLabel.length > INSTANT_PROMPT_LABEL_MAX_CHARS
+          || /[\u0000-\u001F\u007F]/u.test(localizedLabel)) {
+        throw new Error(`${cardLabel}.labels.${locale} is required and must be at most ${INSTANT_PROMPT_LABEL_MAX_CHARS} characters`);
+      }
+      if (typeof prompt !== "string" || !prompt.trim()
+          || prompt.length > INSTANT_PROMPT_TEXT_MAX_CHARS || unsafeControl.test(prompt)) {
+        throw new Error(`${cardLabel}.prompts.${locale} is required and must be a prompt of at most ${INSTANT_PROMPT_TEXT_MAX_CHARS} characters`);
+      }
+      labels[locale] = localizedLabel.trim();
+      prompts[locale] = prompt.trim();
+    }
+    if (card.icon !== null
+        && (typeof card.icon !== "string" || !STUDIO_ARTWORK_PATH_PATTERN.test(card.icon))) {
+      throw new Error(`${cardLabel}.icon must be null or artwork/layer-<32 lowercase hex>.webp`);
+    }
+    return { id: card.id, labels, prompts, icon: card.icon };
+  });
+}
+
 export function validateStudioFrame(value, label) {
   assertExactKeys(value, ["anchor", "positionX", "positionY", "focalX", "focalY", "scale"], label);
   return {
@@ -1219,7 +1281,7 @@ export function validateStudioThemeKitDocument(
   if (!isPlainObject(raw)) throw new Error(`${source} must contain a JSON object`);
   const allowed = new Set([
     "$comment", "schemaVersion", "id", "labels", "descriptions", "swatches", "preview",
-    "studioPreview", "newChatLayout", "newChatGreetingStyle", "backgroundScope", "artworkLayers",
+    "studioPreview", "newChatLayout", "newChatGreetingStyle", "instantPrompts", "backgroundScope", "artworkLayers",
     "sourceRecipe", "controlOverrides", "theme",
   ]);
   if (Object.keys(raw).some((key) => !allowed.has(key))) throw new Error(`${source} has an unsupported property`);
@@ -1302,6 +1364,7 @@ export function validateStudioThemeKitDocument(
     studioPreviewFrame: null,
     newChatLayout: validateNewChatLayout(raw.newChatLayout, `${source}.newChatLayout`),
     newChatGreetingStyle: validateNewChatGreetingStyle(raw.newChatGreetingStyle ?? null, `${source}.newChatGreetingStyle`),
+    instantPrompts: validateInstantPrompts(raw.instantPrompts, `${source}.instantPrompts`),
     backgroundScope: strictEnum(
       raw.backgroundScope,
       new Set(["sidebar", "content", "full-window"]),
@@ -1376,6 +1439,7 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
   };
   const newChatLayout = validateNewChatLayout(entry.newChatLayout, `${label}.newChatLayout`);
   const newChatGreetingStyle = validateNewChatGreetingStyle(entry.newChatGreetingStyle ?? null, `${label}.newChatGreetingStyle`);
+  const instantPrompts = validateInstantPrompts(entry.instantPrompts, `${label}.instantPrompts`);
   const ARTWORK_PATH_PATTERN = /^assets\/theme-art\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.(?:svg|png|webp|avif)$/;
   const FRAMED_ARTWORK_LAYER_KEYS = [
     "id", "path", "role", "appearance", "context", "viewport", "visible", "opacity",
@@ -1539,6 +1603,7 @@ export function validateRegistryEntry(entry, label, { source = "builtin" } = {})
     studioPreviewFrame,
     newChatLayout,
     newChatGreetingStyle,
+    instantPrompts,
     artwork,
     artworkLayers,
   };
@@ -1585,12 +1650,24 @@ export async function validateUserLauncherFile(kitRoot, relativePath, label) {
 }
 
 export async function validateUserThemeArtwork(kitRoot, entry, theme, label) {
-  const artworkItems = entry.artworkLayers ?? (entry.artwork ? [entry.artwork] : []);
+  const themeArtwork = entry.artworkLayers ?? (entry.artwork ? [entry.artwork] : []);
+  const artworkItems = [
+    ...themeArtwork.map((item, index) => ({
+      path: item.path,
+      label: entry.artworkLayers
+        ? `${label}.artworkLayers[${index}].path`
+        : `${label}.artwork.path`,
+    })),
+    ...(entry.instantPrompts ?? []).flatMap((card, index) => card.icon ? [{
+      path: card.icon,
+      label: `${label}.instantPrompts[${index}].icon`,
+    }] : []),
+  ];
   let sourceTotal = 0;
   let embeddedTotal = 0;
   const validatedPaths = new Set();
   for (let index = 0; index < artworkItems.length; index += 1) {
-    const itemLabel = entry.artworkLayers ? `${label}.artworkLayers[${index}].path` : `${label}.artwork.path`;
+    const itemLabel = artworkItems[index].label;
     const relativePath = artworkItems[index].path;
     if (!validatedPaths.has(relativePath)) {
       const sizes = await validateUserArtworkFile(kitRoot, relativePath, itemLabel);

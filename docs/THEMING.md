@@ -107,6 +107,14 @@ or a person whose image you do not have permission to use.
 For an app mark, choose **Widgets** > **App identity** > **Replace mark** and
 use a static transparent 96 x 96 PNG. Keep the silhouette clear at 24-48 px.
 
+For reusable new-chat starters, choose **Widgets** > **Instant prompts**,
+choose **Add prompt**, and enter a short label plus the text Aura should place
+in the composer. An optional icon is imported locally. Use the state controls
+to check hover, focus, pressed, and expanded treatments. In Conversation the
+selected ticket remains visible as **New chat only**; choose **Switch to New
+chat** to edit it. Activating a saved ticket inserts text and focuses the real
+composer, but never sends.
+
 ### Minute 19-25: review the real result
 
 1. Choose **Review states**.

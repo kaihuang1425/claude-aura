@@ -733,6 +733,31 @@
         </div>
       </section>
 
+      <section class="editor-section editor-instant-prompts" data-editor-branch="widgets" data-editor-targets="widgets.instant-prompts" aria-labelledby="editor-instant-prompts-title">
+        <div class="editor-section-head">
+          <div>
+            <h2 id="editor-instant-prompts-title" data-editor-i18n="instantPromptsTitle">Instant prompts</h2>
+            <p class="help" data-editor-i18n="instantPromptsHelp">Add up to 12 prompt tickets above the new-chat composer. A ticket inserts text and focuses the composer; it never sends.</p>
+          </div>
+          <button type="button" id="editor-instant-prompt-add" class="ghost-button" data-editor-i18n="instantPromptAdd">Add prompt</button>
+        </div>
+        <fieldset class="editor-inline-fieldset instant-prompt-preview-states">
+          <legend data-editor-i18n="instantPromptPreviewState">Preview state</legend>
+          <label><input type="radio" name="instant-prompt-preview-state" value="default" checked> <span data-editor-i18n="instantPromptStateDefault">Default</span></label>
+          <label><input type="radio" name="instant-prompt-preview-state" value="hover"> <span data-editor-i18n="instantPromptStateHover">Hover</span></label>
+          <label><input type="radio" name="instant-prompt-preview-state" value="focus"> <span data-editor-i18n="instantPromptStateFocus">Focus</span></label>
+          <label><input type="radio" name="instant-prompt-preview-state" value="pressed"> <span data-editor-i18n="instantPromptStatePressed">Pressed</span></label>
+          <label><input type="radio" name="instant-prompt-preview-state" value="expanded"> <span data-editor-i18n="instantPromptStateExpanded">Expanded</span></label>
+        </fieldset>
+        <div id="editor-instant-prompt-context" class="editor-context-notice" hidden>
+          <strong data-editor-i18n="instantPromptNewChatOnly">New chat only</strong>
+          <p class="help" data-editor-i18n="instantPromptConversationHelp">The selected ticket remains visible here for context, but its values are disabled in Conversation preview.</p>
+          <button type="button" id="editor-instant-prompt-switch-preview" class="ghost-button" data-editor-i18n="instantPromptSwitchPreview">Switch to New chat</button>
+        </div>
+        <div id="editor-instant-prompt-list" class="instant-prompt-editor-list"></div>
+        <p id="editor-instant-prompt-empty" class="editor-layer-empty" data-editor-i18n="instantPromptEmpty">No instant prompts yet. Add one to create a reusable prompt ticket.</p>
+      </section>
+
       <section class="editor-section" data-editor-branch="background" data-editor-targets="background.canvas background.layer" aria-labelledby="editor-background-title">
         <h2 id="editor-background-title" data-editor-i18n="themeBackground">Theme background</h2>
         <fieldset class="editor-inline-fieldset">

@@ -11,13 +11,16 @@
 
   const ID_PATTERN = /^[a-z][a-z0-9-]{1,39}$/;
   const LAYER_ID_PATTERN = /^layer-[a-f0-9]{32}$/;
+  const INSTANT_PROMPT_ID_PATTERN = /^prompt-[a-f0-9]{32}$/;
+  const INSTANT_PROMPT_ICON_PATTERN = /^artwork\/layer-[a-f0-9]{32}\.webp$/;
   const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const COLOR_PATTERN = /^#[0-9A-F]{6}$/;
   const LAUNCHER_ASSET_PATTERN = /^(?:assets\/theme-art\/(?:default|japanese-film-editorial|korean-prestige|cartoon-studio|anime-twilight|study-library|japanese-idol|korean-idol)\/launcher-mark\.png|launcher-mark\.png)$/;
   const PREVIEW_PATH_PATTERN = /^\/active\/(?:[a-z0-9][a-z0-9-]{0,63}\/)*[a-z0-9][a-z0-9-]{0,80}\.webp$/;
   const ACTIONS = new Set([
     "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer", "apply-theme-patch",
-    "pick-theme-layer-image", "pick-theme-launcher-mark", "remove-theme-layer", "move-theme-layer", "undo-theme-edit",
+    "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon", "remove-theme-layer",
+    "move-theme-layer", "undo-theme-edit",
     "redo-theme-edit", "save-theme-edit", "discard-theme-edit", "delete-user-theme",
     "set-greeting-phrases", "reset-greeting",
   ]);
@@ -39,6 +42,7 @@
     Object.freeze({ id: "zh-HKTW", name: "繁體中文" }),
   ]);
   const THEME_METADATA_LOCALE_IDS = new Set(THEME_METADATA_LOCALES.map(({ id }) => id));
+  const MAX_INSTANT_PROMPTS = 12;
   const MODE_TOKEN_KEYS = Object.freeze([
     "canvas", "sidebar", "surface", "text", "accent", "border", "surfaceAlpha", "sidebarAlpha",
   ]);
@@ -293,7 +297,7 @@
     "none", "full-canvas", "new-chat-area", "artwork-layer", "local-preview",
   ]);
   const CAPABILITY_SELECTION_BEHAVIOR = Object.freeze([
-    "picker", "stage-prompt", "stage-greeting", "stage-layer",
+    "picker", "stage-prompt", "stage-greeting", "stage-layer", "stage-instant-prompt",
   ]);
   const CAPABILITY_TARGETS = Object.freeze({
     "interface.theme": Object.freeze({ branch: "interface", labelKey: "targetInterfaceTheme" }),
@@ -303,6 +307,7 @@
     "background.canvas": Object.freeze({ branch: "background", labelKey: "branchBackground" }),
     "background.layer": Object.freeze({ branch: "background", labelKey: "targetBackgroundLayer" }),
     "widgets.app-identity": Object.freeze({ branch: "widgets", labelKey: "targetAppIdentity" }),
+    "widgets.instant-prompts": Object.freeze({ branch: "widgets", labelKey: "instantPromptsTitle" }),
   });
 
   function normalizeCapabilityRegistry(value) {
@@ -394,6 +399,14 @@
       axes: [],
       captureGeometry: "local-preview",
       selectionBehavior: "picker",
+    },
+    {
+      id: "widgets.instant-prompts",
+      branch: "widgets",
+      views: ["new-chat"],
+      axes: ["appearance", "view"],
+      captureGeometry: "new-chat-area",
+      selectionBehavior: "stage-instant-prompt",
     },
   ]);
   if (!EDITOR_CAPABILITY_REGISTRY) throw new Error("Invalid Aura editor capability registry");
@@ -756,6 +769,32 @@
     return { labels, descriptions };
   }
 
+  function normalizeInstantPrompt(value) {
+    if (!exactShape(value, ["id", "labels", "prompts", "icon", "iconPreviewUrl"])
+        || !INSTANT_PROMPT_ID_PATTERN.test(value.id)
+        || !plainRecord(value.labels) || !plainRecord(value.prompts)) return null;
+    const locales = Object.keys(value.labels);
+    const promptLocales = Object.keys(value.prompts);
+    if (!locales.length || locales.length > THEME_METADATA_LOCALES.length
+        || !locales.includes("en") || promptLocales.length !== locales.length
+        || locales.some((locale) => !THEME_METADATA_LOCALE_IDS.has(locale)
+          || !Object.hasOwn(value.prompts, locale))) return null;
+    const labels = Object.create(null);
+    const prompts = Object.create(null);
+    for (const locale of locales) {
+      labels[locale] = safeText(value.labels[locale], 48);
+      prompts[locale] = safeText(value.prompts[locale], 1200);
+      if (!labels[locale] || !prompts[locale]
+          || /[\u0000-\u001F\u007F]/u.test(value.labels[locale])
+          || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u.test(value.prompts[locale])) return null;
+    }
+    if (value.icon !== null
+        && (typeof value.icon !== "string" || !INSTANT_PROMPT_ICON_PATTERN.test(value.icon))) return null;
+    const iconPreviewUrl = normalizePreviewUrl(value.iconPreviewUrl);
+    if (iconPreviewUrl === undefined || (value.icon === null) !== (iconPreviewUrl === null)) return null;
+    return { id: value.id, labels, prompts, icon: value.icon, iconPreviewUrl };
+  }
+
   function normalizeContrast(value) {
     if (!exactShape(value, ["light", "dark"])) return null;
     const result = {};
@@ -823,7 +862,7 @@
     const required = [
       "active", "id", "sourceId", "source", "isNew", "session", "revision", "dirty", "canUndo", "canRedo",
       "label", "metadata", "tokens", "studioStyle", "launcher", "launcherStyle", "launcherPreviewUrl",
-      "launcherStylePreviewUrl", "shared", "greetingPreferences", "layers", "feedback",
+      "launcherStylePreviewUrl", "shared", "greetingPreferences", "instantPrompts", "layers", "feedback",
     ];
     const activeOptional = [...optional, "editKind"];
     if (!exactShape(value, required, activeOptional) || !ID_PATTERN.test(value.id)
@@ -848,8 +887,12 @@
     const launcherStylePreviewUrl = normalizeLauncherPreviewUrl(value.launcherStylePreviewUrl);
     const shared = normalizeShared(value.shared);
     const greetingPreferences = normalizeGreetingPreferences(value.greetingPreferences);
+    if (!Array.isArray(value.instantPrompts) || value.instantPrompts.length > MAX_INSTANT_PROMPTS) return undefined;
+    const instantPrompts = value.instantPrompts.map(normalizeInstantPrompt);
     if (!metadata || !light || !dark || !studioStyle || !launcher || !launcherStyle
         || !launcherPreviewUrl || !launcherStylePreviewUrl || !shared || !greetingPreferences
+        || instantPrompts.some((prompt) => !prompt)
+        || new Set(instantPrompts.map((prompt) => prompt.id)).size !== instantPrompts.length
         || !Array.isArray(value.layers) || value.layers.length > 8) return undefined;
     const layers = value.layers.map(normalizeLayer);
     const feedback = normalizeFeedback(value.feedback);
@@ -870,6 +913,7 @@
       launcherStylePreviewUrl,
       shared,
       greetingPreferences,
+      instantPrompts,
       layers,
       feedback,
       editKind,
@@ -965,6 +1009,12 @@
     const launcherPreview = document.getElementById("editor-launcher-preview");
     const launcherMark = document.getElementById("editor-launcher-mark");
     const replaceLauncherMarkButton = document.getElementById("editor-launcher-replace");
+    const instantPromptList = document.getElementById("editor-instant-prompt-list");
+    const instantPromptEmpty = document.getElementById("editor-instant-prompt-empty");
+    const addInstantPromptButton = document.getElementById("editor-instant-prompt-add");
+    const instantPromptContext = document.getElementById("editor-instant-prompt-context");
+    const instantPromptSwitchPreviewButton = document.getElementById("editor-instant-prompt-switch-preview");
+    const instantPromptPreviewInputs = [...document.querySelectorAll('input[name="instant-prompt-preview-state"]')];
     const promptInputs = [...document.querySelectorAll("[data-editor-prompt]")];
     const promptExactInputs = [...document.querySelectorAll("[data-editor-prompt-exact]")];
     const greetingInputs = [...document.querySelectorAll("[data-editor-greeting]")];
@@ -1074,6 +1124,9 @@
       for (const input of modeInputs) input.checked = input.value === selectedMode;
     };
     let selectedLayerId = null;
+    let selectedInstantPromptId = null;
+    let renderedInstantPromptSignature = null;
+    let instantPromptPreviewState = "default";
     let renderedLayerSignature = null;
     let inspectorPage = "interface";
     let inspectorBranch = "interface";
@@ -1187,7 +1240,9 @@
     // stays set forever and flushThemeChanges then queues every later edit without ever
     // sending it — the editor looks alive while silently discarding work.
     const PENDING_WATCHDOG_MS = 12000;
-    const WATCHDOG_EXEMPT_ACTIONS = new Set(["pick-theme-layer-image", "pick-theme-launcher-mark"]);
+    const WATCHDOG_EXEMPT_ACTIONS = new Set([
+      "pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon",
+    ]);
     const clearPendingWatchdog = () => {
       if (!pendingWatchdog) return;
       clearTimeout(pendingWatchdog);
@@ -1349,6 +1404,8 @@
       ? `token:${change.mode}:${change.token}`
       : change.kind === "layer"
         ? `layer:${change.layerId}:${change.preset}:${change.property}`
+        : change.kind === "instant-prompt"
+          ? `instant-prompt:${change.id}:${change.operation}:${change.field ?? ""}:${change.locale ?? ""}`
         : change.kind === "greeting"
           ? change.operation === "reset"
             ? "greeting:reset"
@@ -1614,6 +1671,10 @@
 
     const targetLabel = (target) => tr(CAPABILITY_TARGETS[target]?.labelKey ?? "targetPicker");
     const editingTargetLabel = (target) => {
+      if (target === "widgets.instant-prompts") {
+        const selected = state?.instantPrompts?.find((prompt) => prompt.id === selectedInstantPromptId);
+        return selected?.labels?.[normalizedLocale] ?? selected?.labels?.en ?? targetLabel(target);
+      }
       if (target !== "background.layer") return targetLabel(target);
       const selectedLayer = state?.layers?.find((layer) => layer.id === selectedLayerId);
       return selectedLayer
@@ -1628,7 +1689,8 @@
     const stageSelectionTarget = (selection) => selection?.kind === "prompt"
       ? "interface.new-chat-area"
       : selection?.kind === "greeting" ? "interface.greeting"
-      : selection?.kind === "layer" ? "background.layer" : null;
+      : selection?.kind === "layer" ? "background.layer"
+      : selection?.kind === "instant-prompt" ? "widgets.instant-prompts" : null;
     const stageSelectionAllowed = (selection) => {
       if (!selection) return true;
       const capability = CAPABILITY_BY_ID.get(stageSelectionTarget(selection));
@@ -1663,6 +1725,12 @@
       );
       for (const item of stageRoot.querySelectorAll(".stage-layer .stage-item")) {
         setStageNodeInteractive(item, neutralPage || inspectorPage === "background");
+      }
+      for (const item of stageRoot.querySelectorAll(".stage-instant-prompt-ticket")) {
+        setStageNodeInteractive(
+          item,
+          (neutralPage || inspectorPage === "widgets") && stageContext === "new-chat",
+        );
       }
       const palette = stageRoot.querySelector(".stage-layers-panel");
       if (palette) palette.hidden = inspectorPage !== "background";
@@ -1716,6 +1784,7 @@
       if (field === "shared.backgroundScope") return "background.canvas";
       if (field === "layers" || field.startsWith("layers[")) return "background.layer";
       if (field === "launcher" || field.startsWith("launcher.")) return "widgets.app-identity";
+      if (field === "instantPrompts" || field.startsWith("instantPrompts[")) return "widgets.instant-prompts";
       return null;
     };
     const defaultInspectorField = (target) => {
@@ -1728,6 +1797,10 @@
         const index = state?.layers?.findIndex((layer) => layer.id === selectedLayerId) ?? -1;
         return index >= 0 ? `layers[${index}]` : "layers";
       }
+      if (target === "widgets.instant-prompts") {
+        const index = state?.instantPrompts?.findIndex((prompt) => prompt.id === selectedInstantPromptId) ?? -1;
+        return index >= 0 ? `instantPrompts[${index}]` : "instantPrompts";
+      }
       return "launcher";
     };
     const normalizeInspectorField = (field) => {
@@ -1739,6 +1812,11 @@
       if (layer) {
         const index = state?.layers?.findIndex((item) => item.id === selectedLayerId) ?? -1;
         if (index >= 0) return `layers[${index}]${layer[1]}`;
+      }
+      const instantPrompt = /^instantPrompts\[\d+](.*)$/.exec(field ?? "");
+      if (instantPrompt) {
+        const index = state?.instantPrompts?.findIndex((item) => item.id === selectedInstantPromptId) ?? -1;
+        if (index >= 0) return `instantPrompts[${index}]${instantPrompt[1]}`;
       }
       return field;
     };
@@ -1793,6 +1871,8 @@
       const tokenMode = /^tokens\.(light|dark)\./.exec(inspectorField)?.[1] ?? null;
       contextApplies.textContent = inspectorTarget === "background.layer"
         ? layerScopeLabel(selectedLayer)
+        : inspectorTarget === "widgets.instant-prompts"
+          ? `${tr("allModesScope")} 繚 ${tr("contextNewChat")} 繚 ${tr("frameStandard")} + ${tr("frameWide")}`
         : inspectorTarget === "interface.sidebar-wordmark"
           ? `${tr("allModesScope")} · ${tr("allPagesScope")}`
         : inspectorTarget === "interface.new-chat-area"
@@ -1981,6 +2061,7 @@
         '[data-editor-targets~="interface.theme"],'
         + '[data-editor-targets~="background.canvas"],'
         + '[data-editor-targets~="widgets.app-identity"],'
+        + '[data-editor-targets~="widgets.instant-prompts"],'
         + ".editor-guide-section, .editor-add-artwork, .layer-shared-controls",
       )) {
         section.inert = builtInLayout;
@@ -2022,6 +2103,8 @@
         stageSelection = { kind: "greeting" };
       } else if (target === "background.layer" && selectedLayerId) {
         stageSelection = { kind: "layer", id: selectedLayerId };
+      } else if (target === "widgets.instant-prompts" && selectedInstantPromptId) {
+        stageSelection = { kind: "instant-prompt", id: selectedInstantPromptId };
       } else {
         stageSelection = null;
       }
@@ -2140,7 +2223,9 @@
       dropStageWork();
       stageSelection = null;
       selectedLayerId = null;
+      selectedInstantPromptId = null;
       renderedLayerSignature = null;
+      renderedInstantPromptSignature = null;
       stageHiddenLayers.clear();
       stageLayersUserToggled = false;
       setStageLayersCollapsed(true);
@@ -2674,6 +2759,10 @@
     stagePromptChip.dataset.editorI18n = "stagePromptTag";
     stagePromptChip.textContent = tr("stagePromptTag");
     stagePromptEl.append(stagePromptSample, stagePromptChip);
+    const stageInstantPromptRail = document.createElement("div");
+    stageInstantPromptRail.className = "stage-instant-prompt-rail";
+    stageInstantPromptRail.setAttribute("role", "group");
+    stageInstantPromptRail.setAttribute("aria-label", tr("instantPromptsTitle"));
     // WO-21: Greeting is its own Interface-stage target above the prompt. Its
     // overlay owns editing gestures; the normal Aura greeting remains
     // pointer-inert.
@@ -2864,9 +2953,50 @@
           stageLayerNodes.delete(id);
         }
       }
+      const promptCards = stageContext === "new-chat"
+        ? state.instantPrompts
+        : state.instantPrompts.filter((prompt) => prompt.id === selectedInstantPromptId);
+      stageInstantPromptRail.replaceChildren(...promptCards.map((prompt) => {
+        const ticket = document.createElement("button");
+        ticket.type = "button";
+        ticket.className = "stage-instant-prompt-ticket";
+        ticket.dataset.stageItem = "instant-prompt";
+        ticket.dataset.instantPromptId = prompt.id;
+        ticket.dataset.editorFocus = `stage-instant-prompt-${prompt.id}`;
+        ticket.dataset.selected = String(prompt.id === selectedInstantPromptId);
+        ticket.dataset.previewState = prompt.id === selectedInstantPromptId
+          ? instantPromptPreviewState : "default";
+        ticket.setAttribute("aria-pressed", String(prompt.id === selectedInstantPromptId));
+        ticket.disabled = stageContext !== "new-chat";
+        if (prompt.iconPreviewUrl) {
+          const icon = document.createElement("img");
+          icon.src = prompt.iconPreviewUrl;
+          icon.alt = "";
+          icon.setAttribute("aria-hidden", "true");
+          ticket.appendChild(icon);
+        } else {
+          const seal = document.createElement("i");
+          seal.textContent = "A";
+          seal.setAttribute("aria-hidden", "true");
+          ticket.appendChild(seal);
+        }
+        const copy = document.createElement("span");
+        copy.textContent = prompt.labels[normalizedLocale] ?? prompt.labels.en;
+        copy.dataset.prompt = prompt.prompts[normalizedLocale] ?? prompt.prompts.en;
+        ticket.appendChild(copy);
+        return ticket;
+      }));
+      stageInstantPromptRail.dataset.context = stageContext;
+      if (stageContext === "conversation" && promptCards.length) {
+        const context = document.createElement("span");
+        context.className = "stage-instant-prompt-context";
+        context.textContent = tr("instantPromptNewChatOnly");
+        stageInstantPromptRail.appendChild(context);
+      }
+      stageInstantPromptRail.hidden = promptCards.length === 0;
       stageContentHost.replaceChildren(...(stageContext === "new-chat"
-        ? [stageGreetingEl, stagePromptEl]
-        : [stageStripA, stageStripB, stageComposerEl]));
+        ? [stageGreetingEl, stageInstantPromptRail, stagePromptEl]
+        : [stageStripA, stageStripB, stageInstantPromptRail, stageComposerEl]));
       stageEmptyNote.textContent = tr("stageEmpty");
       stageEmptyNote.hidden = inspectorBranch !== "background" || seen.size > 0;
       if (stageSelection?.kind === "layer" && !seen.has(stageSelection.id)) stageSelection = null;
@@ -2882,6 +3012,11 @@
       if (!stageSelectionAllowed(stageSelection)) stageSelection = null;
       stagePromptEl.setAttribute("aria-pressed", String(stageSelection?.kind === "prompt"));
       stageGreetingEl.setAttribute("aria-pressed", String(stageSelection?.kind === "greeting"));
+      for (const ticket of stageInstantPromptRail.querySelectorAll(".stage-instant-prompt-ticket")) {
+        ticket.setAttribute("aria-pressed", String(
+          stageSelection?.kind === "instant-prompt" && ticket.dataset.instantPromptId === stageSelection.id,
+        ));
+      }
       for (const [id, entry] of stageLayerNodes) {
         entry.item.setAttribute("aria-pressed",
           String(stageSelection?.kind === "layer" && stageSelection.id === id));
@@ -2890,6 +3025,11 @@
       if (stageSelection?.kind === "layer") target = stageLayerNodes.get(stageSelection.id)?.item ?? null;
       else if (stageSelection?.kind === "prompt" && stageContext === "new-chat") target = stagePromptEl;
       else if (stageSelection?.kind === "greeting" && stageContext === "new-chat") target = stageGreetingEl;
+      else if (stageSelection?.kind === "instant-prompt" && stageContext === "new-chat") {
+        target = stageInstantPromptRail.querySelector(
+          `[data-instant-prompt-id="${CSS.escape(stageSelection.id)}"]`,
+        );
+      }
       const chrome = [...stageEdges, ...stageCorners];
       if (!target || !state) {
         stageRing.hidden = true;
@@ -3127,6 +3267,12 @@
         stagePromptEl.style.width = `${rect.width}px`;
         stagePromptEl.style.height = `${rect.height}px`;
         stagePromptEl.style.color = tokenValue("text") ?? "#000000";
+        if (!stageInstantPromptRail.hidden) {
+          stageInstantPromptRail.style.left = `${rect.left}px`;
+          stageInstantPromptRail.style.top = `${Math.max(8, rect.top - 44)}px`;
+          stageInstantPromptRail.style.width = `${rect.width}px`;
+          stageInstantPromptRail.style.height = "38px";
+        }
         stagePromptSample.style.fontFamily = STAGE_FONT_STACKS[stageValue("shared.fontDisplay")]
           ?? STAGE_FONT_STACKS["system-sans"];
         stagePromptChip.style.color = tokenValue("accent") ?? "currentColor";
@@ -3138,7 +3284,8 @@
           const boxWidth = mainMetrics.width * Number(stageValue(`${greetingStagePrefix()}maxWidthRatio`));
           const centre = mainMetrics.left + (mainMetrics.width / 2)
             + (mainMetrics.width * Number(stageValue(`${greetingStagePrefix()}xRatio`)));
-          const gap = Math.max(24, greeting.fontSize * 0.9);
+          const gap = Math.max(24, greeting.fontSize * 0.9)
+            + (stageInstantPromptRail.hidden ? 0 : 42);
           stageGreetingEl.hidden = false;
           stageGreetingEl.dataset.liveTarget = liveGreeting ? "true" : "";
           if (liveGreeting && confirmedGreeting) {
@@ -3202,6 +3349,12 @@
         stageComposerEl.style.width = `${mainWidth * 0.72}px`;
         stageComposerEl.style.height = "110px";
         stageComposerEl.style.top = `${logicalHeight - 134}px`;
+        if (!stageInstantPromptRail.hidden) {
+          stageInstantPromptRail.style.left = `${mainLeft + (mainWidth * 0.14)}px`;
+          stageInstantPromptRail.style.top = `${logicalHeight - 178}px`;
+          stageInstantPromptRail.style.width = `${mainWidth * 0.72}px`;
+          stageInstantPromptRail.style.height = "36px";
+        }
       }
       const zones = stageZonesHost.children;
       const setZoneRect = (node, left, top, width, height) => {
@@ -3271,6 +3424,17 @@
         inspectorField = `${greetingStagePrefix()}xRatio`;
         setInspectorTarget("interface.greeting", { reveal });
         announce(format(tr("stageSelectedAnnounce"), tr("targetGreeting")));
+      } else if (selection?.kind === "instant-prompt") {
+        const index = state?.instantPrompts?.findIndex((prompt) => prompt.id === selection.id) ?? -1;
+        if (index < 0) return false;
+        selectedInstantPromptId = selection.id;
+        inspectorField = `instantPrompts[${index}]`;
+        setInspectorTarget("widgets.instant-prompts", { reveal });
+        renderInstantPromptEditor();
+        announce(format(
+          tr("stageSelectedAnnounce"),
+          state.instantPrompts[index].labels[normalizedLocale] ?? state.instantPrompts[index].labels.en,
+        ));
       }
       syncStageHud();
       return true;
@@ -3281,6 +3445,8 @@
         ? { kind: "prompt" }
         : node.dataset.stageItem === "greeting"
           ? { kind: "greeting" }
+        : node.dataset.stageItem === "instant-prompt"
+          ? { kind: "instant-prompt", id: node.dataset.instantPromptId }
         : { kind: "layer", id: node.dataset.stageItem };
       return stageSelectionAllowed(selection) ? selection : null;
     };
@@ -3385,6 +3551,7 @@
         itemNode.focus?.();
       }
       if (!selection || !stageSelectionAllowed(selection)) return;
+      if (selection.kind === "instant-prompt") return;
       const [logicalWidth, logicalHeight] = stageLogicalSize();
       const mainMetrics = stageMainMetrics(logicalWidth, logicalHeight);
       const scopeRect = backgroundScopeRect(
@@ -3576,6 +3743,7 @@
         reflectButtonStates();
         return;
       }
+      if (selection.kind === "instant-prompt") return;
       const step = event.shiftKey ? 5 : 1;
       const handleKind = handle?.dataset.stageHandle;
       const scaleDirection = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1
@@ -3747,15 +3915,21 @@
       if (!input.checked) return;
       stageContextTouched = true;
       stageContext = input.value;
+      renderedInstantPromptSignature = null;
       selectStageMirror();
+      renderInstantPromptEditor();
+      refreshInspectorContext();
       renderStage();
       announce(format(tr("stageContextSelected"), stageContextLabel()));
     }));
     const switchToNewChatPreview = () => {
       stageContextTouched = true;
       stageContext = "new-chat";
+      renderedInstantPromptSignature = null;
       for (const input of stageContextInputs) input.checked = input.value === stageContext;
       selectStageMirror();
+      renderInstantPromptEditor();
+      refreshInspectorContext();
       renderStage();
       announce(format(tr("stageContextSelected"), stageContextLabel()));
     };
@@ -4820,6 +4994,232 @@
       return node;
     };
 
+    const instantPromptLocaleName = (localeId) => (
+      THEME_METADATA_LOCALES.find(({ id }) => id === localeId)?.name ?? localeId
+    );
+    const instantPromptChange = (prompt, operation, {
+      field = null,
+      locale: promptLocale = null,
+      value = null,
+      immediate = true,
+    } = {}) => queueThemeChange({
+      kind: "instant-prompt",
+      operation,
+      id: prompt.id,
+      field,
+      locale: promptLocale,
+      value,
+    }, { immediate });
+    const instantPromptSeed = () => {
+      const seed = {
+        en: ["New prompt", "What would you like Claude to help with?"],
+        "zh-CN": ["快捷提示", "请描述你希望 Claude 协助的内容。"],
+        "zh-HKTW": ["快速提示", "請描述你希望 Claude 協助的內容。"],
+      };
+      const locales = Object.keys(state?.metadata?.labels ?? { en: "" });
+      const labels = {};
+      const prompts = {};
+      for (const promptLocale of locales) {
+        const values = seed[promptLocale] ?? seed.en;
+        labels[promptLocale] = values[0];
+        prompts[promptLocale] = values[1];
+      }
+      if (!Object.hasOwn(labels, "en")) {
+        labels.en = seed.en[0];
+        prompts.en = seed.en[1];
+      }
+      return {
+        id: `prompt-${window.crypto.randomUUID().replaceAll("-", "").toLowerCase()}`,
+        labels,
+        prompts,
+        icon: null,
+      };
+    };
+    const requestInstantPromptIcon = (id) => {
+      const base = mutationBase();
+      if (base) post({ type: "pick-instant-prompt-icon", ...base, id });
+    };
+    const renderInstantPromptEditor = () => {
+      if (!instantPromptList || !state) return;
+      if (!state.instantPrompts.some((prompt) => prompt.id === selectedInstantPromptId)) {
+        selectedInstantPromptId = state.instantPrompts[0]?.id ?? null;
+      }
+      const conversation = stageContext !== "new-chat";
+      const signature = JSON.stringify([
+        state.instantPrompts,
+        selectedInstantPromptId,
+        normalizedLocale,
+        conversation,
+        isBuiltInLayoutEdit(),
+      ]);
+      if (signature === renderedInstantPromptSignature) return;
+      renderedInstantPromptSignature = signature;
+      const focused = document.activeElement?.dataset?.editorFocus ?? null;
+      instantPromptList.replaceChildren();
+      state.instantPrompts.forEach((prompt, index) => {
+        const selected = prompt.id === selectedInstantPromptId;
+        const card = document.createElement("details");
+        card.className = "instant-prompt-card";
+        card.dataset.instantPromptId = prompt.id;
+        card.dataset.selected = String(selected);
+        card.open = selected;
+        const summary = document.createElement("summary");
+        summary.dataset.editorFocus = `instant-prompt-${prompt.id}`;
+        summary.dataset.editorField = `instantPrompts[${index}]`;
+        const icon = document.createElement("span");
+        icon.className = "instant-prompt-card-icon";
+        if (prompt.iconPreviewUrl) {
+          const image = document.createElement("img");
+          image.src = prompt.iconPreviewUrl;
+          image.alt = "";
+          image.setAttribute("aria-hidden", "true");
+          icon.appendChild(image);
+        } else {
+          icon.textContent = "A";
+          icon.setAttribute("aria-hidden", "true");
+        }
+        const copy = document.createElement("span");
+        copy.className = "instant-prompt-card-copy";
+        const title = document.createElement("strong");
+        title.textContent = prompt.labels[normalizedLocale] ?? prompt.labels.en;
+        const description = document.createElement("small");
+        description.textContent = prompt.prompts[normalizedLocale] ?? prompt.prompts.en;
+        copy.append(title, description);
+        const order = document.createElement("span");
+        order.className = "layer-order";
+        order.textContent = `${index + 1} / ${state.instantPrompts.length}`;
+        summary.append(icon, copy, order);
+        summary.addEventListener("click", () => {
+          selectedInstantPromptId = prompt.id;
+          inspectorField = `instantPrompts[${index}]`;
+          stageSelection = { kind: "instant-prompt", id: prompt.id };
+          renderedInstantPromptSignature = null;
+          setInspectorTarget("widgets.instant-prompts");
+          requestAnimationFrame(() => {
+            renderInstantPromptEditor();
+            renderStage();
+            syncStageHud();
+          });
+        });
+        const body = document.createElement("div");
+        body.className = "instant-prompt-card-body";
+        for (const promptLocale of Object.keys(prompt.labels)) {
+          const localeGroup = document.createElement("section");
+          localeGroup.className = "instant-prompt-locale";
+          const localeTitle = document.createElement("strong");
+          localeTitle.textContent = instantPromptLocaleName(promptLocale);
+          const labelField = document.createElement("label");
+          labelField.className = "editor-field";
+          const labelText = document.createElement("span");
+          labelText.textContent = tr("instantPromptLabel");
+          const labelInput = document.createElement("input");
+          labelInput.type = "text";
+          labelInput.maxLength = 48;
+          labelInput.value = prompt.labels[promptLocale];
+          labelInput.disabled = conversation;
+          labelInput.dataset.editorFocus = `instant-prompt-${prompt.id}-${promptLocale}-label`;
+          labelInput.dataset.editorField = `instantPrompts[${index}].labels.${promptLocale}`;
+          labelInput.addEventListener("input", () => {
+            if (promptLocale === normalizedLocale || (normalizedLocale !== "en" && !prompt.labels[normalizedLocale])) {
+              title.textContent = labelInput.value || prompt.labels.en;
+            }
+          });
+          labelInput.addEventListener("change", () => {
+            const value = labelInput.value.trim();
+            if (!value) {
+              labelInput.value = prompt.labels[promptLocale];
+              announce(tr("instantPromptValueRequired"), "error");
+              return;
+            }
+            instantPromptChange(prompt, "update", { field: "label", locale: promptLocale, value });
+          });
+          labelField.append(labelText, labelInput);
+          const promptField = document.createElement("label");
+          promptField.className = "editor-field";
+          const promptText = document.createElement("span");
+          promptText.textContent = tr("instantPromptText");
+          const promptInput = document.createElement("textarea");
+          promptInput.rows = 4;
+          promptInput.maxLength = 1200;
+          promptInput.value = prompt.prompts[promptLocale];
+          promptInput.disabled = conversation;
+          promptInput.dataset.editorFocus = `instant-prompt-${prompt.id}-${promptLocale}-prompt`;
+          promptInput.dataset.editorField = `instantPrompts[${index}].prompts.${promptLocale}`;
+          promptInput.addEventListener("input", () => {
+            if (promptLocale === normalizedLocale || (normalizedLocale !== "en" && !prompt.prompts[normalizedLocale])) {
+              description.textContent = promptInput.value || prompt.prompts.en;
+              const ticketCopy = stageInstantPromptRail.querySelector(
+                `[data-instant-prompt-id="${CSS.escape(prompt.id)}"] > span`,
+              );
+              if (ticketCopy) ticketCopy.dataset.prompt = promptInput.value || prompt.prompts.en;
+            }
+          });
+          promptInput.addEventListener("change", () => {
+            const value = promptInput.value.trim();
+            if (!value) {
+              promptInput.value = prompt.prompts[promptLocale];
+              announce(tr("instantPromptValueRequired"), "error");
+              return;
+            }
+            instantPromptChange(prompt, "update", { field: "prompt", locale: promptLocale, value });
+          });
+          promptField.append(promptText, promptInput);
+          localeGroup.append(localeTitle, labelField, promptField);
+          body.appendChild(localeGroup);
+        }
+        const actions = document.createElement("div");
+        actions.className = "instant-prompt-card-actions";
+        const actionButton = (key, handler, disabled = false) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "ghost-button";
+          button.textContent = tr(key);
+          button.disabled = disabled || conversation;
+          button.addEventListener("click", handler);
+          return button;
+        };
+        actions.append(
+          actionButton("instantPromptChooseIcon", () => requestInstantPromptIcon(prompt.id)),
+          actionButton("instantPromptRemoveIcon", () => instantPromptChange(prompt, "clear-icon"), !prompt.icon),
+          actionButton("instantPromptMoveUp", () => instantPromptChange(prompt, "move", { value: "up" }), index === 0),
+          actionButton("instantPromptMoveDown", () => instantPromptChange(prompt, "move", { value: "down" }), index === state.instantPrompts.length - 1),
+          actionButton("instantPromptRemove", () => {
+            const next = state.instantPrompts[index + 1] ?? state.instantPrompts[index - 1] ?? null;
+            selectedInstantPromptId = next?.id ?? null;
+            instantPromptChange(prompt, "remove");
+          }),
+        );
+        body.appendChild(actions);
+        card.append(summary, body);
+        instantPromptList.appendChild(card);
+      });
+      instantPromptEmpty.hidden = state.instantPrompts.length > 0;
+      addInstantPromptButton.disabled = conversation
+        || isBuiltInLayoutEdit() || state.instantPrompts.length >= MAX_INSTANT_PROMPTS;
+      instantPromptContext.hidden = !conversation;
+      instantPromptContext.inert = !conversation;
+      for (const input of instantPromptPreviewInputs) input.disabled = conversation || !selectedInstantPromptId;
+      if (focused) instantPromptList.querySelector(`[data-editor-focus="${CSS.escape(focused)}"]`)?.focus();
+    };
+
+    addInstantPromptButton?.addEventListener("click", () => {
+      if (!state || stageContext !== "new-chat" || state.instantPrompts.length >= MAX_INSTANT_PROMPTS) return;
+      const prompt = instantPromptSeed();
+      selectedInstantPromptId = prompt.id;
+      renderedInstantPromptSignature = null;
+      instantPromptChange(prompt, "add", { value: prompt });
+    });
+    instantPromptSwitchPreviewButton?.addEventListener("click", () => {
+      switchToNewChatPreview();
+    });
+    for (const input of instantPromptPreviewInputs) {
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        instantPromptPreviewState = input.value;
+        renderStage();
+      });
+    }
+
     const layerSelect = ({ layer, preset = "shared", property, labelKey, values, quick = false }) => {
       const field = document.createElement("label");
       field.className = `layer-field${quick ? "" : " advanced-only"}`;
@@ -5332,6 +5732,10 @@
       cancelButton.disabled = isBlockingAction();
       backButton.disabled = isBlockingAction();
       addLayerButton.disabled = builtInLayout || busy || blocked || state.layers.length >= 8;
+      if (addInstantPromptButton) {
+        addInstantPromptButton.disabled = builtInLayout || busy || blocked
+          || stageContext !== "new-chat" || state.instantPrompts.length >= MAX_INSTANT_PROMPTS;
+      }
       stageOpacityInput.disabled = builtInLayout || isBlockingAction() || blocked;
       if (replaceLauncherMarkButton) {
         replaceLauncherMarkButton.disabled = builtInLayout || busy || blocked;
@@ -5361,6 +5765,7 @@
       reflectLauncher();
       reflectMetadata();
       reflectCardPreview();
+      renderInstantPromptEditor();
       renderLayers(focusKey);
       syncBuiltInLayoutPresentation();
       renderFeedback();
@@ -5404,10 +5809,13 @@
           greetingTimeoutRetries = 0;
         }
         const successMessage = settledAction === "pick-theme-launcher-mark"
-          ? tr("launcherMarkImported") : tr("editorReady");
+          ? tr("launcherMarkImported")
+          : settledAction === "pick-instant-prompt-icon"
+            ? tr("instantPromptIconImported") : tr("editorReady");
         const failureMessage = settledAction === "pick-theme-launcher-mark"
           ? tr(actionError === "identity-apply-failed" ? "launcherMarkApplyFailed" : "launcherMarkFailed")
-          : tr("editorActionFailed");
+          : settledAction === "pick-instant-prompt-icon"
+            ? tr("instantPromptIconFailed") : tr("editorActionFailed");
         announce(succeeded ? successMessage : failureMessage, succeeded ? "ok" : "error");
         if (followup) {
           const base = mutationBase();

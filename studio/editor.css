@@ -528,6 +528,136 @@
   margin-top: 10px;
 }
 
+.instant-prompt-preview-states {
+  margin-top: 14px;
+}
+
+.instant-prompt-preview-states label {
+  white-space: nowrap;
+}
+
+.editor-context-notice {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--control-radius);
+  background: var(--raised);
+}
+
+.editor-context-notice > :first-child {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.editor-context-notice .help {
+  margin: 0 0 10px;
+}
+
+.instant-prompt-editor-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.instant-prompt-card {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--shell-card-radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.instant-prompt-card[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border-soft));
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+.instant-prompt-card > summary {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.instant-prompt-card > summary:hover {
+  background: var(--raised);
+}
+
+.instant-prompt-card-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: min(var(--control-radius), 10px);
+  background: var(--raised);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.instant-prompt-card-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.instant-prompt-card-copy {
+  min-width: 0;
+}
+
+.instant-prompt-card-copy strong,
+.instant-prompt-card-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instant-prompt-card-copy small {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
+.instant-prompt-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.instant-prompt-locale {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.instant-prompt-locale:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.instant-prompt-locale > strong {
+  font-size: 12px;
+}
+
+.instant-prompt-locale textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.instant-prompt-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .editor-metadata-grid {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -1539,6 +1669,113 @@
   letter-spacing: 0;
 }
 
+.stage-instant-prompt-rail {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.stage-instant-prompt-ticket {
+  min-width: 0;
+  max-width: 190px;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px 7px 8px;
+  border: 1px solid var(--border-soft);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: min(var(--control-radius), 12px);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  color: var(--ink-secondary);
+  box-shadow: var(--shadow);
+  font: 650 11px/1.2 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.stage-instant-prompt-ticket > img,
+.stage-instant-prompt-ticket > i {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.stage-instant-prompt-ticket > img {
+  object-fit: cover;
+}
+
+.stage-instant-prompt-ticket > i {
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-style: normal;
+  font-size: 10px;
+}
+
+.stage-instant-prompt-ticket > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-instant-prompt-ticket[data-selected="true"] {
+  border-color: var(--accent);
+}
+
+.stage-instant-prompt-ticket[data-preview-state="hover"] {
+  background: var(--raised);
+  transform: translateY(-1px);
+}
+
+.stage-instant-prompt-ticket[data-preview-state="focus"] {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.stage-instant-prompt-ticket[data-preview-state="pressed"] {
+  background: var(--accent-soft);
+  transform: scale(0.98);
+}
+
+.stage-instant-prompt-ticket[data-preview-state="expanded"] {
+  grid-template-columns: auto minmax(0, 1fr);
+  max-width: 260px;
+}
+
+.stage-instant-prompt-ticket[data-preview-state="expanded"] > span::after {
+  content: attr(data-prompt);
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-instant-prompt-rail[data-context="conversation"] .stage-instant-prompt-ticket {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.stage-instant-prompt-context {
+  align-self: center;
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .stage-strip,
 .stage-composer {
   pointer-events: none;
@@ -2329,7 +2566,8 @@
 .editor-view[data-inspector-page="interface"][data-inspector-target="interface.greeting"] [data-editor-targets~="interface.greeting"],
 .editor-view[data-inspector-page="background"][data-inspector-target="background.canvas"] [data-editor-targets~="background.canvas"],
 .editor-view[data-inspector-page="background"][data-inspector-target="background.layer"] [data-editor-targets~="background.layer"],
-.editor-view[data-inspector-page="widgets"][data-inspector-target="widgets.app-identity"] [data-editor-targets~="widgets.app-identity"] {
+.editor-view[data-inspector-page="widgets"][data-inspector-target="widgets.app-identity"] [data-editor-targets~="widgets.app-identity"],
+.editor-view[data-inspector-page="widgets"][data-inspector-target="widgets.instant-prompts"] [data-editor-targets~="widgets.instant-prompts"] {
   display: block;
 }
 

@@ -15,6 +15,7 @@ import "./avatar.test.mjs";
 import "./wordmark.test.mjs";
 import "./greeting.test.mjs";
 import "./greeting-runtime.test.mjs";
+import "./instant-prompts.test.mjs";
 import "./prepaint.test.mjs";
 import "./aura-rescue.test.mjs";
 import "./draft-handoff.test.mjs";

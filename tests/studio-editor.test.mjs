@@ -606,6 +606,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "apply-theme-patch",
     "pick-theme-layer-image",
     "pick-theme-launcher-mark",
+    "pick-instant-prompt-icon",
     "remove-theme-layer",
     "move-theme-layer",
     "undo-theme-edit",
@@ -713,6 +714,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "apply-theme-patch": ["type", "session", "revision", "changes"],
     "pick-theme-layer-image": ["type", "session", "revision", "index", "role", "appearance", "context"],
     "pick-theme-launcher-mark": ["type", "session", "revision"],
+    "pick-instant-prompt-icon": ["type", "session", "revision", "id"],
     "remove-theme-layer": ["type", "session", "revision", "index"],
     "move-theme-layer": ["type", "session", "revision", "index", "direction"],
     "undo-theme-edit": ["type", "session", "revision"],
@@ -1007,9 +1009,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioHtml,
     /id="editor-document-details" class="editor-document-details-panel"[^>]+hidden/,
     "Localized names and descriptions must remain available as document details");
-  assert.equal((studioHtml.match(/data-editor-branch="widgets"/g) ?? []).length, 1,
-    "Widgets must contain only the already authorized App identity surface");
-  assert.equal((studioHtml.match(/data-editor-targets="widgets\.[^"]+"/g) ?? []).length, 1);
+  assert.equal((studioHtml.match(/data-editor-branch="widgets"/g) ?? []).length, 2,
+    "Widgets must contain App identity and Instant prompts only");
+  assert.equal((studioHtml.match(/data-editor-targets="widgets\.[^"]+"/g) ?? []).length, 2);
   const widgetsMarkup = studioHtml.slice(
     studioHtml.indexOf('data-editor-branch="widgets"'),
     studioHtml.indexOf('data-editor-branch="background"'),
@@ -1191,8 +1193,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The mark picker must identify its purpose instead of reusing generic artwork copy");
   assert.equal((ui.match(/StudioEditorState\['error'\]\s*=\s*'picker-cancelled'/g) ?? []).length, 2,
     "Closing either host-owned image picker must be acknowledged as neutral cancellation");
-  assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-theme-(?:layer-image|launcher-mark)' -ActionSucceeded \$true/g) ?? []).length, 2,
-    "Picker cancellation must settle the pending action without reporting an edit failure");
+  assert.equal((ui.match(/Send-AuraUiStudioState -Action 'pick-theme-launcher-mark' -ActionSucceeded \$true/g) ?? []).length, 1);
+  assert.match(ui, /Send-AuraUiStudioState -Action \$action -ActionSucceeded \$true/,
+    "Layer and instant-prompt picker cancellation must settle through their exact requested action");
   assert.match(studioEditor,
     /actionError === "picker-cancelled"[\s\S]{0,500}?settledAction === "pick-theme-launcher-mark"[\s\S]{0,300}?launcherMarkImported[\s\S]{0,400}?identity-apply-failed[\s\S]{0,200}?launcherMarkApplyFailed/,
     "The editor must preserve neutral cancellation and actionable mark replacement results");
@@ -2321,7 +2324,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /commitStagePaths\(drag\.paths\)[\s\S]{0,100}?renderStage\(\)[\s\S]{0,100}?refreshInspectorContext\(\)/,
     "Ending a no-op gesture must refresh provenance after local overrides are cleared");
   const stageEscapeBlock = studioEditor.match(
-    /if \(event\.key === "Escape"\) \{[\s\S]*?}\s*const step =/,
+    /if \(event\.key === "Escape"\) \{[\s\S]*?const step =/,
   )?.[0] ?? "";
   assert.match(stageEscapeBlock, /stageKeyPaths\.delete\(path\)[\s\S]{0,400}?reflectStageInputs\(paths\)/,
     "Escape must cancel pending keyboard paths and restore their inspector values");
@@ -2405,8 +2408,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(pendingWatchdogBlock, /WATCHDOG_EXEMPT_ACTIONS\.has\(action\)/,
     "file-picker actions wait on the user and must be exempt from the watchdog");
   assert.match(studioEditor,
-    /WATCHDOG_EXEMPT_ACTIONS = new Set\(\["pick-theme-layer-image", "pick-theme-launcher-mark"\]\)/,
-    "only the two picker actions may skip the pending-action watchdog");
+    /WATCHDOG_EXEMPT_ACTIONS = new Set\(\[[\s\S]{0,140}?"pick-theme-layer-image", "pick-theme-launcher-mark", "pick-instant-prompt-icon"/,
+    "only the three host-owned picker actions may skip the pending-action watchdog");
 
   assert.match(studioEditor,
     /const STRINGS = Object\.fromEntries\(\s*Object\.entries\(window\.CLAUDE_AURA_STRINGS \?\? \{\}\)/,
@@ -3382,8 +3385,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "background.canvas",
       "background.layer",
       "widgets.app-identity",
+      "widgets.instant-prompts",
     ],
-    "The host-owned capability registry must contain the theme targets plus the device-level wordmark page",
+    "The host-owned capability registry must contain every implemented visual target",
   );
   assert.deepEqual(
     editorApi.capabilityRegistry
@@ -3551,6 +3555,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       themeOverrides: { "studio-copy": { mode: "global", phrases: [] } },
       shuffle: null,
     },
+    instantPrompts: [],
     layers: [{
       id: "layer-00000000000000000000000000000000", index: 0,
       role: "hero", appearance: "all", context: "new-chat", viewport: "normal",
@@ -3777,8 +3782,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "A per-theme greeting edit must preserve every other local override");
   assert.match(studioCore, /greetingPreferences:\s*cloneJson\(internal\.greetingCurrent\)/,
     "Canonical Studio state must project the current host-owned greeting draft");
-  assert.match(studioEditor, /stageContext === "new-chat"\s*\?\s*\[stageGreetingEl, stagePromptEl\]/,
-    "The stage must draw the greeting above the new-chat prompt so placement controls have an effect");
+  assert.match(studioEditor,
+    /stageContext === "new-chat"\s*\?\s*\[stageGreetingEl, stageInstantPromptRail, stagePromptEl\]/,
+    "The stage must draw greeting and prompt tickets above the new-chat composer");
   for (const property of ["launcherPreviewUrl", "launcherStylePreviewUrl"]) {
     const unsafePreviewState = structuredClone(validEditorState);
     unsafePreviewState[property] = "https://example.com/launcher.png";

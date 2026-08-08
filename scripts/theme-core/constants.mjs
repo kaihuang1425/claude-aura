@@ -43,6 +43,10 @@ export const GREETING_THEME_OVERRIDE_MODES = new Set(["claude", "global", "custo
 export const STUDIO_MAX_LAYERS = 8;
 export const STUDIO_MAX_HISTORY = 50;
 export const STUDIO_MAX_PATCH_CHANGES = 16;
+export const STUDIO_MAX_INSTANT_PROMPTS = 12;
+export const INSTANT_PROMPT_LABEL_MAX_CHARS = 48;
+export const INSTANT_PROMPT_TEXT_MAX_CHARS = 1200;
+export const INSTANT_PROMPT_RUNTIME_TEXT_MAX_BYTES = 1536;
 // These are the two logical Aura client sizes used by Studio's responsive
 // framing presets. Legacy built-in artwork is resolved against the same sizes
 // before it enters the native frame editor, so the first adjustment starts
@@ -229,6 +233,7 @@ export const USER_LAUNCHER_ASSET_PATTERN = /^launcher-mark\.png$/;
 export const USER_ARTWORK_PATH_PATTERN = /^(?:background|hero|corner-top-right|corner-bottom|card-[1-3]|brand-mark)\.(?:png|webp|avif)$/;
 export const STUDIO_ARTWORK_PATH_PATTERN = /^artwork\/layer-[a-f0-9]{32}\.webp$/;
 export const STUDIO_LAYER_ID_PATTERN = /^layer-[a-f0-9]{32}$/;
+export const STUDIO_INSTANT_PROMPT_ID_PATTERN = /^prompt-[a-f0-9]{32}$/;
 export const STUDIO_SESSION_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export const STUDIO_COLOR_TOKENS = Object.freeze({
   canvas: "--aura-background-primary",
