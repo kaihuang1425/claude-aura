@@ -66,3 +66,15 @@ clone then passed `npm.cmd run verify:cycle` at **17/17**. Windows reported the
 real Aura and Studio top-level windows visible at 1293 x 765; the built-in
 Computer Use enumerator still omitted these PowerShell-owned windows, so this is
 installed/runtime evidence but not visual inspection or owner approval.
+
+## Final blocker recheck — 2026-08-08
+
+| Question | Yes / no | Current evidence |
+| --- | --- | --- |
+| Does current official documentation permit stable/release Aura Code in an injected third-party WebView2 host? | **No.** | Anthropic's current [Remote Control documentation](https://code.claude.com/docs/en/remote-control) supports `claude.ai/code` from a browser and Claude's mobile apps, while its [platform catalog](https://code.claude.com/docs/en/platforms) lists CLI, Desktop, VS Code, JetBrains, web, and mobile; neither describes a third-party WebView/WebView2 embedding or restyling contract. Its current [account-authentication guidance](https://support.claude.com/en/articles/13189465-log-in-to-your-claude-account) continues to direct third-party tools and products built for others to API-key or supported-provider authentication. This matches the existing research memo (`docs/handoff/WO27_OFFICIAL_RESEARCH_2026-08-08.md:5-31`, `docs/handoff/WO27_OFFICIAL_RESEARCH_2026-08-08.md:127-150`). |
+| Has the repo's explicit unblock condition been met? | **No.** | The blocker still requires either an affirmative Anthropic contract for subscription-authenticated third-party WebView use or a separately approved API/browser-companion architecture (`docs/plans/BLOCKED.md:514-525`). Neither exists in the current queue or official sources. The source-only exception expressly leaves stable/install/release activation and HUMAN CHECKPOINT CODE open (`docs/plans/QUEUE.md:29-56`). |
+| Can owner-observed whole-window actual-Aura evidence now be omitted or replaced? | **No.** | The repository still defines only a whole-window capture of actual Aura on live `claude.ai` as UI visual evidence (`docs/SCREENSHOT_PLAN.md:1-5`, `docs/SCREENSHOT_PLAN.md:31-60`; `docs/plans/QUEUE.md:395-404`). HUMAN CHECKPOINT CODE still requires the installed Aura/live-session matrix (`docs/SCREENSHOT_PLAN.md:468-506`), and terminal, Desktop, browser, fixture, reconstructed, or headless images cannot replace it (`docs/SCREENSHOT_PLAN.md:554-567`). Official product documentation does not waive this project-owned acceptance rule. |
+
+**Unblock conclusion: NO.** Stable/release WO-27 remains blocked, and the
+required actual-Aura whole-window observation plus explicit owner review remain
+mandatory.
