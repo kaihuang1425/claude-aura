@@ -1,5 +1,74 @@
 # Eight-theme implementation report
 
+## WO-16 final sweep — 2026-08-08
+
+**Outcome: mechanically complete release candidate; final public release
+refused.** The owner waived WO-27 and HUMAN CHECKPOINT CODE as dependencies so
+the remaining source work could continue. That waiver does not turn the
+recorded support NO-GO into a pass, approve the source-only Code experiment, or
+authorize any claim that Aura themes native Claude Desktop.
+
+The sweep ran in a clean local clone of committed source at `3c4292f`, separate
+from the shared dirty worktree:
+
+| Gate | Current result |
+| --- | --- |
+| `npm.cmd run check` | Passed, 170/170 |
+| `npm.cmd run verify:cycle` | Passed, 17/17; payload-only Light/Dark compilation for all eight themes |
+| Fresh profile | Passed from an absent `%LOCALAPPDATA%\ClaudeAura\data`; `windows/verify.ps1 -Json` created Default/enabled state and detected WebView2 `151.0.4129.72` |
+| Production asset audits | All eight `status.json` records report `asset-audit-pass`; no UI imagery was generated |
+| Windows PowerShell parse | Passed for all 15 `windows/*.ps1` files |
+| Terminal themes | Default and a validated scaffolded user kit each exported an official Light/Dark JSON pair plus the ownership manifest |
+| Release structure | A pre-report candidate contained 247 allowlisted files; its SHA-256 matched both builder output and sidecar, with no forbidden or missing sampled entries |
+
+The Remote Control sentinel transaction, installed terminal-export/Desktop-
+guidance interaction, and a new whole-window capture matrix were not repeated.
+They remain live-only evidence, not mechanical gates. The current official-
+support audit still supplies no affirmative third-party WebView2 embedding and
+restyling contract, so stable WO-27 and HUMAN CHECKPOINT CODE remain NO-GO.
+
+### Per-theme scorecard
+
+The image paths below are the existing private, gitignored whole-window Aura
+records on live `claude.ai`. They document the previously approved WO-17/
+Checkpoint C and WO-18/Checkpoint D surfaces. They do **not** approve the later
+source-only Code material cues; that optional experiment still lacks its final
+8 × 2 live review.
+
+| Theme | Audit | Max chrome bytes | Max embedded art bytes | Existing live image paths | Visual status |
+| --- | --- | ---: | ---: | --- | --- |
+| Default | Light/Dark pass | 58,222 | 28,860 | `dist/verify/live-aura/01-default-{light,dark}-new-chat-normal-aura-window.jpg` | Prior stable Aura pair approved |
+| Japanese Film Editorial | Light/Dark pass | 59,656 | 451,510 | `dist/verify/live-aura/02-japanese-film-editorial-{light,dark}-new-chat-normal-aura-window.jpg` | Prior stable Aura pair approved |
+| Korean Prestige | Light/Dark pass | 59,437 | 400,082 | `dist/verify/live-aura/03-korean-prestige-{light,dark}-new-chat-normal-aura-window.jpg` | Prior stable Aura pair approved |
+| Cartoon Studio | Light/Dark pass | 59,716 | 322,917 | `dist/verify/live-aura/04-cartoon-studio-{light,dark}-new-chat-normal-aura-window.jpg` | Prior stable Aura pair approved |
+| Anime Twilight | Light/Dark pass | 60,631 | 134,787 | `dist/verify/live-aura/05-anime-twilight-{light,dark}-new-chat-normal-aura-window.jpg` | Prior stable Aura pair approved |
+| Study Library | Light/Dark pass | 60,673 | 224,859 | `dist/verify/live-aura/06-study-library-{light,dark}-new-chat-normal-aura-window.jpg` and the approved PNG pair | Prior stable Aura pair approved |
+| Japanese Idol | Light/Dark pass | 59,756 | 696,538 | `dist/verify/live-aura/wo13-japanese-idol-*-revision-normal-aura-window.jpg` | Revised new-chat/conversation matrix approved |
+| Korean Idol | Light/Dark pass | 60,099 | 611,120 | `dist/verify/live-aura/08-korean-idol-{light,dark}-new-chat-normal-aura-window.jpg` plus conversation captures | Prior stable Aura/context matrix approved |
+
+### Provenance, licensing, and distribution boundary
+
+- Japanese Film Editorial and Japanese Idol reuse their exact supplied full
+  lockups; Korean Idol reuses its approved supplied raster. Those references do
+  not grant new redistribution rights outside the recorded product use.
+- Default, Korean Prestige, Cartoon Studio, Anime Twilight, and Study Library
+  identity sources are project-authored/generated. Repository-only masters and
+  prompt records produce the shipped PNG/ICO/WebP derivatives.
+- Project-authored code and runtime theme assets are offered under the
+  repository MIT license. Microsoft WebView2 and the two credited reference
+  projects retain their own notices in `THIRD_PARTY_NOTICES.md`.
+- Claude names, marks, interface, website, and applications remain Anthropic's;
+  `NOTICE.md` requires trademark/legal review before public or commercial
+  distribution. User-provided images remain the user's responsibility.
+- Native Claude Desktop, its package, configuration, account data, and content
+  are neither modified nor themed. Terminal export and browser guidance are
+  separate companion paths and cannot substitute for Aura Code acceptance.
+
+The architecture, asset isolation, dependency, screenshot, and maintenance
+sections below remain the detailed final report. This dated section supersedes
+older snapshot counts and any older statement that HUMAN CHECKPOINT D was
+still open.
+
 ## 0.3.x follow-up fixes
 
 Eight changes landed after the initial eight-theme system:
@@ -497,7 +566,7 @@ payload compilation in both appearance modes, the prohibition on fixture-image
 generation, and release exclusions. `theme-cli qa <id>` writes only a JSON
 asset/payload status record; it does not create a UI board or screenshot.
 
-Results recorded through 2026-07-23:
+Results recorded through 2026-08-08:
 
 The current shared work tree has completed every non-visual gate below. Windows
 release candidates are built from the explicit distribution allowlist and
@@ -508,16 +577,19 @@ reinstalled after the source tree and live checkpoint settle.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | Passed, 22/22 |
-| `npm run check` | Passed, 22/22; includes JavaScript and platform parsing plus the complete test suite |
+| `npm test` | Covered by the clean-clone `npm run check` run; 170/170 tests passed |
+| `npm run check` | Passed, 170/170; includes JavaScript and platform parsing plus the complete test suite |
 | `npm run verify:cycle` | Passed, 17/17; the payload-only verifier runs the test suite, then compiles and syntax-checks all eight themes in Light and Dark; it launches no browser and writes no images |
-| PowerShell parser | Passed for all eight `windows/*.ps1` files through the suite; the edited `windows/aura-ui.ps1`, `windows/install.ps1`, and `windows/uninstall.ps1` also pass an explicit zero-error parse |
+| Fresh-state verifier | Passed from an absent sandboxed data directory; initialized Default/enabled state and detected WebView2 `151.0.4129.72` |
+| PowerShell parser | Passed with zero errors for all 15 `windows/*.ps1` files |
+| Production asset audits | All eight `theme-cli qa <id>` runs wrote `asset-audit-pass` status records and no UI images |
+| Terminal-theme export | Passed for the built-in Default theme and one validated scaffolded user theme, each producing Light/Dark JSON and an ownership manifest |
 | Explicit payload budgets | Passed 48 locale/theme/appearance cases; maximum payload-minus-art 64,430 bytes and maximum embedded art 662,664 bytes |
 | Lint | Not configured in the repository; there is no linter dependency or lint script, so this gate is explicitly not applicable rather than represented by `npm run check` |
 | Typecheck | Not applicable; the project contains JavaScript, PowerShell, and shell sources with no TypeScript sources, `tsconfig.json`, or typecheck script |
 | Historical `npm run release` snapshot | The earlier 2026-07-22 WO-18 snapshot produced a 153-entry, 15,024,082-byte archive with SHA-256 `8d2e113aaca9483ea9802f0e647f15a6403641106358c3461df485e3ba3ff248`. It predates the current uncommitted fixes and is not current release evidence. |
-| Current Windows release status | A provisional versioned candidate is present and has passed exact workspace ↔ ZIP ↔ installed-tree path/hash comparison. Its digest is recorded only in the generated `.sha256` sidecar so the packaged report does not invalidate its own archive. Rebuild, reinstall, and repeat the comparison after every source edit and once more after HUMAN CHECKPOINT D and HUMAN CHECKPOINT CODE. |
-| WO-18 in-page brand identity | The repository-only reference tree freezes one normalized horizontal `Claude` source per built-in and records source provenance/prompts: exact supplied full lockups for Japanese Film Editorial and Japanese Idol, the approved supplied Korean Idol raster, and newly authored Default, Korean Prestige, Cartoon Studio, Anime Twilight, and Study Library directions. The deterministic builder emits appearance-specific Light/Dark PNGs under all eight theme-art directories. One artwork-budgeted renderer channel preserves the native wrapper, reveals one inert image only after decode on a unique expanded host, and restores the native visual for collapsed/undersized, ambiguous, failed, forced-colors, Original-look, cleanup, and remount paths. Runtime derivatives and the builder ship; normalized sources, prompts, and ignored source kits do not. This is mechanical implementation evidence only: live expanded-sidebar Light/Dark quality across all eight themes and selector/fallback behavior remain open at HUMAN CHECKPOINT D. |
+| Current Windows release status | WO-16 produces a mechanically verified candidate only. The archive digest is recorded in its generated `.sha256` sidecar so the packaged report does not invalidate its own archive. Final public release is refused while WO-27 and HUMAN CHECKPOINT CODE remain NO-GO. |
+| WO-18 in-page brand identity | The repository-only reference tree freezes one normalized horizontal `Claude` source per built-in and records source provenance/prompts: exact supplied full lockups for Japanese Film Editorial and Japanese Idol, the approved supplied Korean Idol raster, and newly authored Default, Korean Prestige, Cartoon Studio, Anime Twilight, and Study Library directions. The deterministic builder emits appearance-specific Light/Dark PNGs under all eight theme-art directories. One artwork-budgeted renderer channel preserves the native wrapper, reveals one inert image only after decode on a unique expanded host, and restores the native visual for collapsed/undersized, ambiguous, failed, forced-colors, Original-look, cleanup, and remount paths. Runtime derivatives and the builder ship; normalized sources, prompts, and ignored source kits do not. The live expanded/collapsed Light/Dark and fallback review was subsequently completed at HUMAN CHECKPOINT D. |
 | Windows title-bar source check | Passed; best-effort DWM dark-caption and caption/text/border attributes are present with a non-fatal fallback path |
 | Windows uninstaller dry run | Passed with `-WhatIf`; enumerated only Claude Aura shortcuts plus `%LOCALAPPDATA%\ClaudeAura\app`, `data`, and `webview` |
 | Aura Studio framing simulator exercise | Mechanically exercised on 2026-07-18 at the product 1080 x 720 viewport with a WebView bridge simulator. Pointer drags adjusted card and background framing; native range controls, reset/cancel/save, host acknowledgement, reload persistence, live background aspect ratio, zh-HKTW/zh-CN copy, image-load failure handling, and zero fresh-run warnings/errors were checked. This was not an acceptance pass: the offline walkthrough images were retired and deleted on 2026-07-20, and actual-Aura review remains the only visual evidence. |
@@ -525,12 +597,12 @@ reinstalled after the source tree and live checkpoint settle.
 | WO-11 Anime Twilight asset cycle | Source/runtime checksum freeze, one-layer decode, status-only asset audit, Light/Dark payload compilation, and actual-Aura Light/Dark 1920 x 1080 review pass. The user approved the visual evidence at HUMAN CHECKPOINT C. |
 | WO-12 Study Library asset and appearance cycle | Two-layer decode, main-canvas anchor, status-only asset audit, source/runtime checksum freeze, localized persisted System/Light/Dark control, Light/Dark payload compilation, and user-approved whole-window Light/Dark Aura captures on real `claude.ai`. |
 | WO-17 live Aura UX and identity cycle | Complete actual-Aura Light/Dark matrix for all eight themes on live `claude.ai`; Original-look cleanup; Korean Idol new-chat/conversation contexts; representative hover/selected state; Studio Back-to-Aura activation; one content scroller; and Aura title-bar/tray identity at normal DPI and actual 2560 × 1600 / 200% display scaling. |
-| WO-18 themed identity/launcher/preview amendment | Twenty-two automated checks, all eight Light/Dark payload cycles, eight status-only asset audits, deterministic mark rebuild equality, exact preview-master hashes/dimensions, non-destructive frame metadata, release/install scoping, and dynamic running-app identity source assertions pass. The installed focused smoke check in `dist/verify/live-aura/wo18-identity-preview-smoke/manifest.json` cycled all eight marks, visibly synchronized Japanese Film across the running app surfaces available in one native full-monitor capture, and proved persisted/resettable 600% framing against an unchanged 1709×920 master. The complete localized editor and permanent-circle launcher cold-start/hover/click/whole-button-drag/menu walkthrough remains HUMAN CHECKPOINT D. |
-| WO-18 premium identity correction | The prior generic palette-swapped mark direction was rejected on 2026-07-22. Eight distinct authored sources, deterministic 96×96 PNGs, per-theme nine-frame ICOs, owned Desktop/Start shortcut switching, custom content-addressed ICO derivation, and Original-look Default fallback supersede it. The current source snapshot passes `npm run check` 22/22, `npm run verify:cycle` 17/17, all eight `theme-cli qa <id>` audits with the exact 16/20/24/32/40/48/64/128/256 ICO frame set, and zero parse errors across all eight Windows PowerShell files. The release must still be regenerated after HUMAN CHECKPOINT D and the final source tree settle. WO-18 is not complete; corrected live quality and the complete interaction review remain open. |
-| Pinned taskbar identity correction | Installer-created Aura and Studio shortcuts now receive the same explicit `ClaudeAura` AppUserModelID as the running process. A theme change includes only top-level taskbar pins whose exact PowerShell target, installed script, launch arguments, reparse status, and existing identity pass validation; their theme icon and AppUserModelID update in the existing prevalidated transaction and restore together on rollback. Executable Windows regression coverage creates real temporary `.lnk` files, proves identity set/read/clear behavior, discovers the valid pinned copy, and leaves a foreign-identity shortcut unchanged. `npm.cmd run check` passes 64/64, `npm.cmd run verify:cycle` passes 17/17, the edited PowerShell files parse without errors, and `git diff --check` passes. HUMAN CHECKPOINT D remains open for the installed multi-theme taskbar visual review. |
-| WO-18 editor-feasibility amendment | The current shared snapshot passes `npm run check` 22/22, `npm run verify:cycle` 17/17, all eight status-only theme audits, and all eight Windows PowerShell parses. Executable core tests cover bounded exact patches, rollback, one-step multi-field Undo/Redo, localized metadata persistence, stable layer identities through reorder, route-section exclusivity, renderer-selected Standard/Wide framing, clipped live-main geometry, and queued/debounced/in-flight unsaved status. Front-end contracts cover visual Create, Quick/Advanced separation, coalescing, exact numeric controls, privacy, validation recovery, the persistent Back/status/Cancel/Save header, and the 1080 px two-pane breakpoint. Exact Windows package/install comparison must be repeated after every source edit. The actual-window interaction and visual approval remain open at HUMAN CHECKPOINT D; no offline substitute is accepted. |
-| WO-18 Studio-shell theming amendment | `studioStyleFromTheme` supplies one canonical dual-mode projection to generated built-ins, runtime user-theme listings, and last-valid editor state. Exact bridge/page validation, fixed root-variable mapping, contrast-safe material compositing, Default/System Original-look fallback, on-accent foreground use, forced-colors reset, and artwork/wallpaper/CSS/path exclusions have direct regression coverage. The complete mechanical gates and Windows package/install parity are rechecked after source edits. Acceptance remains Partial until the installed all-eight Light/Dark/System cycle, valid/invalid draft synchronization, user-theme restart, Original-look reset, and accessibility/media-exclusion review complete at HUMAN CHECKPOINT D. |
-| WO-18 permanent Studio-shell profiles | Eight closed Aura-owned profile branches add pairwise-distinct non-colour structure for the permanent themes. Selection is limited to the immutable generated-theme snapshot; host-added themes and active drafts use neutral chrome. Regressions require the exact eight IDs, a complete variable set, at least two structural differences per pair, no raw colour/media/path channel, reduced-motion lift removal, and high-contrast/forced-colours decoration removal. `npm run check` passes 22/22, `npm run verify:cycle` passes 17/17, all eight status-only audits pass, and the focused Studio regression passes. Exact Windows package/install comparison must be repeated after every source edit. Acceptance remains Partial until the installed 1080×720 Gallery/settings Light/Dark/System walkthrough confirms each profile and the neutral Quick/Advanced draft boundary. |
+| WO-18 themed identity/launcher/preview amendment | Twenty-two automated checks, all eight Light/Dark payload cycles, eight status-only asset audits, deterministic mark rebuild equality, exact preview-master hashes/dimensions, non-destructive frame metadata, release/install scoping, and dynamic running-app identity source assertions passed at the recorded slice. The installed focused smoke check in `dist/verify/live-aura/wo18-identity-preview-smoke/manifest.json` cycled all eight marks and proved persisted/resettable 600% framing against an unchanged 1709×920 master. The complete walkthrough was subsequently approved at HUMAN CHECKPOINT D. |
+| WO-18 premium identity correction | The prior generic palette-swapped mark direction was rejected on 2026-07-22. Eight distinct authored sources, deterministic 96×96 PNGs, per-theme nine-frame ICOs, owned Desktop/Start shortcut switching, custom content-addressed ICO derivation, and Original-look Default fallback supersede it. The recorded slice passed its then-current mechanical gates; corrected live quality and the complete interaction review were subsequently approved at HUMAN CHECKPOINT D. |
+| Pinned taskbar identity correction | Installer-created Aura and Studio shortcuts now receive the same explicit `ClaudeAura` AppUserModelID as the running process. A theme change includes only top-level taskbar pins whose exact PowerShell target, installed script, launch arguments, reparse status, and existing identity pass validation; their theme icon and AppUserModelID update in the existing prevalidated transaction and restore together on rollback. Executable Windows regression coverage creates real temporary `.lnk` files, proves identity set/read/clear behavior, discovers the valid pinned copy, and leaves a foreign-identity shortcut unchanged. The installed multi-theme taskbar review was subsequently completed at HUMAN CHECKPOINT D. |
+| WO-18 editor-feasibility amendment | The recorded snapshot passed its then-current checks, all eight status-only theme audits, and PowerShell parses. Executable core tests cover bounded exact patches, rollback, one-step multi-field Undo/Redo, localized metadata persistence, stable layer identities through reorder, route-section exclusivity, renderer-selected Standard/Wide framing, clipped live-main geometry, and queued/debounced/in-flight unsaved status. Front-end contracts cover visual Create, Quick/Advanced separation, coalescing, exact numeric controls, privacy, validation recovery, the persistent Back/status/Cancel/Save header, and the 1080 px two-pane breakpoint. The actual-window interaction and visual review were subsequently completed at HUMAN CHECKPOINT D. |
+| WO-18 Studio-shell theming amendment | `studioStyleFromTheme` supplies one canonical dual-mode projection to generated built-ins, runtime user-theme listings, and last-valid editor state. Exact bridge/page validation, fixed root-variable mapping, contrast-safe material compositing, Default/System Original-look fallback, on-accent foreground use, forced-colors reset, and artwork/wallpaper/CSS/path exclusions have direct regression coverage. The installed all-eight Light/Dark/System, draft/restart, Original-look, and accessibility/media-exclusion review was completed at HUMAN CHECKPOINT D. |
+| WO-18 permanent Studio-shell profiles | Eight closed Aura-owned profile branches add pairwise-distinct non-colour structure for the permanent themes. Selection is limited to the immutable generated-theme snapshot; host-added themes and active drafts use neutral chrome. Regressions require the exact eight IDs, a complete variable set, at least two structural differences per pair, no raw colour/media/path channel, reduced-motion lift removal, and high-contrast/forced-colours decoration removal. The installed 1080×720 Gallery/settings Light/Dark/System walkthrough and neutral Quick/Advanced draft boundary were completed at HUMAN CHECKPOINT D. |
 | WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass. After the first Checkpoint C review rejected the Light framing, the top-right 74%/660px revision was recaptured in actual Aura across Light/Dark new-chat/conversation; Dark is unchanged. The user approved HUMAN CHECKPOINT C on 2026-07-21 and the recorded assets/hashes are frozen. |
 
 Before creating an archive, run the checks and then:
@@ -629,8 +701,8 @@ They are never injected into Claude or used as runtime backgrounds.
 transparent 1254×1254 built-in identity sources and exact prompt record. They
 remain repository-only; deterministic transparent 96×96 PNGs and nine-frame
 ICOs under `assets/theme-art/<id>/` are the distributable derivatives. These
-source and derived assets are not live visual evidence. The complete revised
-identity-quality review remains pending HUMAN CHECKPOINT D.
+source and derived assets are not live visual evidence. Their revised installed
+identity-quality review was completed at HUMAN CHECKPOINT D.
 
 `assets/studio-previews/references/in-page-brand-wordmarks-v1/` preserves one
 normalized 344×124 horizontal `Claude` source per built-in plus `PROMPTS.md`.
@@ -641,22 +713,20 @@ matched to their frozen recipes. `scripts/build-brand-wordmarks.mjs` validates
 the source set and emits a separate shipped Light/Dark pair under every
 `assets/theme-art/<id>/`. The source tree is excluded from releases, and the
 renderer keeps Claude's native compact visual outside a uniquely discovered
-expanded sidebar. Mechanical wiring does not replace the required all-eight
-actual-Aura Light/Dark and fallback review.
+expanded sidebar. The all-eight actual-Aura Light/Dark and fallback review was
+completed at HUMAN CHECKPOINT D; mechanical wiring alone was not used as its
+substitute.
 
 ## Remaining limitations
 
-- Aura 0.3 currently themes the live Claude website only. It does not theme the
-  native Claude Desktop Code tab or the Claude Code terminal, and it gives
-  ordinary web chat no local-project authority. Release-blocking WO-27 is now
-  specified as CLI-first: it must prove an official local CLI/Remote Control
-  engine through live `claude.ai/code`, consent-based local/no-local setup,
-  truthful project/process state, Settings recovery, a named Desktop
-  direct-handoff or guidance-only contract, optional VS Code handoff, complete
-  benefits/limitations/privacy disclosure, the fixed Aura Code adapter, and
-  matching terminal-theme export. Native Desktop remains unchanged and
-  unthemed. HUMAN CHECKPOINT CODE must pass before the tutorial or final
-  release sweep can begin.
+- Aura 0.3 themes the live Claude website only. It does not theme native Claude
+  Desktop and gives ordinary web chat no local-project authority. The safe
+  companion coverage is terminal-theme export plus `desktop-guidance-only`;
+  the opt-in Code outer-shell styling remains a source-checkout experiment.
+  Stable WO-27 and HUMAN CHECKPOINT CODE are NO-GO because no affirmative
+  third-party WebView2 support contract has been established. The owner waived
+  their dependency only to continue source work, so the final public release
+  remains refused.
 - Production styling targets the current semantic and ARIA structure rendered by
   `claude.ai`; selectors should be rechecked when that upstream interface changes.
 - Native title-bar colors are best-effort. On supported Windows builds, Aura
@@ -667,19 +737,11 @@ actual-Aura Light/Dark and fallback review.
 - Supplied portrait pixels appear only in uncropped Studio selector masters.
   Renderer backgrounds continue to use isolated project artwork; closer runtime
   portrait fidelity still requires separately licensed, isolated source art.
-- The revised themed identity requires an actual-Aura quality pass across the
-  running surfaces and four owned Desktop/Start shortcuts at HUMAN CHECKPOINT D;
-  source files and offline asset inspection cannot close that gate.
-- The eight built-in in-page wordmark pairs require the same actual-Aura
-  checkpoint in expanded Light and Dark navigation plus collapsed/native,
-  asset-failure, forced-colors, Original-look, and SPA-remount fallback states.
-  Compiled payload and lifecycle assertions cannot prove current upstream
-  selector compatibility, native interaction preservation, or final visual
-  fit.
+- The eight built-in in-page wordmark pairs passed their recorded Checkpoint D
+  review, but upstream selector changes can still invalidate discovery or fit;
+  every future visual revision therefore needs new actual-Aura evidence.
 - Studio shell projection intentionally excludes renderer artwork and personal
-  wallpaper. Its all-eight mode cycle, last-valid/error behavior, saved-theme
-  restart, Original-look reset, and forced-colors behavior still require the
-  installed live review at HUMAN CHECKPOINT D.
+  wallpaper; later Phase 2 editor surfaces must preserve that boundary.
 - The macOS scripts remain a reversible legacy launcher; the native, non-technical
   rich gallery is the supported Windows WebView2 experience.
 

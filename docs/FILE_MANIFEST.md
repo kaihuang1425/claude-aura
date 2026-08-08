@@ -1,8 +1,7 @@
 # Deliverable file manifest
 
-The `work/full-theme-system` branch has no tracked baseline commit, so Git cannot
-reliably classify paths as created versus modified. The list below is the
-exhaustive current deliverable surface, excluding generated release output,
+The list below is the exhaustive deliverable surface revalidated during the
+2026-08-08 WO-16 clean-clone sweep. It excludes generated release output,
 local workspace metadata, internal planning records, and the unsafe reference
 surfaces outside the categorized asset tree. The retired reconstructed
 offline-preview files and comparison screenshots are not deliverables.
