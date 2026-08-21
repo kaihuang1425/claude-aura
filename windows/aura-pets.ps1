@@ -21,6 +21,7 @@ function New-AuraPetIntent {
   return [PSCustomObject][ordered]@{
     schemaVersion = 1
     contractId = $script:AuraPetContractId
+    sourceApp = 'claude-aura'
     writerId = [Guid]::NewGuid().ToString('D').ToLowerInvariant()
     catalogVersion = $script:AuraPetCatalogVersion
     revision = [long]0
@@ -34,12 +35,15 @@ function ConvertTo-AuraPetIntent {
   param([Parameter(Mandatory = $true)][object]$Value)
   $names = @(Get-AuraTaskboardPropertyNames -Value $Value)
   $selectedPetId = Get-AuraTaskboardProperty -Value $Value -Name 'selectedPetId'
-  if ($names.Count -ne 8 -or $names -cnotcontains 'schemaVersion' -or
+  $legacy = $names.Count -eq 8 -and $names -cnotcontains 'sourceApp'
+  if (($names.Count -ne 9 -and -not $legacy) -or $names -cnotcontains 'schemaVersion' -or
       $names -cnotcontains 'contractId' -or $names -cnotcontains 'writerId' -or
+      (-not $legacy -and $names -cnotcontains 'sourceApp') -or
       $names -cnotcontains 'catalogVersion' -or $names -cnotcontains 'revision' -or
       $names -cnotcontains 'enabled' -or $names -cnotcontains 'selectedPetId' -or
       $names -cnotcontains 'changedAt' -or $Value.schemaVersion -ne 1 -or
       [string]$Value.contractId -cne $script:AuraPetContractId -or
+      (-not $legacy -and [string]$Value.sourceApp -cnotin @('gemini-aura', 'claude-aura')) -or
       $Value.writerId -isnot [string] -or -not (Test-AuraPetUuid -Value ([string]$Value.writerId)) -or
       $Value.catalogVersion -ne $script:AuraPetCatalogVersion -or
       -not (Test-AuraTaskboardInteger -Value $Value.revision -Minimum 0 -Maximum 9007199254740991) -or
@@ -53,6 +57,7 @@ function ConvertTo-AuraPetIntent {
   return [PSCustomObject][ordered]@{
     schemaVersion = 1
     contractId = $script:AuraPetContractId
+    sourceApp = if ($legacy) { 'gemini-aura' } else { [string]$Value.sourceApp }
     writerId = [string]$Value.writerId
     catalogVersion = $script:AuraPetCatalogVersion
     revision = [long]$Value.revision
@@ -101,9 +106,10 @@ function Read-AuraPetIntent {
     }
     $json = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
     foreach ($field in @(
-        'schemaVersion', 'contractId', 'writerId', 'catalogVersion',
+        'schemaVersion', 'contractId', 'sourceApp', 'writerId', 'catalogVersion',
         'revision', 'enabled', 'selectedPetId', 'changedAt')) {
-      if ([regex]::Matches($json, ('"{0}"\s*:' -f [regex]::Escape($field))).Count -ne 1) {
+      $occurrences = [regex]::Matches($json, ('"{0}"\s*:' -f [regex]::Escape($field))).Count
+      if ($(if ($field -ceq 'sourceApp') { $occurrences -gt 1 } else { $occurrences -ne 1 })) {
         throw 'Pet selection file is invalid.'
       }
     }
@@ -188,6 +194,7 @@ function New-AuraPetIntentRevision {
   return ConvertTo-AuraPetIntent -Value ([PSCustomObject][ordered]@{
     schemaVersion = 1
     contractId = $script:AuraPetContractId
+    sourceApp = 'claude-aura'
     writerId = [string]$Current.writerId
     catalogVersion = $script:AuraPetCatalogVersion
     revision = [long]$Current.revision + 1

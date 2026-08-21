@@ -112,6 +112,7 @@ test("JavaScript and platform scripts parse", async () => {
     "assets/renderer-prepaint.js",
     "studio/app.js",
     "studio/editor.js",
+    "studio/theme-assistant.js",
     ...studioLocaleScripts,
     "scripts/build-aura-icon.mjs",
     "scripts/build-launcher-assets.mjs",
@@ -192,6 +193,7 @@ test("Windows launcher avoids live page controls without mutating the saved posi
   };
 
   const positionUpdate = powershellFunction("Update-AuraUiLauncherPosition");
+  const clampLocation = powershellFunction("Get-AuraUiLauncherClampedLocation");
   const avoidCollector = powershellFunction("Get-AuraUiLauncherAvoidRectangles");
   const probeValidation = powershellFunction("Assert-AuraUiLauncherLayoutProbe");
   const probeRequest = powershellFunction("Request-AuraUiLauncherLayoutProbe");
@@ -215,6 +217,9 @@ test("Windows launcher avoids live page controls without mutating the saved posi
   assert.match(positionUpdate,
     /Get-AuraUiLauncherClampedLocation[\s\S]*?Get-AuraUiLauncherAvoidRectangles[\s\S]*?Get-AuraUiLauncherCollisionFreeLocation/,
     "Launcher placement must solve from the clamped saved preference and bounded live obstacles");
+  assert.match(clampLocation,
+    /\$topLeft\.X \+ \$gap[\s\S]*?\$bottomRight\.X - \$script:Launcher\.Width - \$gap[\s\S]*?\$topLeft\.Y \+ \$gap[\s\S]*?\$bottomRight\.Y - \$script:Launcher\.Height - \$gap/,
+    "The complete floating launcher surface, including its halo, must remain inside Aura's client area");
   assert.match(probeValidation,
     /\$Value\.controls -isnot \[System\.Array\][\s\S]*?@\(\$Value\.controls\)\.Count -gt 12/,
     "The host must reject non-array or over-budget control collections");
@@ -303,7 +308,7 @@ test("Windows launcher avoids live page controls without mutating the saved posi
       "$highDpi=Get-AuraUiLauncherCollisionFreeLocation -Preferred ([Drawing.Point]::new(1800,1240)) -Bounds ([Drawing.Rectangle]::new(0,0,2000,1400)) -CircleSize 96 -Halo 16 -Gap 32 -AvoidRectangles @([Drawing.Rectangle]::new(1440,1080,520,300))",
       "Assert-Point -Actual $highDpi -X 1800 -Y 936 -Label 'DPI-scaled composer avoidance'",
       "$edgeClamped=Get-AuraUiLauncherCollisionFreeLocation -Preferred ([Drawing.Point]::new(-200,900)) -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @()",
-      "Assert-Point -Actual $edgeClamped -X 8 -Y 628 -Label 'Visible-circle edge clamp'",
+      "Assert-Point -Actual $edgeClamped -X 16 -Y 620 -Label 'Whole-launcher edge clamp'",
       "$restored=Get-AuraUiLauncherCollisionFreeLocation -Preferred $preferred -Bounds $bounds -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @()",
       "Assert-Point -Actual $restored -X 900 -Y 620 -Label 'Preferred placement after obstruction removal'",
       "$noSolution=Get-AuraUiLauncherCollisionFreeLocation -Preferred ([Drawing.Point]::new(20,20)) -Bounds ([Drawing.Rectangle]::new(0,0,100,100)) -CircleSize 48 -Halo 8 -Gap 16 -AvoidRectangles @([Drawing.Rectangle]::new(0,0,100,100))",

@@ -122,7 +122,11 @@ test("Windows Setup uses a native, per-user, offline trust boundary", async () =
   assert.match(transaction, /\[ValidateSet\('prepare', 'commit', 'rollback', 'recover'\)\]/);
   assert.match(transaction, /Write-AuraAtomicText -Path \$journalPath/);
   assert.match(transaction, /Assert-AuraTreeHasNoReparsePoints/);
-  assert.match(transaction, /Get-FileHash -LiteralPath \$sourceFile\.FullName -Algorithm SHA256/);
+  assert.match(transaction,
+    /function Get-AuraFileSha256[\s\S]*?\[Security\.Cryptography\.SHA256\]::Create\(\)/,
+    "Native Setup must hash with the .NET runtime available in its maintenance process");
+  assert.doesNotMatch(transaction, /\bGet-FileHash\b/,
+    "Native Setup must not depend on PowerShell module autoloading for app verification");
   assert.match(transaction, /AURA_INSTALL_TRANSACTION=\$id/);
   const finalizedFunction = transaction.match(
     /function Test-AuraTransactionFinalized[\s\S]*?(?=function Complete-AuraCommit)/u,
@@ -373,6 +377,8 @@ test("installer build signs before hashing and rejects stale or ambiguous artifa
     /trust: options\.signed[\s\S]{0,180}?"sha256-only"[\s\S]{0,100}?"development-only"/);
   assert.doesNotMatch(builder, /checkedCommand\("powershell\.exe"/,
     "Build-time signature checks must use the absolute system PowerShell path");
+  assert.match(builder, /PSModulePath: trustedModulePath/,
+    "Signature inspection must not inherit PowerShell 7 module paths");
   assert.match(builder, /if \(options\.signed && signature\.status !== "Valid"\)/);
   const signatureIndex = builder.indexOf(
     "const signature = powershellSignature(powerShellPath, stagedArtifactPath)",

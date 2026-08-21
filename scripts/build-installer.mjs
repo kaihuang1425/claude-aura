@@ -236,6 +236,7 @@ function windowsPowerShellPath() {
 }
 
 function powershellSignature(powerShellPath, artifactPath) {
+  const trustedModulePath = path.join(path.dirname(powerShellPath), "Modules");
   const script = [
     "$signature = Get-AuthenticodeSignature -LiteralPath $env:AURA_INSTALLER_ARTIFACT",
     "[pscustomobject]@{",
@@ -252,7 +253,11 @@ function powershellSignature(powerShellPath, artifactPath) {
     "-Command",
     script,
   ], "Authenticode inspection", {
-    env: { ...process.env, AURA_INSTALLER_ARTIFACT: artifactPath },
+    env: {
+      ...process.env,
+      PSModulePath: trustedModulePath,
+      AURA_INSTALLER_ARTIFACT: artifactPath,
+    },
   });
   return JSON.parse(result.stdout.trim());
 }

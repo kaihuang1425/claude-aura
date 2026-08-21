@@ -161,13 +161,13 @@ test("Prompt Shelf is a localized native host surface with reversible lifecycle 
     "The launcher menu must expose the current-target Action Queue shortcut");
   assert.match(powershellFunction(ui, "Show-AuraUiLauncherMenu"),
     /\$script:LauncherMenu\.Show\(\[System\.Windows\.Forms\.Cursor\]::Position\)/,
-    "Ordinary click and right-click must share the existing launcher menu");
+    "Right-click must retain the existing launcher menu");
   assert.match(ui,
     /\$eventArgs\.Button -eq \[System\.Windows\.Forms\.MouseButtons\]::Right[\s\S]{0,220}?Show-AuraUiLauncherMenu/,
     "Right-click must continue to open the launcher menu");
   assert.match(ui,
-    /\$wasClickArmed[\s\S]{0,260}?Show-AuraUiLauncherMenu/,
-    "An undragged left click must make Action Queue discoverable through the launcher menu");
+    /\$wasClickArmed[\s\S]{0,260}?Show-AuraUiStudio -OfferIntroduction/,
+    "An undragged left click must use the Gemini-compatible Studio default");
   assert.match(ui, /0x50\s*\{\s*\$eventArgs\.Handled\s*=\s*\$true;\s*Show-AuraTaskboardQueue/,
     "Ctrl+Shift+P must open the current-target Action Queue");
   for (const eventName of ["NavigationStarting", "SourceChanged", "HistoryChanged", "ProcessFailed"]) {

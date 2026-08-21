@@ -330,6 +330,25 @@ function Restore-AuraTransaction {
   Remove-AuraJournalFile
 }
 
+function Get-AuraFileSha256 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = $null
+  $algorithm = $null
+  try {
+    $fullPath = Get-AuraFullPath -Path $Path
+    $stream = [IO.File]::Open(
+      $fullPath,
+      [IO.FileMode]::Open,
+      [IO.FileAccess]::Read,
+      [IO.FileShare]::Read)
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+  } finally {
+    if ($null -ne $stream) { $stream.Dispose() }
+    if ($null -ne $algorithm) { $algorithm.Dispose() }
+  }
+}
+
 function Copy-AuraVerifiedTree {
   param(
     [Parameter(Mandatory = $true)][string]$Source,
@@ -361,8 +380,8 @@ function Copy-AuraVerifiedTree {
     New-Item -ItemType Directory -Force -Path $destinationDirectory | Out-Null
     Assert-AuraItemIsNotReparsePoint -Root $Destination -Path $destinationDirectory
     Copy-Item -LiteralPath $sourceFile.FullName -Destination $destinationPath
-    $sourceHash = (Get-FileHash -LiteralPath $sourceFile.FullName -Algorithm SHA256).Hash
-    $destinationHash = (Get-FileHash -LiteralPath $destinationPath -Algorithm SHA256).Hash
+    $sourceHash = Get-AuraFileSha256 -Path $sourceFile.FullName
+    $destinationHash = Get-AuraFileSha256 -Path $destinationPath
     if ($sourceFile.Length -ne (Get-Item -LiteralPath $destinationPath).Length -or
         $sourceHash -cne $destinationHash) {
       throw "Claude Aura staged file verification failed: $relative"
