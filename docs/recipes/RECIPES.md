@@ -32,6 +32,26 @@ Shared rules:
 - Backgrounds: `position center / size cover / mobile keep / mask none`.
 - Any slot marked (await) → asset-request.md entry, not procedural art.
 
+New-chat hero composition (2026-08-21 owner comparison pass):
+
+- The greeting and composer remain centered as one composition. `composer X`
+  is `newChatLayout.offsetXRatio`; greeting X/Y are the frame ratios.
+- Permanent-theme greetings use no native or compact mark. The theme identity
+  belongs to the full scene, and a detached mark must never interrupt wording.
+- Light and Dark share geometry. Standard/Wide values are respectively
+  `fontSize / lineHeight / maxWidthRatio`; every frame stays centered.
+
+| Theme | Composer X | Standard | Wide | Greeting X/Y | Typography |
+| --- | ---: | --- | --- | --- | --- |
+| default | 0 | 36 / 1.12 / 0.70 | 42 / 1.08 / 0.64 | 0 / -0.02 | editorial 500, primary |
+| japanese-film-editorial | 0 | 38 / 1.08 / 0.64 | 46 / 1.05 / 0.58 | 0 / -0.03 | editorial 500, primary |
+| korean-prestige | 0 | 36 / 1.10 / 0.62 | 44 / 1.06 / 0.56 | 0 / -0.03 | humanist 600, primary |
+| cartoon-studio | 0 | 36 / 1.10 / 0.68 | 44 / 1.06 / 0.62 | 0 / -0.02 | rounded 700, accent |
+| anime-twilight | 0 | 36 / 1.10 / 0.62 | 44 / 1.06 / 0.56 | 0 / -0.04 | humanist 600, restrained glow |
+| study-library | 0 | 36 / 1.10 / 0.68 | 44 / 1.06 / 0.62 | 0 / -0.02 | editorial 600, hairline |
+| japanese-idol | 0 | 38 / 1.08 / 0.62 | 46 / 1.05 / 0.56 | 0 / -0.04 | editorial 600, accent |
+| korean-idol | 0 | 36 / 1.08 / 0.60 | 44 / 1.04 / 0.54 | 0 / -0.04 | system sans 700, primary |
+
 Live native-chrome baseline (WO-18; fixed recipes, not user-schema fields):
 
 - Apply these recipes only to uniquely marked existing Claude roles. Missing,

@@ -1142,7 +1142,7 @@
       greetingMemory.l = greetingMemory.s;
       return greetingMemory.s;
     };
-    custom = (ma, sh) => {
+    custom = (ma, sh, instant = false) => {
       const i = pick();
       if (i < 0 || !bd?.n?.isConnected) return 0;
       if (/^(pending|verifying|custom)$/.test(st) && rn?.isConnected) {
@@ -1178,19 +1178,24 @@
           const v = c?.getPropertyValue?.(p); if (v) rn.style.setProperty(p, v);
         }
       }
-      st = "pending";
-      af(() => {
+      const activate = (verify) => {
         const r = rn?.getBoundingClientRect?.(), m = visibleRect(ma);
         if (!r || !m || r.width <= 0 || r.height <= 0 || r.width > m.width) {
-          fail(U); return;
+          fail(U); return 0;
         }
         bd.n.setAttribute(G, "native-mark");
         for (const k of bd.ks) k.setAttribute(K, "native");
         bd.u.setAttribute(H, "true"); bd.u.setAttribute("aria-hidden", "true");
         bd.u.style.setProperty("display", "none");
         rn.removeAttribute("aria-hidden"); rn.style.removeProperty("position"); rn.style.removeProperty("visibility");
-        if (!fit(rn, ma, sh)) { fail(U); return; }
-        st = "verifying";
+        if (!fit(rn, ma, sh)) { fail(U); return 0; }
+        st = verify ? "verifying" : "custom";
+        return 1;
+      };
+      if (instant) return activate(false);
+      st = "pending";
+      af(() => {
+        if (!activate(true)) return;
         af(() => {
           if (!fit(rn, ma, sh)) fail(U);
           else st = "custom";
@@ -1207,6 +1212,7 @@
       if (mf) return fail(U);
       if (ctx !== "new-chat") return fail(ctx === "conversation" ? ctx : "other", ctx === "conversation");
       if (!ma || !sh || !gr) return fail("missing");
+      const sameVisit = greetingMemory.v;
       greetingMemory.v = true;
       const x = find(ma, sh, gr);
       if (x[0] !== "found") return fail(x[0], false, x[1]);
@@ -1216,7 +1222,7 @@
       }
       cc = greetingMatches = x[1];
       if (ps.length) {
-        if (!custom(ma, sh)) st = U;
+        if (!custom(ma, sh, sameVisit && st === "custom")) st = U;
         else watch(ma, sh, bd?.n, bd?.u, rn, ...bd.ks);
         return;
       }

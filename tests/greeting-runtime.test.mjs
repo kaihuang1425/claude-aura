@@ -650,6 +650,10 @@ test("plain-div greeting binds outside the composer group and swaps with exactly
 
   app.remountGreeting();
   app.window.__CLAUDE_AURA_STATE__.ensure();
+  assert.equal(app.greetings[0].text.getAttribute(H), "true",
+    "an established Aura greeting exposed Claude's raw replacement during a remount");
+  assert.equal(app.replacements().length, 1,
+    "an established Aura greeting did not hand off synchronously during a remount");
   app.flushFrame();
   app.flushFrame();
   assert.equal(app.replacements()[0].querySelector(`[${T}]`).textContent, phrase,
