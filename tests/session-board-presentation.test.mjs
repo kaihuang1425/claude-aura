@@ -366,14 +366,14 @@ $localized=Get-AuraWebTabWorkHubTitle
   }
 
   const expected = {
-    en: "Work Hub",
-    "zh-CN": "工作中心",
-    "zh-HKTW": "工作中心",
+    en: "Dashboard",
+    "zh-CN": "仪表板",
+    "zh-HKTW": "儀表板",
   };
   for (const [locale, title] of Object.entries(expected)) {
     const value = JSON.parse(await fs.readFile(
       path.join(PROJECT_ROOT, "windows", "locales", `${locale}.json`), "utf8"));
-    assert.equal(value.workHubTitle, title, `${locale} must localize the native Work Hub title`);
+    assert.equal(value.workHubTitle, title, `${locale} must localize the native dashboard title`);
   }
 });
 

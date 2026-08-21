@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Centro de trabajo",
+  "workHubTitle": "Panel",
   "menuFile": "Archivo",
   "menuView": "Ver",
   "menuThemes": "Temas",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Colocar de nuevo",
   "actionQueuePlace": "Colocar en el compositor",
   "actionQueueRemove": "Eliminar",
-  "actionQueueOpenWorkHub": "Abrir Work Hub",
+  "actionQueueOpenWorkHub": "Abrir Panel",
   "actionQueueClose": "Cerrar",
   "actionQueuePlaceFailed": "Coloca el cursor en el compositor de Claude y vuelve a intentarlo.",
   "actionQueueInserted": "Colocado en el compositor. Revísalo y pulsa Enviar tú mismo.",

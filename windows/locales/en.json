@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Work Hub",
+  "workHubTitle": "Dashboard",
   "menuFile": "File",
   "menuView": "View",
   "menuThemes": "Themes",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Place again",
   "actionQueuePlace": "Place in composer",
   "actionQueueRemove": "Remove",
-  "actionQueueOpenWorkHub": "Open Work Hub",
+  "actionQueueOpenWorkHub": "Open Dashboard",
   "actionQueueClose": "Close",
   "actionQueuePlaceFailed": "Place the caret in the Claude composer, then try again.",
   "actionQueueInserted": "Placed in the composer. Review it, then press Send yourself.",

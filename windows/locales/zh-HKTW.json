@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "工作中心",
+  "workHubTitle": "儀表板",
   "menuFile": "檔案",
   "menuView": "檢視",
   "menuThemes": "主題",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "再次放入",
   "actionQueuePlace": "放入輸入框",
   "actionQueueRemove": "移除",
-  "actionQueueOpenWorkHub": "開啟工作中心",
+  "actionQueueOpenWorkHub": "開啟儀表板",
   "actionQueueClose": "關閉",
   "actionQueuePlaceFailed": "請將游標放在 Claude 輸入框，再試一次。",
   "actionQueueInserted": "已放入輸入框。請先檢查內容，再自行按下「送出」。",

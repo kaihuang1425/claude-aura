@@ -22,7 +22,7 @@
 
 <p align="center">
   <strong>Make the live Claude website feel like your own Windows workspace.</strong><br>
-  Eight themes · Floating pet · Real tabs · Work Hub · Reversible local styling
+  Eight themes · Floating pet · Real tabs · Dashboard · Reversible local styling
 </p>
 
 <p align="center">
@@ -40,9 +40,9 @@
 
 <p align="center">
   <img src="./docs/readme-showcase/actual-work-hub-tabs.png"
-       alt="Actual installed Claude Aura Work Hub with destination tabs and local session dashboard"
+       alt="Actual installed Claude Aura Dashboard with destination tabs and local session dashboard"
        width="900"><br>
-  <sub>Actual installed Aura capture · Work Hub, destination tabs, and local session dashboard</sub>
+  <sub>Actual installed Aura capture · Dashboard, destination tabs, and local session dashboard</sub>
 </p>
 
 <a id="feature-tour"></a>
@@ -50,7 +50,7 @@
 
 Aura starts with the real `claude.ai`, then adds a local workspace around it.
 Choose a look, use the Aura button when you need controls, keep conversations
-in tabs, and return to observed sessions from Work Hub.
+in tabs, and return to observed sessions from Dashboard.
 
 ### 1. Choose a look
 
@@ -97,7 +97,7 @@ receives conversation bodies.
 
 ### 4. Keep work in tabs
 
-Work Hub stays pinned while user-opened Claude destinations occupy the same
+Dashboard stays pinned while user-opened Claude destinations occupy the same
 strip. Studio uses matching destination tabs for Recent, Projects, and Action
 Queue, so switching context does not replace the page you were using.
 
@@ -108,18 +108,18 @@ Queue, so switching context does not replace the page you were using.
   <sub>Actual installed Aura capture · tabbed Action Queue</sub>
 </p>
 
-### 5. Return from Work Hub
+### 5. Return from Dashboard
 
-Work Hub groups Aura-observed sessions into **Active**, **Open**, and **Past**.
+Dashboard groups Aura-observed sessions into **Active**, **Open**, and **Past**.
 Select a card to reuse its open tab or reopen its known canonical route. The
 dashboard stores local route and status metadata, not conversation content,
 and a latest-request icon never claims that an entire goal is complete.
 
 <p align="center">
   <img src="./docs/readme-showcase/actual-work-hub-tabs.png"
-       alt="Actual installed Claude Aura Work Hub with destination tabs and session dashboard"
+       alt="Actual installed Claude Aura Dashboard with destination tabs and session dashboard"
        width="900"><br>
-  <sub>Actual installed Aura capture · Work Hub</sub>
+  <sub>Actual installed Aura capture · Dashboard</sub>
 </p>
 
 <p align="center"><sub>These are real installed Aura captures. They document the product surfaces shown; final acceptance of a newer build still requires a fresh live review.</sub></p>
@@ -178,8 +178,8 @@ and a latest-request icon never claims that an entire goal is complete.
 - **Keep the change local and reversible.** It applies local styling without patching Claude Desktop, and **Original look** removes Aura's presentation layer in one click.
 - **Start with eight built-in themes.** Each is available as a stable, read-only starting point for a personalized workspace.
 - **Create themes without overwriting the originals.** Claude Aura Studio supports local colors, typography, shapes, effects, and artwork.
-- **Keep Claude work in real tabs.** Work Hub stays pinned while user-opened destinations keep their own WebView2 controls and persisted local metadata.
-- **Resume from Work Hub.** Active, open, and past sessions are projected from encrypted, body-free local history and reopen only known canonical routes.
+- **Keep Claude work in real tabs.** Dashboard stays pinned while user-opened destinations keep their own WebView2 controls and persisted local metadata.
+- **Resume from Dashboard.** Active, open, and past sessions are projected from encrypted, body-free local history and reopen only known canonical routes.
 - **Bring a pet, not another reader.** Aura controls a separate local pet companion and shares only bounded session status—not prompts or conversation bodies.
 
 Aura 0.3 currently themes the live website only. It does not yet theme native
@@ -244,7 +244,7 @@ installer copied from an older release folder.
 
 After Setup, sign in inside Aura if `claude.ai` asks you to. The first-use card
 on the floating Aura button explains Claude Aura Web and Claude Aura Desktop.
-Click the button to open Studio, choose **Themes**, or open **Work Hub** from the
+Click the button to open Studio, choose **Themes**, or open **Dashboard** from the
 pinned tab to return to locally observed sessions.
 
 An asset named `Claude-Aura-Setup-v<version>.exe` without `-UNSIGNED` is a
@@ -409,7 +409,7 @@ customize one.
 | Click the floating Aura button | Opens Claude Aura Studio |
 | Right-click the floating Aura button | Opens quick actions for Studio, Action Queue, the pet, appearance, and Claude Desktop |
 | Drag the floating Aura button | Moves the complete circular control while keeping it inside the Aura window |
-| **Work Hub** | Shows body-free Active, Open, and Past session cards and returns to known Aura routes |
+| **Dashboard** | Shows body-free Active, Open, and Past session cards and returns to known Aura routes |
 | **+** in the main tab strip | Opens another real Claude destination without replacing the current tab |
 | **Themes** | Opens the built-in gallery and saves the selected theme |
 | **Pets** | Selects Nori, Pip, or Moss and shows, hides, or opens settings for the separate pet companion |

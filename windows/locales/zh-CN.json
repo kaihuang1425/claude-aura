@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "工作中心",
+  "workHubTitle": "仪表板",
   "menuFile": "文件",
   "menuView": "查看",
   "menuThemes": "主题",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "再次放入",
   "actionQueuePlace": "放入输入框",
   "actionQueueRemove": "移除",
-  "actionQueueOpenWorkHub": "打开工作中心",
+  "actionQueueOpenWorkHub": "打开仪表板",
   "actionQueueClose": "关闭",
   "actionQueuePlaceFailed": "请将光标放到 Claude 输入框中，然后重试。",
   "actionQueueInserted": "已放入输入框。请先检查内容，再自行点击发送。",

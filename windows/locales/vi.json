@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Trung tâm công việc",
+  "workHubTitle": "Bảng điều khiển",
   "menuFile": "Tệp",
   "menuView": "Xem",
   "menuThemes": "Chủ đề",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Đặt lại",
   "actionQueuePlace": "Đặt vào khung soạn",
   "actionQueueRemove": "Xóa",
-  "actionQueueOpenWorkHub": "Mở Work Hub",
+  "actionQueueOpenWorkHub": "Mở Bảng điều khiển",
   "actionQueueClose": "Đóng",
   "actionQueuePlaceFailed": "Đặt con trỏ vào khung soạn của Claude, rồi thử lại.",
   "actionQueueInserted": "Đã đặt vào khung soạn. Hãy kiểm tra rồi bấm Gửi.",

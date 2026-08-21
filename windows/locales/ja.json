@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "ワークハブ",
+  "workHubTitle": "ダッシュボード",
   "menuFile": "ファイル",
   "menuView": "表示",
   "menuThemes": "テーマ",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "再配置",
   "actionQueuePlace": "コンポーザーに配置",
   "actionQueueRemove": "削除",
-  "actionQueueOpenWorkHub": "ワークハブを開く",
+  "actionQueueOpenWorkHub": "ダッシュボードを開く",
   "actionQueueClose": "閉じる",
   "actionQueuePlaceFailed": "Claudeのコンポーザーにキャレットを置いてから、再試行してください。",
   "actionQueueInserted": "コンポーザーに配置しました。内容を確認してから、送信ボタンを自分で押してください。",

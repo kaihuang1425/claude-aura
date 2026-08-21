@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Hub di lavoro",
+  "workHubTitle": "Dashboard",
   "menuFile": "File",
   "menuView": "Visualizza",
   "menuThemes": "Temi",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Inserisci di nuovo",
   "actionQueuePlace": "Inserisci nel compositore",
   "actionQueueRemove": "Rimuovi",
-  "actionQueueOpenWorkHub": "Apri Work Hub",
+  "actionQueueOpenWorkHub": "Apri Dashboard",
   "actionQueueClose": "Chiudi",
   "actionQueuePlaceFailed": "Posiziona il cursore nel compositore di Claude, quindi riprova.",
   "actionQueueInserted": "Inserito nel compositore. Rivedilo, quindi premi Invia.",

@@ -5,10 +5,11 @@ and Claude Aura Desktop.
 
 ## Language
 
-**Work Hub**:
+**Dashboard**:
 The default Tasks landing view that helps a user find the work to continue or
 review and exposes one clear next action. Summaries and metrics are secondary.
-_Avoid_: Analytics dashboard, reporting dashboard
+Named Work Hub until 2026-08-21; code identifiers still carry the old name.
+_Avoid_: Work Hub, analytics dashboard, reporting dashboard
 
 **Linked Session**:
 A provider thread that the user explicitly attached to a task. Aura may show
@@ -50,7 +51,7 @@ next-message draft only when the user chooses to use it for active work.
 _Avoid_: Queue item, active task
 
 **Needs Attention**:
-A Work Hub queue containing tasks with an explicit needs-input, ready-for-review,
+A Dashboard queue containing tasks with an explicit needs-input, ready-for-review,
 or blocked state. Membership comes from task state, not recency.
 _Avoid_: Recent, notifications
 
@@ -66,7 +67,7 @@ _Avoid_: Recently updated task, trending task
 
 **Tab**:
 A persistent navigation slot for a first-class Aura destination the user
-explicitly opened. Its destination may be the Work Hub, a project, a task, a
+explicitly opened. Its destination may be the Dashboard, a project, a task, a
 Studio page, or another supported target; background activity cannot create it,
 normal repeat opens focus it, and only an explicit action may duplicate it.
 _Avoid_: Task tab, project tab

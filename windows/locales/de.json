@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Arbeitsbereich",
+  "workHubTitle": "Dashboard",
   "menuFile": "Datei",
   "menuView": "Ansicht",
   "menuThemes": "Themen",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Erneut platzieren",
   "actionQueuePlace": "In Composer platzieren",
   "actionQueueRemove": "Entfernen",
-  "actionQueueOpenWorkHub": "Work Hub öffnen",
+  "actionQueueOpenWorkHub": "Dashboard öffnen",
   "actionQueueClose": "Schließen",
   "actionQueuePlaceFailed": "Setze den Cursor in den Claude-Composer und versuche es erneut.",
   "actionQueueInserted": "Im Composer platziert. Überprüfe ihn, dann drücke selbst auf Senden.",

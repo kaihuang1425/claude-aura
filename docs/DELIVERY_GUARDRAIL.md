@@ -13,10 +13,10 @@ The user must verify all seven behaviors in the current installed build:
 2. A selected theme remains applied when entering Code, leaving Code, and
    returning to the chat page.
 3. The Aura window provides the multi-tab web interface and restores its tabs.
-4. Work Hub displays actual local Codex sessions rather than sample or
+4. Dashboard displays actual local Codex sessions rather than sample or
    synthetic cards.
 5. Pip, Nori, and Moss can be loaded with their available settings.
-6. Theme, tabs, Work Hub state, and pet settings survive a normal restart.
+6. Theme, tabs, Dashboard state, and pet settings survive a normal restart.
 7. Original look removes Aura styling and artwork without damaging the site.
 
 The review must use the installed application on live `claude.ai`. A fixture,

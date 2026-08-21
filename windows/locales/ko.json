@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "작업 허브",
+  "workHubTitle": "대시보드",
   "menuFile": "파일",
   "menuView": "보기",
   "menuThemes": "테마",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "다시 배치",
   "actionQueuePlace": "작성창에 배치",
   "actionQueueRemove": "제거",
-  "actionQueueOpenWorkHub": "워크 허브 열기",
+  "actionQueueOpenWorkHub": "대시보드 열기",
   "actionQueueClose": "닫기",
   "actionQueuePlaceFailed": "Claude 작성창에 커서를 두고 다시 시도하세요",
   "actionQueueInserted": "작성창에 배치했습니다. 검토 후 직접 전송하세요",

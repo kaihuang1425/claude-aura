@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Panel pracy",
+  "workHubTitle": "Panel",
   "menuFile": "Plik",
   "menuView": "Widok",
   "menuThemes": "Motywy",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Umieść ponownie",
   "actionQueuePlace": "Umieść w edytorze",
   "actionQueueRemove": "Usuń",
-  "actionQueueOpenWorkHub": "Otwórz Work Hub",
+  "actionQueueOpenWorkHub": "Otwórz Panel",
   "actionQueueClose": "Zamknij",
   "actionQueuePlaceFailed": "Umieść kursor w komponencie Claude, a następnie spróbuj ponownie.",
   "actionQueueInserted": "Umieszczono w edytorze. Sprawdź to, a następnie sam kliknij przycisk Wyślij.",

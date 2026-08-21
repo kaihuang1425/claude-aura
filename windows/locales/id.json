@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Pusat Kerja",
+  "workHubTitle": "Dasbor",
   "menuFile": "File",
   "menuView": "Tampilan",
   "menuThemes": "Tema",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Tempatkan lagi",
   "actionQueuePlace": "Tempatkan di composer",
   "actionQueueRemove": "Hapus",
-  "actionQueueOpenWorkHub": "Buka Work Hub",
+  "actionQueueOpenWorkHub": "Buka Dasbor",
   "actionQueueClose": "Tutup",
   "actionQueuePlaceFailed": "Letakkan kursor di composer Claude, lalu coba lagi.",
   "actionQueueInserted": "Ditempatkan di composer. Tinjau lalu tekan Kirim sendiri.",

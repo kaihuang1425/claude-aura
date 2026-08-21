@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Hub de travail",
+  "workHubTitle": "Tableau de bord",
   "menuFile": "Fichier",
   "menuView": "Affichage",
   "menuThemes": "Thèmes",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Replacer",
   "actionQueuePlace": "Placer dans le composeur",
   "actionQueueRemove": "Retirer",
-  "actionQueueOpenWorkHub": "Ouvrir le Work Hub",
+  "actionQueueOpenWorkHub": "Ouvrir le Tableau de bord",
   "actionQueueClose": "Fermer",
   "actionQueuePlaceFailed": "Placez le curseur dans le composeur Claude, puis réessayez.",
   "actionQueueInserted": "Placé dans le composeur. Vérifiez-le, puis appuyez sur Envoyer.",

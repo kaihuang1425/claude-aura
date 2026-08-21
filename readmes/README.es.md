@@ -39,9 +39,9 @@
 
 <p align="center">
   <a href="../README.md#feature-tour"><img src="../docs/readme-showcase/actual-work-hub-tabs.png"
-       alt="Claude Aura Work Hub, tabs, pet, and themes feature tour"
+       alt="Claude Aura Dashboard, tabs, pet, and themes feature tour"
        width="900"></a><br>
-  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Work Hub</sub>
+  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Dashboard</sub>
 </p>
 
 

@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "Çalışma Merkezi",
+  "workHubTitle": "Pano",
   "menuFile": "Dosya",
   "menuView": "Görünüm",
   "menuThemes": "Temalar",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "Tekrar yerleştir",
   "actionQueuePlace": "Composer'a yerleştir",
   "actionQueueRemove": "Kaldır",
-  "actionQueueOpenWorkHub": "Work Hub'ı aç",
+  "actionQueueOpenWorkHub": "Panoyu aç",
   "actionQueueClose": "Kapat",
   "actionQueuePlaceFailed": "İmleci Claude composer'ına yerleştirin, ardından yeniden deneyin.",
   "actionQueueInserted": "Composer'a yerleştirildi. Önce gözden geçirin, sonra kendiniz Gönder'e basın.",

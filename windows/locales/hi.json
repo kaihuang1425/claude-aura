@@ -1,5 +1,5 @@
 {
-  "workHubTitle": "कार्य हब",
+  "workHubTitle": "डैशबोर्ड",
   "menuFile": "फ़ाइल",
   "menuView": "दृश्य",
   "menuThemes": "थीम",
@@ -40,7 +40,7 @@
   "actionQueuePlaceAgain": "फिर से रखें",
   "actionQueuePlace": "कंपोजर में रखें",
   "actionQueueRemove": "हटाएँ",
-  "actionQueueOpenWorkHub": "Work Hub खोलें",
+  "actionQueueOpenWorkHub": "डैशबोर्ड खोलें",
   "actionQueueClose": "बंद करें",
   "actionQueuePlaceFailed": "Claude कंपोजर में कर्सर रखें, फिर दोबारा प्रयास करें।",
   "actionQueueInserted": "कंपोजर में रखा गया। पहले इसकी समीक्षा करें, फिर खुद Send दबाएँ।",
