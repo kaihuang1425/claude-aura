@@ -317,7 +317,8 @@ test("Studio responsive CRUD is explicit, sparse, persistent, and budget-safe", 
     assert.equal(Object.hasOwn(document.artworkLayers[0].frames, "laptop"), false,
       "Adding metadata invented an artwork override");
     for (const appearance of ["light", "dark"]) {
-      assert.equal(Object.hasOwn(document.newChatGreetingStyle[appearance].frames, "laptop"), false,
+      const frames = document.newChatGreetingStyle?.[appearance]?.frames ?? null;
+      assert.equal(Boolean(frames && Object.hasOwn(frames, "laptop")), false,
         "Adding metadata invented a greeting override");
     }
     result = await request(action(result, "mutate-responsive-layout", {

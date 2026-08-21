@@ -1626,7 +1626,9 @@ function Initialize-AuraWebAppBar {
   $maximize = New-AuraWebWindowControlButton -Text ([char]0x25A1) `
     -AccessibleName (Get-AuraWebUiText -Name maximizeWindow -Fallback 'Maximize window') `
     -Action { Switch-AuraWebWindowMaximized }
-  $close = New-AuraWebWindowControlButton -Text ([char]0x00D7) `
+  # U+00D7 is a math operator and renders visibly smaller than the em dash and
+  # white square beside it. U+2715 is the UI-sized cross, so all three match.
+  $close = New-AuraWebWindowControlButton -Text ([char]0x2715) `
     -AccessibleName (Get-AuraWebUiText -Name closeWindow -Fallback 'Close window') `
     -Action { $script:Form.Close() } -Close
   $script:AuraWebWindowControlButtons = @($minimize, $maximize, $close)

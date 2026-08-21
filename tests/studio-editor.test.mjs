@@ -6883,6 +6883,33 @@ test("WO-21 greeting reset, shuffle checkpoint, and delete stay recoverable", as
     result = await invoke(mutate(result, "apply-theme-patch", {
       changes: [{
         kind: "greeting",
+        operation: "set-frame",
+        appearance: "light",
+        frame: "standard",
+        value: {
+          font: "editorial-serif",
+          color: "primary",
+          fontSize: 36,
+          weight: 500,
+          italic: false,
+          letterSpacing: -0.015,
+          lineHeight: 1.12,
+          align: "center",
+          maxWidthRatio: 0.7,
+          xRatio: 0,
+          yRatio: -0.02,
+          decoration: "none",
+          markSource: "none",
+          markScale: 1,
+        },
+      }],
+    }));
+    assert.equal(result.state.shared.greeting.native, false,
+      "Seeding a greeting frame must leave the draft styled before the reset");
+
+    result = await invoke(mutate(result, "apply-theme-patch", {
+      changes: [{
+        kind: "greeting",
         operation: "reset",
         appearance: "light",
         frame: "standard",

@@ -34,23 +34,10 @@ Shared rules:
 
 New-chat hero composition (2026-08-21 owner comparison pass):
 
-- The greeting and composer remain centered as one composition. `composer X`
-  is `newChatLayout.offsetXRatio`; greeting X/Y are the frame ratios.
-- Permanent-theme greetings use no native or compact mark. The theme identity
-  belongs to the full scene, and a detached mark must never interrupt wording.
-- Light and Dark share geometry. Standard/Wide values are respectively
-  `fontSize / lineHeight / maxWidthRatio`; every frame stays centered.
-
-| Theme | Composer X | Standard | Wide | Greeting X/Y | Typography |
-| --- | ---: | --- | --- | --- | --- |
-| default | 0 | 36 / 1.12 / 0.70 | 42 / 1.08 / 0.64 | 0 / -0.02 | editorial 500, primary |
-| japanese-film-editorial | 0 | 38 / 1.08 / 0.64 | 46 / 1.05 / 0.58 | 0 / -0.03 | editorial 500, primary |
-| korean-prestige | 0 | 36 / 1.10 / 0.62 | 44 / 1.06 / 0.56 | 0 / -0.03 | humanist 600, primary |
-| cartoon-studio | 0 | 36 / 1.10 / 0.68 | 44 / 1.06 / 0.62 | 0 / -0.02 | rounded 700, accent |
-| anime-twilight | 0 | 36 / 1.10 / 0.62 | 44 / 1.06 / 0.56 | 0 / -0.04 | humanist 600, restrained glow |
-| study-library | 0 | 36 / 1.10 / 0.68 | 44 / 1.06 / 0.62 | 0 / -0.02 | editorial 600, hairline |
-| japanese-idol | 0 | 38 / 1.08 / 0.62 | 46 / 1.05 / 0.56 | 0 / -0.04 | editorial 600, accent |
-| korean-idol | 0 | 36 / 1.08 / 0.60 | 44 / 1.04 / 0.54 | 0 / -0.04 | system sans 700, primary |
+- The composer stays centered in every built-in theme: `newChatLayout` is
+  `widthRatio 0.64`, `offsetXRatio 0`, `offsetYRatio 0`.
+- The greeting is no longer part of this recipe. Built-ins inherit Claude's own
+  greeting type, colour, and placement; see the WO-21 section below.
 
 Live native-chrome baseline (WO-18; fixed recipes, not user-schema fields):
 
@@ -345,48 +332,18 @@ marks are limited to the audited local SVG assets for Japanese Film Editorial,
 Korean Prestige, and Japanese Idol, plus Study Library's already-audited local
 launcher PNG reused as its book mark.
 
-All eight built-in themes use normal, non-italic greeting type and default to
-Claude's native greeting wording. Personal phrases remain an explicit user
-choice and stay outside theme documents.
+All eight built-in themes leave Claude's greeting styling alone. They ship no
+`newChatGreetingStyle`, so the renderer copies the live computed type, colour,
+and alignment onto its replacement node and changes only the wording. A greeting
+therefore reads identically before and after Aura claims it, which also removes
+the mid-load restyle that the earlier authored recipes produced.
 
-Authored recipes (exact values):
+The schema above still applies to user themes: Studio's greeting editor creates a
+style on first edit and its **reset** operation returns a draft to this same null
+state. Personal phrases remain an explicit user choice and stay outside theme
+documents.
 
-- **Default** — centered warm display serif, restrained native mark.
-  Standard: editorial-serif / primary / 34px / 500 / letter-spacing -0.01em /
-  line-height 1.15 / center / max-width 0.72 / x 0 / y 0 / decoration none /
-  mark native @1. Wide: 40px / line-height 1.12 / max-width 0.68 (else identical).
-  Light and Dark share values; colour adapts via the theme token.
-- **Japanese Film Editorial** — centered editorial serif, cinnabar accent, and
-  approved compact mark. Standard: editorial-serif / accent / 34px / 500 /
-  not italic / -0.02em / 1.15 / center / max 0.72 / x 0 / y 0 / none /
-  compact @1. Wide: 40px / 1.12 / max 0.68 / x 0 / y 0 / compact @1; other
-  values unchanged. Light and Dark are identical.
-- **Korean Prestige** — precise centered sans and approved rosette. Standard:
-  humanist-sans / primary / 34px / 400 / not italic / 0.03em / 1.15 / center /
-  max 0.72 / x 0 / y 0 / none / compact @1. Wide: 40px / 0.035em / 1.12 /
-  max 0.68 / x 0 / y 0 / compact @1; other values unchanged. Light and Dark
-  are identical.
-- **Cartoon Studio** — rounded bold sans with a compact native ink accent.
-  Standard: rounded-sans / accent / 34px / 700 / not italic / -0.02em / 1.15 /
-  center / max 0.72 / x 0 / y 0 / none / native @1. Wide: 40px / -0.025em /
-  1.12 / max 0.68 / x 0 / y 0 / native @1; other values unchanged. Light and
-  Dark are identical.
-- **Anime Twilight** — light display sans with a static restrained glow.
-  Standard: humanist-sans / 34px / 400 / not italic / 0.02em / 1.15 / center /
-  max 0.72 / x 0 / y 0 / glow / native @1. Wide: 40px / 0.025em / 1.12 /
-  max 0.68 / x 0 / y 0 / native @1; other values unchanged. Light uses primary;
-  Dark uses accent. Forced colors removes glow and framing.
-- **Study Library** — centered book serif and quiet hairline. Standard:
-  editorial-serif / primary / 34px / 600 / not italic / -0.01em / 1.15 /
-  center / max 0.72 / x 0 / y 0 / hairline / approved book mark @1. Wide:
-  40px / -0.015em / 1.12 / max 0.68 / x 0 / y 0 / book mark @1; other values
-  unchanged. Light and Dark are identical.
-- **Japanese Idol** — upright serif, soft accent, approved flower mark.
-  Standard: editorial-serif / accent / 34px / 600 / not italic / 0.005em /
-  1.15 / center / max 0.72 / x 0 / y 0 / none / compact @1. Wide: 40px /
-  1.12 / max 0.68 / x 0 / y 0 / compact @1. Light and Dark are identical.
-- **Korean Idol** — portrait-safe geometric sans retaining Claude's starburst.
-  Standard: system-sans / primary / 34px / 650 / not italic / -0.025em / 1.15 /
-  center / max 0.72 / x 0 / y 0 / none / native @1. Wide: 40px / -0.03em /
-  1.12 / max 0.68 / x 0 / y 0 / native @1; other values unchanged. Light and
-  Dark are identical.
+The WO-21 authored per-theme recipes that used to be listed here were retired on
+2026-08-21 after an owner comparison of the pre-claim and post-claim renders.
+Removing them also returned about 11 KB to the chrome payload budget, which the
+worst-case responsive theme had been overrunning.

@@ -20,7 +20,12 @@
         "zh-CN": "保留 Claude Aura 熟悉的靛蓝基调，界面清晰克制。",
         "zh-HKTW": "保留 Claude Aura 熟悉的靛藍基調，畫面清楚、操作沉穩。"
       },
-      "swatches": ["#F7F7FC", "#E8E9F5", "#4F46A8", "#26243B"],
+      "swatches": [
+        "#F7F7FC",
+        "#E8E9F5",
+        "#4F46A8",
+        "#26243B"
+      ],
       "preview": {
         "chrome": "#171623",
         "background": "#F3F3FA",
@@ -33,16 +38,6 @@
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 42, "weight": 500, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.64, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 42, "weight": 500, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.64, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        }
       }
     },
     {
@@ -57,7 +52,12 @@
         "zh-CN": "暖象牙色纸张、墨线与朱红焦点，呈现沉静的电影编辑感。",
         "zh-HKTW": "暖象牙紙、墨線與朱紅焦點，營造安靜的電影編輯質感。"
       },
-      "swatches": ["#F2E8D5", "#252725", "#394563", "#B64B32"],
+      "swatches": [
+        "#F2E8D5",
+        "#252725",
+        "#394563",
+        "#B64B32"
+      ],
       "preview": {
         "chrome": "#DED8CE",
         "background": "#EEE2CC",
@@ -66,21 +66,15 @@
         "text": "#272824"
       },
       "studioPreview": "assets/studio-previews/masters/japanese-film-editorial.png",
-      "studioPreviewFrame": { "x": 77.76, "y": 8.98, "zoom": 3.651 },
+      "studioPreviewFrame": {
+        "x": 77.76,
+        "y": 8.98,
+        "zoom": 3.651
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 38, "weight": 500, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.64, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 46, "weight": 500, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.58, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 38, "weight": 500, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.64, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 46, "weight": 500, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.58, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -114,8 +108,12 @@
           "role": "hero",
           "appearance": "light",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         },
         {
@@ -128,8 +126,12 @@
           "role": "hero",
           "appearance": "dark",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         }
       ]
@@ -146,7 +148,12 @@
         "zh-CN": "午夜蓝配合银灰玻璃表面，结构利落，层次清晰。",
         "zh-HKTW": "午夜藍搭配銀灰玻璃表面，結構俐落、層次清楚。"
       },
-      "swatches": ["#071426", "#152840", "#AAB5C7", "#4D84D8"],
+      "swatches": [
+        "#071426",
+        "#152840",
+        "#AAB5C7",
+        "#4D84D8"
+      ],
       "preview": {
         "chrome": "#CCD4E0",
         "background": "#08172B",
@@ -155,21 +162,15 @@
         "text": "#EDF3FA"
       },
       "studioPreview": "assets/studio-previews/masters/korean-prestige.png",
-      "studioPreviewFrame": { "x": 82.34, "y": 8.61, "zoom": 3.274 },
+      "studioPreviewFrame": {
+        "x": 82.34,
+        "y": 8.61,
+        "zoom": 3.274
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.56, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.56, "xRatio": 0, "yRatio": -0.03, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -193,8 +194,12 @@
           "role": "hero",
           "appearance": "light",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         },
         {
@@ -217,8 +222,12 @@
           "role": "hero",
           "appearance": "dark",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         }
       ]
@@ -235,7 +244,12 @@
         "zh-CN": "奶油色、珊瑚色和青绿色搭配手绘轮廓，轻松但不失秩序。",
         "zh-HKTW": "奶油色、珊瑚色與青綠色搭配手繪輪廓，輕鬆又有秩序。"
       },
-      "swatches": ["#FFF6E7", "#EA6047", "#248C88", "#F4B62E"],
+      "swatches": [
+        "#FFF6E7",
+        "#EA6047",
+        "#248C88",
+        "#F4B62E"
+      ],
       "preview": {
         "chrome": "#2B2621",
         "background": "#FFF5E3",
@@ -244,21 +258,15 @@
         "text": "#302820"
       },
       "studioPreview": "assets/studio-previews/masters/cartoon-studio.png",
-      "studioPreviewFrame": { "x": 92.79, "y": 10.48, "zoom": 3.651 },
+      "studioPreviewFrame": {
+        "x": 92.79,
+        "y": 10.48,
+        "zoom": 3.651
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 36, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 44, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 36, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 44, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -291,8 +299,12 @@
           "mask": "none",
           "role": "hero",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         }
       ]
@@ -309,7 +321,12 @@
         "zh-CN": "暮蓝与紫色玻璃面板，配合柔和窗光和星空线条。",
         "zh-HKTW": "暮藍與紫色玻璃面板，搭配柔和窗光與星空線條。"
       },
-      "swatches": ["#111A49", "#393A85", "#9CE5EC", "#F0B875"],
+      "swatches": [
+        "#111A49",
+        "#393A85",
+        "#9CE5EC",
+        "#F0B875"
+      ],
       "preview": {
         "chrome": "#E0E2EB",
         "background": "#141C50",
@@ -318,21 +335,15 @@
         "text": "#F1F1FF"
       },
       "studioPreview": "assets/studio-previews/masters/anime-twilight.png",
-      "studioPreviewFrame": { "x": 96.1, "y": 8.25, "zoom": 3.374 },
+      "studioPreviewFrame": {
+        "x": 96.1,
+        "y": 8.25,
+        "zoom": 3.374
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.04, "decoration": "glow", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.56, "xRatio": 0, "yRatio": -0.04, "decoration": "glow", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "humanist-sans", "color": "accent", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.04, "decoration": "glow", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "humanist-sans", "color": "accent", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.56, "xRatio": 0, "yRatio": -0.04, "decoration": "glow", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -359,7 +370,12 @@
         "zh-CN": "象牙纸、森林绿和牛血红，营造安静的研究与阅读氛围。",
         "zh-HKTW": "象牙紙、森林綠與牛血紅，營造安靜的研究與閱讀氛圍。"
       },
-      "swatches": ["#F4EEDC", "#1F523F", "#74343B", "#AA884C"],
+      "swatches": [
+        "#F4EEDC",
+        "#1F523F",
+        "#74343B",
+        "#AA884C"
+      ],
       "preview": {
         "chrome": "#EDE9DE",
         "background": "#EEE6D2",
@@ -368,21 +384,15 @@
         "text": "#292B26"
       },
       "studioPreview": "assets/studio-previews/masters/study-library.png",
-      "studioPreviewFrame": { "x": 50, "y": 55, "zoom": 1 },
+      "studioPreviewFrame": {
+        "x": 50,
+        "y": 55,
+        "zoom": 1
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.1, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.06, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -429,7 +439,12 @@
         "zh-CN": "暖奶油色与柔粉色，辅以克制的丝带和舞台光元素。",
         "zh-HKTW": "暖奶油色與柔粉色，點綴節制的緞帶與舞台光。"
       },
-      "swatches": ["#FFF5F1", "#EF879A", "#C7B3E6", "#F2A17C"],
+      "swatches": [
+        "#FFF5F1",
+        "#EF879A",
+        "#C7B3E6",
+        "#F2A17C"
+      ],
       "preview": {
         "chrome": "#3A2431",
         "background": "#FFF2EF",
@@ -438,21 +453,15 @@
         "text": "#3B2930"
       },
       "studioPreview": "assets/studio-previews/masters/japanese-idol.png",
-      "studioPreviewFrame": { "x": 86.85, "y": 9.49, "zoom": 3.194 },
+      "studioPreviewFrame": {
+        "x": 86.85,
+        "y": 9.49,
+        "zoom": 3.194
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 38, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 46, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.56, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 38, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.62, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 46, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.56, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -476,8 +485,12 @@
           "role": "hero",
           "appearance": "light",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         },
         {
@@ -490,8 +503,12 @@
           "role": "background",
           "appearance": "dark",
           "contextOverrides": {
-            "conversation": { "hidden": true },
-            "other": { "hidden": true }
+            "conversation": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         },
         {
@@ -504,8 +521,12 @@
           "role": "background",
           "appearance": "dark",
           "contextOverrides": {
-            "new-chat": { "hidden": true },
-            "other": { "hidden": true }
+            "new-chat": {
+              "hidden": true
+            },
+            "other": {
+              "hidden": true
+            }
           }
         }
       ]
@@ -522,7 +543,12 @@
         "zh-CN": "冷白与薰衣草色结合全息玻璃，采用利落的几何布局。",
         "zh-HKTW": "冷白與薰衣草色結合全像玻璃，採用俐落的幾何編排。"
       },
-      "swatches": ["#F7F6FF", "#8F78DF", "#C6B7F2", "#79D7E4"],
+      "swatches": [
+        "#F7F6FF",
+        "#8F78DF",
+        "#C6B7F2",
+        "#79D7E4"
+      ],
       "preview": {
         "chrome": "#241D43",
         "background": "#F1EFFF",
@@ -531,21 +557,15 @@
         "text": "#292244"
       },
       "studioPreview": "assets/studio-previews/masters/korean-idol.png",
-      "studioPreviewFrame": { "x": 83.47, "y": 11.82, "zoom": 3.507 },
+      "studioPreviewFrame": {
+        "x": 83.47,
+        "y": 11.82,
+        "zoom": 3.507
+      },
       "newChatLayout": {
         "widthRatio": 0.64,
         "offsetXRatio": 0,
         "offsetYRatio": 0
-      },
-      "newChatGreetingStyle": {
-        "light": {
-          "standard": { "font": "system-sans", "color": "primary", "fontSize": 36, "weight": 700, "italic": false, "letterSpacing": -0.035, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.6, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "system-sans", "color": "primary", "fontSize": 44, "weight": 700, "italic": false, "letterSpacing": -0.035, "lineHeight": 1.04, "align": "center", "maxWidthRatio": 0.54, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        },
-        "dark": {
-          "standard": { "font": "system-sans", "color": "primary", "fontSize": 36, "weight": 700, "italic": false, "letterSpacing": -0.035, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.6, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } },
-          "wide": { "font": "system-sans", "color": "primary", "fontSize": 44, "weight": 700, "italic": false, "letterSpacing": -0.035, "lineHeight": 1.04, "align": "center", "maxWidthRatio": 0.54, "xRatio": 0, "yRatio": -0.04, "decoration": "none", "mark": { "source": "none", "scale": 1 } }
-        }
       },
       "artwork": null,
       "artworkLayers": [
@@ -569,7 +589,9 @@
           "role": "hero",
           "appearance": "light",
           "contextOverrides": {
-            "conversation": { "hidden": true },
+            "conversation": {
+              "hidden": true
+            },
             "other": {
               "hidden": true
             }

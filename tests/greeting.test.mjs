@@ -255,161 +255,50 @@ const BUILTIN_IDS = [
   "default", "japanese-film-editorial", "korean-prestige", "cartoon-studio",
   "anime-twilight", "study-library", "japanese-idol", "korean-idol",
 ];
-const COMPACT_MARK_IDS = new Set();
 
-// Independent acceptance oracle copied from docs/recipes/RECIPES.md § WO-21.
-// Do not derive this from registry.json: the test must catch recipe drift there.
-const recipeFrame = (
-  font, color, fontSize, weight, italic, letterSpacing, lineHeight, align,
-  maxWidthRatio, xRatio, yRatio, decoration, markSource, markScale,
-) => ({
-  font, color, fontSize, weight, italic, letterSpacing, lineHeight, align,
-  maxWidthRatio, xRatio, yRatio, decoration,
-  mark: { source: markSource, scale: markScale },
-});
-const cloneRecipeFrame = (frame) => ({ ...frame, mark: { ...frame.mark } });
-const sharedAppearanceRecipe = (standard, wide) => ({
-  light: { standard: cloneRecipeFrame(standard), wide: cloneRecipeFrame(wide) },
-  dark: { standard: cloneRecipeFrame(standard), wide: cloneRecipeFrame(wide) },
-});
-const EXPECTED_BUILTIN_GREETING_RECIPES = Object.freeze({
-  default: sharedAppearanceRecipe(
-    recipeFrame("editorial-serif", "primary", 36, 500, false, -0.015, 1.12, "center",
-      0.7, 0, -0.02, "none", "none", 1),
-    recipeFrame("editorial-serif", "primary", 42, 500, false, -0.015, 1.08, "center",
-      0.64, 0, -0.02, "none", "none", 1),
-  ),
-  "japanese-film-editorial": sharedAppearanceRecipe(
-    recipeFrame("editorial-serif", "primary", 38, 500, false, -0.025, 1.08, "center",
-      0.64, 0, -0.03, "none", "none", 1),
-    recipeFrame("editorial-serif", "primary", 46, 500, false, -0.025, 1.05, "center",
-      0.58, 0, -0.03, "none", "none", 1),
-  ),
-  "korean-prestige": sharedAppearanceRecipe(
-    recipeFrame("humanist-sans", "primary", 36, 600, false, -0.015, 1.1, "center",
-      0.62, 0, -0.03, "none", "none", 1),
-    recipeFrame("humanist-sans", "primary", 44, 600, false, -0.015, 1.06, "center",
-      0.56, 0, -0.03, "none", "none", 1),
-  ),
-  "cartoon-studio": sharedAppearanceRecipe(
-    recipeFrame("rounded-sans", "accent", 36, 700, false, -0.025, 1.1, "center",
-      0.68, 0, -0.02, "none", "none", 1),
-    recipeFrame("rounded-sans", "accent", 44, 700, false, -0.025, 1.06, "center",
-      0.62, 0, -0.02, "none", "none", 1),
-  ),
-  "anime-twilight": {
-    light: {
-      standard: recipeFrame("humanist-sans", "primary", 36, 600, false, -0.01, 1.1, "center",
-        0.62, 0, -0.04, "glow", "none", 1),
-      wide: recipeFrame("humanist-sans", "primary", 44, 600, false, -0.01, 1.06, "center",
-        0.56, 0, -0.04, "glow", "none", 1),
-    },
-    dark: {
-      standard: recipeFrame("humanist-sans", "accent", 36, 600, false, -0.01, 1.1, "center",
-        0.62, 0, -0.04, "glow", "none", 1),
-      wide: recipeFrame("humanist-sans", "accent", 44, 600, false, -0.01, 1.06, "center",
-        0.56, 0, -0.04, "glow", "none", 1),
-    },
-  },
-  "study-library": sharedAppearanceRecipe(
-    recipeFrame("editorial-serif", "primary", 36, 600, false, -0.015, 1.1, "center",
-      0.68, 0, -0.02, "hairline", "none", 1),
-    recipeFrame("editorial-serif", "primary", 44, 600, false, -0.015, 1.06, "center",
-      0.62, 0, -0.02, "hairline", "none", 1),
-  ),
-  "japanese-idol": sharedAppearanceRecipe(
-    recipeFrame("editorial-serif", "accent", 38, 600, false, -0.015, 1.08, "center",
-      0.62, 0, -0.04, "none", "none", 1),
-    recipeFrame("editorial-serif", "accent", 46, 600, false, -0.015, 1.05, "center",
-      0.56, 0, -0.04, "none", "none", 1),
-  ),
-  "korean-idol": sharedAppearanceRecipe(
-    recipeFrame("system-sans", "primary", 36, 700, false, -0.035, 1.08, "center",
-      0.6, 0, -0.04, "none", "none", 1),
-    recipeFrame("system-sans", "primary", 44, 700, false, -0.035, 1.04, "center",
-      0.54, 0, -0.04, "none", "none", 1),
-  ),
-});
+// Built-in themes inherit Claude's own greeting styling: Aura swaps the wording
+// and nothing else. The renderer takes that path whenever a theme carries no
+// newChatGreetingStyle, copying the live computed type, colour, and alignment
+// onto its replacement node so the greeting reads identically before and after
+// the claim. Studio's "reset" greeting operation produces the same null state
+// for user themes, so this is a first-class mode rather than an absence.
+// This retires the WO-21 four-frame recipes that used to live here.
 
-test("all built-in greetings use an intentional centered composition", async () => {
+test("all built-in composers use an intentional centered composition", async () => {
   const registry = JSON.parse(await fs.readFile(
     path.join(PROJECT_ROOT, "themes", "registry.json"),
     "utf8",
   ));
-  const compositions = {
-    "default": { layout: [0.64, 0, 0], standard: [36, 1.12, 0.7, 0, -0.02], wide: [42, 1.08, 0.64, 0, -0.02] },
-    "japanese-film-editorial": { layout: [0.64, 0, 0], standard: [38, 1.08, 0.64, 0, -0.03], wide: [46, 1.05, 0.58, 0, -0.03] },
-    "korean-prestige": { layout: [0.64, 0, 0], standard: [36, 1.1, 0.62, 0, -0.03], wide: [44, 1.06, 0.56, 0, -0.03] },
-    "cartoon-studio": { layout: [0.64, 0, 0], standard: [36, 1.1, 0.68, 0, -0.02], wide: [44, 1.06, 0.62, 0, -0.02] },
-    "anime-twilight": { layout: [0.64, 0, 0], standard: [36, 1.1, 0.62, 0, -0.04], wide: [44, 1.06, 0.56, 0, -0.04] },
-    "study-library": { layout: [0.64, 0, 0], standard: [36, 1.1, 0.68, 0, -0.02], wide: [44, 1.06, 0.62, 0, -0.02] },
-    "japanese-idol": { layout: [0.64, 0, 0], standard: [38, 1.08, 0.62, 0, -0.04], wide: [46, 1.05, 0.56, 0, -0.04] },
-    "korean-idol": { layout: [0.64, 0, 0], standard: [36, 1.08, 0.6, 0, -0.04], wide: [44, 1.04, 0.54, 0, -0.04] },
-  };
-  const frameGeometry = (frame) => ({
-    fontSize: frame.fontSize,
-    lineHeight: frame.lineHeight,
-    maxWidthRatio: frame.maxWidthRatio,
-    xRatio: frame.xRatio,
-    yRatio: frame.yRatio,
-  });
-
   for (const theme of registry.themes) {
-    const expected = compositions[theme.id];
-    assert(expected, `${theme.id} is missing an approved greeting composition`);
     assert.deepEqual(
-      [theme.newChatLayout.widthRatio, theme.newChatLayout.offsetXRatio, theme.newChatLayout.offsetYRatio],
-      expected.layout,
+      [
+        theme.newChatLayout.widthRatio,
+        theme.newChatLayout.offsetXRatio,
+        theme.newChatLayout.offsetYRatio,
+      ],
+      [0.64, 0, 0],
       `${theme.id} composer drifted from its centered composition`,
     );
-    for (const appearance of ["light", "dark"]) {
-      for (const viewport of ["standard", "wide"]) {
-        const frame = theme.newChatGreetingStyle[appearance][viewport];
-        assert.deepEqual(
-          Object.values(frameGeometry(frame)),
-          expected[viewport],
-          `${theme.id} ${appearance}.${viewport} greeting drifted from its approved composition`,
-        );
-        assert.equal(frame.mark.source, "none",
-          `${theme.id} ${appearance}.${viewport} reintroduced a floating greeting mark`);
-      }
-    }
   }
 });
 
-test("all built-ins compile exact four-frame greeting recipes and registered marks", async () => {
+test("all built-ins inherit the native greeting and still compile in budget", async () => {
   const registry = JSON.parse(await fs.readFile(
     path.join(PROJECT_ROOT, "themes", "registry.json"),
     "utf8",
   ));
   const registryThemes = new Map(registry.themes.map((theme) => [theme.id, theme]));
   for (const theme of BUILTIN_IDS) {
-    const expected = EXPECTED_BUILTIN_GREETING_RECIPES[theme];
-    assert.deepEqual(registryThemes.get(theme)?.newChatGreetingStyle, expected,
-      `${theme} registry greeting drifted from the approved recipe`);
+    assert.equal(registryThemes.get(theme)?.newChatGreetingStyle, undefined,
+      `${theme} must inherit Claude's greeting styling, not restyle it`);
     for (const compiledAppearance of ["light", "dark"]) {
       const compiled = await compileTheme({
         config: { ...DEFAULT_CONFIG, theme, appearance: compiledAppearance },
       });
-      assert.deepEqual(compiled.settings.greeting?.style, expected,
-        `${theme} ${compiledAppearance} compile changed its approved greeting recipe`);
-      assert.equal(compiled.settings.greeting.phrases, null,
-        `${theme} ${compiledAppearance} native mode grew phrases`);
-      for (const appearance of ["light", "dark"]) {
-        for (const viewport of ["standard", "wide"]) {
-          assert.deepEqual(
-            compiled.settings.greeting.style[appearance][viewport],
-            expected[appearance][viewport],
-            `${theme} ${compiledAppearance} compile changed ${appearance}.${viewport}`,
-          );
-        }
-      }
-      assert.equal(Boolean(compiled.settings.greeting.markDataUrl), COMPACT_MARK_IDS.has(theme),
-        `${theme} ${compiledAppearance} compact mark registration differs from its recipe`);
+      assert.equal(compiled.settings.greeting, undefined,
+        `${theme} ${compiledAppearance} compiled a greeting block in native mode`);
       const bundle = await buildPayloadFromCompiled(compiled);
       new Function(bundle.payload);
-      assert(bundle.payload.includes("data-claude-aura-greeting"),
-        `${theme} ${compiledAppearance} greeting subsystem was silently removed`);
       assert(bundle.payloadBudget.chromeBytes < 65_000,
         `${theme} ${compiledAppearance} exceeds 65 KB (${bundle.payloadBudget.chromeBytes})`);
       assert(bundle.payloadBudget.embeddedArtworkBytes < 1_400_000,
