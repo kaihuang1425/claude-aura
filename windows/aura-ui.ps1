@@ -1354,6 +1354,28 @@ function Test-AuraUiCloudflareChallengeSignal {
     [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Test-AuraUiVerifiedDocumentResponse {
+  param(
+    [AllowNull()][object]$NavigationId,
+    [AllowNull()][object]$NavigationUri,
+    [AllowNull()][object]$RequestUri,
+    [int]$StatusCode,
+    [AllowNull()][string]$MitigatedHeader
+  )
+  if ($null -eq $NavigationId -or $StatusCode -lt 200 -or $StatusCode -gt 299) { return $false }
+  $navigationIdentity = Get-AuraUiNavigationRequestIdentity -Value $NavigationUri
+  $requestIdentity = Get-AuraUiNavigationRequestIdentity -Value $RequestUri
+  if (-not $navigationIdentity -or -not $requestIdentity -or
+      -not [string]::Equals($navigationIdentity, $requestIdentity, [StringComparison]::Ordinal) -or
+      -not (Test-AuraUiClaudeUri -Value $RequestUri)) {
+    return $false
+  }
+  return -not [string]::Equals(
+    "$MitigatedHeader".Trim(),
+    'challenge',
+    [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Test-AuraUiRescueChallengeCandidate {
   param(
     [AllowNull()][object]$Candidate,
@@ -1415,6 +1437,7 @@ function Complete-AuraUiPendingNavigationVerification {
   $navigationId = [UInt64]$pending.NavigationId
   $script:ActiveNavigationId = $null
   $script:ActiveNavigationUri = $null
+  $script:VerifiedNavigationId = $null
   $script:RescueVerificationPending = $false
   if ($challengeCandidate) {
     Enter-AuraUiRescueMode -NavigationId $navigationId -Reason Challenge
@@ -11895,6 +11918,7 @@ $script:RestoreVerificationDueUtc = $null
 $script:OriginalRestoreState = 'None'
 $script:ActiveNavigationId = $null
 $script:ActiveNavigationUri = $null
+$script:VerifiedNavigationId = $null
 $script:ReadyNavigationId = $null
 $script:NavigationRecoverySurface = 'None'
 $script:IsRescueSession = [bool]$RescueSession
@@ -13462,6 +13486,17 @@ public static class AuraUiAsyncDispatch {
               # never reaches DOMContentLoaded. Reveal the genuine response now;
               # the recovery card still waits for top-level status correlation.
               Hide-AuraUiLoading
+            } elseif (Test-AuraUiVerifiedDocumentResponse `
+                -NavigationId $script:ActiveNavigationId `
+                -NavigationUri $script:ActiveNavigationUri `
+                -RequestUri $eventArgs.Request.Uri `
+                -StatusCode ([int]$eventArgs.Response.StatusCode) `
+                -MitigatedHeader $mitigatedHeader) {
+              # A successful top-level Claude response for this exact navigation
+              # is the same evidence NavigationCompleted waits for. Recording it
+              # here lets DOMContentLoaded theme a document already known not to
+              # be a challenge, without relaxing what counts as verified.
+              $script:VerifiedNavigationId = [UInt64]$script:ActiveNavigationId
             }
           } catch {
             # Missing/unsupported headers are ordinary responses. Deliberately
@@ -13495,6 +13530,7 @@ public static class AuraUiAsyncDispatch {
           }
           $script:ActiveNavigationId = [UInt64]$eventArgs.NavigationId
           $script:ActiveNavigationUri = [string]$eventArgs.Uri
+          $script:VerifiedNavigationId = $null
           $script:RescueChallengeCandidate = $null
           $script:PendingNavigationCompletion = $null
           $script:RescueVerificationPending = Test-AuraUiClaudeUri -Value $eventArgs.Uri
@@ -13554,6 +13590,14 @@ public static class AuraUiAsyncDispatch {
             $script:PageReady = $false
             return
           }
+          if ($null -ne $script:VerifiedNavigationId -and
+              [UInt64]$script:VerifiedNavigationId -eq [UInt64]$eventArgs.NavigationId -and
+              (Get-AuraUiEnabled)) {
+            # NavigationCompleted waits for every subresource. The greeting is
+            # already laid out here, so claiming it now shortens the window in
+            # which Claude's own greeting is the one on screen.
+            Apply-AuraUiTheme
+          }
         })
         $core.add_NavigationCompleted({
           param($sender, $eventArgs)
@@ -13589,6 +13633,7 @@ public static class AuraUiAsyncDispatch {
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             Enter-AuraUiRescueMode -NavigationId $challengeNavigationId -Reason $rescueReason
             return
           }
@@ -13603,6 +13648,7 @@ public static class AuraUiAsyncDispatch {
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             $script:RescueChallengeCandidate = $null
             if ($script:RescueActive) {
               $script:RescueBreakerState = 'Open'
@@ -13663,6 +13709,7 @@ public static class AuraUiAsyncDispatch {
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             $script:RescueChallengeCandidate = $null
             $script:ReadyNavigationId = $null
             Hide-AuraUiLoading
@@ -13758,6 +13805,7 @@ public static class AuraUiAsyncDispatch {
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             $script:RescueBreakerState = 'Open'
             Hide-AuraUiLoading
             Show-AuraUiRescueWindow
@@ -13770,12 +13818,14 @@ public static class AuraUiAsyncDispatch {
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             Enter-AuraUiRescueMode -NavigationId $candidateNavigationId -Reason Challenge
           } elseif ($processRecoverySurface -ceq 'Code') {
             $script:PendingNavigationCompletion = $null
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             $script:NavigationRecoverySurface = 'None'
             $script:ReadyNavigationId = $null
             $script:PageReady = $false
@@ -13788,6 +13838,7 @@ public static class AuraUiAsyncDispatch {
             $script:RescueVerificationPending = $false
             $script:ActiveNavigationId = $null
             $script:ActiveNavigationUri = $null
+            $script:VerifiedNavigationId = $null
             $script:NavigationRecoverySurface = 'None'
             Show-AuraUiLoading -Message "$($script:UiCopy.reloadRetry)" -Retry $true
           }

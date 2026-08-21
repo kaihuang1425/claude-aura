@@ -461,4 +461,36 @@ test("Aura Rescue Mode never logs delayed stale mirror exceptions", async () => 
   }
 });
 
+test("a verified top-level response lets DOMContentLoaded theme before completion", async () => {
+  const ui = await fs.readFile(uiPath, "utf8");
+  const predicate = powershellFunction(ui, "Test-AuraUiVerifiedDocumentResponse");
+  // The early-apply gate consumes the same evidence NavigationCompleted waits
+  // for. It must never be reachable by a redirect, an error, or a challenge.
+  assert(predicate.includes("$StatusCode -lt 200 -or $StatusCode -gt 299"),
+    "Only a successful top-level status may count as verified");
+  assert(predicate.includes("'challenge'"),
+    "A Cloudflare challenge marker must still disqualify the response");
+  assert(predicate.includes("return -not [string]::Equals("),
+    "The predicate must answer the opposite question to the challenge classifier");
+  assert(predicate.includes("Test-AuraUiClaudeUri -Value $RequestUri"),
+    "Verification must stay scoped to a Claude origin");
+  assert(predicate.includes("[StringComparison]::Ordinal)"),
+    "The top-level identity match must stay ordinal");
+
+  const startingStart = ui.indexOf("$core.add_NavigationStarting({");
+  const startingEnd = ui.indexOf("$core.add_DOMContentLoaded({", startingStart);
+  assert(ui.slice(startingStart, startingEnd).includes("$script:VerifiedNavigationId = $null"),
+    "Every new navigation must retire the previous verification");
+
+  const domStart = ui.indexOf("$core.add_DOMContentLoaded({", startingEnd);
+  const domEnd = ui.indexOf("$core.add_NavigationCompleted({", domStart);
+  const handler = ui.slice(domStart, domEnd);
+  assert.match(handler, /VerifiedNavigationId[\s\S]{0,420}?Apply-AuraUiTheme/u,
+    "Early theming must be gated on the verified navigation id");
+  assert(!handler.includes("Hide-AuraUiLoading"),
+    "Early theming must not take over the reveal NavigationCompleted owns");
+  assert(!/\$script:PageReady\s*=\s*\$true/u.test(handler),
+    "Early theming must not mark the page ready");
+});
+
 runIfMain(import.meta.url);
