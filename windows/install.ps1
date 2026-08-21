@@ -238,11 +238,20 @@ function Test-AuraInstallExcludedReleasePath {
   param([Parameter(Mandatory = $true)][string]$RelativePath)
   $normalized = $RelativePath.Replace('\', '/')
   if ($normalized -ceq 'scripts/desktop-cdp/session.mjs' -or
+      $normalized -ceq 'scripts/desktop-main-inspector.mjs' -or
       $normalized -ceq 'scripts/desktop-profile.mjs' -or
+      $normalized -ceq 'studio/pets/moss.svg' -or
+      $normalized -ceq 'studio/pets/nori.svg' -or
+      $normalized -ceq 'studio/pets/pip.svg' -or
       $normalized -ceq 'tests/aura-code-popup-diagnostic.test.mjs' -or
       $normalized -ceq 'tests/desktop-cdp.test.mjs' -or
       $normalized -ceq 'windows/aura-code-popup-diagnostic.ps1' -or
+      $normalized -ceq 'windows/build-desktop-capture-filter.ps1' -or
+      $normalized -ceq 'windows/desktop-aura-session.ps1' -or
+      $normalized -ceq 'windows/desktop-overlay-proof.ps1' -or
       $normalized -ceq 'windows/desktop-presentation.ps1' -or
+      $normalized -ceq 'windows/desktop-taskboard-panel.ps1' -or
+      $normalized -ceq 'windows/native/desktop-capture-filter.cpp' -or
       $normalized -ceq 'scripts/qa-board.mjs' -or
       $normalized -ceq 'tests/fixtures/claude-dom.html') {
     return $true
@@ -265,6 +274,7 @@ function Add-AuraInstallSourceFile {
   param(
     [Parameter(Mandatory = $true)][string]$SourceRoot,
     [Parameter(Mandatory = $true)][string]$RelativePath,
+    [string]$SourceRelativePath,
     [Parameter(Mandatory = $true)][AllowEmptyCollection()][Collections.Generic.List[object]]$Files,
     [Parameter(Mandatory = $true)][AllowEmptyCollection()][Collections.Generic.HashSet[string]]$Seen
   )
@@ -273,7 +283,16 @@ function Add-AuraInstallSourceFile {
       @($normalized -split '/' | Where-Object { -not $_ -or $_ -eq '.' -or $_ -eq '..' }).Count -gt 0) {
     throw "Invalid Aura release path: $RelativePath"
   }
-  $sourcePath = Get-AuraInstallFullPath -Path (Join-Path $SourceRoot $normalized.Replace('/', '\'))
+  $sourceNormalized = if ($SourceRelativePath) {
+    $SourceRelativePath.Replace('\', '/').Trim('/')
+  } else {
+    $normalized
+  }
+  if (-not $sourceNormalized -or [IO.Path]::IsPathRooted($sourceNormalized) -or
+      @($sourceNormalized -split '/' | Where-Object { -not $_ -or $_ -eq '.' -or $_ -eq '..' }).Count -gt 0) {
+    throw "Invalid Aura source path: $SourceRelativePath"
+  }
+  $sourcePath = Get-AuraInstallFullPath -Path (Join-Path $SourceRoot $sourceNormalized.Replace('/', '\'))
   if (-not (Test-AuraInstallPathWithin -Root $SourceRoot -Path $sourcePath)) {
     throw "Aura release path escaped its source root: $sourcePath"
   }
@@ -318,8 +337,20 @@ function Get-AuraInstallSourceFiles {
     'config.example.json',
     'package.json'
   )
+  $releaseRootTemplatePaths = @{
+    'Install Claude Aura.cmd' = 'installer/templates/package-root/Install Claude Aura.cmd.template'
+    'Install Claude Aura.command' = 'installer/templates/package-root/Install Claude Aura.command.template'
+    'Uninstall Claude Aura.cmd' = 'installer/templates/package-root/Uninstall Claude Aura.cmd.template'
+  }
+  $repositorySource = Test-Path -LiteralPath (Join-Path $sourceRootFull '.git')
   foreach ($relativePath in $releaseRootFiles) {
-    Add-AuraInstallSourceFile -SourceRoot $sourceRootFull -RelativePath $relativePath -Files $files -Seen $seen
+    $sourceRelativePath = if ($repositorySource -and $releaseRootTemplatePaths.ContainsKey($relativePath)) {
+      $releaseRootTemplatePaths[$relativePath]
+    } else {
+      $relativePath
+    }
+    Add-AuraInstallSourceFile -SourceRoot $sourceRootFull -RelativePath $relativePath `
+      -SourceRelativePath $sourceRelativePath -Files $files -Seen $seen
   }
   foreach ($documentationName in $DocumentationNames) {
     Add-AuraInstallSourceFile -SourceRoot $sourceRootFull -RelativePath "docs/$documentationName" `
@@ -839,6 +870,7 @@ try {
   )
   $documentationNames = @(
     'ACCEPTANCE_AUDIT.md',
+    'DELIVERY_GUARDRAIL.md',
     'FILE_MANIFEST.md',
     'IMPLEMENTATION_REPORT.md',
     'SCREENSHOT_PLAN.md',
@@ -861,8 +893,19 @@ try {
   }
 
   if (Test-Path -LiteralPath (Join-Path $SourceRoot '.git')) {
-    & $node.Path (Join-Path $SourceRoot 'tests\run-tests.mjs')
-    if ($LASTEXITCODE -ne 0) { throw 'Claude Aura checks failed; installation stopped.' }
+    # Repository installs run on developer machines that may already host many
+    # Node processes. Keep this mandatory pre-install gate serial so Windows
+    # loader pressure cannot turn a healthy suite into a transient 0xC0000142
+    # failure. Restore the caller's setting before continuing to Aura launch.
+    $previousTestJobs = [Environment]::GetEnvironmentVariable('AURA_TEST_JOBS', 'Process')
+    try {
+      [Environment]::SetEnvironmentVariable('AURA_TEST_JOBS', '1', 'Process')
+      & $node.Path (Join-Path $SourceRoot 'tests\run-tests.mjs')
+      $testExitCode = $LASTEXITCODE
+    } finally {
+      [Environment]::SetEnvironmentVariable('AURA_TEST_JOBS', $previousTestJobs, 'Process')
+    }
+    if ($testExitCode -ne 0) { throw 'Claude Aura checks failed; installation stopped.' }
   } else {
     foreach ($themeId in $canonicalThemeIds) {
       & $node.Path (Join-Path $SourceRoot 'scripts\theme-cli.mjs') validate --theme $themeId | Out-Null

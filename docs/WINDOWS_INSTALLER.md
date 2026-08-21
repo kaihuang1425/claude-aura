@@ -7,39 +7,29 @@ installer work.
 Installer work does not close HUMAN CHECKPOINT D, replace live Aura review, or
 declare the product release-ready.
 
-## Public distribution paths
+## Distribution path
 
-Claude Aura has three possible public Windows distribution paths plus one
-non-public development build. They must never be presented as providing the
-same identity guarantee. A no-certificate release uses one GitHub release with
-both the unsigned Setup and ZIP/CMD assets; it does not create two releases for
-one version.
+Claude Aura has one Windows installer entry point: native Setup. The active
+`release\windows` directory contains exactly one Setup mode plus its checksum
+and manifest. Building a different mode replaces the prior mode so stale
+installers cannot look current.
 
 | Path | Public use | Entry point | Trust boundary |
 | --- | --- | --- | --- |
 | Unsigned native Setup | Optional guided path without a signing certificate | `Claude-Aura-Setup-v<version>-UNSIGNED.exe` | Native wizard and Installed apps registration; explicit unsigned warning plus SHA-256 and manifest, but no Authenticode publisher identity |
-| Checksummed release ZIP | Public fallback without a signing certificate | Extract the attached `claude-aura-v<version>.zip`, then run `Install Claude Aura.cmd` | Readable source scripts plus SHA-256 integrity; no Authenticode publisher identity and no Installed apps registration |
 | Signed native Setup | Optional when a CA-trusted certificate is available | `Claude-Aura-Setup-v<version>.exe` | Authenticode publisher, timestamp, final-file SHA-256, and native Installed apps registration |
 | Unsigned development Setup | Never public | `Claude-Aura-Setup-v<version>-UNSIGNED-DEV.exe` | Local developer inspection only; `releaseEligible: false` |
 
 For a no-certificate release, publish the public unsigned Setup with its
-matching `.sha256` and `.manifest.json`, plus the deterministic allowlisted ZIP
-and its `.sha256`. GitHub's automatic **Source code** archives are not
-substitutes. The unsigned Setup filename, first wizard page, manifest, README,
-security guidance, troubleshooting, and release notes must all state that
-Windows cannot verify its publisher. If Windows warns about or blocks it, the
-user must stop and use the ZIP/CMD fallback instead of bypassing the warning.
+matching `.sha256` and `.manifest.json`. GitHub's automatic **Source code**
+archives are not substitutes. The unsigned Setup filename, first wizard page,
+manifest, README, security guidance, troubleshooting, and release notes must
+all state that Windows cannot verify its publisher. If Windows warns about or
+blocks it, the user must stop instead of bypassing the warning.
 
-The user verifies the ZIP, extracts the whole archive, and runs the `.cmd`
-beside its bundled `windows` folder. Never publish the `.cmd` alone.
-
-`Install Claude Aura.cmd` resolves only the adjacent `windows\install.ps1`,
-changes to a safe local working directory, and applies `ExecutionPolicy Bypass`
-only to that PowerShell process. The installer validates the shipped app
-surface, performs a guarded app-tree replacement, and creates owned Start and
-Desktop shortcuts. It does not claim a signed publisher or add an Installed
-apps entry. The matching `Uninstall Claude Aura.cmd` and Start-menu shortcut
-remain the removal path.
+The internal payload archive and its package-root launcher templates are build
+inputs only. They are created under `dist` or a private temporary directory;
+they are never a second user-facing installer under `release`.
 
 ## User experience
 
@@ -92,8 +82,9 @@ Setup writes below:
 
 The install sequence is:
 
-1. `scripts/build-release.mjs` creates the allowlisted Aura ZIP.
-2. `scripts/build-installer.mjs` re-hashes and safely extracts that exact ZIP,
+1. `scripts/build-installer.mjs` asks `scripts/build-release.mjs` to create an
+   allowlisted payload archive in a private temporary directory.
+2. The installer builder re-hashes and safely extracts that exact payload,
    regenerates deterministic wizard art, and invokes the pinned compiler.
 3. Inno Setup expands the signed, CRC-protected payload to its private Temp
    directory.
@@ -157,12 +148,8 @@ first recovers any interrupted install transaction. If cleanup fails, Inno
 aborts before removing its Installed apps registration or maintenance helper,
 so the user can fix the cause and retry.
 
-`Uninstall Claude Aura.cmd` remains the ZIP-install fallback. When native
-registration exists, its PowerShell entry point validates the exact HKCU
-AppId, the `%LOCALAPPDATA%\ClaudeAura\installer` parent, the `uninsNNN.exe`
-filename, and the absence of a reparse point before delegating to the native
-uninstaller. It never removes the app while leaving a valid native registration
-behind.
+The Start-menu shortcut and **Installed apps** registration are the supported
+uninstall entry points. Both invoke the native uninstaller outside the app tree.
 
 ## Source layout
 
@@ -178,6 +165,11 @@ installer/
 |   |-- wizard-dark.png
 |   |-- wizard-small-light.png
 |   `-- wizard-small-dark.png
+|-- templates/
+|   `-- package-root/
+|       |-- Install Claude Aura.cmd.template
+|       |-- Install Claude Aura.command.template
+|       `-- Uninstall Claude Aura.cmd.template
 `-- locales/
     |-- en.isl
     |-- zh-CN.isl
@@ -189,6 +181,12 @@ The PNGs are deterministic outputs, not hand-edited masters:
 ```powershell
 node scripts/build-installer-assets.mjs
 ```
+
+The files under `installer/templates/package-root/` are non-runnable source
+templates for the separate portable ZIP. The native Setup builder uses the
+`native-setup` payload profile: it does not embed or install those portable
+Install/Uninstall wrappers. The installed app therefore contains application
+files only, while `release\windows\` contains the single Windows Setup.
 
 Installer copy is maintained independently for `en`, `zh-CN`, and `zh-HKTW`.
 Apply the required Chinese UI-copy skill before changing either Chinese
@@ -222,9 +220,8 @@ installer\Build Installer.cmd
 ```
 
 The helper runs `npm.cmd run check`, verifies all eight built-in themes in
-Light and Dark, and builds the current allowlisted public release ZIP. After a
-successful build, File Explorer selects the ZIP under `release\`. Users extract
-it and run `Install Claude Aura.cmd`.
+Light and Dark, and builds the unsigned development Setup. After a successful
+build, File Explorer selects the executable under `release\windows\`.
 
 The command-line equivalent is:
 
@@ -234,11 +231,9 @@ The command-line equivalent is:
 
 Use `--signed` only after configuring the signing variables below. Use
 `--unsigned` for the clearly marked public unsigned Setup and
-`--unsigned-dev` only for the local-development Setup. Use `--zip` to state the
-default ZIP/CMD mode explicitly. A no-certificate release runs both `--zip`
-and `--unsigned`; each invocation reruns the same repository and theme gates.
-The helper never changes `package.json`, creates a commit, or publishes
-anything.
+`--unsigned-dev` only for the local-development Setup. With no mode argument,
+the helper builds `--unsigned-dev`. The helper never changes `package.json`,
+creates a commit, or publishes anything.
 
 ## Unsigned public build
 
@@ -251,22 +246,20 @@ npm.cmd run installer:unsigned
 It produces:
 
 ```text
-release\Claude-Aura-Setup-v<version>-UNSIGNED.exe
-release\Claude-Aura-Setup-v<version>-UNSIGNED.exe.sha256
-release\Claude-Aura-Setup-v<version>-UNSIGNED.manifest.json
+release\windows\Claude-Aura-Setup-v<version>-UNSIGNED.exe
+release\windows\Claude-Aura-Setup-v<version>-UNSIGNED.exe.sha256
+release\windows\Claude-Aura-Setup-v<version>-UNSIGNED.manifest.json
 ```
 
 The manifest must say `buildType: "unsigned-release"`,
 `releaseEligible: true`, `distribution.trust: "sha256-only"`, and
-`signing.status: "NotSigned"`. The build must also produce the matching public
-ZIP and checksum from the same payload.
+`signing.status: "NotSigned"`.
 
 This is a convenience path, not a verified-publisher path. Its filename and
-first wizard page must say that it is unsigned. Publish all five companion
-assets in one GitHub release, state the exact hashes in the release notes, and
-keep ZIP/CMD as the fallback. Never imply that SHA-256 authenticates the
-publisher, never suppress Windows warnings, and never tell users to bypass
-SmartScreen.
+first wizard page must say that it is unsigned. Publish the executable,
+checksum, and manifest together, state the exact hash in the release notes,
+and never imply that SHA-256 authenticates the publisher. Never suppress
+Windows warnings or tell users to bypass SmartScreen.
 
 ## Unsigned development build
 
@@ -279,9 +272,9 @@ npm.cmd run installer:dev
 It produces:
 
 ```text
-release\Claude-Aura-Setup-v<version>-UNSIGNED-DEV.exe
-release\Claude-Aura-Setup-v<version>-UNSIGNED-DEV.exe.sha256
-release\Claude-Aura-Setup-v<version>-UNSIGNED-DEV.manifest.json
+release\windows\Claude-Aura-Setup-v<version>-UNSIGNED-DEV.exe
+release\windows\Claude-Aura-Setup-v<version>-UNSIGNED-DEV.exe.sha256
+release\windows\Claude-Aura-Setup-v<version>-UNSIGNED-DEV.manifest.json
 ```
 
 The manifest must say `buildType: "unsigned-development"`,
@@ -309,7 +302,7 @@ npm.cmd run installer
 Use single quotes around `AURA_SIGNTOOL_COMMAND` so `$f` remains literal. The
 release build:
 
-1. re-verifies the release ZIP SHA-256 from the bytes it extracts;
+1. re-verifies the private payload SHA-256 from the bytes it extracts;
 2. compiles and signs Setup plus the generated uninstaller;
 3. verifies the staged executable before any Setup output is promoted to
    `release`;
@@ -335,9 +328,9 @@ Every installer change must pass:
 node tests/installer.test.mjs
 npm.cmd run check
 npm.cmd run verify:cycle
-npm.cmd run release
 npm.cmd run installer:unsigned
 npm.cmd run installer:dev
+npm.cmd run installer:audit
 git diff --check
 ```
 
@@ -352,15 +345,14 @@ $errors = $null
   [ref]$errors)
 if ($errors.Count) { $errors | Format-List; exit 1 }
 
-Get-AuthenticodeSignature .\release\Claude-Aura-Setup-v0.3.0-UNSIGNED-DEV.exe
-Get-FileHash -Algorithm SHA256 .\release\Claude-Aura-Setup-v0.3.0-UNSIGNED-DEV.exe
-Get-AuthenticodeSignature .\release\Claude-Aura-Setup-v0.3.0-UNSIGNED.exe
-Get-FileHash -Algorithm SHA256 .\release\Claude-Aura-Setup-v0.3.0-UNSIGNED.exe
+Get-AuthenticodeSignature .\release\windows\Claude-Aura-Setup-v0.3.0-UNSIGNED-DEV.exe
+Get-FileHash -Algorithm SHA256 .\release\windows\Claude-Aura-Setup-v0.3.0-UNSIGNED-DEV.exe
+Get-AuthenticodeSignature .\release\windows\Claude-Aura-Setup-v0.3.0-UNSIGNED.exe
+Get-FileHash -Algorithm SHA256 .\release\windows\Claude-Aura-Setup-v0.3.0-UNSIGNED.exe
 ```
 
 The signed command is an additional gate only when publishing a signed Setup.
-The checksummed ZIP remains the public fallback for a no-certificate release;
-an unsigned developer Setup never replaces either public unsigned artifact.
+An unsigned developer Setup never becomes a public release artifact.
 
 Before public distribution, use a clean Windows VM or Windows Sandbox to test:
 
@@ -402,9 +394,8 @@ For every future installer change:
     locale when it will be a release asset;
 11. inspect the actual wizard, not a mockup;
 12. run the clean-VM lifecycle matrix;
-13. create the public ZIP through `npm.cmd run release`, public unsigned Setup
-    through `npm.cmd run installer:unsigned`, or signed Setup through the
-    signed command; and
+13. create the public unsigned Setup through `npm.cmd run
+    installer:unsigned`, or signed Setup through the signed command; and
 14. publish checksums only from the final distributed bytes, after signing and
     timestamping when the artifact is a signed Setup executable.
 

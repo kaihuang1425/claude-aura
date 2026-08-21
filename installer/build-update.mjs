@@ -16,16 +16,16 @@ function parseArguments(argv) {
     help: false,
   };
   for (const argument of argv) {
-    if (argument === "--signed" || argument === "--zip"
+    if (argument === "--signed"
         || argument === "--unsigned" || argument === "--unsigned-dev") {
       const nextMode = argument === "--signed"
         ? "signed"
         : argument === "--unsigned"
           ? "unsigned-release"
-          : argument === "--unsigned-dev" ? "unsigned-development" : "zip";
+          : "unsigned-development";
       if (options.mode && options.mode !== nextMode) {
         throw new Error(
-          "Choose only one output mode: --zip, --signed, --unsigned, or --unsigned-dev.",
+          "Choose only one output mode: --signed, --unsigned, or --unsigned-dev.",
         );
       }
       options.mode = nextMode;
@@ -39,7 +39,7 @@ function parseArguments(argv) {
       throw new Error(`Unknown option: ${argument}\nRun "Build Installer.cmd --help" for usage.`);
     }
   }
-  options.mode ??= "zip";
+  options.mode ??= "unsigned-development";
   return options;
 }
 
@@ -47,13 +47,12 @@ function printHelp() {
   console.log(`Build the current Claude Aura release for Windows.
 
 Double-click:
-  Builds the checksummed public ZIP. Extract it and run Install Claude Aura.cmd.
+  Builds the one local-development Setup executable.
 
 Options:
-  --zip            Build the public ZIP with the CMD installer (default).
   --signed         Build the signed public Setup executable. Signing is required.
   --unsigned       Build the clearly marked unsigned public Setup executable.
-  --unsigned-dev   Build the clearly marked local-development Setup executable.
+  --unsigned-dev   Build the local-development Setup executable (default).
   --no-open        Do not open File Explorer after a successful build.
   --no-pause       Return immediately instead of waiting for Enter.
   --help           Show this help.`);
@@ -100,12 +99,12 @@ async function main(options) {
     ? "installer"
     : options.mode === "unsigned-release"
       ? "installer:unsigned"
-      : options.mode === "unsigned-development" ? "installer:dev" : "release";
+      : "installer:dev";
   const buildLabel = options.mode === "signed"
     ? "signed Setup"
     : options.mode === "unsigned-release"
       ? "unsigned public Setup"
-      : options.mode === "unsigned-development" ? "unsigned development Setup" : "public ZIP + CMD";
+      : "unsigned development Setup";
   console.log(`\nClaude Aura release build\nMode: ${buildLabel}`);
 
   console.log("\n[1/3] Checking the repository...");
@@ -128,26 +127,19 @@ async function main(options) {
     ? `Claude-Aura-Setup-v${packageJson.version}.exe`
     : options.mode === "unsigned-release"
       ? `Claude-Aura-Setup-v${packageJson.version}-UNSIGNED.exe`
-    : options.mode === "unsigned-development"
-      ? `Claude-Aura-Setup-v${packageJson.version}-UNSIGNED-DEV.exe`
-      : `claude-aura-v${packageJson.version}.zip`;
-  const outputPath = path.join(PROJECT_ROOT, "release", basename);
+      : `Claude-Aura-Setup-v${packageJson.version}-UNSIGNED-DEV.exe`;
+  const outputDirectory = "windows";
+  const outputPath = path.join(PROJECT_ROOT, "release", outputDirectory, basename);
   const output = await fs.stat(outputPath).catch(() => null);
   if (!output?.isFile()) {
     throw new Error(`The build completed, but the expected installer is missing:\n${outputPath}`);
   }
 
   console.log(`\nRelease artifact ready:\n${outputPath}`);
-  if (options.mode === "zip") {
-    console.log("\nThe matching SHA-256 file is in the same folder.");
-    console.log("Windows install: extract the whole ZIP, then run Install Claude Aura.cmd.");
-    console.log("This source-script path is checksummed but has no Authenticode publisher identity.");
-  } else {
-    console.log("\nThe matching SHA-256 file and build manifest are in the same folder.");
-    if (options.mode === "unsigned-release") {
-      console.log("Windows cannot verify this unsigned publisher.");
-      console.log("Publish it only with its checksum and the ZIP + CMD fallback.");
-    }
+  console.log("\nThe matching SHA-256 file and build manifest are in the same folder.");
+  if (options.mode === "unsigned-release") {
+    console.log("Windows cannot verify this unsigned publisher.");
+    console.log("Publish it only with its checksum.");
   }
   if (options.open) {
     const explorer = spawnSync("explorer.exe", [`/select,${outputPath}`], {

@@ -13,6 +13,7 @@ const installerScriptPath = path.join(PROJECT_ROOT, "installer", "ClaudeAura.iss
 const installerQuickBuildPath = path.join(PROJECT_ROOT, "installer", "Build Installer.cmd");
 const installerQuickWorkflowPath = path.join(PROJECT_ROOT, "installer", "build-update.mjs");
 const installerBuildPath = path.join(PROJECT_ROOT, "scripts", "build-installer.mjs");
+const installerAuditPath = path.join(PROJECT_ROOT, "scripts", "audit-installer.mjs");
 const installerAssetBuildPath = path.join(PROJECT_ROOT, "scripts", "build-installer-assets.mjs");
 const installBackendPath = path.join(PROJECT_ROOT, "windows", "install.ps1");
 const uninstallBackendPath = path.join(PROJECT_ROOT, "windows", "uninstall.ps1");
@@ -202,6 +203,20 @@ test("native uninstall keeps data by default and requires an explicit erase choi
   }
 });
 
+test("repository installs serialize the mandatory Windows check gate", async () => {
+  const installer = await fs.readFile(installBackendPath, "utf8");
+  const repositoryGate = installer.match(
+    /if \(Test-Path -LiteralPath \(Join-Path \$SourceRoot '\.git'\)\) \{[\s\S]*?\n  \} else \{/u,
+  )?.[0] ?? "";
+
+  assert.match(repositoryGate,
+    /SetEnvironmentVariable\('AURA_TEST_JOBS', '1', 'Process'\)[\s\S]*tests\\run-tests\.mjs/,
+    "Repository installs must avoid parallel Windows loader pressure");
+  assert.match(repositoryGate,
+    /finally \{[\s\S]*SetEnvironmentVariable\('AURA_TEST_JOBS', \$previousTestJobs, 'Process'\)/,
+    "Repository installs must restore the caller's test concurrency setting");
+});
+
 test("installer locales are complete, independent, and preserve placeholders", async () => {
   const localeFiles = ["en.isl", "zh-CN.isl", "zh-HKTW.isl"];
   const localeEntries = await Promise.all(localeFiles.map(async (name) => {
@@ -270,7 +285,7 @@ test("installer artwork is deterministic and has exact native-wizard dimensions"
   }
 });
 
-test("one-click release builds default to the CMD ZIP and keep Setup modes explicit", async () => {
+test("one-click release builds one current Setup and keeps trust modes explicit", async () => {
   const [launcher, workflow] = await Promise.all([
     fs.readFile(installerQuickBuildPath, "utf8"),
     fs.readFile(installerQuickWorkflowPath, "utf8"),
@@ -278,13 +293,15 @@ test("one-click release builds default to the CMD ZIP and keep Setup modes expli
   assert.match(launcher, /node\.exe "%~dp0build-update\.mjs" %\*/,
     "The one-click batch file must delegate beside itself without depending on the working directory");
   assert.match(workflow, /mode: null/);
-  assert.match(workflow, /options\.mode \?\?= "zip"/,
-    "Double-clicking must default to the public ZIP with the CMD installer");
+  assert.match(workflow, /options\.mode \?\?= "unsigned-development"/,
+    "Double-clicking must default to the local-development Setup executable");
   assert.match(workflow,
-    /argument === "--signed" \|\| argument === "--zip"[\s\S]{0,100}?"--unsigned"[\s\S]{0,100}?"--unsigned-dev"/,
-    "Every Setup mode must require an explicit option");
+    /argument === "--signed"[\s\S]{0,100}?"--unsigned"[\s\S]{0,100}?"--unsigned-dev"/,
+    "Every non-default trust mode must require an explicit option");
+  assert.doesNotMatch(workflow, /--zip|public ZIP \+ CMD/,
+    "The one-click installer builder must not create a second user-facing installer format");
   assert.match(workflow,
-    /"signed"[\s\S]*"unsigned-release"[\s\S]*"unsigned-development"[\s\S]*"zip"/,
+    /"signed"[\s\S]*"unsigned-release"[\s\S]*"unsigned-development"/,
     "A signed public build must require an explicit option");
   const checkIndex = workflow.indexOf('runNpm("check")');
   const verifyIndex = workflow.indexOf('runNpm("verify:cycle")');
@@ -297,20 +314,20 @@ test("one-click release builds default to the CMD ZIP and keep Setup modes expli
     /spawnSync\(commandProcessor, \["\/d", "\/s", "\/c", `npm\.cmd run \$\{script\}`\]/);
   assert.match(workflow, /--no-open/);
   assert.match(workflow, /--no-pause/);
-  assert.match(workflow, /claude-aura-v\$\{packageJson\.version\}\.zip/);
   assert.match(workflow, /Claude-Aura-Setup-v\$\{packageJson\.version\}-UNSIGNED\.exe/);
   assert.match(workflow, /Claude-Aura-Setup-v\$\{packageJson\.version\}-UNSIGNED-DEV\.exe/);
   assert.match(workflow, /Claude-Aura-Setup-v\$\{packageJson\.version\}\.exe/);
-  assert.match(workflow, /extract the whole ZIP, then run Install Claude Aura\.cmd/);
-  assert.match(workflow, /has no Authenticode publisher identity/);
+  assert.match(workflow, /const outputDirectory = "windows"/,
+    "The build launcher must publish only to the canonical Setup folder");
   assert.doesNotMatch(`${launcher}\n${workflow}`,
     /\bgit\b|npm\.cmd version|\bnpm publish\b|\bgh\b/i,
     "Building an installer must not change versions or publish repository state");
 });
 
-test("installer build signs before hashing and rejects unsafe release archives", async () => {
-  const [builder, artworkBuilder, packageSource] = await Promise.all([
+test("installer build signs before hashing and rejects stale or ambiguous artifacts", async () => {
+  const [builder, auditor, artworkBuilder, packageSource] = await Promise.all([
     fs.readFile(installerBuildPath, "utf8"),
+    fs.readFile(installerAuditPath, "utf8"),
     fs.readFile(installerAssetBuildPath, "utf8"),
     fs.readFile(path.join(PROJECT_ROOT, "package.json"), "utf8"),
   ]);
@@ -334,6 +351,21 @@ test("installer build signs before hashing and rejects unsafe release archives",
   assert.match(builder, /--allow-unsigned-release/);
   assert.match(builder, /UnsignedPublicBuild/);
   assert.match(builder, /UNSIGNED-DEV/);
+  assert.match(builder,
+    /SETUP_RELEASE_DIRECTORY = path\.join\(RELEASE_ROOT, "windows"\)/);
+  assert.doesNotMatch(builder, /PORTABLE_RELEASE_DIRECTORY/,
+    "Setup builds must keep their intermediate ZIP outside the user-facing release tree");
+  assert.match(builder, /const payloadOutputDirectory = path\.join\(stagingParent, "payload"\)/);
+  assert.match(builder, /buildRelease\(payloadOutputDirectory\)/);
+  assert.match(builder,
+    /"scripts\/build-release\.mjs",\s*"--native-payload",\s*"--output-directory"/,
+    "Native Setup must build a payload that excludes portable installer wrappers");
+  assert.match(builder, /release\.files !== staged\.files \|\| release\.unpackedBytes !== staged\.bytes/,
+    "Setup builds must compare the extracted payload inventory with the payload builder");
+  assert.match(builder, /bytes: release\.bytes,[\s\S]{0,80}?unpackedBytes: staged\.bytes/,
+    "Setup manifests must distinguish archive bytes from extracted bytes");
+  assert.match(builder, /removeSupersededInstallerOutputs/,
+    "Publishing a Setup must remove older Setup modes from the canonical folder");
   assert.match(builder, /releaseEligible: options\.signed \|\| options\.unsignedRelease/);
   assert.match(builder,
     /buildType: options\.signed[\s\S]{0,180}?"unsigned-release"[\s\S]{0,100}?"unsigned-development"/);
@@ -364,11 +396,18 @@ test("installer build signs before hashing and rejects unsafe release archives",
     "The installer builder must not fetch tools or payloads");
   assert.match(artworkBuilder, /const THEME_SPINE = Object\.freeze\(\[/);
   const packageJson = JSON.parse(packageSource);
-  assert.equal(packageJson.scripts.installer, "node scripts/build-installer.mjs --signed");
-  assert.equal(packageJson.scripts["installer:unsigned"],
-    "node scripts/build-installer.mjs --allow-unsigned-release");
-  assert.equal(packageJson.scripts["installer:dev"],
-    "node scripts/build-installer.mjs --allow-unsigned-development");
+  assert.match(packageJson.scripts.installer, /build-installer\.mjs --signed && node scripts\/audit-installer\.mjs/);
+  assert.match(packageJson.scripts["installer:unsigned"],
+    /build-installer\.mjs --allow-unsigned-release && node scripts\/audit-installer\.mjs/);
+  assert.match(packageJson.scripts["installer:dev"],
+    /build-installer\.mjs --allow-unsigned-development && node scripts\/audit-installer\.mjs/);
+  assert.match(auditor, /Expected one Setup executable and no alternate installers/);
+  assert.match(auditor, /The Setup executable embeds a stale payload/);
+  assert.match(auditor, /Installed Claude Aura contains a nested portable installer/);
+  assert.match(auditor, /The Setup payload includes a nested portable installer/);
+  assert.match(auditor, /manifest\?\.payload\?\.unpackedBytes !== current\.unpackedBytes/,
+    "The installer audit must compare extracted payload size with the current source payload");
+  assert.match(auditor, /Installed Claude Aura is stale or incomplete/);
   assert(packageJson.scripts.check.includes("node --check scripts/build-installer.mjs"));
 });
 
@@ -480,6 +519,9 @@ function Enter-AuraTransactionLock {
   }
   return $mutex
 }
+if ($env:AURA_TEST_UI_RUNNING -ceq '1') {
+  function Test-AuraUiHostRunning { return $true }
+}
 $parameters = @{ Mode = $env:AURA_TEST_MODE }
 if ($env:AURA_TEST_SOURCE_ROOT) {
   $parameters.SourceRoot = $env:AURA_TEST_SOURCE_ROOT
@@ -492,7 +534,7 @@ if ($env:AURA_TEST_TARGET_VERSION) {
 }
 Invoke-AuraTransaction @parameters
 `;
-  const runTransaction = (mode, extra = [], expectSuccess = true) => {
+  const runTransaction = (mode, extra = [], expectSuccess = true, uiRunning = false) => {
     const extraValues = {};
     for (let index = 0; index < extra.length; index += 2) {
       extraValues[extra[index]] = extra[index + 1];
@@ -516,6 +558,7 @@ Invoke-AuraTransaction @parameters
         AURA_TEST_SOURCE_ROOT: extraValues["-SourceRoot"] ?? "",
         AURA_TEST_TRANSACTION_ID: extraValues["-TransactionId"] ?? "",
         AURA_TEST_TARGET_VERSION: extraValues["-TargetVersion"] ?? "",
+        AURA_TEST_UI_RUNNING: uiRunning ? "1" : "0",
       },
       windowsHide: true,
     });
@@ -537,6 +580,16 @@ Invoke-AuraTransaction @parameters
     await fs.writeFile(path.join(sourceRoot, "new.txt"), "new-app\n", "utf8");
     await fs.writeFile(path.join(sourceRoot, "nested", "state.bin"),
       Buffer.from([9, 8, 7, 6]));
+
+    const runningBlocked = runTransaction("prepare", [
+      "-SourceRoot", sourceRoot,
+      "-TargetVersion", "9.8.7",
+    ], false, true);
+    assert.match(`${runningBlocked.stdout}\n${runningBlocked.stderr}`,
+      /Exit Claude Aura from its window or tray/i,
+      "Native Setup must explain how to release the live app before updating");
+    assert.equal(await fs.readFile(path.join(appRoot, "old.txt"), "utf8"), "old-app\n",
+      "Native Setup changed the installed app while Aura was running");
 
     const prepared = runTransaction("prepare", [
       "-SourceRoot", sourceRoot,

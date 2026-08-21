@@ -396,6 +396,19 @@ function Exit-AuraTransactionLock {
   try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
 }
 
+function Test-AuraUiHostRunning {
+  $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  $probe = $null
+  try {
+    $probe = [Threading.Mutex]::OpenExisting("Local\ClaudeAura.$sid.Ui")
+    return $true
+  } catch [Threading.WaitHandleCannotBeOpenedException] {
+    return $false
+  } finally {
+    if ($null -ne $probe) { $probe.Dispose() }
+  }
+}
+
 function Invoke-AuraTransaction {
   [CmdletBinding()]
   param(
@@ -424,6 +437,9 @@ if ($Mode -eq 'prepare') {
 Assert-AuraProductRoot
 $operationLock = Enter-AuraTransactionLock
 try {
+  if ($Mode -in @('prepare', 'recover') -and (Test-AuraUiHostRunning)) {
+    throw 'Exit Claude Aura from its window or tray before installing or repairing it.'
+  }
   $existing = Read-AuraJournal
   if ($Mode -eq 'recover') {
     if ($null -ne $existing) { Restore-AuraTransaction -Journal $existing }

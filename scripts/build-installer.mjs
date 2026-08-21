@@ -9,7 +9,8 @@ import { buildInstallerAssets } from "./build-installer-assets.mjs";
 import { AURA_VERSION, PROJECT_ROOT } from "./theme-core.mjs";
 
 const INSTALLER_SCRIPT = path.join(PROJECT_ROOT, "installer", "ClaudeAura.iss");
-const RELEASE_DIRECTORY = path.join(PROJECT_ROOT, "release");
+const RELEASE_ROOT = path.join(PROJECT_ROOT, "release");
+const SETUP_RELEASE_DIRECTORY = path.join(RELEASE_ROOT, "windows");
 const MAX_ARCHIVE_FILES = 10_000;
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const SIGN_COMMAND_ENVIRONMENT = "AURA_SIGNTOOL_COMMAND";
@@ -261,7 +262,7 @@ async function sha256File(filePath) {
 }
 
 async function promoteInstallerOutputs(entries) {
-  const releaseRoot = path.resolve(RELEASE_DIRECTORY);
+  const releaseRoot = path.resolve(SETUP_RELEASE_DIRECTORY);
   const token = crypto.randomBytes(12).toString("hex");
   const prepared = entries.map(({ source, destination }) => {
     const resolvedDestination = path.resolve(destination);
@@ -340,9 +341,27 @@ function normalizeThumbprint(value) {
   return value?.replaceAll(/\s/gu, "").toUpperCase() ?? "";
 }
 
-async function buildRelease() {
-  const result = checkedCommand(process.execPath, ["scripts/build-release.mjs"], "Release payload build");
+async function buildRelease(outputDirectory) {
+  const result = checkedCommand(process.execPath, [
+    "scripts/build-release.mjs",
+    "--native-payload",
+    "--output-directory",
+    outputDirectory,
+  ], "Release payload build");
   return JSON.parse(result.stdout.trim());
+}
+
+async function removeSupersededInstallerOutputs(keepPaths) {
+  const keep = new Set(keepPaths.map((candidate) => path.resolve(candidate).toLowerCase()));
+  const releaseRoot = path.resolve(SETUP_RELEASE_DIRECTORY);
+  for (const entry of await fs.readdir(releaseRoot, { withFileTypes: true })) {
+    if (!entry.isFile() || !/^Claude-Aura-Setup-v.+\.(?:exe|sha256|manifest\.json)$/u.test(entry.name)) {
+      continue;
+    }
+    const candidate = path.resolve(releaseRoot, entry.name);
+    if (path.dirname(candidate) !== releaseRoot || keep.has(candidate.toLowerCase())) { continue; }
+    await fs.rm(candidate, { force: true });
+  }
 }
 
 async function main() {
@@ -387,20 +406,24 @@ async function main() {
     );
   }
 
-  await fs.mkdir(RELEASE_DIRECTORY, { recursive: true });
-  const release = await buildRelease();
-  const releaseArchive = path.resolve(release.outputPath);
-  const expectedReleaseRoot = `${path.resolve(RELEASE_DIRECTORY)}${path.sep}`;
-  if (!releaseArchive.startsWith(expectedReleaseRoot) || !await isFile(releaseArchive)) {
-    throw new Error("Release builder returned an installer payload outside the release directory.");
-  }
+  await fs.mkdir(SETUP_RELEASE_DIRECTORY, { recursive: true });
   const stagingParent = await fs.mkdtemp(path.join(os.tmpdir(), "claude-aura-installer-"));
   try {
+    const payloadOutputDirectory = path.join(stagingParent, "payload");
+    const release = await buildRelease(payloadOutputDirectory);
+    const releaseArchive = path.resolve(release.outputPath);
+    const expectedReleaseRoot = `${path.resolve(payloadOutputDirectory)}${path.sep}`;
+    if (!releaseArchive.startsWith(expectedReleaseRoot) || !await isFile(releaseArchive)) {
+      throw new Error("Release builder returned an installer payload outside its private staging directory.");
+    }
     const stagingRoot = path.join(stagingParent, "claude-aura");
     const compilerOutputDirectory = path.join(stagingParent, "compiled");
     await fs.mkdir(stagingRoot);
     await fs.mkdir(compilerOutputDirectory);
     const staged = await extractReleaseArchive(releaseArchive, stagingRoot, release.sha256);
+    if (release.files !== staged.files || release.unpackedBytes !== staged.bytes) {
+      throw new Error("Extracted installer payload does not match the release builder inventory.");
+    }
     await buildInstallerAssets();
 
     const compilerArguments = [
@@ -424,7 +447,7 @@ async function main() {
     if (compile.stderr) process.stderr.write(compile.stderr);
 
     const stagedArtifactPath = path.join(compilerOutputDirectory, `${outputBasename}.exe`);
-    const artifactPath = path.join(RELEASE_DIRECTORY, `${outputBasename}.exe`);
+    const artifactPath = path.join(SETUP_RELEASE_DIRECTORY, `${outputBasename}.exe`);
     const artifact = await fs.readFile(stagedArtifactPath);
     if (artifact.length < 2 || artifact[0] !== 0x4d || artifact[1] !== 0x5a) {
       throw new Error("Compiled installer is not a valid Windows PE image.");
@@ -457,7 +480,7 @@ async function main() {
       compilerOutputDirectory,
       `${outputBasename}.manifest.json`,
     );
-    const manifestPath = path.join(RELEASE_DIRECTORY, `${outputBasename}.manifest.json`);
+    const manifestPath = path.join(SETUP_RELEASE_DIRECTORY, `${outputBasename}.manifest.json`);
     const manifest = {
       schemaVersion: 2,
       product: "Claude Aura",
@@ -483,8 +506,10 @@ async function main() {
       },
       payload: {
         file: path.basename(releaseArchive),
+        profile: release.profile,
         files: staged.files,
-        bytes: staged.bytes,
+        bytes: release.bytes,
+        unpackedBytes: staged.bytes,
         sha256: staged.sha256,
       },
       signing: {
@@ -510,6 +535,7 @@ async function main() {
       { source: stagedChecksumPath, destination: checksumPath },
       { source: stagedManifestPath, destination: manifestPath },
     ]);
+    await removeSupersededInstallerOutputs([artifactPath, checksumPath, manifestPath]);
     console.log(JSON.stringify({
       artifactPath,
       checksumPath,
