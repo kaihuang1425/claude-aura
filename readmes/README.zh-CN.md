@@ -3,7 +3,7 @@
 # Claude Aura
 
 <p align="center">
-  <a href="./README.md">English</a> ·
+  <a href="../README.md">English</a> ·
   <strong>简体中文</strong> ·
   <a href="./README.zh-HKTW.md">繁體中文</a> ·
   <a href="./README.hi.md">हिंदी</a> ·
@@ -21,16 +21,16 @@
 </p>
 
 <p align="center">
-  <strong>在 Windows 上，为 Claude 实时网站换上个性化且可随时撤销的主题。</strong><br>
-  本地主题 · 不修改 Claude Desktop · 一键恢复原始外观
+  <strong>把 Claude 实时网站变成更顺手的 Windows 工作空间。</strong><br>
+  八种主题 · 悬浮宠物 · 真实标签页 · Work Hub · 可撤销的本地样式
 </p>
 
 <p align="center">
   <a href="#getting-started">开始使用</a> ·
-  <a href="#theme-showcase">查看主题</a> ·
+  <a href="#feature-tour">60 秒了解 Aura</a> ·
   <a href="#create-a-custom-theme">创建主题</a> ·
   <a href="../docs/TROUBLESHOOTING.md">故障排除</a> ·
-  <a href="./SECURITY.md">安全</a>
+  <a href="../SECURITY.md">安全</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,85 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="日式电影编辑风深色新聊天参考预览"
+  <img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="实际安装的 Claude Aura Work Hub，包含目标标签页和本地会话看板"
        width="900"><br>
-  <sub>深色 · 新聊天 · 用户提供的文档展示图</sub>
+  <sub>实际安装的 Aura 截图 · Work Hub、目标标签页和本地会话看板</sub>
 </p>
 
-<p align="center"><sub>参考预览 · 不是可导入的主题背景，也不是实时验收证据</sub></p>
+<a id="feature-tour"></a>
+## 60 秒了解 Aura
+
+Aura 会打开真实的 `claude.ai`，并在它周围加入本地工作空间。选择喜欢的
+外观，需要控制功能时使用 Aura 按钮，在标签页中保留不同会话，再通过
+Work Hub 返回之前的工作。
+
+### 1. 选择外观
+
+打开 Studio，即可在八种内置主题之间切换。所选主题会同时应用到 Claude Aura
+和 Studio，支持浅色与深色模式；需要修改时，先复制主题，不会覆盖内置版本。
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-studio-theme-gallery.png"
+       alt="实际安装的 Claude Aura Studio 内置主题库"
+       width="900"><br>
+  <sub>实际安装的 Aura 截图 · Studio 主题库</sub>
+</p>
+
+### 2. 认识 Aura 按钮
+
+48 × 48 的悬浮圆形按钮会完整留在 Aura 窗口内。首次打开时，按钮旁的引导卡
+会将 **Claude Aura Web** 标示为使用实时 `claude.ai` 的工作空间，并区分独立、
+仍在实验阶段的 **Claude Aura Desktop** 方向。点击按钮可打开 Studio，右键单击
+可查看快捷操作，按住拖动即可调整位置。
+
+### 3. 带上宠物
+
+在 Studio 中选择 Nori、Pip 或 Moss，再显示或隐藏独立运行的本地宠物；隐藏后
+不会丢失选择。宠物的会话列表只显示经过限制的本地状态，可返回已知的 Aura
+标签页或曾观察到的会话，不会接收对话正文。
+
+<p align="center">
+  <img src="../studio/pets/nori.png" alt="Nori 宠物预览" width="112">
+  &nbsp;&nbsp;
+  <img src="../studio/pets/pip.png" alt="Pip 宠物预览" width="112">
+  &nbsp;&nbsp;
+  <img src="../studio/pets/moss.png" alt="Moss 宠物预览" width="112">
+</p>
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-pet-session-runway.png"
+       alt="实际安装的宠物会话列表，显示活动、已打开和过去的本地会话"
+       width="372"><br>
+  <sub>实际安装的伴侣应用截图 · 本地会话列表</sub>
+</p>
+
+### 4. 在标签页之间切换
+
+Work Hub 始终固定显示，用户打开的 Claude 页面位于同一标签栏。Studio 也会用
+相同方式显示“最近”“项目”和“操作队列”等目标，切换位置时不会替换当前页面。
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-action-queue-tabs.png"
+       alt="实际安装的 Claude Aura Studio 操作队列和目标标签页"
+       width="900"><br>
+  <sub>实际安装的 Aura 截图 · 标签页式操作队列</sub>
+</p>
+
+### 5. 从 Work Hub 返回会话
+
+Work Hub 将 Aura 观察到的会话分为**活动**、**已打开**和**过去**。点击卡片时，
+Aura 会复用已经打开的标签页，或重新打开已知的规范地址。看板只保存本地路由和
+状态元数据，不保存对话内容；最新请求的图标也不会把整个目标误报为已完成。
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="实际安装的 Claude Aura Work Hub 标签页和会话看板"
+       width="900"><br>
+  <sub>实际安装的 Aura 截图 · Work Hub</sub>
+</p>
+
+<p align="center"><sub>以上均为实际安装的 Aura 截图，仅证明画面中展示的产品界面；较新的版本仍需重新完成实时验收。</sub></p>
 
 > **独立项目。** Claude Aura 是非官方项目，与 Anthropic PBC 不存在关联，
 > 也未获得其认可、赞助或批准。Aura 显示 `claude.ai` 的实时网站；
@@ -68,6 +140,7 @@
 <summary><strong>目录</strong></summary>
 
 - [Claude Aura](#claude-aura)
+  - [60 秒了解 Aura](#60-秒了解-aura)
   - [为什么选择 Aura](#为什么选择-aura)
   - [快速开始](#快速开始)
     - [系统要求](#系统要求)
@@ -97,6 +170,9 @@
 - **改动保留在本地，并可随时撤销。** Aura 无需修改 Claude Desktop 即可应用本地样式；点击一次 **原始外观**，即可移除 Aura 的呈现层。
 - **从八个内置主题开始。** 每个主题都是稳定、只读的个性化工作区起点。
 - **创建主题时不覆盖原始文件。** Claude Aura Studio 支持本地配色、字体、形状、效果和美术素材。
+- **用真实标签页保留 Claude 工作。** Work Hub 固定显示；用户打开的页面继续使用各自的 WebView2 控件和本地标签元数据。
+- **从 Work Hub 继续。** 活动、已打开和过去的会话来自加密且不含正文的本地记录，只会重新打开已知的规范地址。
+- **带上宠物，不带上另一个内容读取器。** Aura 控制独立的本地宠物伴侣，只共享经过限制的会话状态，不共享提示词或对话正文。
 
 Aura 0.3 目前只为实时网站应用主题，尚不会为 Claude Desktop 原生 Code
 界面或 Claude Code 终端应用主题；Aura 中的普通聊天也不会因此获得本地项目
@@ -333,7 +409,12 @@ Aura 按固定顺序提供八个内置主题：
 | 操作 | 作用 |
 | --- | --- |
 | 点击悬浮 Aura 按钮 | 打开 Claude Aura Studio |
+| 右键单击悬浮 Aura 按钮 | 打开 Studio、操作队列、宠物、外观和 Claude Desktop 的快捷操作 |
+| 拖动悬浮 Aura 按钮 | 移动完整的圆形控件，并让它始终保持在 Aura 窗口内 |
+| **Work Hub** | 显示不含正文的活动、已打开和过去会话卡片，并返回已知的 Aura 地址 |
+| 主标签栏中的 **+** | 打开另一个真实 Claude 页面，不替换当前标签页 |
 | **主题** | 打开内置主题库并保存选中的主题 |
+| **宠物** | 选择 Nori、Pip 或 Moss，并显示、隐藏或打开独立宠物伴侣的设置 |
 | **创建主题** | 创建或编辑由 Aura 管理的自定义主题 |
 | **个人壁纸 > 选择壁纸…** | 选择一张与当前主题分开管理的本地图片 |
 | **清除壁纸** | 停止使用壁纸，但不删除其源文件 |
@@ -345,8 +426,8 @@ Aura 按固定顺序提供八个内置主题：
 但不会删除已保存的主题或自定义美术素材。**默认**是 Aura 的第一个内置主题，
 与“原始外观”并不相同。
 
-悬浮 Aura 启动按钮始终保持为紧凑的圆形控件。点击可打开 Studio，
-拖动可移动位置，右键单击可打开 Aura 菜单。
+悬浮 Aura 启动按钮始终保持为紧凑的圆形控件。默认点击会打开 Studio；
+右键菜单保留次要操作；拖动时，包含透明边缘在内的完整控件都不会离开窗口。
 
 个人壁纸始终链接到原始图片路径。移动或删除该文件后，壁纸将无法使用。
 通过编辑器导入的主题美术素材采用另一套处理方式：Studio 会将素材复制或转换到

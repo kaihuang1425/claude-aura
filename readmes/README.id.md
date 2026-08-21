@@ -30,7 +30,7 @@
   <a href="#theme-showcase">Lihat tema</a> ·
   <a href="#create-a-custom-theme">Buat tema</a> ·
   <a href="../docs/TROUBLESHOOTING.md">Pemecahan masalah</a> ·
-  <a href="./SECURITY.md">Keamanan</a>
+  <a href="../SECURITY.md">Keamanan</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,12 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="Japanese Film Editorial dark new-chat reference preview"
-       width="900"><br>
-  <sub>Gelap · Chat baru · showcase dokumentasi dari pengguna</sub>
+  <a href="../README.md#feature-tour"><img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="Claude Aura Work Hub, tabs, pet, and themes feature tour"
+       width="900"></a><br>
+  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Work Hub</sub>
 </p>
 
-<p align="center"><sub>Pratinjau referensi · bukan latar tema yang bisa diimpor atau bukti penerimaan live</sub></p>
 
 > **Independent project.** Claude Aura adalah proyek mandiri dan tidak berafiliasi,
 > disetujui, disponsori, atau disahkan oleh Anthropic PBC. Aura menampilkan

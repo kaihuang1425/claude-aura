@@ -30,7 +30,7 @@
   <a href="#theme-showcase">테마 보기</a> ·
   <a href="#create-a-custom-theme">테마 만들기</a> ·
   <a href="../docs/TROUBLESHOOTING.md">문제 해결</a> ·
-  <a href="./SECURITY.md">보안</a>
+  <a href="../SECURITY.md">보안</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,12 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="Japanese Film Editorial dark new-chat reference preview"
-       width="900"><br>
-  <sub>다크 · 새 대화 · 사용자 제공 문서 쇼케이스</sub>
+  <a href="../README.md#feature-tour"><img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="Claude Aura Work Hub, tabs, pet, and themes feature tour"
+       width="900"></a><br>
+  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Work Hub</sub>
 </p>
 
-<p align="center"><sub>참조 미리보기 · 가져온 테마 배경이나 라이브 승인 증거가 아닙니다</sub></p>
 
 > **Independent project.** Claude Aura는 독립 프로젝트이며 Anthropic PBC와 제휴되거나 승인되거나 후원되지 않습니다. Aura는 `claude.ai`에서 라이브 웹사이트를 표시할 뿐, Claude 또는 Anthropic 설치 앱을 제공하거나 수정하지 않습니다. Claude, Anthropic 및 관련 이름과 상표는 Anthropic PBC의 자산입니다. 프로젝트 라이선스는 이 자료에 대한 사용권을 부여하지 않습니다.
 

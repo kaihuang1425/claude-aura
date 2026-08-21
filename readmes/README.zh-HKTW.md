@@ -3,7 +3,7 @@
 # Claude Aura
 
 <p align="center">
-  <a href="./README.md">English</a> ·
+  <a href="../README.md">English</a> ·
   <a href="./README.zh-CN.md">简体中文</a> ·
   <strong>繁體中文</strong> ·
   <a href="./README.hi.md">हिंदी</a> ·
@@ -21,16 +21,16 @@
 </p>
 
 <p align="center">
-  <strong>在 Windows 上，替 Claude 即時網站換上個人化、可隨時還原的主題。</strong><br>
-  本機主題 · 不修改 Claude Desktop · 一鍵回到原始外觀
+  <strong>讓 Claude 即時網站成為更順手的 Windows 工作空間。</strong><br>
+  8 個主題 · 浮動寵物 · 真正的分頁 · Work Hub · 可還原的本機樣式
 </p>
 
 <p align="center">
   <a href="#getting-started">開始使用</a> ·
-  <a href="#theme-showcase">瀏覽主題</a> ·
+  <a href="#feature-tour">60 秒看懂 Aura</a> ·
   <a href="#create-a-custom-theme">建立主題</a> ·
   <a href="../docs/TROUBLESHOOTING.md">疑難排解</a> ·
-  <a href="./SECURITY.md">安全性</a>
+  <a href="../SECURITY.md">安全性</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,87 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="日系電影編輯風深色新對話參考預覽"
+  <img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="實際安裝的 Claude Aura Work Hub，包含目的地分頁與本機工作階段看板"
        width="900"><br>
-  <sub>深色 · 新對話 · 使用者提供的說明文件展示圖</sub>
+  <sub>實際安裝的 Aura 畫面 · Work Hub、目的地分頁與本機工作階段看板</sub>
 </p>
 
-<p align="center"><sub>參考預覽 · 不是可匯入的主題背景，也不是即時驗收證據</sub></p>
+<a id="feature-tour"></a>
+## 60 秒看懂 Aura
+
+Aura 會開啟真正的 `claude.ai`，再於外圍加上本機工作空間。先選一種喜歡的
+外觀；需要控制功能時使用 Aura 按鈕；不同對話留在各自的分頁；想繼續之前的
+工作，就回到 Work Hub。
+
+### 1. 選一種外觀
+
+開啟 Studio，即可切換 8 個內建主題。選取的主題會同時套用到 Claude Aura
+與 Studio，支援淺色和深色模式；想調整時可先複製，不會覆寫內建版本。
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-studio-theme-gallery.png"
+       alt="實際安裝的 Claude Aura Studio 內建主題圖庫"
+       width="900"><br>
+  <sub>實際安裝的 Aura 畫面 · Studio 主題圖庫</sub>
+</p>
+
+### 2. 認識 Aura 按鈕
+
+48 × 48 的浮動圓形按鈕會完整留在 Aura 視窗內。第一次開啟時，按鈕旁的引導卡
+會將 **Claude Aura Web** 標示為使用即時 `claude.ai` 的工作空間，並區分獨立、
+仍在實驗階段的 **Claude Aura Desktop** 方向。按一下可開啟 Studio；按右鍵可
+查看快速操作；按住拖曳則可移動按鈕。
+
+### 3. 讓寵物陪著你
+
+在 Studio 選擇 Nori、Pip 或 Moss，再顯示或隱藏獨立執行的本機寵物；隱藏後
+不會忘記原本的選擇。寵物的工作階段清單只顯示受限的本機狀態，可回到已知的
+Aura 分頁或曾觀察到的工作階段，不會取得對話內文。
+
+<p align="center">
+  <img src="../studio/pets/nori.png" alt="Nori 寵物預覽" width="112">
+  &nbsp;&nbsp;
+  <img src="../studio/pets/pip.png" alt="Pip 寵物預覽" width="112">
+  &nbsp;&nbsp;
+  <img src="../studio/pets/moss.png" alt="Moss 寵物預覽" width="112">
+</p>
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-pet-session-runway.png"
+       alt="實際安裝的寵物工作階段清單，顯示進行中、已開啟與過去的本機工作階段"
+       width="372"><br>
+  <sub>實際安裝的 companion 畫面 · 本機工作階段清單</sub>
+</p>
+
+### 4. 用分頁保留每段工作
+
+Work Hub 固定留在分頁列；使用者開啟的 Claude 頁面則排在同一列。Studio 也用
+相同方式呈現「最近」、「專案」和「操作佇列」等目的地，切換位置時不會取代
+原本正在使用的頁面。
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-action-queue-tabs.png"
+       alt="實際安裝的 Claude Aura Studio 操作佇列與目的地分頁"
+       width="900"><br>
+  <sub>實際安裝的 Aura 畫面 · 分頁式操作佇列</sub>
+</p>
+
+### 5. 回到 Work Hub 繼續
+
+Work Hub 會把 Aura 觀察到的工作階段分成**進行中**、**已開啟**和**過去**。
+按下卡片時，Aura 會沿用已開啟的分頁，或重新開啟已知且符合規則的網址。
+看板只儲存本機路由與狀態中繼資料，不儲存對話內容；最新要求的圖示也不會
+把整個目標誤判為已完成。
+
+<p align="center">
+  <img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="實際安裝的 Claude Aura Work Hub 分頁與工作階段看板"
+       width="900"><br>
+  <sub>實際安裝的 Aura 畫面 · Work Hub</sub>
+</p>
+
+<p align="center"><sub>以上都是實際安裝的 Aura 畫面，只能證明截圖中顯示的產品介面；更新後的版本仍須重新完成即時驗收。</sub></p>
 
 > **獨立專案。** Claude Aura 是非官方專案，與 Anthropic PBC 沒有合作、
 > 認可、贊助或核准關係。Aura 顯示 `claude.ai` 即時網站；本專案不提供
@@ -68,6 +142,7 @@
 <summary><strong>目錄</strong></summary>
 
 - [Claude Aura](#claude-aura)
+  - [60 秒看懂 Aura](#60-秒看懂-aura)
   - [為什麼選 Aura](#為什麼選-aura)
   - [開始使用](#開始使用)
     - [系統需求](#系統需求)
@@ -97,6 +172,9 @@
 - **變更只留在本機，而且可隨時還原。** Aura 不需要修改 Claude Desktop 就能套用本機樣式；按一下 **原始外觀**，即可移除 Aura 的顯示層。
 - **從 8 個內建主題開始。** 每個主題都可作為穩定、唯讀的個人化工作空間起點。
 - **建立主題時不覆寫原始檔案。** Claude Aura Studio 支援本機配色、字體、形狀、效果與美術素材。
+- **用真正的分頁保留 Claude 工作。** Work Hub 固定顯示；使用者開啟的頁面會繼續使用各自的 WebView2 控制項與本機分頁中繼資料。
+- **從 Work Hub 繼續。** 進行中、已開啟和過去的工作階段來自加密且不含內文的本機記錄，只會重新開啟已知且符合規則的網址。
+- **帶上寵物，不帶上另一個內容讀取器。** Aura 控制獨立的本機寵物 companion，只分享受限的工作階段狀態，不分享提示詞或對話內文。
 
 Aura 0.3 目前只會替即時網站套用主題，還不會替 Claude Desktop 原生 Code
 介面或 Claude Code 終端機套用主題；Aura 裡的一般對話也不會因此取得本機專案
@@ -333,7 +411,12 @@ Aura 依固定順序提供 8 個內建主題：
 | 操作 | 功能 |
 | --- | --- |
 | 按一下浮動的 Aura 按鈕 | 開啟 Claude Aura Studio |
+| 在浮動的 Aura 按鈕上按右鍵 | 開啟 Studio、操作佇列、寵物、外觀與 Claude Desktop 的快速操作 |
+| 拖曳浮動的 Aura 按鈕 | 移動完整的圓形控制項，並讓它留在 Aura 視窗內 |
+| **Work Hub** | 顯示不含內文的進行中、已開啟與過去工作階段卡片，並回到已知的 Aura 網址 |
+| 主分頁列的 **+** | 開啟另一個真正的 Claude 頁面，不取代目前的分頁 |
 | **主題** | 開啟內建圖庫，並儲存選取的主題 |
+| **寵物** | 選擇 Nori、Pip 或 Moss，並顯示、隱藏或開啟獨立寵物 companion 的設定 |
 | **建立主題** | 建立或編輯由 Aura 管理的自訂主題 |
 | **個人桌布 > 選擇桌布…** | 選取本機圖片，與使用中的主題分開設定 |
 | **清除桌布** | 停止使用桌布，但不刪除原始圖片檔案 |
@@ -345,8 +428,8 @@ Aura 依固定順序提供 8 個內建主題：
 的顯示層，不會刪除已儲存的主題或自訂美術素材。**預設**是 Aura
 的第一個內建主題，和原始外觀不同。
 
-浮動的 Aura 啟動按鈕會維持精簡的圓形控制項。按一下可開啟 Studio，
-拖曳可移動位置，按右鍵則可開啟 Aura 選單。
+浮動的 Aura 啟動按鈕會維持精簡的圓形控制項。預設按一下會開啟 Studio；
+右鍵選單保留次要操作；拖曳時，連同透明外圍在內的完整控制項都不會離開視窗。
 
 個人桌布會持續連結原始圖片路徑。移動或刪除該檔案後，桌布就無法使用。
 透過編輯器匯入的主題美術素材採用不同方式處理：Studio 會將素材複製或

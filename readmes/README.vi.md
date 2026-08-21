@@ -30,7 +30,7 @@
   <a href="#theme-showcase">Xem bộ sưu tập theme</a> ·
   <a href="#create-a-custom-theme">Tạo theme</a> ·
   <a href="../docs/TROUBLESHOOTING.md">Xử lý sự cố</a> ·
-  <a href="./SECURITY.md">Bảo mật</a>
+  <a href="../SECURITY.md">Bảo mật</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,12 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="Japanese Film Editorial dark new-chat reference preview"
-       width="900"><br>
-  <sub>Tối · Chat mới · bản trình diễn tài liệu do người dùng cung cấp</sub>
+  <a href="../README.md#feature-tour"><img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="Claude Aura Work Hub, tabs, pet, and themes feature tour"
+       width="900"></a><br>
+  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Work Hub</sub>
 </p>
 
-<p align="center"><sub>Xem trước tham chiếu · không phải nền theme có thể nhập hoặc bằng chứng chấp nhận trực tiếp</sub></p>
 
 > **Independent project.** Claude Aura là dự án độc lập, không thuộc Anthropic, không được liên kết, tài trợ, hay chấp thuận bởi Anthropic PBC. Aura hiển thị website `claude.ai` trực tiếp; nó không cung cấp Claude hay sửa đổi ứng dụng cài đặt của Anthropic. Claude, Anthropic và các tên/nhãn hiệu liên quan thuộc sở hữu của Anthropic PBC. Giấy phép dự án không cấp quyền nào cho các tài sản này.
 

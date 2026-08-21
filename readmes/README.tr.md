@@ -30,7 +30,7 @@
   <a href="#theme-showcase">Temalara göz at</a> ·
   <a href="#create-a-custom-theme">Tema oluştur</a> ·
   <a href="../docs/TROUBLESHOOTING.md">Sorun giderme</a> ·
-  <a href="./SECURITY.md">Güvenlik</a>
+  <a href="../SECURITY.md">Güvenlik</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,12 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="Japanese Film Editorial dark new-chat reference preview"
-       width="900"><br>
-  <sub>Koyu · Yeni sohbet · kullanıcı tarafından sağlanan dokümantasyon önizlemesi</sub>
+  <a href="../README.md#feature-tour"><img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="Claude Aura Work Hub, tabs, pet, and themes feature tour"
+       width="900"></a><br>
+  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Work Hub</sub>
 </p>
 
-<p align="center"><sub>Referans önizleme · içe aktarılabilir bir tema arka planı veya canlı kabul kanıtı değildir</sub></p>
 
 > **Independent project.** Claude Aura bağımsız bir projedir; Anthropic PBC ile bağlı,
 > desteklenmiş, sponsorlu, onaylanmış veya onaylanmış değildir. Aura canlı `claude.ai`

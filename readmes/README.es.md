@@ -30,7 +30,7 @@
   <a href="#theme-showcase">Ver temas</a> ·
   <a href="#create-a-custom-theme">Crear un tema</a> ·
   <a href="../docs/TROUBLESHOOTING.md">Solución de problemas</a> ·
-  <a href="./SECURITY.md">Seguridad</a>
+  <a href="../SECURITY.md">Seguridad</a>
 </p>
 
 <p align="center">
@@ -38,13 +38,12 @@
 </p>
 
 <p align="center">
-  <img src="../docs/readme-showcase/japanese-film-editorial-dark-new-chat.png"
-       alt="Japanese Film Editorial dark new-chat reference preview"
-       width="900"><br>
-  <sub>Oscuro · Nueva conversación · muestra de documentación aportada por usuarios</sub>
+  <a href="../README.md#feature-tour"><img src="../docs/readme-showcase/actual-work-hub-tabs.png"
+       alt="Claude Aura Work Hub, tabs, pet, and themes feature tour"
+       width="900"></a><br>
+  <sub>Actual installed Aura capture · Themes · Pet · Tabs · Work Hub</sub>
 </p>
 
-<p align="center"><sub>Vista de referencia · no es un fondo de tema importable ni evidencia de aceptación en vivo</sub></p>
 
 > **Independent project.** Claude Aura es un proyecto independiente y no está afiliado,
 > respaldado, patrocinado ni aprobado por Anthropic PBC. Aura muestra
