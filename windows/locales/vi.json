@@ -1,5 +1,13 @@
 {
   "workHubTitle": "Trung tâm công việc",
+  "menuFile": "Tệp",
+  "menuView": "Xem",
+  "menuThemes": "Chủ đề",
+  "menuHelp": "Trợ giúp",
+  "minimizeWindow": "Thu nhỏ cửa sổ",
+  "maximizeWindow": "Phóng to cửa sổ",
+  "restoreWindow": "Khôi phục cửa sổ",
+  "closeWindow": "Đóng cửa sổ",
   "chooseThemePackage": "Chọn gói .aura hoặc tệp theme.json.",
   "exportThemePackageTitle": "Xuất chủ đề Claude Aura",
   "theme": "Chủ đề",

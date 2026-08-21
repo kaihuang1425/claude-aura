@@ -1,5 +1,13 @@
 {
   "workHubTitle": "Panel pracy",
+  "menuFile": "Plik",
+  "menuView": "Widok",
+  "menuThemes": "Motywy",
+  "menuHelp": "Pomoc",
+  "minimizeWindow": "Minimalizuj okno",
+  "maximizeWindow": "Maksymalizuj okno",
+  "restoreWindow": "Przywróć okno",
+  "closeWindow": "Zamknij okno",
   "chooseThemePackage": "Wybierz pakiet .aura lub plik zestawu theme.json.",
   "exportThemePackageTitle": "Eksportuj motyw Claude Aura",
   "theme": "Motyw",

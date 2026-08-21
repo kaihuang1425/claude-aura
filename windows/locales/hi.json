@@ -1,5 +1,13 @@
 {
   "workHubTitle": "कार्य हब",
+  "menuFile": "फ़ाइल",
+  "menuView": "दृश्य",
+  "menuThemes": "थीम",
+  "menuHelp": "सहायता",
+  "minimizeWindow": "विंडो को छोटा करें",
+  "maximizeWindow": "विंडो को बड़ा करें",
+  "restoreWindow": "विंडो पुनर्स्थापित करें",
+  "closeWindow": "विंडो बंद करें",
   "chooseThemePackage": "एक .aura पैकेज या theme.json किट फ़ाइल चुनें।",
   "exportThemePackageTitle": "Claude Aura थीम निर्यात करें",
   "theme": "थीम",

@@ -1,5 +1,13 @@
 {
   "workHubTitle": "Çalışma Merkezi",
+  "menuFile": "Dosya",
+  "menuView": "Görünüm",
+  "menuThemes": "Temalar",
+  "menuHelp": "Yardım",
+  "minimizeWindow": "Pencereyi simge durumuna küçült",
+  "maximizeWindow": "Pencereyi büyüt",
+  "restoreWindow": "Pencereyi geri yükle",
+  "closeWindow": "Pencereyi kapat",
   "chooseThemePackage": ".aura paketi veya theme.json kit dosyası seçin.",
   "exportThemePackageTitle": "Claude Aura temasını dışa aktar",
   "theme": "Tema",

@@ -1263,6 +1263,19 @@ function Test-AuraUiSignInUri {
   } catch { return $false }
 }
 
+function Test-AuraUiAccountTransitionUri {
+  param([AllowNull()][object]$Value)
+  if (Test-AuraUiSignInUri -Value $Value) { return $true }
+  try {
+    $uri = if ($Value -is [Uri]) { $Value } else { [Uri]"$Value" }
+    if (-not $uri.IsAbsoluteUri -or $uri.Scheme -cne [Uri]::UriSchemeHttps -or
+        $uri.UserInfo.Length -ne 0 -or -not $uri.IsDefaultPort) { return $false }
+    $hostName = $uri.Host.ToLowerInvariant()
+    if ($hostName -notin @('claude.ai', 'claude.com')) { return $false }
+    return $uri.AbsolutePath -cmatch '^/(?:login|logout|auth)(?:/|$)'
+  } catch { return $false }
+}
+
 function Test-AuraUiCodeUri {
   param([AllowNull()][object]$Value)
   try {
@@ -1423,7 +1436,6 @@ function Complete-AuraUiPendingNavigationVerification {
     # reveals Claude. The first launcher frame therefore waits for current,
     # validated page geometry instead of flashing at its saved position.
     Hide-AuraUiLoading
-    Show-AuraUiLauncherHint
   } else {
     $script:ReadyNavigationId = $null
     Hide-AuraUiLoading
@@ -2364,12 +2376,15 @@ function Show-AuraUiLoading {
   }
   $script:RetryButton.AccessibleName = $script:RetryButton.Text
   $script:RetryButton.Visible = $Retry
-  $script:LoadingProgress.Visible = -not $Retry
-  if ($Retry -or -not (Test-AuraUiLoadingAnimationEnabled)) {
-    if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Stop() }
+  if (-not $Retry) {
+    $script:LoadingMark.Visible = $false
+    $script:LoadingLabel.Visible = $false
+    $script:LoadingProgress.Visible = $false
   } else {
-    if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Start() }
+    $script:LoadingLabel.Visible = $true
+    $script:LoadingProgress.Visible = $false
   }
+  if ($null -ne $script:LoadingAnimationTimer) { $script:LoadingAnimationTimer.Stop() }
   $script:LoadingPanel.Visible = $true
   $script:LoadingPanel.BringToFront()
   Update-AuraUiLauncherPosition
@@ -2426,6 +2441,7 @@ function Show-AuraUiLoadingScreenPreview {
   Update-AuraUiLoadingTheme
   $script:LoadingScreenPreviewActive = $true
   $script:LoadingLabel.Text = "$($script:UiCopy.openingClaude)"
+  $script:LoadingLabel.Visible = $true
   $script:LoadingProgress.AccessibleName = $script:LoadingLabel.Text
   $script:RetryButton.Visible = $false
   $script:LoadingProgress.Visible = $true
@@ -2984,7 +3000,8 @@ function Test-AuraUiDarkChrome {
 function Update-AuraUiWindowChrome {
   param(
     [bool]$Dark = (Test-AuraUiDarkChrome),
-    [AllowNull()][Drawing.Color]$MainColor
+    [AllowNull()][Drawing.Color]$MainColor,
+    [AllowNull()][Nullable[bool]]$MainDark
   )
   if ($null -eq $MainColor -or $MainColor.IsEmpty) {
     $MainColor = if ($Dark) {
@@ -2998,13 +3015,14 @@ function Update-AuraUiWindowChrome {
   } else {
     [Drawing.ColorTranslator]::FromHtml('#FAF9F5')
   }
+  $mainUsesDarkControls = if ($null -eq $MainDark) { $Dark } else { [bool]$MainDark }
   foreach ($entry in @(
-    @{ Tracker = $script:MainIconWindow; Color = $MainColor },
-    @{ Tracker = $script:StudioIconWindow; Color = $studioColor }
+    @{ Tracker = $script:MainIconWindow; Color = $MainColor; Dark = $mainUsesDarkControls },
+    @{ Tracker = $script:StudioIconWindow; Color = $studioColor; Dark = $Dark }
   )) {
     if ($null -eq $entry.Tracker) { continue }
     try {
-      $entry.Tracker.SetDarkMode($Dark)
+      $entry.Tracker.SetDarkMode([bool]$entry.Dark)
       $entry.Tracker.SetCaptionColor(
         [byte]$entry.Color.R,
         [byte]$entry.Color.G,
@@ -3036,6 +3054,9 @@ function Set-AuraUiPreferredColorScheme {
   }
   $darkChrome = Test-AuraUiDarkChrome -Appearance $Appearance -Enabled $Enabled
   Update-AuraUiWindowChrome -Dark $darkChrome
+  if (Get-Command Update-AuraWebChromeAppearance -ErrorAction SilentlyContinue) {
+    Update-AuraWebChromeAppearance -Dark $darkChrome -Material $script:LauncherStyle
+  }
   Update-AuraUiLoadingTheme
   if (Get-Command Update-AuraPromptShelfTheme -ErrorAction SilentlyContinue) {
     Update-AuraPromptShelfTheme
@@ -4635,6 +4656,9 @@ function Set-AuraUiIdentityCandidate {
   Dispose-AuraUiNativeFormIconPair -Pair $old.MainWindowIconPair
   Dispose-AuraUiNativeFormIconPair -Pair $old.StudioWindowIconPair
   if ($null -ne $old.ThemeIdentityLock) { try { $old.ThemeIdentityLock.Dispose() } catch {} }
+  if (Get-Command Update-AuraWebChromeAppearance -ErrorAction SilentlyContinue) {
+    Update-AuraWebChromeAppearance -Dark (Test-AuraUiDarkChrome) -Material $script:LauncherStyle
+  }
   return $true
 }
 
@@ -4812,13 +4836,13 @@ function Get-AuraUiLauncherClampedLocation {
       [Drawing.Point]::new($script:Form.ClientSize.Width, $script:Form.ClientSize.Height))
   } catch { return $Location }
   $gap = ConvertTo-AuraUiLauncherPixels -Logical $script:LauncherSafeGap
-  # Clamp the visible circle, not the transparent halo, so the safe inset keeps
-  # its classic meaning around the painted button.
-  $halo = (Get-AuraUiLauncherMetrics).Halo
-  $x = [Math]::Max($topLeft.X + $gap - $halo,
-    [Math]::Min($Location.X, $bottomRight.X - $script:Launcher.Width + $halo - $gap))
-  $y = [Math]::Max($topLeft.Y + $gap - $halo,
-    [Math]::Min($Location.Y, $bottomRight.Y - $script:Launcher.Height + $halo - $gap))
+  # The launcher is an owned top-level window because WebView2 occupies native
+  # airspace. Clamp its complete surface so even the transparent halo and
+  # shadow remain visibly inside the Aura client area.
+  $x = [Math]::Max($topLeft.X + $gap,
+    [Math]::Min($Location.X, $bottomRight.X - $script:Launcher.Width - $gap))
+  $y = [Math]::Max($topLeft.Y + $gap,
+    [Math]::Min($Location.Y, $bottomRight.Y - $script:Launcher.Height - $gap))
   return [Drawing.Point]::new([int]$x, [int]$y)
 }
 
@@ -5062,15 +5086,17 @@ function Get-AuraUiLauncherCollisionFreeLocation {
     [Parameter(Mandatory = $true)][int]$Gap,
     [AllowNull()][object[]]$AvoidRectangles
   )
-  if ($CircleSize -le 0 -or $Gap -lt 0 -or
-      $Bounds.Width -lt ($CircleSize + (2 * $Gap)) -or
-      $Bounds.Height -lt ($CircleSize + (2 * $Gap))) {
+  if ($CircleSize -le 0 -or $Halo -lt 0 -or $Gap -lt 0 -or
+      $Bounds.Width -lt ($CircleSize + (2 * $Halo) + (2 * $Gap)) -or
+      $Bounds.Height -lt ($CircleSize + (2 * $Halo) + (2 * $Gap))) {
     return $Preferred
   }
-  $minimumX = $Bounds.Left + $Gap
-  $maximumX = $Bounds.Right - $Gap - $CircleSize
-  $minimumY = $Bounds.Top + $Gap
-  $maximumY = $Bounds.Bottom - $Gap - $CircleSize
+  # Candidate coordinates describe the painted circle, but its transparent
+  # halo belongs to the same launcher window and must stay within Bounds too.
+  $minimumX = $Bounds.Left + $Gap + $Halo
+  $maximumX = $Bounds.Right - $Gap - $Halo - $CircleSize
+  $minimumY = $Bounds.Top + $Gap + $Halo
+  $maximumY = $Bounds.Bottom - $Gap - $Halo - $CircleSize
   $preferredCircleX = [int][Math]::Max(
     $minimumX, [Math]::Min($Preferred.X + $Halo, $maximumX))
   $preferredCircleY = [int][Math]::Max(
@@ -5354,9 +5380,8 @@ function Update-AuraUiLauncherPosition {
 }
 
 function Show-AuraUiLauncherMenu {
-  # Both ordinary click and right-click reveal the same host-owned actions.
-  # Keeping this path separate from the pointer gesture makes the Prompt Shelf
-  # discoverable without changing the launcher's permanent circular surface.
+  # Right-click reveals the host-owned actions while ordinary left-click opens
+  # Studio, matching Gemini Aura's permanent launcher behavior.
   if ($null -eq $script:LauncherMenu -or $script:LauncherMenu.IsDisposed) { return }
   Hide-AuraUiLauncherTip
   $script:LauncherMenu.Show([System.Windows.Forms.Cursor]::Position)
@@ -5367,8 +5392,8 @@ function New-AuraUiLauncherTipBitmap {
     [Parameter(Mandatory = $true)][object]$Style,
     [int]$Dpi = $script:LauncherDpi
   )
-  # A stylized hover caption for the launcher: theme surface, action-menu title,
-  # and a one-line usage hint. Rendered per-pixel so the rounded card and
+  # A stylized hover caption for the launcher's default Studio action. Rendered
+  # per-pixel so the rounded card and
   # its shadow composite cleanly over the page like the launcher itself.
   $bitmap = $null
   $graphics = $null
@@ -5378,8 +5403,8 @@ function New-AuraUiLauncherTipBitmap {
     $scale = Get-AuraUiLauncherScale -Dpi $Dpi
     $titleFont = [Drawing.Font]::new('Segoe UI Semibold', [float](13 * $scale), [Drawing.GraphicsUnit]::Pixel)
     $hintFont = [Drawing.Font]::new('Segoe UI', [float](11 * $scale), [Drawing.GraphicsUnit]::Pixel)
-    $title = "$($script:UiCopy.launcherTipTitle)"
-    $hint = "$($script:UiCopy.launcherTipHint)"
+    $title = "$($script:UiCopy.studioTitle)"
+    $hint = "$($script:UiCopy.openStudio)"
     $measure = [Drawing.Graphics]::FromImage([Drawing.Bitmap]::new(1, 1))
     $measure.TextRenderingHint = [Drawing.Text.TextRenderingHint]::AntiAliasGridFit
     $titleSize = $measure.MeasureString($title, $titleFont)
@@ -5673,7 +5698,7 @@ function Show-AuraUiLauncherHint {
     $hint.KeyPreview = $true
     $hint.Text = "$($script:UiCopy.launcherHintTitle)"
     $hint.AccessibleName = "$($script:UiCopy.launcherHintTitle)"
-    $hint.ClientSize = [Drawing.Size]::new((& $px 336), (& $px 148))
+    $hint.ClientSize = [Drawing.Size]::new((& $px 420), (& $px 236))
     $hintBounds = [Drawing.RectangleF]::new(0, 0, $hint.ClientSize.Width, $hint.ClientSize.Height)
     $hintPath = New-AuraUiRoundedRectanglePath -Bounds $hintBounds -Radius (14 * $scale)
     try { $hint.Region = [Drawing.Region]::new($hintPath) } finally { $hintPath.Dispose() }
@@ -5703,14 +5728,60 @@ function Show-AuraUiLauncherHint {
     $titleLabel.Font = [Drawing.Font]::new('Segoe UI Semibold', [float](14 * $scale), [Drawing.GraphicsUnit]::Pixel)
     $titleLabel.ForeColor = $foregroundColor
     $titleLabel.BackColor = $surfaceColor
-    $titleLabel.Bounds = [Drawing.Rectangle]::new((& $px 74), (& $px 22), (& $px 242), (& $px 20))
+    $titleLabel.Bounds = [Drawing.Rectangle]::new((& $px 74), (& $px 22), (& $px 326), (& $px 22))
 
     $bodyLabel = [System.Windows.Forms.Label]::new()
     $bodyLabel.Text = "$($script:UiCopy.launcherHintBody)"
     $bodyLabel.Font = [Drawing.Font]::new('Segoe UI', [float](11.5 * $scale), [Drawing.GraphicsUnit]::Pixel)
     $bodyLabel.ForeColor = ConvertTo-AuraUiBlendedColor -From $foregroundColor -To $surfaceColor -Amount 0.22
     $bodyLabel.BackColor = $surfaceColor
-    $bodyLabel.Bounds = [Drawing.Rectangle]::new((& $px 74), (& $px 44), (& $px 242), (& $px 56))
+    $bodyLabel.Bounds = [Drawing.Rectangle]::new((& $px 20), (& $px 144), (& $px 380), (& $px 38))
+
+    $newProductCard = {
+      param(
+        [Parameter(Mandatory = $true)][int]$X,
+        [Parameter(Mandatory = $true)][string]$Title,
+        [Parameter(Mandatory = $true)][string]$Subtitle,
+        [Parameter(Mandatory = $true)][bool]$Selected
+      )
+      $card = [System.Windows.Forms.Panel]::new()
+      $card.Bounds = [Drawing.Rectangle]::new((& $px $X), (& $px 68), (& $px 184), (& $px 62))
+      $card.BackColor = if ($Selected) {
+        ConvertTo-AuraUiBlendedColor -From $surfaceColor -To $accentColor -Amount 0.14
+      } else {
+        ConvertTo-AuraUiBlendedColor -From $surfaceColor -To $foregroundColor -Amount 0.06
+      }
+      $card.AccessibleName = "$Title, $Subtitle"
+      $card.AccessibleRole = [System.Windows.Forms.AccessibleRole]::Grouping
+      $cardPath = New-AuraUiRoundedRectanglePath `
+        -Bounds ([Drawing.RectangleF]::new(0, 0, $card.Width, $card.Height)) `
+        -Radius (10 * $scale)
+      try { $card.Region = [Drawing.Region]::new($cardPath) } finally { $cardPath.Dispose() }
+
+      $accentRail = [System.Windows.Forms.Panel]::new()
+      $accentRail.Bounds = [Drawing.Rectangle]::new(0, 0, (& $px 4), $card.Height)
+      $accentRail.BackColor = if ($Selected) { $accentColor } else {
+        ConvertTo-AuraUiBlendedColor -From $foregroundColor -To $surfaceColor -Amount 0.64
+      }
+
+      $cardTitle = [System.Windows.Forms.Label]::new()
+      $cardTitle.Text = $Title
+      $cardTitle.Font = [Drawing.Font]::new('Segoe UI Semibold', [float](11.5 * $scale), [Drawing.GraphicsUnit]::Pixel)
+      $cardTitle.ForeColor = $foregroundColor
+      $cardTitle.BackColor = $card.BackColor
+      $cardTitle.Bounds = [Drawing.Rectangle]::new((& $px 16), (& $px 12), (& $px 156), (& $px 18))
+
+      $cardSubtitle = [System.Windows.Forms.Label]::new()
+      $cardSubtitle.Text = $Subtitle
+      $cardSubtitle.Font = [Drawing.Font]::new('Segoe UI', [float](10 * $scale), [Drawing.GraphicsUnit]::Pixel)
+      $cardSubtitle.ForeColor = ConvertTo-AuraUiBlendedColor -From $foregroundColor -To $card.BackColor -Amount 0.34
+      $cardSubtitle.BackColor = $card.BackColor
+      $cardSubtitle.Bounds = [Drawing.Rectangle]::new((& $px 16), (& $px 34), (& $px 156), (& $px 16))
+      $card.Controls.AddRange(@($accentRail, $cardTitle, $cardSubtitle))
+      return $card
+    }
+    $webProductCard = & $newProductCard 20 'Claude Aura Web' 'claude.ai' $true
+    $desktopProductCard = & $newProductCard 216 'Claude Aura Desktop' 'Claude Desktop' $false
 
     $dismissButton = [System.Windows.Forms.Button]::new()
     $dismissButton.Text = "$($script:UiCopy.launcherHintDismiss)"
@@ -5723,7 +5794,7 @@ function Show-AuraUiLauncherHint {
     $dismissButton.Cursor = [System.Windows.Forms.Cursors]::Hand
     $dismissButton.AccessibleName = "$($script:UiCopy.launcherHintDismiss)"
     $dismissButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
-    $dismissButton.Bounds = [Drawing.Rectangle]::new((& $px 96), (& $px 108), (& $px 128), (& $px 28))
+    $dismissButton.Bounds = [Drawing.Rectangle]::new((& $px 148), (& $px 192), (& $px 148), (& $px 30))
 
     $gotItButton = [System.Windows.Forms.Button]::new()
     $gotItButton.Text = "$($script:UiCopy.launcherHintGotIt)"
@@ -5736,9 +5807,11 @@ function Show-AuraUiLauncherHint {
     $gotItButton.Cursor = [System.Windows.Forms.Cursors]::Hand
     $gotItButton.AccessibleName = "$($script:UiCopy.launcherHintGotIt)"
     $gotItButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
-    $gotItButton.Bounds = [Drawing.Rectangle]::new((& $px 232), (& $px 108), (& $px 84), (& $px 28))
+    $gotItButton.Bounds = [Drawing.Rectangle]::new((& $px 304), (& $px 192), (& $px 96), (& $px 30))
 
-    $hint.Controls.AddRange(@($markPanel, $titleLabel, $bodyLabel, $dismissButton, $gotItButton))
+    $hint.Controls.AddRange(@(
+      $markPanel, $titleLabel, $webProductCard, $desktopProductCard,
+      $bodyLabel, $dismissButton, $gotItButton))
     $gotItButton.add_Click({ if ($null -ne $script:LauncherHint -and -not $script:LauncherHint.IsDisposed) { $script:LauncherHint.Close() } })
     $dismissButton.add_Click({
       try {
@@ -10445,8 +10518,8 @@ function Update-AuraUiLocalizedChrome {
       $script:LauncherDesktopWorkspaceGuidanceItem.Text = "$($script:UiCopy.openDesktopWorkspaceGuidance)"
     }
     if ($null -ne $script:LauncherButton -and -not $script:LauncherButton.IsDisposed) {
-      $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
-      $script:LauncherButton.AccessibleDescription = "$($script:UiCopy.launcherTipHint)"
+      $script:LauncherButton.AccessibleName = "$($script:UiCopy.openStudio)"
+      $script:LauncherButton.AccessibleDescription = "$($script:UiCopy.openStudio)"
     }
     if ($null -ne $script:RetryButton -and -not $script:RetryButton.IsDisposed) {
       $script:RetryButton.Text = "$($script:UiCopy.retry)"
@@ -10477,6 +10550,9 @@ function Update-AuraUiLocalizedChrome {
     Update-AuraUiPetMainActions
     if (Get-Command Refresh-AuraWebTabStrip -ErrorAction SilentlyContinue) {
       Refresh-AuraWebTabStrip
+    }
+    if (Get-Command Update-AuraWebAppBarCopy -ErrorAction SilentlyContinue) {
+      Update-AuraWebAppBarCopy
     }
     [void](Update-AuraUiSessionBoardPresentation)
     $script:JumpListRegistered = $false
@@ -12148,6 +12224,7 @@ using System.Windows.Forms;
 public static class AuraWindow {
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr handle, int command);
+  [DllImport("user32.dll")] public static extern bool ReleaseCapture();
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr handle);
   [DllImport("user32.dll", SetLastError = true)] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
@@ -12168,10 +12245,26 @@ public sealed class AuraDpiChangedEventArgs : EventArgs {
 }
 public sealed class AuraIconWindow : NativeWindow, IDisposable {
   const int WM_DPICHANGED = 0x02E0;
+  const int WM_NCHITTEST = 0x0084;
+  const int HTCLIENT = 1;
+  const int HTLEFT = 10;
+  const int HTRIGHT = 11;
+  const int HTTOP = 12;
+  const int HTTOPLEFT = 13;
+  const int HTTOPRIGHT = 14;
+  const int HTBOTTOM = 15;
+  const int HTBOTTOMLEFT = 16;
+  const int HTBOTTOMRIGHT = 17;
   [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr handle, int attribute, ref int value, int size);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr handle, out AuraWindowRect rect);
+  [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr handle);
+
+  [StructLayout(LayoutKind.Sequential)]
+  struct AuraWindowRect { public int Left; public int Top; public int Right; public int Bottom; }
 
   bool darkChrome;
   int captionColor = -1;
+  bool customFrame;
 
   public event EventHandler<AuraDpiChangedEventArgs> DpiChanged;
   public void Attach(IntPtr handle) {
@@ -12210,6 +12303,7 @@ public sealed class AuraIconWindow : NativeWindow, IDisposable {
     captionColor = red | (green << 8) | (blue << 16);
     ApplyChrome();
   }
+  public void SetCustomFrame(bool enabled) { customFrame = enabled; }
   protected override void WndProc(ref Message message) {
     base.WndProc(ref message);
     if (message.Msg == WM_DPICHANGED) {
@@ -12217,6 +12311,28 @@ public sealed class AuraIconWindow : NativeWindow, IDisposable {
       EventHandler<AuraDpiChangedEventArgs> handler = DpiChanged;
       if (handler != null && dpi > 0) handler(this, new AuraDpiChangedEventArgs(dpi));
       ApplyChrome();
+    }
+    if (customFrame && message.Msg == WM_NCHITTEST &&
+        message.Result == (IntPtr)HTCLIENT && !IsZoomed(Handle)) {
+      AuraWindowRect rect;
+      if (GetWindowRect(Handle, out rect)) {
+        long packed = message.LParam.ToInt64();
+        int x = unchecked((short)(packed & 0xFFFF));
+        int y = unchecked((short)((packed >> 16) & 0xFFFF));
+        const int grip = 8;
+        bool left = x >= rect.Left && x < rect.Left + grip;
+        bool right = x < rect.Right && x >= rect.Right - grip;
+        bool top = y >= rect.Top && y < rect.Top + grip;
+        bool bottom = y < rect.Bottom && y >= rect.Bottom - grip;
+        if (top && left) message.Result = (IntPtr)HTTOPLEFT;
+        else if (top && right) message.Result = (IntPtr)HTTOPRIGHT;
+        else if (bottom && left) message.Result = (IntPtr)HTBOTTOMLEFT;
+        else if (bottom && right) message.Result = (IntPtr)HTBOTTOMRIGHT;
+        else if (left) message.Result = (IntPtr)HTLEFT;
+        else if (right) message.Result = (IntPtr)HTRIGHT;
+        else if (top) message.Result = (IntPtr)HTTOP;
+        else if (bottom) message.Result = (IntPtr)HTBOTTOM;
+      }
     }
   }
   public void Dispose() { Detach(); }
@@ -12402,6 +12518,7 @@ public static class AuraUiAsyncDispatch {
 
   $script:Form = [System.Windows.Forms.Form]::new()
   $script:MainIconWindow = [AuraIconWindow]::new()
+  $script:MainIconWindow.SetCustomFrame($true)
   $script:MainIconWindow.add_DpiChanged({
     param($sender, $eventArgs)
     Update-AuraUiNativeIdentityForDpi -Target Main -Form $script:Form -Dpi ([int]$eventArgs.Dpi)
@@ -12423,16 +12540,17 @@ public static class AuraUiAsyncDispatch {
   # browser/Electron screen pickers enumerate windows with GetWindowTextLength
   # and skip anything that returns 0, so an untitled window is invisible to
   # OBS, Recordly, and getDisplayMedia. It also names us in Alt+Tab.
-  $script:Form.Text = 'Claude Aura'
-  $script:Form.AccessibleName = 'Claude Aura'
+  $script:Form.Text = 'Claude Aura Web'
+  $script:Form.AccessibleName = 'Claude Aura Web'
   $script:Form.StartPosition = 'Manual'
   $script:Form.ClientSize = [Drawing.Size]::new(1180, 640)
   $script:Form.MinimumSize = [Drawing.Size]::new(920, 620)
-  $script:Form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::Sizable
+  $script:Form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
   $script:Form.ShowIcon = $false
-  $script:Form.ControlBox = $true
-  $script:Form.MinimizeBox = $true
-  $script:Form.MaximizeBox = $true
+  $script:Form.ControlBox = $false
+  $script:Form.MinimizeBox = $false
+  $script:Form.MaximizeBox = $false
+  $script:Form.Padding = [System.Windows.Forms.Padding]::new(1)
   $script:Form.KeyPreview = $true
   $script:Form.add_KeyDown({
     param($sender, $eventArgs)
@@ -12707,9 +12825,9 @@ public static class AuraUiAsyncDispatch {
   # inside the content. Being its own top-level window it renders above the
   # WebView without an in-content control's airspace limits, reserves no layout
   # space, never reflows or clips Claude, and keeps the main form content-only.
-  # The permanently circular button opens its action menu on a click and
-  # becomes a drag surface only after the DPI-scaled movement threshold;
-  # right-click opens the same menu. The menu exposes the current-target Action Queue, Studio,
+  # The permanently circular button opens Studio on a click and becomes a drag
+  # surface only after the DPI-scaled movement threshold; right-click opens the
+  # action menu. The menu exposes the current-target Action Queue, Studio,
   # appearance, and Desktop actions without touching the claude.ai document.
   $script:LauncherMenu = [System.Windows.Forms.ContextMenuStrip]::new()
   $script:LauncherStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
@@ -12805,9 +12923,9 @@ public static class AuraUiAsyncDispatch {
   $script:LauncherButton.UseVisualStyleBackColor = $false
   $script:LauncherButton.Cursor = [System.Windows.Forms.Cursors]::Hand
   $script:LauncherButton.TabStop = $false
-  $script:LauncherButton.AccessibleName = "$($script:UiCopy.navLauncherName)"
-  $script:LauncherButton.AccessibleDescription = "$($script:UiCopy.launcherTipHint)"
-  $script:LauncherButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::ButtonMenu
+  $script:LauncherButton.AccessibleName = "$($script:UiCopy.openStudio)"
+  $script:LauncherButton.AccessibleDescription = "$($script:UiCopy.openStudio)"
+  $script:LauncherButton.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
   # Owner-drawn so every validated theme can supply its own launcher material
   # and local mark while an absent or invalid launcher always falls back to Aura.
   $script:LauncherButton.add_Paint({
@@ -12937,7 +13055,7 @@ public static class AuraUiAsyncDispatch {
         # temporary collision-free position without rewriting that preference.
         Update-AuraUiLauncherPosition
       } elseif ($wasClickArmed) {
-        Show-AuraUiLauncherMenu
+        Show-AuraUiStudio -OfferIntroduction
       }
     }
   }
@@ -13044,6 +13162,7 @@ public static class AuraUiAsyncDispatch {
   $script:Form.add_Shown({
     Request-AuraUiLauncherLayoutProbe
     Update-AuraUiLauncherPosition
+    Show-AuraUiLauncherHint
   })
   $script:Form.add_LocationChanged({ Update-AuraUiRescueWindowPosition })
   $script:Form.add_SizeChanged({ Update-AuraUiRescueWindowPosition })
@@ -13358,6 +13477,9 @@ public static class AuraUiAsyncDispatch {
             return
           }
           if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
+          if (Test-AuraUiAccountTransitionUri -Value $eventArgs.Uri) {
+            [void](Reset-AuraSessionHistoryForAccountTransition)
+          }
           Advance-AuraPromptShelfPageEpoch
           Stop-AuraUiLoadingScreenPreview -Reason navigation
           Stop-AuraUiEditorOverlay -Reason navigation

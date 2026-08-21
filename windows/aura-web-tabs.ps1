@@ -24,6 +24,297 @@ $script:AuraWebTabWorkHubPresentationRevision = [long]-1
 $script:AuraWebTabStrip = $null
 $script:AuraWebTabList = $null
 $script:AuraWebTabNewButton = $null
+$script:AuraWebChromeHost = $null
+$script:AuraWebAppBar = $null
+$script:AuraWebAppBarTitle = $null
+$script:AuraWebAppIconImage = $null
+$script:AuraWebAppMenuButtons = @()
+$script:AuraWebWindowControlButtons = @()
+$script:AuraWebWindowMaximizeButton = $null
+$script:AuraWebFileMenu = $null
+$script:AuraWebViewMenu = $null
+$script:AuraWebThemesMenu = $null
+$script:AuraWebHelpMenu = $null
+$script:AuraWebFileNewItem = $null
+$script:AuraWebFileCloseItem = $null
+$script:AuraWebFileExitItem = $null
+$script:AuraWebFileStudioItem = $null
+$script:AuraWebViewWorkHubItem = $null
+$script:AuraWebViewPetVisibilityItem = $null
+$script:AuraWebViewPetSettingsItem = $null
+$script:AuraWebThemesStudioItem = $null
+$script:AuraWebThemesOriginalItem = $null
+$script:AuraWebThemeItems = @()
+$script:AuraWebHelpAuraItem = $null
+$script:AuraWebHelpGuideItem = $null
+$script:AuraWebChromePalette = $null
+
+function Get-AuraWebContrastForeground {
+  param([Parameter(Mandatory = $true)][string]$Color)
+  try {
+    $value = [Drawing.ColorTranslator]::FromHtml($Color)
+    $brightness = (0.299 * $value.R) + (0.587 * $value.G) + (0.114 * $value.B)
+    if ($brightness -ge 152) { return '#211923' }
+  } catch {}
+  return '#FFFFFF'
+}
+
+function Get-AuraWebMixedColor {
+  param(
+    [Parameter(Mandatory = $true)][string]$From,
+    [Parameter(Mandatory = $true)][string]$To,
+    [ValidateRange(0, 1)][double]$Amount
+  )
+  $fromColor = [Drawing.ColorTranslator]::FromHtml($From)
+  $toColor = [Drawing.ColorTranslator]::FromHtml($To)
+  return [Drawing.Color]::FromArgb(
+    [Math]::Round($fromColor.R + (($toColor.R - $fromColor.R) * $Amount)),
+    [Math]::Round($fromColor.G + (($toColor.G - $fromColor.G) * $Amount)),
+    [Math]::Round($fromColor.B + (($toColor.B - $fromColor.B) * $Amount)))
+}
+
+function Update-AuraWebWindowControlState {
+  if ($null -eq $script:AuraWebWindowMaximizeButton -or
+      $script:AuraWebWindowMaximizeButton.IsDisposed -or
+      $null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  $maximized = $script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized
+  $script:AuraWebWindowMaximizeButton.Text = if ($maximized) { [char]0x2750 } else { [char]0x25A1 }
+  $script:AuraWebWindowMaximizeButton.AccessibleName = if ($maximized) {
+    Get-AuraWebUiText -Name restoreWindow -Fallback 'Restore window'
+  } else {
+    Get-AuraWebUiText -Name maximizeWindow -Fallback 'Maximize window'
+  }
+}
+
+function Switch-AuraWebWindowMaximized {
+  if ($null -eq $script:Form -or $script:Form.IsDisposed) { return }
+  $script:Form.WindowState = if (
+    $script:Form.WindowState -eq [System.Windows.Forms.FormWindowState]::Maximized) {
+    [System.Windows.Forms.FormWindowState]::Normal
+  } else { [System.Windows.Forms.FormWindowState]::Maximized }
+  Update-AuraWebWindowControlState
+}
+
+function Register-AuraWebWindowDragSurface {
+  param([AllowNull()][System.Windows.Forms.Control]$Control)
+  if ($null -eq $Control -or $Control.IsDisposed) { return }
+  $Control.add_MouseDoubleClick({
+    param($sender, $eventArgs)
+    if ($eventArgs.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+      Switch-AuraWebWindowMaximized
+    }
+  })
+  $Control.add_MouseDown({
+    param($sender, $eventArgs)
+    if ($eventArgs.Button -ne [System.Windows.Forms.MouseButtons]::Left -or
+        $eventArgs.Clicks -ne 1 -or $null -eq $script:Form -or
+        $script:Form.IsDisposed) { return }
+    $auraWindowType = 'AuraWindow' -as [type]
+    if ($null -eq $auraWindowType) { return }
+    [void]$auraWindowType.GetMethod('ReleaseCapture').Invoke($null, @())
+    [void]$auraWindowType.GetMethod('SendMessage').Invoke($null, @(
+      $script:Form.Handle, [uint32]0x00A1, [IntPtr]2, [IntPtr]::Zero))
+  })
+}
+
+function New-AuraWebWindowControlButton {
+  param(
+    [Parameter(Mandatory = $true)][string]$Text,
+    [Parameter(Mandatory = $true)][string]$AccessibleName,
+    [Parameter(Mandatory = $true)][scriptblock]$Action,
+    [switch]$Close
+  )
+  $button = [System.Windows.Forms.Button]::new()
+  $button.Width = 46
+  $button.Height = 30
+  $button.Margin = [System.Windows.Forms.Padding]::new(0)
+  $button.Padding = [System.Windows.Forms.Padding]::new(0)
+  $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $button.FlatAppearance.BorderSize = 0
+  $button.UseVisualStyleBackColor = $false
+  $button.Font = [Drawing.Font]::new('Segoe UI Symbol', 8)
+  $button.Text = $Text
+  $button.AccessibleName = $AccessibleName
+  $button.Tag = if ($Close) { 'close' } else { 'window-control' }
+  $button.add_Click($Action)
+  return $button
+}
+
+function Get-AuraWebUiText {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$Fallback
+  )
+  $copyVariable = Get-Variable -Name UiCopy -Scope Script -ErrorAction SilentlyContinue
+  if ($null -eq $copyVariable -or $null -eq $copyVariable.Value) { return $Fallback }
+  $property = $copyVariable.Value.PSObject.Properties[$Name]
+  if ($null -eq $property -or $property.Value -isnot [string] -or
+      [string]::IsNullOrWhiteSpace([string]$property.Value)) { return $Fallback }
+  return [string]$property.Value
+}
+
+function Get-AuraWebChromePalette {
+  param(
+    [bool]$Dark = $false,
+    [AllowNull()][object]$Material
+  )
+  $fallback = if ($Dark) {
+    [PSCustomObject]@{
+      Surface = '#242229'; SurfaceHover = '#34313B'; Foreground = '#F5F2F8'
+      Muted = '#C7C0CF'; Accent = '#8B6FD6'; Border = '#514A5C'
+    }
+  } else {
+    [PSCustomObject]@{
+      Surface = '#F4F1EA'; SurfaceHover = '#E7E1D7'; Foreground = '#28232D'
+      Muted = '#6D6672'; Accent = '#6B4FB3'; Border = '#CFC6D4'
+    }
+  }
+  $readColor = {
+    param([string]$Name, [string]$Fallback)
+    if ($null -eq $Material) { return $Fallback }
+    $property = $Material.PSObject.Properties[$Name]
+    if ($null -eq $property -or $property.Value -isnot [string] -or
+        $property.Value -cnotmatch '^#[0-9A-Fa-f]{6}$') { return $Fallback }
+    return [string]$property.Value
+  }
+  $surface = & $readColor 'surface' $fallback.Surface
+  $surfaceHover = & $readColor 'surfaceHover' $fallback.SurfaceHover
+  $foreground = & $readColor 'foreground' $fallback.Foreground
+  $accent = & $readColor 'accent' $fallback.Accent
+  return [PSCustomObject]@{
+    Chrome = $accent
+    ChromeForeground = Get-AuraWebContrastForeground -Color $accent
+    Surface = $surface
+    SurfaceHover = $surfaceHover
+    Foreground = $foreground
+    Muted = $fallback.Muted
+    Accent = $accent
+    Border = & $readColor 'border' $fallback.Border
+  }
+}
+
+function Update-AuraWebAppBarCopy {
+  if ($null -eq $script:AuraWebAppMenuButtons -or $script:AuraWebAppMenuButtons.Count -ne 4) {
+    return
+  }
+  $script:AuraWebAppMenuButtons[0].Text = Get-AuraWebUiText -Name menuFile -Fallback 'File'
+  $script:AuraWebAppMenuButtons[1].Text = Get-AuraWebUiText -Name menuView -Fallback 'View'
+  $script:AuraWebAppMenuButtons[2].Text = Get-AuraWebUiText -Name menuThemes -Fallback 'Themes'
+  $script:AuraWebAppMenuButtons[3].Text = Get-AuraWebUiText -Name menuHelp -Fallback 'Help'
+  if ($null -ne $script:AuraWebFileNewItem) {
+    $script:AuraWebFileNewItem.Text = Get-AuraWebUiText -Name newTab -Fallback 'New tab'
+  }
+  if ($null -ne $script:AuraWebFileCloseItem) {
+    $script:AuraWebFileCloseItem.Text = Get-AuraWebUiText -Name closeTab -Fallback 'Close tab'
+  }
+  if ($null -ne $script:AuraWebFileExitItem) {
+    $script:AuraWebFileExitItem.Text = Get-AuraWebUiText -Name exitApp -Fallback 'Exit Claude Aura'
+  }
+  if ($null -ne $script:AuraWebFileStudioItem) {
+    $script:AuraWebFileStudioItem.Text = Get-AuraWebUiText -Name openStudio -Fallback 'Open Studio'
+  }
+  if ($null -ne $script:AuraWebViewWorkHubItem) {
+    $script:AuraWebViewWorkHubItem.Text = Get-AuraWebUiText -Name workHubTitle -Fallback 'Work Hub'
+  }
+  if ($null -ne $script:AuraWebViewPetVisibilityItem) {
+    $trayPetVariable = Get-Variable -Name TrayPetVisibilityItem -Scope Script -ErrorAction SilentlyContinue
+    $script:AuraWebViewPetVisibilityItem.Text = if (
+      $null -ne $trayPetVariable -and $null -ne $trayPetVariable.Value -and
+      -not $trayPetVariable.Value.IsDisposed) {
+      [string]$trayPetVariable.Value.Text
+    } else { Get-AuraWebUiText -Name showPet -Fallback 'Show pet' }
+  }
+  if ($null -ne $script:AuraWebViewPetSettingsItem) {
+    $script:AuraWebViewPetSettingsItem.Text = Get-AuraWebUiText -Name petSettings -Fallback 'Pet settings'
+  }
+  if ($null -ne $script:AuraWebThemesStudioItem) {
+    $script:AuraWebThemesStudioItem.Text = Get-AuraWebUiText -Name customizeThemes -Fallback 'Customize themes'
+  }
+  if ($null -ne $script:AuraWebThemesOriginalItem) {
+    $script:AuraWebThemesOriginalItem.Text = Get-AuraWebUiText -Name originalLook -Fallback 'Original look'
+  }
+  if ($null -ne $script:AuraWebHelpAuraItem) {
+    $script:AuraWebHelpAuraItem.Text = Get-AuraWebUiText -Name launcherHintTitle -Fallback 'Meet the Aura button'
+  }
+  if ($null -ne $script:AuraWebHelpGuideItem) {
+    $script:AuraWebHelpGuideItem.Text = Get-AuraWebUiText `
+      -Name openDesktopWorkspaceGuidance -Fallback 'Review full-workspace guidance'
+  }
+  if ($script:AuraWebWindowControlButtons.Count -eq 3) {
+    $script:AuraWebWindowControlButtons[0].AccessibleName = Get-AuraWebUiText `
+      -Name minimizeWindow -Fallback 'Minimize window'
+    $script:AuraWebWindowControlButtons[2].AccessibleName = Get-AuraWebUiText `
+      -Name closeWindow -Fallback 'Close window'
+    Update-AuraWebWindowControlState
+  }
+}
+
+function Update-AuraWebMenuAppearance {
+  param(
+    [AllowNull()][System.Windows.Forms.ContextMenuStrip]$Menu,
+    [Parameter(Mandatory = $true)][object]$Palette
+  )
+  if ($null -eq $Menu -or $Menu.IsDisposed) { return }
+  $Menu.BackColor = [Drawing.ColorTranslator]::FromHtml($Palette.Surface)
+  $Menu.ForeColor = [Drawing.ColorTranslator]::FromHtml($Palette.Foreground)
+  foreach ($item in @($Menu.Items)) {
+    $item.BackColor = $Menu.BackColor
+    $item.ForeColor = $Menu.ForeColor
+  }
+}
+
+function Update-AuraWebChromeAppearance {
+  param(
+    [bool]$Dark = $false,
+    [AllowNull()][object]$Material
+  )
+  $script:AuraWebChromePalette = Get-AuraWebChromePalette -Dark $Dark -Material $Material
+  $palette = $script:AuraWebChromePalette
+  $chrome = [Drawing.ColorTranslator]::FromHtml($palette.Chrome)
+  $chromeForeground = [Drawing.ColorTranslator]::FromHtml($palette.ChromeForeground)
+  foreach ($control in @($script:AuraWebChromeHost, $script:AuraWebAppBar, $script:AuraWebTabStrip)) {
+    if ($null -ne $control -and -not $control.IsDisposed) { $control.BackColor = $chrome }
+  }
+  if ($null -ne $script:AuraWebAppBarTitle -and -not $script:AuraWebAppBarTitle.IsDisposed) {
+    $script:AuraWebAppBarTitle.BackColor = $chrome
+    $script:AuraWebAppBarTitle.ForeColor = $chromeForeground
+  }
+  foreach ($button in @($script:AuraWebAppMenuButtons)) {
+    if ($null -eq $button -or $button.IsDisposed) { continue }
+    $button.BackColor = $chrome
+    $button.ForeColor = $chromeForeground
+    $button.FlatAppearance.MouseOverBackColor = [Drawing.ColorTranslator]::FromHtml($palette.SurfaceHover)
+  }
+  foreach ($button in @($script:AuraWebWindowControlButtons)) {
+    if ($null -eq $button -or $button.IsDisposed) { continue }
+    $button.BackColor = $chrome
+    $button.ForeColor = $chromeForeground
+    $button.FlatAppearance.MouseOverBackColor = if ([string]$button.Tag -ceq 'close') {
+      [Drawing.ColorTranslator]::FromHtml('#E81123')
+    } else { [Drawing.ColorTranslator]::FromHtml($palette.SurfaceHover) }
+    $button.FlatAppearance.MouseDownBackColor = $button.FlatAppearance.MouseOverBackColor
+  }
+  foreach ($menu in @(
+    $script:AuraWebFileMenu,
+    $script:AuraWebViewMenu,
+    $script:AuraWebThemesMenu,
+    $script:AuraWebHelpMenu
+  )) {
+    Update-AuraWebMenuAppearance -Menu $menu -Palette $palette
+  }
+  if ($null -ne $script:AuraWebTabStrip -and -not $script:AuraWebTabStrip.IsDisposed) {
+    $script:AuraWebTabNewButton.BackColor = $chrome
+    $script:AuraWebTabNewButton.ForeColor = $chromeForeground
+  }
+  if ($null -ne $script:Form -and -not $script:Form.IsDisposed) {
+    $script:Form.BackColor = $chrome
+  }
+  if (Get-Command Update-AuraUiWindowChrome -ErrorAction SilentlyContinue) {
+    $mainDark = ((0.299 * $chrome.R) + (0.587 * $chrome.G) + (0.114 * $chrome.B)) -lt 152
+    Update-AuraUiWindowChrome -Dark $Dark -MainColor $chrome -MainDark $mainDark
+  }
+  Refresh-AuraWebTabStrip
+}
 
 function Test-AuraWebTabUuid {
   param([AllowEmptyString()][string]$Value)
@@ -816,28 +1107,41 @@ function Refresh-AuraWebTabStrip {
   $script:AuraWebTabList.SuspendLayout()
   try {
     $script:AuraWebTabList.Controls.Clear()
+    $palette = if ($null -ne $script:AuraWebChromePalette) {
+      $script:AuraWebChromePalette
+    } else { Get-AuraWebChromePalette }
     foreach ($item in @(Get-AuraWebTabStripModel -Document $script:AuraWebTabDocument)) {
       $container = [System.Windows.Forms.Panel]::new()
-      $container.Width = 190
-      $container.Height = 32
-      $container.Margin = [System.Windows.Forms.Padding]::new(0, 3, 4, 3)
-      $container.BackColor = if ($item.Selected) {
-        [Drawing.ColorTranslator]::FromHtml('#FFFFFF')
-      } else { [Drawing.ColorTranslator]::FromHtml('#E6E8EF') }
+      $container.Width = 132
+      $container.Height = 34
+      $container.Margin = [System.Windows.Forms.Padding]::new(0)
+      $selectedBack = Get-AuraWebMixedColor `
+        -From $palette.Chrome -To $palette.Surface -Amount 0.16
+      $hoverBack = Get-AuraWebMixedColor `
+        -From $palette.Chrome -To $palette.Surface -Amount 0.1
+      $container.BackColor = if ($item.Selected) { $selectedBack } else {
+        [Drawing.ColorTranslator]::FromHtml($palette.Chrome)
+      }
       Register-AuraWebTabDropTarget -Control $container
       $select = [System.Windows.Forms.Button]::new()
       $select.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
       $select.FlatAppearance.BorderSize = 0
       $select.BackColor = $container.BackColor
-      $select.ForeColor = [Drawing.ColorTranslator]::FromHtml('#202124')
+      $select.FlatAppearance.MouseOverBackColor = $hoverBack
+      $select.FlatAppearance.MouseDownBackColor = $selectedBack
+      $tabForeground = if ($item.Selected) {
+        Get-AuraWebContrastForeground -Color ([Drawing.ColorTranslator]::ToHtml($selectedBack))
+      } else { $palette.ChromeForeground }
+      $select.ForeColor = [Drawing.ColorTranslator]::FromHtml($tabForeground)
+      $select.Font = [Drawing.Font]::new('Segoe UI Semibold', 9)
       $select.TextAlign = [Drawing.ContentAlignment]::MiddleLeft
       $select.Text = Get-AuraWebTabDisplayTitle -Title ([string]$item.Title)
       $select.AccessibleName = [string]$item.Title
       $select.Tag = [string]$item.Id
-      $select.Location = [Drawing.Point]::new(2, 2)
+      $select.Location = [Drawing.Point]::new(0, 0)
       $select.Size = if ($item.Closable) {
-        [Drawing.Size]::new(156, 28)
-      } else { [Drawing.Size]::new(186, 28) }
+        [Drawing.Size]::new(108, 32)
+      } else { [Drawing.Size]::new(131, 32) }
       if ([string]$item.Kind -ceq 'work-hub') {
         $select.add_Click({ [void](Set-AuraWebTabWorkHubActive) })
       } else {
@@ -856,16 +1160,35 @@ function Refresh-AuraWebTabStrip {
         $close.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
         $close.FlatAppearance.BorderSize = 0
         $close.BackColor = $container.BackColor
-        $close.ForeColor = [Drawing.ColorTranslator]::FromHtml('#5F6368')
-        $close.Font = [Drawing.Font]::new('Segoe UI', 10)
+        $closeForeground = if ($item.Selected) { $palette.Muted } else { $palette.ChromeForeground }
+        $close.ForeColor = [Drawing.ColorTranslator]::FromHtml($closeForeground)
+        $close.FlatAppearance.MouseOverBackColor = $hoverBack
+        $close.FlatAppearance.MouseDownBackColor = $selectedBack
+        $close.Font = [Drawing.Font]::new('Segoe UI', 9)
         $close.Text = [char]0x00D7
         $close.AccessibleName = "$($script:UiCopy.closeTab): $([string]$item.Title)"
         $close.Tag = [string]$item.Id
-        $close.Location = [Drawing.Point]::new(160, 2)
-        $close.Size = [Drawing.Size]::new(28, 28)
+        $close.Location = [Drawing.Point]::new(108, 0)
+        $close.Size = [Drawing.Size]::new(23, 32)
         $close.add_Click({ param($sender, $eventArgs) Request-AuraUiCloseWebTab -Id ([string]$sender.Tag) })
         Register-AuraWebTabDropTarget -Control $close
         $container.Controls.Add($close)
+      }
+      $divider = [System.Windows.Forms.Panel]::new()
+      $divider.Dock = [System.Windows.Forms.DockStyle]::Right
+      $divider.Width = 1
+      $divider.BackColor = Get-AuraWebMixedColor `
+        -From $palette.Chrome -To $palette.ChromeForeground -Amount 0.28
+      Register-AuraWebTabDropTarget -Control $divider
+      $container.Controls.Add($divider)
+      if ($item.Selected) {
+        $activeLine = [System.Windows.Forms.Panel]::new()
+        $activeLine.Dock = [System.Windows.Forms.DockStyle]::Bottom
+        $activeLine.Height = 2
+        $activeLine.BackColor = [Drawing.ColorTranslator]::FromHtml($palette.ChromeForeground)
+        Register-AuraWebTabDropTarget -Control $activeLine
+        $container.Controls.Add($activeLine)
+        $activeLine.BringToFront()
       }
       $script:AuraWebTabList.Controls.Add($container)
     }
@@ -1069,6 +1392,278 @@ function Sync-AuraWebTabMetadata {
   }
 }
 
+function New-AuraWebAppMenuButton {
+  param(
+    [Parameter(Mandatory = $true)][string]$Text,
+    [Parameter(Mandatory = $true)][System.Windows.Forms.ContextMenuStrip]$Menu
+  )
+  $button = [System.Windows.Forms.Button]::new()
+  $button.AutoSize = $true
+  $button.AutoSizeMode = [System.Windows.Forms.AutoSizeMode]::GrowAndShrink
+  $button.MinimumSize = [Drawing.Size]::new(0, 30)
+  $button.Margin = [System.Windows.Forms.Padding]::new(0)
+  $button.Padding = [System.Windows.Forms.Padding]::new(8, 0, 8, 0)
+  $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $button.FlatAppearance.BorderSize = 0
+  $button.UseVisualStyleBackColor = $false
+  $button.Font = [Drawing.Font]::new('Segoe UI', 9)
+  $button.Text = $Text
+  $button.TextAlign = [Drawing.ContentAlignment]::MiddleCenter
+  $button.AccessibleRole = [System.Windows.Forms.AccessibleRole]::MenuItem
+  $button.Tag = $Menu
+  $button.add_MouseEnter({
+    param($sender, $eventArgs)
+    if ($null -eq $script:AuraWebChromePalette) { return }
+    $sender.BackColor = [Drawing.ColorTranslator]::FromHtml(
+      $script:AuraWebChromePalette.SurfaceHover)
+    $sender.ForeColor = [Drawing.ColorTranslator]::FromHtml(
+      $script:AuraWebChromePalette.Foreground)
+  })
+  $button.add_MouseLeave({
+    param($sender, $eventArgs)
+    if ($null -eq $script:AuraWebChromePalette) { return }
+    $sender.BackColor = [Drawing.ColorTranslator]::FromHtml(
+      $script:AuraWebChromePalette.Chrome)
+    $sender.ForeColor = [Drawing.ColorTranslator]::FromHtml(
+      $script:AuraWebChromePalette.ChromeForeground)
+  })
+  $button.add_Click({
+    param($sender, $eventArgs)
+    $menu = $sender.Tag
+    if ($null -eq $menu -or $menu.IsDisposed) { return }
+    if ($null -ne $script:AuraWebChromePalette) {
+      Update-AuraWebMenuAppearance -Menu $menu -Palette $script:AuraWebChromePalette
+    }
+    $menu.Show($sender, [Drawing.Point]::new(0, $sender.Height))
+  })
+  return $button
+}
+
+function New-AuraWebAppMenu {
+  param([switch]$ShowChecks)
+  $menu = [System.Windows.Forms.ContextMenuStrip]::new()
+  $menu.ShowImageMargin = $false
+  $menu.ShowCheckMargin = [bool]$ShowChecks
+  $menu.AutoSize = $true
+  $menu.MinimumSize = [Drawing.Size]::new(220, 0)
+  $menu.Padding = [System.Windows.Forms.Padding]::new(0, 4, 0, 4)
+  $menu.Font = [Drawing.Font]::new('Segoe UI', 9.75)
+  return $menu
+}
+
+function Initialize-AuraWebAppBar {
+  $script:AuraWebFileMenu = New-AuraWebAppMenu
+  $script:AuraWebViewMenu = New-AuraWebAppMenu
+  $script:AuraWebThemesMenu = New-AuraWebAppMenu -ShowChecks
+  $script:AuraWebHelpMenu = New-AuraWebAppMenu
+
+  $script:AuraWebFileNewItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebFileNewItem.ShortcutKeyDisplayString = 'Ctrl+T'
+  $script:AuraWebFileNewItem.add_Click({ [void](Request-AuraUiNewWebTab) })
+  $script:AuraWebFileCloseItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebFileCloseItem.ShortcutKeyDisplayString = 'Ctrl+W'
+  $script:AuraWebFileCloseItem.add_Click({ Request-AuraUiCloseWebTab })
+  $script:AuraWebFileStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebFileStudioItem.add_Click({ Show-AuraUiStudio })
+  $script:AuraWebFileExitItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebFileExitItem.add_Click({
+    if ($null -ne $script:TrayExitItem -and -not $script:TrayExitItem.IsDisposed) {
+      $script:TrayExitItem.PerformClick()
+    } else { Request-AuraUiExit }
+  })
+  [void]$script:AuraWebFileMenu.Items.AddRange(@(
+    $script:AuraWebFileNewItem,
+    $script:AuraWebFileCloseItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
+    $script:AuraWebFileStudioItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
+    $script:AuraWebFileExitItem
+  ))
+
+  $script:AuraWebViewWorkHubItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebViewWorkHubItem.ShortcutKeyDisplayString = 'Ctrl+1'
+  $script:AuraWebViewWorkHubItem.add_Click({ [void](Set-AuraWebTabWorkHubActive) })
+  $script:AuraWebViewPetVisibilityItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebViewPetVisibilityItem.add_Click({
+    $trayPetVariable = Get-Variable -Name TrayPetVisibilityItem -Scope Script -ErrorAction SilentlyContinue
+    if ($null -ne $trayPetVariable -and $null -ne $trayPetVariable.Value -and
+        -not $trayPetVariable.Value.IsDisposed) { $trayPetVariable.Value.PerformClick() }
+  })
+  $script:AuraWebViewPetSettingsItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebViewPetSettingsItem.add_Click({
+    $trayPetSettingsVariable = Get-Variable -Name TrayPetSettingsItem -Scope Script -ErrorAction SilentlyContinue
+    if ($null -ne $trayPetSettingsVariable -and $null -ne $trayPetSettingsVariable.Value -and
+        -not $trayPetSettingsVariable.Value.IsDisposed) { $trayPetSettingsVariable.Value.PerformClick() }
+  })
+  [void]$script:AuraWebViewMenu.Items.AddRange(@(
+    $script:AuraWebViewWorkHubItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
+    $script:AuraWebViewPetVisibilityItem,
+    $script:AuraWebViewPetSettingsItem
+  ))
+  $script:AuraWebViewMenu.add_Opening({
+    if (Get-Command Update-AuraUiPetMainActions -ErrorAction SilentlyContinue) {
+      Update-AuraUiPetMainActions
+    }
+    Update-AuraWebAppBarCopy
+  })
+
+  $script:AuraWebThemesStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebThemesStudioItem.add_Click({
+    Show-AuraUiStudio
+    if ($script:StudioReady -and $null -ne $script:StudioWebView -and
+        $null -ne $script:StudioWebView.CoreWebView2) {
+      [void]$script:StudioWebView.CoreWebView2.ExecuteScriptAsync('location.hash="#themes"')
+    }
+  })
+  $script:AuraWebThemesOriginalItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebThemesOriginalItem.add_Click({
+    if ($null -ne $script:TrayAppearanceItem -and -not $script:TrayAppearanceItem.IsDisposed) {
+      $script:TrayAppearanceItem.PerformClick()
+    }
+  })
+  $script:AuraWebThemeItems = @()
+  $permanentThemeIds = if (
+    (Get-Command Get-AuraUiPermanentThemeIds -ErrorAction SilentlyContinue) -and
+    (Get-Command Get-AuraUiThemeByName -ErrorAction SilentlyContinue)) {
+    @(Get-AuraUiPermanentThemeIds)
+  } else { @() }
+  foreach ($themeId in $permanentThemeIds) {
+    $theme = Get-AuraUiThemeByName -Name $themeId
+    if ($null -eq $theme) { continue }
+    $themeItem = [System.Windows.Forms.ToolStripMenuItem]::new([string]$theme.label)
+    $themeItem.Tag = $themeId
+    $themeItem.add_Click({
+      param($sender, $eventArgs)
+      Invoke-AuraUiSelectTheme -Theme ([string]$sender.Tag)
+    })
+    $script:AuraWebThemeItems += $themeItem
+    [void]$script:AuraWebThemesMenu.Items.Add($themeItem)
+  }
+  [void]$script:AuraWebThemesMenu.Items.Add([System.Windows.Forms.ToolStripSeparator]::new())
+  [void]$script:AuraWebThemesMenu.Items.Add($script:AuraWebThemesStudioItem)
+  [void]$script:AuraWebThemesMenu.Items.Add($script:AuraWebThemesOriginalItem)
+  $script:AuraWebThemesMenu.add_Opening({
+    $selectedTheme = [string](Get-AuraUiSelectedThemeName)
+    foreach ($themeItem in @($script:AuraWebThemeItems)) {
+      $themeItem.Checked = [string]::Equals(
+        [string]$themeItem.Tag, $selectedTheme, [StringComparison]::OrdinalIgnoreCase)
+    }
+  })
+
+  $script:AuraWebHelpAuraItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebHelpAuraItem.add_Click({
+    Show-AuraUiMessage `
+      -Title (Get-AuraWebUiText -Name launcherHintTitle -Fallback 'Meet the Aura button') `
+      -Message (Get-AuraWebUiText -Name launcherHintBody `
+        -Fallback 'Click the Aura button for quick actions, or drag it to move it.')
+  })
+  $script:AuraWebHelpGuideItem = [System.Windows.Forms.ToolStripMenuItem]::new()
+  $script:AuraWebHelpGuideItem.add_Click({
+    if ($null -ne $script:TrayDesktopWorkspaceGuidanceItem -and
+        -not $script:TrayDesktopWorkspaceGuidanceItem.IsDisposed) {
+      $script:TrayDesktopWorkspaceGuidanceItem.PerformClick()
+    } else { [void](Request-AuraUiDesktopWorkspaceGuidance) }
+  })
+  [void]$script:AuraWebHelpMenu.Items.AddRange(@(
+    $script:AuraWebHelpAuraItem,
+    $script:AuraWebHelpGuideItem
+  ))
+
+  $menuHost = [System.Windows.Forms.FlowLayoutPanel]::new()
+  $menuHost.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $menuHost.FlowDirection = [System.Windows.Forms.FlowDirection]::LeftToRight
+  $menuHost.WrapContents = $false
+  $menuHost.AutoScroll = $false
+  $menuHost.Margin = [System.Windows.Forms.Padding]::new(0)
+  $menuHost.Padding = [System.Windows.Forms.Padding]::new(8, 0, 0, 0)
+
+  $appIcon = [System.Windows.Forms.PictureBox]::new()
+  $appIcon.Width = 24
+  $appIcon.Height = 30
+  $appIcon.Margin = [System.Windows.Forms.Padding]::new(0)
+  $appIcon.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::CenterImage
+  $appIcon.AccessibleName = 'Claude Aura'
+  $mainIconVariable = Get-Variable -Name MainIcon -Scope Script -ErrorAction SilentlyContinue
+  if ($null -ne $mainIconVariable -and $null -ne $mainIconVariable.Value) {
+    $sourceIconBitmap = $mainIconVariable.Value.ToBitmap()
+    try {
+      $script:AuraWebAppIconImage = [Drawing.Bitmap]::new(
+        $sourceIconBitmap, [Drawing.Size]::new(16, 16))
+      $appIcon.Image = $script:AuraWebAppIconImage
+    } finally { $sourceIconBitmap.Dispose() }
+  }
+  $menuHost.Controls.Add($appIcon)
+
+  $script:AuraWebAppMenuButtons = @(
+    (New-AuraWebAppMenuButton -Text (Get-AuraWebUiText -Name menuFile -Fallback 'File') -Menu $script:AuraWebFileMenu),
+    (New-AuraWebAppMenuButton -Text (Get-AuraWebUiText -Name menuView -Fallback 'View') -Menu $script:AuraWebViewMenu),
+    (New-AuraWebAppMenuButton -Text (Get-AuraWebUiText -Name menuThemes -Fallback 'Themes') -Menu $script:AuraWebThemesMenu),
+    (New-AuraWebAppMenuButton -Text (Get-AuraWebUiText -Name menuHelp -Fallback 'Help') -Menu $script:AuraWebHelpMenu)
+  )
+  $menuHost.Controls.AddRange($script:AuraWebAppMenuButtons)
+
+  $script:AuraWebAppBarTitle = [System.Windows.Forms.Label]::new()
+  $script:AuraWebAppBarTitle.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $script:AuraWebAppBarTitle.Text = 'Claude Aura'
+  $script:AuraWebAppBarTitle.TextAlign = [Drawing.ContentAlignment]::MiddleCenter
+  $script:AuraWebAppBarTitle.Font = [Drawing.Font]::new('Segoe UI Semibold', 9)
+  $script:AuraWebAppBarTitle.AccessibleRole = [System.Windows.Forms.AccessibleRole]::TitleBar
+
+  $balance = [System.Windows.Forms.Panel]::new()
+  $balance.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $windowControls = [System.Windows.Forms.FlowLayoutPanel]::new()
+  $windowControls.Dock = [System.Windows.Forms.DockStyle]::Right
+  $windowControls.Width = 138
+  $windowControls.Height = 30
+  $windowControls.FlowDirection = [System.Windows.Forms.FlowDirection]::LeftToRight
+  $windowControls.WrapContents = $false
+  $windowControls.Margin = [System.Windows.Forms.Padding]::new(0)
+  $windowControls.Padding = [System.Windows.Forms.Padding]::new(0)
+  $minimize = New-AuraWebWindowControlButton -Text ([char]0x2014) `
+    -AccessibleName (Get-AuraWebUiText -Name minimizeWindow -Fallback 'Minimize window') `
+    -Action { $script:Form.WindowState = [System.Windows.Forms.FormWindowState]::Minimized }
+  $maximize = New-AuraWebWindowControlButton -Text ([char]0x25A1) `
+    -AccessibleName (Get-AuraWebUiText -Name maximizeWindow -Fallback 'Maximize window') `
+    -Action { Switch-AuraWebWindowMaximized }
+  $close = New-AuraWebWindowControlButton -Text ([char]0x00D7) `
+    -AccessibleName (Get-AuraWebUiText -Name closeWindow -Fallback 'Close window') `
+    -Action { $script:Form.Close() } -Close
+  $script:AuraWebWindowControlButtons = @($minimize, $maximize, $close)
+  $script:AuraWebWindowMaximizeButton = $maximize
+  $windowControls.Controls.AddRange($script:AuraWebWindowControlButtons)
+  $balance.Controls.Add($windowControls)
+  $layout = [System.Windows.Forms.TableLayoutPanel]::new()
+  $layout.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $layout.Margin = [System.Windows.Forms.Padding]::new(0)
+  $layout.Padding = [System.Windows.Forms.Padding]::new(0)
+  $layout.ColumnCount = 3
+  $layout.RowCount = 1
+  [void]$layout.ColumnStyles.Add([System.Windows.Forms.ColumnStyle]::new(
+    [System.Windows.Forms.SizeType]::Percent, 42))
+  [void]$layout.ColumnStyles.Add([System.Windows.Forms.ColumnStyle]::new(
+    [System.Windows.Forms.SizeType]::Percent, 16))
+  [void]$layout.ColumnStyles.Add([System.Windows.Forms.ColumnStyle]::new(
+    [System.Windows.Forms.SizeType]::Percent, 42))
+  [void]$layout.RowStyles.Add([System.Windows.Forms.RowStyle]::new(
+    [System.Windows.Forms.SizeType]::Percent, 100))
+  $layout.Controls.Add($menuHost, 0, 0)
+  $layout.Controls.Add($script:AuraWebAppBarTitle, 1, 0)
+  $layout.Controls.Add($balance, 2, 0)
+
+  foreach ($surface in @($menuHost, $script:AuraWebAppBarTitle, $balance, $layout)) {
+    Register-AuraWebWindowDragSurface -Control $surface
+  }
+
+  $script:AuraWebAppBar = [System.Windows.Forms.Panel]::new()
+  $script:AuraWebAppBar.Dock = [System.Windows.Forms.DockStyle]::Top
+  $script:AuraWebAppBar.Height = 30
+  $script:AuraWebAppBar.Margin = [System.Windows.Forms.Padding]::new(0)
+  $script:AuraWebAppBar.Controls.Add($layout)
+  $script:Form.add_SizeChanged({ Update-AuraWebWindowControlState })
+  Update-AuraWebAppBarCopy
+}
+
 function Initialize-AuraWebTabs {
   param(
     [Parameter(Mandatory = $true)][object]$ContentPanel,
@@ -1128,11 +1723,11 @@ function Initialize-AuraWebTabs {
     $script:AuraWebTabWorkHubControl.Hide()
   }
 
+  Initialize-AuraWebAppBar
   $script:AuraWebTabStrip = [System.Windows.Forms.Panel]::new()
-  $script:AuraWebTabStrip.Dock = [System.Windows.Forms.DockStyle]::Top
-  $script:AuraWebTabStrip.Height = 40
-  $script:AuraWebTabStrip.Padding = [System.Windows.Forms.Padding]::new(8, 1, 8, 1)
-  $script:AuraWebTabStrip.BackColor = [Drawing.ColorTranslator]::FromHtml('#F1F2F7')
+  $script:AuraWebTabStrip.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $script:AuraWebTabStrip.Padding = [System.Windows.Forms.Padding]::new(0)
+  $script:AuraWebTabStrip.BackColor = [Drawing.ColorTranslator]::FromHtml('#6B4FB3')
   $script:AuraWebTabNewButton = [System.Windows.Forms.Button]::new()
   $script:AuraWebTabNewButton.Dock = [System.Windows.Forms.DockStyle]::Right
   $script:AuraWebTabNewButton.Width = 38
@@ -1153,8 +1748,22 @@ function Initialize-AuraWebTabs {
   Register-AuraWebTabDropTarget -Control $script:AuraWebTabNewButton
   $script:AuraWebTabStrip.Controls.Add($script:AuraWebTabList)
   $script:AuraWebTabStrip.Controls.Add($script:AuraWebTabNewButton)
-  $script:Form.Controls.Add($script:AuraWebTabStrip)
-  $script:AuraWebTabStrip.BringToFront()
+  $script:AuraWebChromeHost = [System.Windows.Forms.Panel]::new()
+  $script:AuraWebChromeHost.Dock = [System.Windows.Forms.DockStyle]::Top
+  $script:AuraWebChromeHost.Height = 64
+  $script:AuraWebChromeHost.Margin = [System.Windows.Forms.Padding]::new(0)
+  $script:AuraWebChromeHost.Controls.Add($script:AuraWebTabStrip)
+  $script:AuraWebChromeHost.Controls.Add($script:AuraWebAppBar)
+  $script:Form.Controls.Add($script:AuraWebChromeHost)
+  # Web/Desktop is explained once through the Aura launcher guide. Keep the
+  # everyday window focused: one application menu and one tab row, both drawn
+  # from the active theme instead of a permanent destination switcher.
+  $initialDark = if (Get-Command Test-AuraUiDarkChrome -ErrorAction SilentlyContinue) {
+    [bool](Test-AuraUiDarkChrome)
+  } else { $false }
+  $launcherStyleVariable = Get-Variable -Name LauncherStyle -Scope Script -ErrorAction SilentlyContinue
+  $initialMaterial = if ($null -ne $launcherStyleVariable) { $launcherStyleVariable.Value } else { $null }
+  Update-AuraWebChromeAppearance -Dark $initialDark -Material $initialMaterial
   Refresh-AuraWebTabStrip
 }
 
@@ -1207,10 +1816,45 @@ function Dispose-AuraWebTabs {
     $script:AuraWebTabWorkHubControl.Dispose()
   }
   $script:AuraWebTabWorkHubControl = $null
-  if ($null -ne $script:AuraWebTabStrip -and -not $script:AuraWebTabStrip.IsDisposed) {
-    $script:AuraWebTabStrip.Dispose()
+  foreach ($menu in @(
+    $script:AuraWebFileMenu,
+    $script:AuraWebViewMenu,
+    $script:AuraWebThemesMenu,
+    $script:AuraWebHelpMenu
+  )) {
+    if ($null -ne $menu -and -not $menu.IsDisposed) { try { $menu.Dispose() } catch {} }
   }
+  if ($null -ne $script:AuraWebChromeHost -and -not $script:AuraWebChromeHost.IsDisposed) {
+    $script:AuraWebChromeHost.Dispose()
+  }
+  if ($null -ne $script:AuraWebAppIconImage) {
+    try { $script:AuraWebAppIconImage.Dispose() } catch {}
+  }
+  $script:AuraWebChromeHost = $null
+  $script:AuraWebAppBar = $null
+  $script:AuraWebAppBarTitle = $null
+  $script:AuraWebAppIconImage = $null
+  $script:AuraWebAppMenuButtons = @()
+  $script:AuraWebWindowControlButtons = @()
+  $script:AuraWebWindowMaximizeButton = $null
+  $script:AuraWebFileMenu = $null
+  $script:AuraWebViewMenu = $null
+  $script:AuraWebThemesMenu = $null
+  $script:AuraWebHelpMenu = $null
+  $script:AuraWebFileNewItem = $null
+  $script:AuraWebFileCloseItem = $null
+  $script:AuraWebFileExitItem = $null
+  $script:AuraWebFileStudioItem = $null
+  $script:AuraWebViewWorkHubItem = $null
+  $script:AuraWebViewPetVisibilityItem = $null
+  $script:AuraWebViewPetSettingsItem = $null
+  $script:AuraWebThemesStudioItem = $null
+  $script:AuraWebThemesOriginalItem = $null
+  $script:AuraWebThemeItems = @()
+  $script:AuraWebHelpAuraItem = $null
+  $script:AuraWebHelpGuideItem = $null
   $script:AuraWebTabStrip = $null
   $script:AuraWebTabList = $null
   $script:AuraWebTabNewButton = $null
+  $script:AuraWebChromePalette = $null
 }

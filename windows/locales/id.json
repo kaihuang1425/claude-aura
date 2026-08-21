@@ -1,5 +1,13 @@
 {
   "workHubTitle": "Pusat Kerja",
+  "menuFile": "File",
+  "menuView": "Tampilan",
+  "menuThemes": "Tema",
+  "menuHelp": "Bantuan",
+  "minimizeWindow": "Minimalkan jendela",
+  "maximizeWindow": "Maksimalkan jendela",
+  "restoreWindow": "Pulihkan jendela",
+  "closeWindow": "Tutup jendela",
   "chooseThemePackage": "Pilih paket .aura atau berkas tema kit theme.json.",
   "exportThemePackageTitle": "Ekspor tema Claude Aura",
   "theme": "Tema",

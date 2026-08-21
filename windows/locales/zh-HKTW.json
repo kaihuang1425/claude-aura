@@ -1,5 +1,13 @@
 {
   "workHubTitle": "工作中心",
+  "menuFile": "檔案",
+  "menuView": "檢視",
+  "menuThemes": "主題",
+  "menuHelp": "說明",
+  "minimizeWindow": "最小化視窗",
+  "maximizeWindow": "最大化視窗",
+  "restoreWindow": "還原視窗",
+  "closeWindow": "關閉視窗",
   "chooseThemePackage": "選擇 .aura 主題套件或主題資料夾內的 theme.json 檔案。",
   "exportThemePackageTitle": "匯出 Claude Aura 主題",
   "themeFallbackDescription": "Claude Aura 的獨特外觀。",

@@ -1,5 +1,13 @@
 {
   "workHubTitle": "Hub de travail",
+  "menuFile": "Fichier",
+  "menuView": "Affichage",
+  "menuThemes": "Thèmes",
+  "menuHelp": "Aide",
+  "minimizeWindow": "Réduire la fenêtre",
+  "maximizeWindow": "Agrandir la fenêtre",
+  "restoreWindow": "Restaurer la fenêtre",
+  "closeWindow": "Fermer la fenêtre",
   "chooseThemePackage": "Choisir un package .aura ou un fichier thème theme.json.",
   "exportThemePackageTitle": "Exporter le thème Claude Aura",
   "theme": "Thème",

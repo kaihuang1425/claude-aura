@@ -200,7 +200,9 @@ function Invoke-AuraWorkHubInitializationFixture {
   param([Parameter(Mandatory=$true)][object]$Fixture)
   $script:Fixture=$Fixture
   $script:Form=[System.Windows.Forms.Form]::new()
+  $script:Form.ClientSize=[Drawing.Size]::new(1000,700)
   $content=[System.Windows.Forms.Panel]::new()
+  $content.Dock=[System.Windows.Forms.DockStyle]::Fill
   [void]$script:Form.Controls.Add($content)
   $initialView=[PSCustomObject]@{IsDisposed=$false}
   $errorMessage=''
@@ -209,13 +211,18 @@ function Invoke-AuraWorkHubInitializationFixture {
   } catch { $errorMessage=$_.Exception.Message }
   $workHubVariable=Get-Variable -Name AuraWebTabWorkHubControl -Scope Script -ErrorAction SilentlyContinue
   $workHub=if($null-eq$workHubVariable){$null}else{$workHubVariable.Value}
+  $script:Form.PerformLayout()
   $result=[PSCustomObject][ordered]@{
     error=$errorMessage
     count=if($null-eq$script:AuraWebTabDocument){-1}else{@($script:AuraWebTabDocument.tabs).Count}
     activeNull=($null-ne$script:AuraWebTabDocument-and$null-eq$script:AuraWebTabDocument.activeTabId)
     workHubOwned=($null-ne$workHub-and$workHub.Parent-eq$content-and[string]$workHub.Tag-ceq'work-hub')
+    chromeRows=($script:AuraWebChromeHost.Parent-eq$script:Form-and
+      $script:AuraWebChromeHost.Height-eq64-and$script:AuraWebAppBar.Top-eq0-and
+      $script:AuraWebAppBar.Height-eq30-and$script:AuraWebTabStrip.Top-eq30-and
+      $script:AuraWebTabStrip.Height-eq34-and$content.Top-eq64)
   }
-  if($null-ne$script:AuraWebTabStrip-and-not$script:AuraWebTabStrip.IsDisposed){$script:AuraWebTabStrip.Dispose()}
+  Dispose-AuraWebTabs
   $script:Form.Dispose()
   $script:AuraWebTabRuntime=@{}
   return $result
@@ -238,8 +245,8 @@ $withUser=Invoke-AuraWorkHubInitializationFixture -Fixture ([PSCustomObject][ord
     ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.deepEqual(JSON.parse(result.stdout.trim().split(/\r?\n/u).at(-1)), {
-      empty: { error: "", count: 0, activeNull: true, workHubOwned: true },
-      withUser: { error: "", count: 1, activeNull: true, workHubOwned: true },
+      empty: { error: "", count: 0, activeNull: true, workHubOwned: true, chromeRows: true },
+      withUser: { error: "", count: 1, activeNull: true, workHubOwned: true, chromeRows: true },
     });
   } finally {
     await fs.rm(temporaryRoot, { recursive: true, force: true });
@@ -1184,7 +1191,32 @@ test("main Aura window wires real WebView2 tabs and keyboard tab actions", async
   assert.match(module, /ClaudeAura\.WebTabs\.v1/);
   assert.match(module, /FlowLayoutPanel/);
   assert.match(module, /Request-AuraUiSelectWebTab/);
+  const initializeStart = module.indexOf("function Initialize-AuraWebTabs {");
+  const initializeEnd = module.indexOf("\nfunction ", initializeStart + 1);
+  const initializeTabs = module.slice(initializeStart, initializeEnd);
+  assert.doesNotMatch(initializeTabs, /Initialize-AuraWebTopBar/,
+    "The main Aura window must not mount a permanent Web/Desktop destination row");
+  assert.doesNotMatch(module, /AuraWebTopBar/,
+    "The rejected permanent Web/Desktop destination row must not remain as dormant shell code");
+  assert.match(initializeTabs,
+    /Initialize-AuraWebAppBar[\s\S]{0,2600}?\$script:AuraWebChromeHost\.Controls\.Add\(\$script:AuraWebTabStrip\)[\s\S]{0,180}?\$script:AuraWebChromeHost\.Controls\.Add\(\$script:AuraWebAppBar\)/,
+    "The main window must mount exactly one application menu row above its tab row");
+  assert.match(module,
+    /menuFile[\s\S]{0,220}?menuView[\s\S]{0,220}?menuThemes[\s\S]{0,220}?menuHelp/,
+    "The app bar must expose the File, View, Themes, and Help labels in order");
+  assert.match(module, /\$script:AuraWebChromeHost\.Height\s*=\s*64/,
+    "The custom titlebar and tab strip must occupy exactly 30px + 34px");
+  assert.match(module,
+    /\$container\.Width\s*=\s*132[\s\S]{0,160}?\$container\.Height\s*=\s*34/,
+    "Tabs must use Gemini Aura's compact 132px by 34px proportions");
+  assert.match(module, /\$select\.Font\s*=\s*\[Drawing\.Font\]::new\('Segoe UI Semibold', 9\)/,
+    "Tab labels must use the compact 12px-equivalent utility type scale");
+  assert.match(module,
+    /Chrome\s*=\s*\$accent[\s\S]{0,220}?ChromeForeground\s*=\s*Get-AuraWebContrastForeground/,
+    "The app bar, caption, and tabs must use a readable active-theme accent");
   assert.match(ui, /\. \(Join-Path \$PSScriptRoot 'aura-web-tabs\.ps1'\)/);
+  assert.match(ui, /\$script:Form\.Text\s*=\s*'Claude Aura Web'/,
+    "The WebView2 wrapper must retain its Claude Aura Web identity");
   assert.match(ui, /Initialize-AuraWebTabs/);
   assert.match(ui, /Register-AuraWebTabInitialized/);
   assert.match(ui, /Request-AuraUiNewWebTab/);

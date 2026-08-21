@@ -1,5 +1,13 @@
 {
   "workHubTitle": "ワークハブ",
+  "menuFile": "ファイル",
+  "menuView": "表示",
+  "menuThemes": "テーマ",
+  "menuHelp": "ヘルプ",
+  "minimizeWindow": "ウィンドウを最小化",
+  "maximizeWindow": "ウィンドウを最大化",
+  "restoreWindow": "ウィンドウを元に戻す",
+  "closeWindow": "ウィンドウを閉じる",
   "chooseThemePackage": ".aura パッケージまたは theme.json キットファイルを選択してください。",
   "exportThemePackageTitle": "Claude Aura テーマをエクスポート",
   "theme": "テーマ",
