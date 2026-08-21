@@ -19,6 +19,7 @@ const uiPath = path.join(PROJECT_ROOT, "windows", "aura-ui.ps1");
 const rendererPath = path.join(PROJECT_ROOT, "assets", "renderer-inject.js");
 const studioIndexPath = path.join(PROJECT_ROOT, "studio", "index.html");
 const studioAppPath = path.join(PROJECT_ROOT, "studio", "app.js");
+const taskboardAppPath = path.join(PROJECT_ROOT, "studio", "taskboard.js");
 const studioStylesPath = path.join(PROJECT_ROOT, "studio", "styles.css");
 
 const powershellFunction = (source, name) => {
@@ -150,14 +151,14 @@ test("Prompt Shelf is a localized native host surface with reversible lifecycle 
 
   assert.match(ui, /\. \(Join-Path \$PSScriptRoot 'aura-prompt-shelf\.ps1'\)/);
   assert.match(ui,
-    /\$script:LauncherPromptShelfItem\s*=\s*\[System\.Windows\.Forms\.ToolStripMenuItem\]::new\(/);
+    /\$script:LauncherActionQueueItem\s*=\s*\[System\.Windows\.Forms\.ToolStripMenuItem\]::new\(/);
   assert.match(ui,
-    /\$script:LauncherMenu\.Items\.AddRange\(@\([\s\S]{0,180}?\$script:LauncherPromptShelfItem,/);
+    /\$script:LauncherMenu\.Items\.AddRange\(@\([\s\S]{0,180}?\$script:LauncherActionQueueItem,/);
   assert.match(ui,
-    /\$script:LauncherPromptShelfItem\.add_Click\(\{\s*Show-AuraPromptShelf\s*\}\)/);
+    /\$script:LauncherActionQueueItem\.add_Click\(\{\s*Show-AuraTaskboardQueue\s*\}\)/);
   assert.match(ui,
-    /\$script:LauncherPromptShelfItem\.ShortcutKeyDisplayString\s*=\s*'Ctrl\+Shift\+P'/,
-    "The launcher menu must expose the existing Prompt Shelf shortcut");
+    /\$script:LauncherActionQueueItem\.ShortcutKeyDisplayString\s*=\s*'Ctrl\+Shift\+P'/,
+    "The launcher menu must expose the current-target Action Queue shortcut");
   assert.match(powershellFunction(ui, "Show-AuraUiLauncherMenu"),
     /\$script:LauncherMenu\.Show\(\[System\.Windows\.Forms\.Cursor\]::Position\)/,
     "Ordinary click and right-click must share the existing launcher menu");
@@ -166,11 +167,11 @@ test("Prompt Shelf is a localized native host surface with reversible lifecycle 
     "Right-click must continue to open the launcher menu");
   assert.match(ui,
     /\$wasClickArmed[\s\S]{0,260}?Show-AuraUiLauncherMenu/,
-    "An undragged left click must make Prompt Shelf discoverable through the launcher menu");
-  assert.match(ui, /0x50\s*\{\s*\$eventArgs\.Handled\s*=\s*\$true;\s*Show-AuraPromptShelf/,
-    "Ctrl+Shift+P must provide a keyboard route into the Shelf");
+    "An undragged left click must make Action Queue discoverable through the launcher menu");
+  assert.match(ui, /0x50\s*\{\s*\$eventArgs\.Handled\s*=\s*\$true;\s*Show-AuraTaskboardQueue/,
+    "Ctrl+Shift+P must open the current-target Action Queue");
   for (const eventName of ["NavigationStarting", "SourceChanged", "HistoryChanged", "ProcessFailed"]) {
-    assert.match(ui, new RegExp(`add_${eventName}\\(\\{[\\s\\S]{0,120}?Advance-AuraPromptShelfPageEpoch`),
+    assert.match(ui, new RegExp(`\\$core\\.add_${eventName}\\(\\{[\\s\\S]{0,600}?Advance-AuraPromptShelfPageEpoch`),
       `${eventName} must invalidate a pending insertion target`);
   }
   assert.match(powershellFunction(ui, "Invoke-AuraUiSetEnabled"),
@@ -222,10 +223,10 @@ test("Prompt Shelf is a localized native host surface with reversible lifecycle 
       assert(copy[key].trim(), `${locale} has empty Prompt Shelf copy ${key}`);
     }
     if (locale === "en" || locale === "zh-CN" || locale === "zh-HKTW") {
-      assert(copy.launcherTipHint.includes(copy.promptShelf),
-        `${locale} hover guidance must use its authored Prompt Shelf name`);
-      assert(copy.launcherHintBody.includes(copy.promptShelf),
-        `${locale} first-use guidance must use its authored Prompt Shelf name`);
+      assert(copy.launcherTipHint.includes(copy.actionQueueTitle),
+        `${locale} hover guidance must use its authored Action Queue name`);
+      assert(copy.launcherHintBody.includes(copy.actionQueueTitle),
+        `${locale} first-use guidance must use its authored Action Queue name`);
     }
   }
 });
@@ -290,12 +291,13 @@ test("Prompt Shelf follows host height without widening or revealing a hidden wi
 });
 
 test("Aura Studio manages the same encrypted Prompt Shelf through a strict local bridge", async () => {
-  const [shelf, ui, renderer, html, app, styles, studioCopy] = await Promise.all([
+  const [shelf, ui, renderer, html, app, taskboard, styles, studioCopy] = await Promise.all([
     fs.readFile(shelfPath, "utf8"),
     fs.readFile(uiPath, "utf8"),
     fs.readFile(rendererPath, "utf8"),
     fs.readFile(studioIndexPath, "utf8"),
     fs.readFile(studioAppPath, "utf8"),
+    fs.readFile(taskboardAppPath, "utf8"),
     fs.readFile(studioStylesPath, "utf8"),
     readStudioCopy(),
   ]);
@@ -305,9 +307,15 @@ test("Aura Studio manages the same encrypted Prompt Shelf through a strict local
   );
   assert(shelfSectionMatch, "Aura Studio is missing its Prompt Shelf page");
   const shelfSection = shelfSectionMatch[0];
+  assert.doesNotMatch(html,
+    /data-rail-group="customize"[\s\S]{0,500}?href="#prompt-shelf"/,
+    "Saved prompts must not compete with work retrieval as a top-level destination");
   assert.match(html,
-    /<a class="rail-item" href="#prompt-shelf" data-studio-view="prompt-shelf" data-i18n="navPromptShelf">/,
-    "Prompt Shelf must be a first-class Studio rail destination");
+    /id="settings-manage-prompts"[^>]*data-open-studio-view="prompt-shelf"[^>]*data-i18n="promptShelfTitle"/,
+    "Settings must keep Saved Prompt management one action away without adding task UI to Work Hub");
+  assert.match(app,
+    /for \(const action of studioViewActions\)[\s\S]{0,220}?activateStudioView\(action\.dataset\.openStudioView/,
+    "The Settings action must open the existing encrypted Prompt Shelf editor");
   assert.match(shelfSection,
     /data-studio-page="prompt-shelf"[^>]*aria-labelledby="prompt-shelf-title" aria-busy="false" hidden inert/,
     "Prompt Shelf must start as a separate inactive Studio page");
@@ -329,9 +337,8 @@ test("Aura Studio manages the same encrypted Prompt Shelf through a strict local
   assert.match(shelfSection,
     /<textarea id="prompt-shelf-text"[^>]*maxlength="8000"[^>]*aria-describedby="prompt-shelf-character-count prompt-shelf-status"/,
     "The Studio editor must share the host's 8,000-character limit and status semantics");
-  assert.match(shelfSection,
-    /id="prompt-shelf-insert"[\s\S]{0,160}?aria-describedby="prompt-shelf-insert-help"[^>]*disabled/,
-    "Insert in Aura must start disabled and retain explicit no-send guidance");
+  assert.doesNotMatch(shelfSection, /id="prompt-shelf-insert"/,
+    "The Saved Prompt migration page must not bypass the Action Queue");
   assert.match(html,
     /<dialog id="prompt-shelf-delete-dialog"[\s\S]{0,220}?aria-describedby="prompt-shelf-delete-body"/,
     "Destructive deletion must use a labeled confirmation dialog");
@@ -365,10 +372,12 @@ test("Aura Studio manages the same encrypted Prompt Shelf through a strict local
     /version: promptShelfBridgeVersion,[\s\S]{0,180}?revision: promptShelf\.revision,[\s\S]{0,80}?commandEpoch: promptShelf\.commandEpoch/,
     "Every Studio mutation must bind the current protocol, revision, and command epoch");
   assert.match(promptShelfController,
-    /"prompt-shelf-insert",\s*"insert",\s*\{ id: selected\.id \}/,
-    "Insert must send only the immutable item id, never a second copy of its body");
+    /insertSavedPrompt:[\s\S]{0,320}?"prompt-shelf-insert"[\s\S]{0,160}?\{ id, queueCommandId, draftFingerprint \}/,
+    "Queue placement must bind the item, queue command, and saved-draft fingerprint");
+  assert.doesNotMatch(promptShelfController, /promptShelfInsert\.addEventListener/,
+    "Saved Prompt management must not expose a direct composer action");
   assert.match(promptShelfController,
-    /promptShelfHasExactKeys\(data, \[\s*"type", "version", "requestId", "session", "revision", "commandEpoch",\s*"persistenceAvailable", "insertionAvailable", "insertState", "items",\s*\]\)/,
+    /promptShelfHasExactKeys\(data, \[\s*"type", "version", "requestId", "session", "revision", "commandEpoch",\s*"persistenceAvailable", "insertionAvailable", "localTargetId", "insertState", "items",\s*\]\)/,
     "Studio must reject expanded or partial body-bearing state snapshots");
   assert.match(promptShelfController,
     /promptShelfHasExactKeys\(data, \[\s*"type", "version", "requestId", "session", "action",\s*"ok", "code", "revision", "commandEpoch", "itemId",\s*\]\)/,
@@ -529,6 +538,68 @@ test("Aura Studio manages the same encrypted Prompt Shelf through a strict local
       assert(studioCopy.shell[locale][key].trim(),
         `${locale} has empty Studio Prompt Shelf copy ${key}`);
     }
+  }
+});
+
+test("Prompt Shelf derives a stable private local target without exposing its route", async () => {
+  if (process.platform !== "win32") return;
+  const [shelf, app] = await Promise.all([
+    fs.readFile(shelfPath, "utf8"),
+    fs.readFile(studioAppPath, "utf8"),
+  ]);
+  assert.match(shelf, /PromptShelfTargetKeyPath[\s\S]{0,240}?target-key\.bin/);
+  assert.match(shelf,
+    /ProtectedData\]::Protect\([\s\S]{0,220}?PromptShelfTargetKeyEntropy[\s\S]{0,160}?DataProtectionScope\]::CurrentUser/);
+  assert.match(shelf,
+    /type = 'prompt-shelf-state'[\s\S]{0,500}?localTargetId = \$localTargetId/);
+  assert.match(app,
+    /promptShelfTargetPattern\s*=\s*\/\^\[a-f0-9\]\{8\}[\s\S]{0,160}?\[458\]/);
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aura-prompt-target-"));
+  try {
+    const regressionPath = path.join(temporaryRoot, "target-id-regression.ps1");
+    const regression = [
+      "$ErrorActionPreference='Stop'",
+      `$DataRoot='${temporaryRoot.replaceAll("'", "''")}'`,
+      "function Test-AuraUiClaudeUri { param($Value); return $true }",
+      `. '${shelfPath.replaceAll("'", "''")}'`,
+      "function Set-AuraPromptShelfSecureAcl { param([string]$Path,[switch]$Directory) }",
+      "$key=[byte[]](0..31)",
+      "$first=ConvertTo-AuraPromptShelfTargetId -RouteKey 'https://claude.ai/chat/private-a' -Key $key",
+      "$same=ConvertTo-AuraPromptShelfTargetId -RouteKey 'https://claude.ai/chat/private-a' -Key $key",
+      "$other=ConvertTo-AuraPromptShelfTargetId -RouteKey 'https://claude.ai/chat/private-b' -Key $key",
+      "$draftFingerprint=ConvertTo-AuraPromptShelfDraftFingerprint -Id ('a' * 32) -Text 'Private next message' -Key $key",
+      "$sameDraftFingerprint=ConvertTo-AuraPromptShelfDraftFingerprint -Id ('a' * 32) -Text 'Private next message' -Key $key",
+      "$changedDraftFingerprint=ConvertTo-AuraPromptShelfDraftFingerprint -Id ('a' * 32) -Text 'Changed next message' -Key $key",
+      "$routeA=Get-AuraPromptShelfTargetRouteKey -Value 'https://claude.ai/chat/private-a?panel=one'",
+      "$routeB=Get-AuraPromptShelfTargetRouteKey -Value 'https://claude.ai/chat/private-a?panel=two'",
+      "$newRoute=Get-AuraPromptShelfTargetRouteKey -Value 'https://claude.ai/new'",
+      "$settingsRoute=Get-AuraPromptShelfTargetRouteKey -Value 'https://claude.ai/settings/profile'",
+      "$nestedRoute=Get-AuraPromptShelfTargetRouteKey -Value 'https://claude.ai/chat/private-a/details'",
+      "$persistedKey=[byte[]](Get-AuraPromptShelfTargetKey)",
+      "$persistedFirst=ConvertTo-AuraPromptShelfTargetId -RouteKey $routeA -Key $persistedKey",
+      "$script:PromptShelfTargetKey=$null",
+      "$reloadedKey=[byte[]](Get-AuraPromptShelfTargetKey)",
+      "$persistedAgain=ConvertTo-AuraPromptShelfTargetId -RouteKey $routeB -Key $reloadedKey",
+      "$raw=[IO.File]::ReadAllBytes($script:PromptShelfTargetKeyPath)",
+      "[ordered]@{first=$first;same=$same;other=$other;draftFingerprint=$draftFingerprint;draftStable=($draftFingerprint -ceq $sameDraftFingerprint);draftChanged=($draftFingerprint -cne $changedDraftFingerprint);routeStable=($routeA -ceq $routeB);nonChatRejected=(-not $newRoute -and -not $settingsRoute -and -not $nestedRoute);persistedStable=($persistedFirst -ceq $persistedAgain);keyFileExists=(Test-Path -LiteralPath $script:PromptShelfTargetKeyPath -PathType Leaf);routeLeaked=([Text.Encoding]::UTF8.GetString($raw).Contains('private'))} | ConvertTo-Json -Compress",
+    ].join("\n");
+    await fs.writeFile(regressionPath, `\uFEFF${regression}`, "utf8");
+    const output = JSON.parse(run("powershell.exe", [
+      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", regressionPath,
+    ]).trim());
+    assert.match(output.first, /^[a-f0-9]{8}-[a-f0-9]{4}-8[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
+    assert.equal(output.first, output.same);
+    assert.notEqual(output.first, output.other);
+    assert.match(output.draftFingerprint, /^[a-f0-9]{64}$/u);
+    assert.equal(output.draftStable, true);
+    assert.equal(output.draftChanged, true);
+    assert.equal(output.routeStable, true);
+    assert.equal(output.nonChatRejected, true);
+    assert.equal(output.persistedStable, true);
+    assert.equal(output.keyFileExists, true);
+    assert.equal(output.routeLeaked, false);
+  } finally {
+    await fs.rm(temporaryRoot, { recursive: true, force: true });
   }
 });
 
@@ -930,6 +1001,7 @@ test("Aura Studio Prompt Shelf CRUD is revision-bound, replay-safe, and body-con
       "function Test-AuraUiClaudeUri { param($Value); return $true }",
       "function Show-AuraUiMain {}",
       `. ${quote(shelfPath)}`,
+      "function Test-AuraTaskboardQueuePlacementReady { param($CommandId,$DraftId,$DraftFingerprint); return $true }",
       "$script:StudioReady=$true",
       "$script:WebReady=$false",
       "$script:StudioWebView=$null",
@@ -1070,7 +1142,8 @@ test("Aura Studio Prompt Shelf CRUD is revision-bound, replay-safe, and body-con
       "Invoke-ValidatedShelfMessage $snapshot",
       "$bodyState=Get-LastStudioMessage",
       "if($bodyState.type -cne 'prompt-shelf-state' -or $bodyState.version -ne 1 -or $bodyState.revision -ne 4 -or $bodyState.commandEpoch -ne 5 -or @($bodyState.items).Count -ne 2 -or $bodyState.items[0].id -cne $secondItemId -or $bodyState.items[1].text -cne $updatedCanary){throw 'Body-bearing snapshot lost order, text, revision, or command epoch'}",
-      "$failedInsert=[ordered]@{type='prompt-shelf-insert';version=1;requestId=$failedInsertId;session=$session;revision=4;commandEpoch=5;id=$firstItemId}",
+      "$failedInsertFingerprint=ConvertTo-AuraPromptShelfDraftFingerprint -Id $firstItemId -Text $updatedCanary -Key ([byte[]](Get-AuraPromptShelfTargetKey))",
+      "$failedInsert=[ordered]@{type='prompt-shelf-insert';version=1;requestId=$failedInsertId;session=$session;revision=4;commandEpoch=5;id=$firstItemId;queueCommandId='c3333333-3333-4333-8333-333333333333';draftFingerprint=$failedInsertFingerprint}",
       "Invoke-ValidatedShelfMessage $failedInsert",
       "$insertFailure=Get-LastStudioMessage",
       "if($insertFailure.ok -or $insertFailure.code -cne 'runtime-unavailable' -or $insertFailure.revision -ne 4 -or $insertFailure.commandEpoch -ne 6 -or $script:PromptShelfStudioCommandEpoch -ne 6){throw 'Accepted insert failure did not consume one command epoch'}",
@@ -1118,8 +1191,8 @@ test("Aura Studio Prompt Shelf CRUD is revision-bound, replay-safe, and body-con
       "}",
       "$receiptJson=$script:PromptShelfStudioReceipts.Values|ConvertTo-Json -Depth 8 -Compress",
       "if($receiptJson.Contains($canary) -or $receiptJson.Contains($updatedCanary) -or $receiptJson.Contains($staleCanary)){throw 'Replay cache retained a plaintext prompt body'}",
-      "$rotationFingerprint=Get-AuraPromptShelfStudioRequestFingerprint -Message ([pscustomobject][ordered]@{type='prompt-shelf-insert';version=1;requestId=$rotationInsertId;session=$session;revision=6;commandEpoch=($epochAfterEviction+2);id=('e'*32)})",
-      "$script:PromptShelfInsertOperation=[PSCustomObject][ordered]@{OperationId=('d'*32);PageEpoch=9;Target='https://claude.ai/chat/test';State='dispatching';Task=[PSCustomObject]@{};StudioRequestId=$rotationInsertId;StudioSession=$session;StudioItemId=('e'*32);StudioRequestFingerprint=$rotationFingerprint}",
+      "$rotationFingerprint=Get-AuraPromptShelfStudioRequestFingerprint -Message ([pscustomobject][ordered]@{type='prompt-shelf-insert';version=1;requestId=$rotationInsertId;session=$session;revision=6;commandEpoch=($epochAfterEviction+2);id=('e'*32);queueCommandId='c7777777-7777-4777-8777-777777777777';draftFingerprint=('e'*64)})",
+      "$script:PromptShelfInsertOperation=[PSCustomObject][ordered]@{OperationId=('d'*32);PageEpoch=9;Target='https://claude.ai/chat/test';State='dispatching';Task=[PSCustomObject]@{};StudioRequestId=$rotationInsertId;StudioSession=$session;StudioItemId=('e'*32);StudioRequestFingerprint=$rotationFingerprint;QueueCommandId='c7777777-7777-4777-8777-777777777777';QueueDraftFingerprint=('e'*64)}",
       "$rotatedSession=New-AuraPromptShelfStudioSession",
       "if($rotatedSession -ceq $session -or $script:PromptShelfStudioSession -cne $rotatedSession -or $script:PromptShelfStudioCommandEpoch -ne 0 -or $script:PromptShelfStudioReceipts.Count -ne 0){throw 'Studio session rotation did not reset replay authority'}",
       "if($script:PromptShelfInsertOperation.State -cne 'uncertain' -or $null -ne $script:PromptShelfInsertOperation.Task -or -not ($script:events -contains 'Prompt Shelf event: studio-session-changed')){throw 'Studio session rotation did not make its in-flight insertion explicitly uncertain'}",
@@ -1129,7 +1202,7 @@ test("Aura Studio Prompt Shelf CRUD is revision-bound, replay-safe, and body-con
       "  if($message.version -ne 1){throw \"Outbound Shelf envelope $($message.type) omitted protocol version 1\"}",
       "  $names=@($message.PSObject.Properties.Name)",
       "  if($message.type -ceq 'prompt-shelf-state'){",
-      "    $expected=@('type','version','requestId','session','revision','commandEpoch','persistenceAvailable','insertionAvailable','insertState','items')",
+      "    $expected=@('type','version','requestId','session','revision','commandEpoch','persistenceAvailable','insertionAvailable','localTargetId','insertState','items')",
       "  }elseif($message.type -ceq 'prompt-shelf-result'){",
       "    $expected=@('type','version','requestId','session','action','ok','code','revision','commandEpoch','itemId')",
       "  }elseif($message.type -ceq 'prompt-shelf-changed'){",

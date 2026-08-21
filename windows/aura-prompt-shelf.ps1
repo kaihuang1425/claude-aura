@@ -7,9 +7,13 @@
 
 $script:PromptShelfStoreRoot = Join-Path $DataRoot 'prompt-shelf'
 $script:PromptShelfStatePath = Join-Path $script:PromptShelfStoreRoot 'drafts.bin'
+$script:PromptShelfTargetKeyPath = Join-Path $script:PromptShelfStoreRoot 'target-key.bin'
 $script:PromptShelfLegacyStatePath = Join-Path $DataRoot 'prompt-shelf.json'
 $script:PromptShelfStateMagic = [Text.Encoding]::ASCII.GetBytes("CLAUDE-AURA-PROMPT-SHELF-1`n")
 $script:PromptShelfEntropy = [Text.Encoding]::UTF8.GetBytes('ClaudeAura.PromptShelf.v1')
+$script:PromptShelfTargetKeyMagic = [Text.Encoding]::ASCII.GetBytes("CLAUDE-AURA-TARGET-KEY-1`n")
+$script:PromptShelfTargetKeyEntropy = [Text.Encoding]::UTF8.GetBytes('ClaudeAura.PromptShelf.TargetKey.v1')
+$script:PromptShelfTargetKey = $null
 $script:PromptShelfMaxItems = 50
 $script:PromptShelfMaxTextLength = 8000
 $script:PromptShelfMaxFileBytes = 512 * 1024
@@ -43,6 +47,42 @@ $script:PromptShelfStudioReceiptOrder = [Collections.Generic.Queue[string]]::new
 function Write-AuraPromptShelfEvent {
   param([Parameter(Mandatory = $true)][string]$Code)
   try { Write-AuraUiLog -Message "Prompt Shelf event: $Code" } catch {}
+}
+
+function ConvertTo-AuraPromptShelfTargetId {
+  param(
+    [Parameter(Mandatory = $true)][ValidateLength(1, 2048)][string]$RouteKey,
+    [Parameter(Mandatory = $true)][ValidateCount(32, 32)][byte[]]$Key
+  )
+  $hmac = [Security.Cryptography.HMACSHA256]::new($Key)
+  try {
+    $hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($RouteKey))
+  } finally {
+    $hmac.Dispose()
+  }
+  $hex = ([BitConverter]::ToString($hash, 0, 16)).Replace('-', '').ToLowerInvariant()
+  return '{0}-{1}-8{2}-8{3}-{4}' -f (
+    $hex.Substring(0, 8)), ($hex.Substring(8, 4)), ($hex.Substring(13, 3)),
+    ($hex.Substring(17, 3)), ($hex.Substring(20, 12))
+}
+
+function ConvertTo-AuraPromptShelfDraftFingerprint {
+  param(
+    [Parameter(Mandatory = $true)][ValidatePattern('^[a-f0-9]{32}$')][string]$Id,
+    [Parameter(Mandatory = $true)][ValidateLength(1, 8000)][string]$Text,
+    [Parameter(Mandatory = $true)][ValidateCount(32, 32)][byte[]]$Key
+  )
+  $payload = [Text.Encoding]::UTF8.GetBytes("ClaudeAura.NextMessage.v1`0$Id`0$Text")
+  $hmac = [Security.Cryptography.HMACSHA256]::new($Key)
+  $hash = $null
+  try {
+    $hash = $hmac.ComputeHash($payload)
+    return ([BitConverter]::ToString($hash)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $hmac.Dispose()
+    if ($null -ne $hash) { [Array]::Clear($hash, 0, $hash.Length) }
+    [Array]::Clear($payload, 0, $payload.Length)
+  }
 }
 
 function Get-AuraPromptShelfCopy {
@@ -370,6 +410,111 @@ function Initialize-AuraPromptShelfStorage {
   [void][IO.Directory]::CreateDirectory($directory)
   Set-AuraPromptShelfSecureAcl -Path $directory -Directory
   return $fullPath
+}
+
+function Read-AuraPromptShelfTargetKey {
+  param([string]$Path = $script:PromptShelfTargetKeyPath)
+  Assert-AuraPromptShelfNotReparsePoint -Path $Path
+  Set-AuraPromptShelfSecureAcl -Path $Path
+  $envelope = [IO.File]::ReadAllBytes($Path)
+  $cipher = $null
+  $plain = $null
+  $result = $null
+  try {
+    if ($envelope.Length -le $script:PromptShelfTargetKeyMagic.Length -or
+        $envelope.Length -gt 4096) {
+      throw 'Prompt Shelf target key has an invalid size.'
+    }
+    for ($index = 0; $index -lt $script:PromptShelfTargetKeyMagic.Length; $index += 1) {
+      if ($envelope[$index] -ne $script:PromptShelfTargetKeyMagic[$index]) {
+        throw 'Prompt Shelf target key has an invalid header.'
+      }
+    }
+    $cipherLength = $envelope.Length - $script:PromptShelfTargetKeyMagic.Length
+    $cipher = [byte[]]::new($cipherLength)
+    [Array]::Copy(
+      $envelope, $script:PromptShelfTargetKeyMagic.Length, $cipher, 0, $cipherLength)
+    $plain = [Security.Cryptography.ProtectedData]::Unprotect(
+      $cipher,
+      $script:PromptShelfTargetKeyEntropy,
+      [Security.Cryptography.DataProtectionScope]::CurrentUser)
+    if ($plain.Length -ne 32) { throw 'Prompt Shelf target key is invalid.' }
+    $result = [byte[]]::new(32)
+    [Array]::Copy($plain, $result, 32)
+    Write-Output -NoEnumerate $result
+  } finally {
+    if ($null -ne $plain) { [Array]::Clear($plain, 0, $plain.Length) }
+    if ($null -ne $cipher) { [Array]::Clear($cipher, 0, $cipher.Length) }
+    [Array]::Clear($envelope, 0, $envelope.Length)
+  }
+}
+
+function New-AuraPromptShelfTargetKey {
+  param([string]$Path = $script:PromptShelfTargetKeyPath)
+  $key = [byte[]]::new(32)
+  $random = [Security.Cryptography.RandomNumberGenerator]::Create()
+  $cipher = $null
+  $envelope = $null
+  $temporary = $null
+  try {
+    $random.GetBytes($key)
+    $cipher = [Security.Cryptography.ProtectedData]::Protect(
+      $key,
+      $script:PromptShelfTargetKeyEntropy,
+      [Security.Cryptography.DataProtectionScope]::CurrentUser)
+    $envelope = [byte[]]::new($script:PromptShelfTargetKeyMagic.Length + $cipher.Length)
+    [Array]::Copy(
+      $script:PromptShelfTargetKeyMagic, 0, $envelope, 0,
+      $script:PromptShelfTargetKeyMagic.Length)
+    [Array]::Copy(
+      $cipher, 0, $envelope, $script:PromptShelfTargetKeyMagic.Length, $cipher.Length)
+    $temporary = Join-Path (Split-Path -Parent $Path) `
+      ('.target-key-{0}.tmp' -f [Guid]::NewGuid().ToString('N'))
+    [IO.File]::WriteAllBytes($temporary, $envelope)
+    Set-AuraPromptShelfSecureAcl -Path $temporary
+    if (Test-Path -LiteralPath $Path) {
+      throw 'Prompt Shelf target key already exists.'
+    }
+    [IO.File]::Move($temporary, $Path)
+    $temporary = $null
+    Set-AuraPromptShelfSecureAcl -Path $Path
+    $verified = [byte[]](Read-AuraPromptShelfTargetKey -Path $Path)
+    if (-not [Linq.Enumerable]::SequenceEqual([byte[]]$key, [byte[]]$verified)) {
+      throw 'Prompt Shelf target key did not verify.'
+    }
+    Write-Output -NoEnumerate $verified
+  } finally {
+    $random.Dispose()
+    if ($temporary -and (Test-Path -LiteralPath $temporary -PathType Leaf)) {
+      try { Remove-Item -LiteralPath $temporary -Force } catch {}
+    }
+    if ($null -ne $envelope) { [Array]::Clear($envelope, 0, $envelope.Length) }
+    if ($null -ne $cipher) { [Array]::Clear($cipher, 0, $cipher.Length) }
+    [Array]::Clear($key, 0, $key.Length)
+  }
+}
+
+function Get-AuraPromptShelfTargetKey {
+  if ($null -ne $script:PromptShelfTargetKey -and
+      $script:PromptShelfTargetKey -is [byte[]] -and
+      $script:PromptShelfTargetKey.Length -eq 32) {
+    Write-Output -NoEnumerate $script:PromptShelfTargetKey
+    return
+  }
+  try {
+    [void](Initialize-AuraPromptShelfStorage)
+    $key = if (Test-Path -LiteralPath $script:PromptShelfTargetKeyPath -PathType Leaf) {
+      [byte[]](Read-AuraPromptShelfTargetKey)
+    } else {
+      [byte[]](New-AuraPromptShelfTargetKey)
+    }
+    if ($key.Length -ne 32) { throw 'Prompt Shelf target key is unavailable.' }
+    $script:PromptShelfTargetKey = $key
+    Write-Output -NoEnumerate $script:PromptShelfTargetKey
+  } catch {
+    Write-AuraPromptShelfEvent -Code 'target-key-unavailable'
+    return $null
+  }
 }
 
 function ConvertFrom-AuraPromptShelfJsonBytes {
@@ -795,7 +940,9 @@ function Get-AuraPromptShelfStudioRequestFingerprint {
     requestId = [string]$Message.requestId
     session = [string]$Message.session
   }
-  foreach ($name in @('version', 'revision', 'commandEpoch', 'id', 'direction')) {
+  foreach ($name in @(
+      'version', 'revision', 'commandEpoch', 'id', 'direction',
+      'queueCommandId', 'draftFingerprint')) {
     $property = $Message.PSObject.Properties[$name]
     if ($null -ne $property) { $canonical[$name] = $property.Value }
   }
@@ -842,7 +989,8 @@ function Get-AuraPromptShelfInsertState {
 
 function Test-AuraPromptShelfInsertionAvailable {
   if (-not (Get-AuraUiEnabled) -or -not $script:WebReady -or
-      $null -eq $script:WebView -or $null -eq $script:WebView.CoreWebView2) {
+      $null -eq $script:WebView -or $null -eq $script:WebView.CoreWebView2 -or
+      $null -ne $script:PromptShelfInsertOperation) {
     return $false
   }
   return [bool](Get-AuraPromptShelfRouteKey -Value $script:WebView.Source)
@@ -857,6 +1005,13 @@ function Send-AuraPromptShelfStudioState {
   if (-not (Test-AuraPromptShelfStudioUuid -Value $script:PromptShelfStudioSession)) {
     [void](New-AuraPromptShelfStudioSession)
   }
+  $insertionAvailable = [bool](Test-AuraPromptShelfInsertionAvailable)
+  $localTargetId = if ($insertionAvailable) {
+    Get-AuraPromptShelfCurrentTargetId
+  } else { $null }
+  $fingerprintKey = if ($script:PromptShelfItems.Count -gt 0) {
+    [byte[]](Get-AuraPromptShelfTargetKey)
+  } else { $null }
   $snapshot = [ordered]@{
     type = 'prompt-shelf-state'
     version = 1
@@ -865,11 +1020,19 @@ function Send-AuraPromptShelfStudioState {
     revision = [long]$script:PromptShelfStudioRevision
     commandEpoch = [long]$script:PromptShelfStudioCommandEpoch
     persistenceAvailable = [bool]$script:PromptShelfPersistenceAvailable
-    insertionAvailable = [bool](Test-AuraPromptShelfInsertionAvailable)
+    insertionAvailable = $insertionAvailable
+    localTargetId = $localTargetId
     insertState = Get-AuraPromptShelfInsertState
     items = @(
       foreach ($item in $script:PromptShelfItems) {
-        [ordered]@{ id = [string]$item.id; text = [string]$item.text }
+        [ordered]@{
+          id = [string]$item.id
+          text = [string]$item.text
+          fingerprint = if ($null -ne $fingerprintKey -and $fingerprintKey.Length -eq 32) {
+            ConvertTo-AuraPromptShelfDraftFingerprint `
+              -Id ([string]$item.id) -Text ([string]$item.text) -Key $fingerprintKey
+          } else { $null }
+        }
       }
     )
   }
@@ -977,6 +1140,13 @@ function Assert-AuraPromptShelfStudioRequest {
     if ($Message.id -isnot [string] -or $Message.id -cnotmatch '^[a-f0-9]{32}$') {
       throw 'Prompt Shelf item id is invalid.'
     }
+  }
+  if ($type -ceq 'prompt-shelf-insert' -and
+      ($Message.queueCommandId -isnot [string] -or
+        -not (Test-AuraPromptShelfStudioUuid -Value $Message.queueCommandId) -or
+        $Message.draftFingerprint -isnot [string] -or
+        $Message.draftFingerprint -cnotmatch '^[a-f0-9]{64}$')) {
+    throw 'Prompt Shelf queue placement identity is invalid.'
   }
   if ($type -in @('prompt-shelf-create', 'prompt-shelf-update')) {
     if ($Message.text -isnot [string] -or $Message.text.Length -gt $script:PromptShelfMaxTextLength) {
@@ -1461,6 +1631,20 @@ function Invoke-AuraPromptShelfStudioRequest {
             -RequestFingerprint $requestFingerprint -Cache
           return
         }
+        $draftFingerprint = ConvertTo-AuraPromptShelfDraftFingerprint `
+          -Id $itemId -Text ([string]$script:PromptShelfItems[$itemIndex].text) `
+          -Key ([byte[]](Get-AuraPromptShelfTargetKey))
+        if ($draftFingerprint -cne [string]$Message.draftFingerprint -or
+            -not (Get-Command Test-AuraTaskboardQueuePlacementReady -ErrorAction SilentlyContinue) -or
+            -not (Test-AuraTaskboardQueuePlacementReady `
+              -CommandId ([string]$Message.queueCommandId) -DraftId $itemId `
+              -DraftFingerprint $draftFingerprint)) {
+          Send-AuraPromptShelfStudioResult `
+            -RequestId $requestId -Action $action -Ok $false -Code 'not-inserted' `
+            -ItemId $itemId -RequestType $type `
+            -RequestFingerprint $requestFingerprint -Cache
+          return
+        }
         if ($null -ne $script:PromptShelfInsertOperation) {
           Send-AuraPromptShelfStudioResult `
             -RequestId $requestId -Action $action -Ok $false -Code 'busy' `
@@ -1481,7 +1665,9 @@ function Invoke-AuraPromptShelfStudioRequest {
           -StudioRequestId $requestId `
           -StudioSession ([string]$Message.session) `
           -StudioItemId $itemId `
-          -StudioRequestFingerprint $requestFingerprint
+          -StudioRequestFingerprint $requestFingerprint `
+          -QueueCommandId ([string]$Message.queueCommandId) `
+          -QueueDraftFingerprint $draftFingerprint
         if ($null -eq $script:PromptShelfInsertOperation -or
             [string]$script:PromptShelfInsertOperation.StudioRequestId -cne $requestId) {
           Send-AuraPromptShelfStudioResult `
@@ -1518,6 +1704,28 @@ function Get-AuraPromptShelfRouteKey {
   }
 }
 
+function Get-AuraPromptShelfTargetRouteKey {
+  param([AllowNull()][object]$Value)
+  try {
+    $uri = if ($Value -is [Uri]) { $Value } else { [Uri]([string]$Value) }
+    if (-not (Test-AuraUiClaudeUri -Value $uri)) { return '' }
+    $path = $uri.AbsolutePath.TrimEnd('/')
+    if ($path -cnotmatch '^/chat/[A-Za-z0-9_-]+$') { return '' }
+    return $uri.GetLeftPart([UriPartial]::Authority) + $path
+  } catch {
+    return ''
+  }
+}
+
+function Get-AuraPromptShelfCurrentTargetId {
+  if ($null -eq $script:WebView) { return $null }
+  $routeKey = Get-AuraPromptShelfTargetRouteKey -Value $script:WebView.Source
+  if (-not $routeKey) { return $null }
+  $key = [byte[]](Get-AuraPromptShelfTargetKey)
+  if ($key.Length -ne 32) { return $null }
+  return ConvertTo-AuraPromptShelfTargetId -RouteKey $routeKey -Key $key
+}
+
 function Stop-AuraPromptShelfInsertTimeouts {
   foreach ($timer in @(
       $script:PromptShelfInsertTimeout,
@@ -1541,6 +1749,12 @@ function Set-AuraPromptShelfOperationUncertain {
     Complete-AuraDraftHandoffInsert `
       -AttemptId ([string]$operation.DraftHandoffAttemptId) -Outcome uncertain
   }
+  if ([string]$operation.QueueCommandId -and
+      (Get-Command Complete-AuraTaskboardQueuePlacement -ErrorAction SilentlyContinue)) {
+    Complete-AuraTaskboardQueuePlacement `
+      -QueueCommandId ([string]$operation.QueueCommandId) `
+      -DraftFingerprint ([string]$operation.QueueDraftFingerprint) -Outcome uncertain
+  }
   Write-AuraPromptShelfEvent -Code $EventCode
   Set-AuraPromptShelfStatusCopy `
     -Name 'promptShelfInsertUncertain' `
@@ -1560,7 +1774,12 @@ function Set-AuraPromptShelfOperationUncertain {
 function Confirm-AuraPromptShelfComposerChecked {
   if ($null -eq $script:PromptShelfInsertOperation -or
       [string]$script:PromptShelfInsertOperation.State -cne 'uncertain') { return }
+  $operation = $script:PromptShelfInsertOperation
   $script:PromptShelfInsertOperation = $null
+  if ([string]$operation.QueueCommandId -and
+      (Get-Command Refresh-AuraTaskboardQueue -ErrorAction SilentlyContinue)) {
+    Refresh-AuraTaskboardQueue
+  }
   Set-AuraPromptShelfStatusCopy `
     -Name 'promptShelfChecked' `
     -Fallback 'Composer checked. Insert is available again.'
@@ -1647,6 +1866,12 @@ function Complete-AuraPromptShelfInsert {
       (Get-Command Complete-AuraDraftHandoffInsert -ErrorAction SilentlyContinue)) {
     Complete-AuraDraftHandoffInsert `
       -AttemptId ([string]$operation.DraftHandoffAttemptId) -Outcome $Outcome
+  }
+  if ([string]$operation.QueueCommandId -and
+      (Get-Command Complete-AuraTaskboardQueuePlacement -ErrorAction SilentlyContinue)) {
+    Complete-AuraTaskboardQueuePlacement `
+      -QueueCommandId ([string]$operation.QueueCommandId) `
+      -DraftFingerprint ([string]$operation.QueueDraftFingerprint) -Outcome $Outcome
   }
   if ($Outcome -ceq 'inserted') {
     Set-AuraPromptShelfStatusCopy `
@@ -1815,7 +2040,12 @@ function Invoke-AuraPromptShelfInsert {
     [AllowEmptyString()]
     [ValidatePattern('^$|^[a-f0-9]{32}$')][string]$DraftHandoffAttemptId = '',
     [long]$DraftHandoffPageEpoch = -1,
-    [AllowEmptyString()][string]$DraftHandoffTarget = ''
+    [AllowEmptyString()][string]$DraftHandoffTarget = '',
+    [AllowEmptyString()]
+    [ValidatePattern('^$|^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$')]
+    [string]$QueueCommandId = '',
+    [AllowEmptyString()]
+    [ValidatePattern('^$|^[a-f0-9]{64}$')][string]$QueueDraftFingerprint = ''
   )
   if ([string]::IsNullOrWhiteSpace($Text)) {
     Set-AuraPromptShelfStatus -Text (
@@ -1825,6 +2055,12 @@ function Invoke-AuraPromptShelfInsert {
   if (-not (Test-AuraPromptShelfText -Text $Text)) {
     Set-AuraPromptShelfStatus -Text (
       Get-AuraPromptShelfCopy -Name 'promptShelfTooLong' -Fallback 'Keep each draft under 8,000 characters.')
+    return
+  }
+  if ([bool]$QueueCommandId -ne [bool]$QueueDraftFingerprint) {
+    Set-AuraPromptShelfStatusCopy `
+      -Name 'promptShelfInsertFailed' `
+      -Fallback 'Place the caret in the Claude composer, then try again.'
     return
   }
   if ($null -ne $script:PromptShelfInsertOperation) {
@@ -1865,6 +2101,8 @@ function Invoke-AuraPromptShelfInsert {
       StudioItemId = $StudioItemId
       StudioRequestFingerprint = $StudioRequestFingerprint
       DraftHandoffAttemptId = $DraftHandoffAttemptId
+      QueueCommandId = $QueueCommandId
+      QueueDraftFingerprint = $QueueDraftFingerprint
     }
     Update-AuraPromptShelfActions
     Send-AuraPromptShelfStudioChanged
@@ -1883,6 +2121,11 @@ function Invoke-AuraPromptShelfInsert {
     if ($DraftHandoffAttemptId -and
         (Get-Command Complete-AuraDraftHandoffInsert -ErrorAction SilentlyContinue)) {
       Complete-AuraDraftHandoffInsert -AttemptId $DraftHandoffAttemptId -Outcome not-inserted
+    }
+    if ($QueueCommandId -and
+        (Get-Command Complete-AuraTaskboardQueuePlacement -ErrorAction SilentlyContinue)) {
+      Complete-AuraTaskboardQueuePlacement `
+        -QueueCommandId $QueueCommandId -Outcome not-inserted
     }
     Write-AuraPromptShelfEvent -Code 'insert-dispatch-failed'
     Set-AuraPromptShelfStatusCopy `
@@ -2101,8 +2344,8 @@ function Draw-AuraPromptShelfListItem {
 }
 
 function Update-AuraPromptShelfCopy {
-  if ($null -ne $script:LauncherPromptShelfItem -and -not $script:LauncherPromptShelfItem.IsDisposed) {
-    $script:LauncherPromptShelfItem.Text = Get-AuraPromptShelfCopy -Name 'openPromptShelf' -Fallback 'Open Prompt Shelf'
+  if ($null -ne $script:LauncherActionQueueItem -and -not $script:LauncherActionQueueItem.IsDisposed) {
+    $script:LauncherActionQueueItem.Text = Get-AuraPromptShelfCopy -Name 'openActionQueue' -Fallback 'Open Action Queue'
   }
   if ($null -eq $script:PromptShelfForm -or $script:PromptShelfForm.IsDisposed) { return }
   $title = Get-AuraPromptShelfCopy -Name 'promptShelf' -Fallback 'Prompt Shelf'
@@ -2791,9 +3034,9 @@ function Dispose-AuraPromptShelf {
 
 function Set-AuraPromptShelfAvailability {
   param([Parameter(Mandatory = $true)][bool]$Enabled)
-  if ($null -ne $script:LauncherPromptShelfItem -and -not $script:LauncherPromptShelfItem.IsDisposed) {
-    $script:LauncherPromptShelfItem.Visible = $Enabled
-    $script:LauncherPromptShelfItem.Enabled = $Enabled
+  if ($null -ne $script:LauncherActionQueueItem -and -not $script:LauncherActionQueueItem.IsDisposed) {
+    $script:LauncherActionQueueItem.Visible = $Enabled
+    $script:LauncherActionQueueItem.Enabled = $Enabled
   }
   if (-not $Enabled) { Dispose-AuraPromptShelf }
   Send-AuraPromptShelfStudioChanged
