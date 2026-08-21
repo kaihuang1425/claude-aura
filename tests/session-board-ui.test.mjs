@@ -357,6 +357,9 @@ test("session-board exposes translated status semantics, safe messages, and full
     active: "sessionBoardLaneActive",
     open: "sessionBoardLaneOpen",
     past: "sessionBoardLanePast",
+    activeNone: "sessionBoardActiveNone",
+    activeOne: "sessionBoardActiveOne",
+    activeOther: "sessionBoardActiveOther",
     emptyActive: "sessionBoardEmptyActive",
     emptyOpen: "sessionBoardEmptyOpen",
     emptyPast: "sessionBoardEmptyPast",
@@ -735,6 +738,64 @@ test("session-board CSS keeps every lane scrollable, responsive, and accessible"
   assert.match(styles, /\[data-response-state="unknown"\]/u);
   assert.match(styles, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?animation(?:-duration)?:\s*(?:none|0\.01ms)/u);
   assert.match(styles, /@media\s*\(forced-colors:\s*active\)[\s\S]*?(?:CanvasText|Highlight|ButtonText)/u);
+});
+
+test("Work Hub names its active-session count instead of showing a bare total", async () => {
+  const { api } = await loadSessionBoardApi();
+  assert.equal(typeof api.formatActiveSessionCount, "function");
+  const copy = {
+    activeNone: "No active sessions",
+    activeOne: "1 active session",
+    activeOther: "{0} active sessions",
+  };
+  assert.equal(api.formatActiveSessionCount(0, copy), "No active sessions");
+  assert.equal(api.formatActiveSessionCount(1, copy), "1 active session");
+  assert.equal(api.formatActiveSessionCount(4, copy), "4 active sessions");
+  for (const invalid of [-1, 1.5, null, undefined, Number.NaN]) {
+    assert.equal(api.formatActiveSessionCount(invalid, copy), "No active sessions",
+      `A non-positive integer must read as none, not ${String(invalid)}`);
+  }
+
+  // sessionFixture lanes offset 0 as active and the rest as open/past, so a
+  // five-session board has exactly one active session. The indicator must name
+  // that one, never the five-session total it used to print.
+  const { document, root } = createSessionBoardDom();
+  const strings = {
+    sessionBoardActiveNone: "No active sessions",
+    sessionBoardActiveOne: "1 active session",
+    sessionBoardActiveOther: "{0} active sessions",
+  };
+  const board = await loadSessionBoardApi({
+    document,
+    window: { crypto: { randomUUID: () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+  });
+  const controller = board.api.createSessionBoard({
+    root,
+    rootDocument: document,
+    send: () => true,
+    t: (key) => strings[key] ?? `translated:${key}`,
+  });
+  assert.equal(controller.ensure(), true);
+  assert.equal(controller.receive({
+    type: "session-board-state",
+    version: 1,
+    requestId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    state: sessionFixture(5),
+  }), true);
+  const status = root.querySelector(".session-board-status");
+  assert.equal(status.dataset.status, "ready");
+  assert.equal(status.dataset.activeSessions, "1",
+    "The indicator must track the active lane, not the board total");
+  assert.equal(status.textContent, "1 active session");
+  assert.equal(status.getAttribute("aria-label"), null,
+    "Visible labelled text must not be overridden by an aria-label");
+});
+
+test("Work Hub indicator styling follows the active count", async () => {
+  const styles = await readRequired(sessionBoardStylesPath, "Session board styles");
+  const zeroRule = "[data-session-board-mode=\"compact\"] .session-board-status[data-active-sessions=\"0\"]::before";
+  assert(styles.includes(zeroRule),
+    "A board with no active session must not keep the success-coloured light");
 });
 
 runIfMain(import.meta.url);

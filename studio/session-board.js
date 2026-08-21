@@ -29,6 +29,9 @@
     active: "sessionBoardLaneActive",
     open: "sessionBoardLaneOpen",
     past: "sessionBoardLanePast",
+    activeNone: "sessionBoardActiveNone",
+    activeOne: "sessionBoardActiveOne",
+    activeOther: "sessionBoardActiveOther",
     emptyActive: "sessionBoardEmptyActive",
     emptyOpen: "sessionBoardEmptyOpen",
     emptyPast: "sessionBoardEmptyPast",
@@ -150,6 +153,15 @@
   const getSessionBoardCopy = (translate) => {
     const t = typeof translate === "function" ? translate : (key) => key;
     return Object.fromEntries(Object.entries(COPY_KEYS).map(([name, key]) => [name, t(key)]));
+  };
+
+  // The Work Hub indicator names what its light means. A bare total read as an
+  // active count even when most of it was past work, so label the active lane
+  // explicitly and let the light follow that same number.
+  const formatActiveSessionCount = (count, copy) => {
+    if (!Number.isInteger(count) || count <= 0) return copy.activeNone;
+    const template = count === 1 ? copy.activeOne : copy.activeOther;
+    return template.replace("{0}", String(count));
   };
 
   const getResponsePresentation = (candidate, translate) => {
@@ -393,10 +405,11 @@
       status.setAttribute("aria-live", "polite");
       status.dataset.status = statusName;
       const statusCopy = model.copy[statusName] ?? model.copy.ready;
+      const activeCount = model.lanes.find((lane) => lane.state === "active")?.count ?? 0;
+      status.dataset.activeSessions = String(activeCount);
       status.textContent = statusName === "ready"
-        ? String(model.lanes.reduce((total, lane) => total + lane.count, 0))
+        ? formatActiveSessionCount(activeCount, model.copy)
         : statusCopy;
-      status.setAttribute("aria-label", statusCopy);
       status.title = statusCopy;
       actions.append(refresh, info, disclosure);
       header.append(headingCopy, actions);
@@ -577,6 +590,7 @@
     normalizeSessionBoardState,
     buildSessionLanes,
     getSessionBoardCopy,
+    formatActiveSessionCount,
     getResponsePresentation,
     createSessionBoardMessage,
     normalizeSessionBoardHostResponse,

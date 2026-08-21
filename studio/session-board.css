@@ -431,6 +431,10 @@ body:has([data-session-board-mode="compact"]) {
   content: "";
 }
 
+[data-session-board-mode="compact"] .session-board-status[data-active-sessions="0"]::before {
+  background: color-mix(in srgb, var(--accent-ink, #fff) 42%, transparent);
+}
+
 [data-session-board-mode="compact"] .session-board-status[data-status="loading"] {
   width: 9px;
   min-width: 9px;
