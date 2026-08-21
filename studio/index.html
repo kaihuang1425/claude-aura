@@ -8,6 +8,8 @@
 <link id="studio-theme-icon" rel="icon" href="https://aura.assets/default/launcher-mark.png">
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="editor.css">
+<link rel="stylesheet" href="session-board.css?v=1">
+<link rel="stylesheet" href="pets.css?v=1">
 </head>
 <body>
 <div class="studio">
@@ -21,23 +23,37 @@
       </span>
       <span><strong>Claude Aura</strong><small data-i18n="railSubtitle">Studio</small></span>
     </div>
-    <a class="rail-item is-current" href="#themes" data-studio-view="themes" aria-current="page" data-i18n="navThemes">Themes</a>
-    <a class="rail-item" id="nav-editor" href="#editor" data-editor-i18n="navEditor" hidden>Theme editor</a>
-    <a class="rail-item" href="#prompt-shelf" data-studio-view="prompt-shelf" data-i18n="navPromptShelf">Prompt Shelf</a>
-    <a class="rail-item" href="#background" data-studio-view="background" data-i18n="navBackground">Personal wallpaper</a>
-    <a class="rail-item" href="#create" data-studio-view="create" data-i18n="navCreate">Create a theme</a>
-    <a class="rail-item" href="#settings" data-studio-view="settings" data-i18n="navSettings">Settings</a>
+    <div class="rail-main">
+    <div class="rail-group" data-rail-group="find-work">
+      <p class="rail-group-label" data-i18n="railFindWork">Find work</p>
+      <a class="rail-item is-current" href="#tasks" data-studio-view="tasks" aria-current="page"><span class="rail-item-label" data-i18n="navWorkHub">Work Hub</span></a>
+    </div>
+    <div class="rail-group" data-rail-group="customize">
+      <p class="rail-group-label" data-i18n="railCustomize">Customize</p>
+      <a class="rail-item" href="#themes" data-studio-view="themes" data-i18n="navThemes">Themes</a>
+      <a class="rail-item" id="nav-editor" href="#editor" data-editor-i18n="navEditor" hidden>Theme editor</a>
+      <a class="rail-item" href="#pets" data-studio-view="pets" data-i18n="petsTitle">Pets</a>
+      <a class="rail-item" href="#background" data-studio-view="background" data-i18n="navBackground">Personal wallpaper</a>
+    </div>
+    </div>
     <div class="rail-foot">
+      <a class="rail-item" href="#settings" data-studio-view="settings" data-i18n="navSettings">Settings</a>
       <button type="button" id="open-aura" class="ghost-button" data-i18n="auraWindow">Back to Claude Aura</button>
-      <button type="button" id="open-desktop" class="ghost-button" data-i18n="desktopApp">Desktop app</button>
     </div>
   </nav>
 
   <main class="content">
-    <section id="themes" class="studio-page is-current-page" data-studio-page="themes" aria-labelledby="themes-title">
+    <section id="tasks" class="studio-page session-board-page is-current-page" data-studio-page="tasks">
+      <div data-session-board-root data-session-board-mode="studio"></div>
+    </section>
+
+    <section id="themes" class="studio-page" data-studio-page="themes" aria-labelledby="themes-title" hidden inert>
       <p class="kicker" data-i18n="themesKicker">Appearance</p>
       <h1 id="themes-title" tabindex="-1" data-i18n="themesTitle">Choose a look</h1>
       <p class="lede" data-i18n="themesLede">Selection applies to Claude Aura and Studio immediately and is saved on this device.</p>
+      <div class="actions-row themes-page-actions">
+        <button type="button" class="ghost-button" data-open-studio-view="create" data-i18n="navCreate">Create a theme</button>
+      </div>
 
       <div id="built-in-authoring-banner" class="built-in-authoring-banner" role="status" hidden>
         <span class="built-in-authoring-mark" aria-hidden="true">
@@ -89,9 +105,9 @@
     <section id="prompt-shelf" class="studio-page prompt-shelf-page" data-studio-page="prompt-shelf" aria-labelledby="prompt-shelf-title" aria-busy="false" hidden inert>
       <header class="prompt-shelf-page-head">
         <div>
-          <p class="kicker" data-i18n="promptShelfKicker">Local prompt library</p>
-          <h2 id="prompt-shelf-title" tabindex="-1" data-i18n="promptShelfTitle">Prompt Shelf</h2>
-          <p class="lede" data-i18n="promptShelfLede">Organize drafts here, then insert one at the current Claude composer caret. Aura never sends it for you.</p>
+          <p class="kicker" data-i18n="promptShelfKicker">Reusable messages</p>
+          <h2 id="prompt-shelf-title" tabindex="-1" data-i18n="promptShelfTitle">Saved prompts</h2>
+          <p class="lede" data-i18n="promptShelfLede">Create reusable messages for task queues, or place one directly in the current Claude composer. Aura never sends it for you.</p>
         </div>
         <button type="button" id="prompt-shelf-new" class="primary-button" data-i18n="promptShelfNew">New draft</button>
       </header>
@@ -151,10 +167,6 @@
             </div>
           </div>
 
-          <div class="prompt-shelf-insert-row">
-            <p id="prompt-shelf-insert-help" class="help" data-i18n="promptShelfInsertHelp">Inserts at the current Claude composer caret. Nothing is sent.</p>
-            <button type="button" id="prompt-shelf-insert" class="primary-button" data-i18n="promptShelfInsert" aria-describedby="prompt-shelf-insert-help" disabled>Insert in Aura</button>
-          </div>
           <div class="prompt-shelf-status-row">
             <output id="prompt-shelf-status" class="prompt-shelf-status" role="status" aria-live="polite" aria-atomic="true"></output>
             <button type="button" id="prompt-shelf-refresh" class="ghost-button"
@@ -241,6 +253,27 @@
       <p class="help" data-i18n="createHelp">Your custom themes stay in Aura's user data folder and never modify Claude or the desktop app.</p>
     </section>
 
+    <section id="pets" class="studio-page pet-page" data-studio-page="pets" aria-labelledby="pets-title" aria-busy="true" hidden inert>
+      <header class="pet-page-head">
+        <div>
+          <h2 id="pets-title" tabindex="-1" data-i18n="petsTitle">Pets</h2>
+          <p class="lede" data-i18n="petsBody">Choose a built-in pet separately from whether it is shown. The companion applies this local choice when it is running.</p>
+        </div>
+        <div class="pet-actions">
+          <button type="button" id="pet-refresh" class="ghost-button" data-i18n="taskboardRefresh">Refresh</button>
+          <button type="button" id="pet-settings" class="ghost-button" data-i18n="openPetSettings">Open pet settings</button>
+          <button type="button" id="pet-show" class="ghost-button" disabled></button>
+          <button type="button" id="pet-hide" class="ghost-button" disabled></button>
+        </div>
+      </header>
+      <section class="pet-picker" aria-labelledby="pet-picker-title">
+        <h3 id="pet-picker-title" data-i18n="petsTitle">Pets</h3>
+        <div id="pet-selected-preview" class="pet-selected-preview" role="status" aria-live="polite" data-empty="true"></div>
+        <div id="pet-catalog" class="pet-catalog" role="list"></div>
+      </section>
+      <output id="pet-status" class="pet-status" role="status" aria-live="polite" aria-atomic="true"></output>
+    </section>
+
     <section id="settings" class="studio-page" data-studio-page="settings" aria-labelledby="settings-title" hidden inert>
       <p class="kicker" data-i18n="settingsKicker">Aura preferences</p>
       <h2 id="settings-title" tabindex="-1" data-i18n="settingsTitle">Settings</h2>
@@ -318,6 +351,18 @@
           <p class="settings-card-title" data-i18n="gettingStartedTitle">Getting started</p>
           <p data-i18n="gettingStartedBody">Open the welcome guide whenever you want a quick refresher.</p>
           <button type="button" id="open-welcome" class="ghost-button" data-i18n="openWelcome">Open welcome guide</button>
+        </div>
+
+        <div class="settings-card pet-settings-card">
+          <p class="settings-card-title" data-i18n="petsTitle">Pets</p>
+          <p data-i18n="petsBody">Import a pet, choose one, and adjust its size, motion, and pointer-follow settings.</p>
+          <button type="button" id="open-pet-settings" class="ghost-button" data-i18n="openPetSettings">Open pet settings</button>
+        </div>
+
+        <div class="settings-card prompt-shelf-settings-card">
+          <p class="settings-card-title" data-i18n="promptShelfTitle">Saved prompts</p>
+          <p data-i18n="promptShelfLede">Create reusable messages for task queues, or place one directly in the current Claude composer. Aura never sends it for you.</p>
+          <button type="button" id="settings-manage-prompts" class="ghost-button" data-open-studio-view="prompt-shelf" data-i18n="promptShelfTitle">Saved prompts</button>
         </div>
       </div>
     </section>
@@ -1311,7 +1356,7 @@
           </li>
         </ol>
 
-        <p class="welcome-launcher-note" data-i18n="welcomeLauncherNote">Click the Aura button to open Prompt Shelf, Studio, and other actions. Drag it to move it.</p>
+        <p class="welcome-launcher-note" data-i18n="welcomeLauncherNote">Click the Aura button to open Action Queue, Studio, and other actions. Drag it to move it.</p>
         <div class="dialog-actions welcome-actions">
           <output id="welcome-status" class="welcome-status" role="status" aria-live="polite"></output>
           <button type="button" id="welcome-later" class="ghost-button" data-i18n="welcomeLater">Skip</button>
@@ -1447,6 +1492,8 @@
 <script src="crop-math.js"></script>
 <script src="responsive-resolver.js"></script>
 <script src="editor.js"></script>
+<script src="session-board.js?v=1"></script>
+<script src="pets.js?v=1"></script>
 <script src="app.js"></script>
 </body>
 </html>

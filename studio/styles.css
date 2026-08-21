@@ -327,6 +327,7 @@ body {
 }
 
 .studio[data-editor-active="true"] .rail-brand > :not(.rail-mark),
+.studio[data-editor-active="true"] .rail-main,
 .studio[data-editor-active="true"] .rail-item,
 .studio[data-editor-active="true"] .rail-foot {
   display: none;
@@ -429,6 +430,31 @@ body {
 .rail-brand strong { display: block; font-size: 15px; letter-spacing: -0.01em; }
 .rail-brand small { color: var(--rail-ink-muted); font-size: 11.5px; }
 
+.rail-main {
+  display: grid;
+  min-height: 0;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.rail-group {
+  display: grid;
+  gap: 2px;
+}
+
+.rail-group-label {
+  margin: 0;
+  padding: 4px 16px 2px;
+  color: var(--rail-ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
 .rail-item {
   position: relative;
   display: flex;
@@ -440,6 +466,32 @@ body {
   text-decoration: none;
   font-weight: 500;
 }
+
+.rail-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-item-count {
+  display: inline-grid;
+  min-width: 20px;
+  min-height: 20px;
+  place-items: center;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--rail-ink-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.rail-item-count[hidden] { display: none; }
 
 .rail-item:hover { background: var(--rail-hover); color: var(--rail-ink); }
 .rail :focus-visible { outline-color: var(--rail-ink); }
@@ -467,6 +519,8 @@ body {
   margin-top: auto;
   padding: 8px 4px 0;
 }
+
+.rail-foot .rail-item { width: 100%; }
 
 .rail-foot .ghost-button { width: 100%; }
 
@@ -1051,19 +1105,6 @@ button:disabled {
 
 .prompt-shelf-order-actions { justify-content: flex-end; }
 
-.prompt-shelf-insert-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.prompt-shelf-insert-row .help { max-width: 52ch; margin: 0; }
-.prompt-shelf-insert-row .primary-button { flex: 0 0 auto; }
-
 .prompt-shelf-status {
   display: block;
   min-height: 1.5em;
@@ -1166,6 +1207,11 @@ fieldset.settings-card {
 }
 
 .getting-started-card .ghost-button { margin-top: auto; }
+.pet-settings-card {
+  display: flex;
+  flex-direction: column;
+}
+.pet-settings-card .ghost-button { margin-top: auto; }
 
 .language-options {
   display: flex;
@@ -1820,13 +1866,11 @@ fieldset.settings-card {
 @media (max-width: 760px) {
   .prompt-shelf-page-head,
   .prompt-shelf-editor-actions,
-  .prompt-shelf-insert-row,
   .prompt-shelf-status-row {
     align-items: stretch;
     flex-direction: column;
   }
-  .prompt-shelf-page-head > .primary-button,
-  .prompt-shelf-insert-row .primary-button { align-self: flex-start; }
+  .prompt-shelf-page-head > .primary-button { align-self: flex-start; }
   .prompt-shelf-workspace { grid-template-columns: minmax(0, 1fr); }
   .prompt-shelf-index,
   .prompt-shelf-editor { min-height: 0; }
@@ -1859,7 +1903,10 @@ fieldset.settings-card {
   .crop-controls input[type="range"] { margin-bottom: 8px; }
 }
 
-@media (max-width: 640px), (max-height: 430px) {
+/* Studio's native host enforces a 760px outer minimum. Its WebView viewport is
+   narrower than that, so this threshold makes the tight rail reachable in the
+   real minimum-width window instead of leaving it as dead browser-only CSS. */
+@media (max-width: 760px), (max-height: 430px) {
   .personal-wordmark-current {
     align-items: flex-start;
     flex-direction: column;
@@ -1893,6 +1940,14 @@ fieldset.settings-card {
   }
 
   .studio:not([data-editor-active="true"]) .rail-brand > :not(.rail-mark) {
+    display: none;
+  }
+
+  .studio:not([data-editor-active="true"]) .rail-main {
+    gap: 0;
+  }
+
+  .studio:not([data-editor-active="true"]) .rail-group-label {
     display: none;
   }
 
@@ -1936,9 +1991,44 @@ fieldset.settings-card {
     mask-size: contain;
   }
 
+  .studio:not([data-editor-active="true"]) .taskboard-side-route .rail-item-count {
+    position: absolute;
+    z-index: 3;
+    top: 2px;
+    right: 1px;
+    min-width: 16px;
+    min-height: 16px;
+    margin: 0;
+    padding: 0 3px;
+    border-color: var(--rail-bg);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 9px;
+  }
+
   .studio:not([data-editor-active="true"]) .rail-item[href="#themes"]::after {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linejoin='round' stroke-width='1.8'%3E%3Cpath d='M3.5 3.5h7v7h-7zM13.5 3.5h7v7h-7zM3.5 13.5h7v7h-7zM13.5 13.5h7v7h-7z'/%3E%3C/g%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-linejoin='round' stroke-width='1.8'%3E%3Cpath d='M3.5 3.5h7v7h-7zM13.5 3.5h7v7h-7zM3.5 13.5h7v7h-7zM13.5 13.5h7v7h-7z'/%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  .studio:not([data-editor-active="true"]) .rail-item[data-taskboard-destination="work-hub"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 11.5 12 4l8.5 7.5M5.5 10.5V20h13v-9.5M9 20v-6h6v6' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 11.5 12 4l8.5 7.5M5.5 10.5V20h13v-9.5M9 20v-6h6v6' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+  }
+
+  .studio:not([data-editor-active="true"]) .rail-item[data-taskboard-destination="attention"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5 21 20H3L12 3.5Zm0 5.2v5.7m0 3.1h.01' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5 21 20H3L12 3.5Zm0 5.2v5.7m0 3.1h.01' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+  }
+
+  .studio:not([data-editor-active="true"]) .rail-item[data-taskboard-destination="recent"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4.5 8V4.5H8M5.2 6.3A8.5 8.5 0 1 1 3.5 12M12 7.5V12l3 2' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4.5 8V4.5H8M5.2 6.3A8.5 8.5 0 1 1 3.5 12M12 7.5V12l3 2' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+  }
+
+  .studio:not([data-editor-active="true"]) .rail-item[data-taskboard-destination="projects"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 6h6l2 2h9v11h-17V6Z' fill='none' stroke='black' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 6h6l2 2h9v11h-17V6Z' fill='none' stroke='black' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
   }
 
   .studio:not([data-editor-active="true"]) #nav-editor::after {
@@ -1971,11 +2061,6 @@ fieldset.settings-card {
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M10 6 4 12l6 6M4.5 12H15M14 5h5v14h-5' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
   }
 
-  .studio:not([data-editor-active="true"]) #open-desktop::after {
-    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 4.5h17v12h-17zM8 20h8M12 16.5V20' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
-    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 4.5h17v12h-17zM8 20h8M12 16.5V20' fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.8'/%3E%3C/svg%3E");
-  }
-
   /* Disclose a tight-rail label by reopening the grid track, not by floating
      the selected link over the page heading. At very narrow CSS viewports the
      drawer yields space to content while keeping its resting 56px ribbon. */
@@ -2006,6 +2091,18 @@ fieldset.settings-card {
     line-height: 1.25;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .studio:not([data-editor-active="true"]) .taskboard-side-route:is(:hover, :focus-visible) .rail-item-count {
+    position: static;
+    min-width: 20px;
+    min-height: 20px;
+    margin-left: 8px;
+    padding: 0 6px;
+    border-color: var(--border-soft);
+    background: var(--surface-raised);
+    color: var(--ink-muted);
+    font-size: 10px;
   }
 
   .studio:not([data-editor-active="true"]) .rail-item.is-current:is(:hover, :focus-visible) {

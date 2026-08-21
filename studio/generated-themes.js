@@ -3933,8 +3933,8 @@ window.CLAUDE_AURA_THEMES = {
       "zoom": 3.507
     },
     "newChatLayout": {
-      "widthRatio": 0.76,
-      "offsetXRatio": -0.07,
+      "widthRatio": 0.64,
+      "offsetXRatio": 0,
       "offsetYRatio": 0
     },
     "artwork": null,

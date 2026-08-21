@@ -74,12 +74,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.14, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.12, "yRatio": -0.04, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 42, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.5, "xRatio": -0.16, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.95 } }
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 34, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 40, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.14, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.12, "yRatio": -0.04, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 42, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.5, "xRatio": -0.16, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.95 } }
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 34, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 40, "weight": 500, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } }
         }
       },
       "artwork": null,
@@ -163,12 +163,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 32, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.62, "xRatio": -0.06, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 37, "weight": 400, "italic": false, "letterSpacing": 0.035, "lineHeight": 1.16, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 34, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 40, "weight": 400, "italic": false, "letterSpacing": 0.035, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 32, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.62, "xRatio": -0.06, "yRatio": -0.02, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 37, "weight": 400, "italic": false, "letterSpacing": 0.035, "lineHeight": 1.16, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 34, "weight": 400, "italic": false, "letterSpacing": 0.03, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 40, "weight": 400, "italic": false, "letterSpacing": 0.035, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } }
         }
       },
       "artwork": null,
@@ -252,12 +252,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 38, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.8 } },
-          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 46, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.03, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 0.85 } }
+          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 34, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 40, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 38, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.05, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.8 } },
-          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 46, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.03, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 0.85 } }
+          "standard": { "font": "rounded-sans", "color": "accent", "fontSize": 34, "weight": 700, "italic": false, "letterSpacing": -0.02, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "rounded-sans", "color": "accent", "fontSize": 40, "weight": 700, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } }
         }
       },
       "artwork": null,
@@ -326,12 +326,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 36, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": -0.03, "yRatio": -0.03, "decoration": "glow", "mark": { "source": "native", "scale": 0.75 } },
-          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 42, "weight": 400, "italic": false, "letterSpacing": 0.025, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.66, "xRatio": -0.05, "yRatio": -0.01, "decoration": "glow", "mark": { "source": "native", "scale": 0.8 } }
+          "standard": { "font": "humanist-sans", "color": "primary", "fontSize": 34, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "glow", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "humanist-sans", "color": "primary", "fontSize": 40, "weight": 400, "italic": false, "letterSpacing": 0.025, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "glow", "mark": { "source": "native", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "humanist-sans", "color": "accent", "fontSize": 36, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.7, "xRatio": -0.03, "yRatio": -0.03, "decoration": "glow", "mark": { "source": "native", "scale": 0.75 } },
-          "wide": { "font": "humanist-sans", "color": "accent", "fontSize": 42, "weight": 400, "italic": false, "letterSpacing": 0.025, "lineHeight": 1.08, "align": "center", "maxWidthRatio": 0.66, "xRatio": -0.05, "yRatio": -0.01, "decoration": "glow", "mark": { "source": "native", "scale": 0.8 } }
+          "standard": { "font": "humanist-sans", "color": "accent", "fontSize": 34, "weight": 400, "italic": false, "letterSpacing": 0.02, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "glow", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "humanist-sans", "color": "accent", "fontSize": 40, "weight": 400, "italic": false, "letterSpacing": 0.025, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "glow", "mark": { "source": "native", "scale": 1 } }
         }
       },
       "artwork": null,
@@ -376,12 +376,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "hairline", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "hairline", "mark": { "source": "compact", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.2, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.1, "yRatio": -0.02, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.17, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.14, "yRatio": -0.01, "decoration": "hairline", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "editorial-serif", "color": "primary", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": -0.01, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "hairline", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "primary", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": -0.015, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "hairline", "mark": { "source": "compact", "scale": 1 } }
         }
       },
       "artwork": null,
@@ -446,12 +446,12 @@
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 37, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 44, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 36, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.58, "xRatio": -0.1, "yRatio": -0.03, "decoration": "none", "mark": { "source": "compact", "scale": 0.85 } },
-          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 43, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.54, "xRatio": -0.14, "yRatio": -0.01, "decoration": "none", "mark": { "source": "compact", "scale": 0.9 } }
+          "standard": { "font": "editorial-serif", "color": "accent", "fontSize": 34, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } },
+          "wide": { "font": "editorial-serif", "color": "accent", "fontSize": 40, "weight": 600, "italic": false, "letterSpacing": 0.005, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "compact", "scale": 1 } }
         }
       },
       "artwork": null,
@@ -533,18 +533,18 @@
       "studioPreview": "assets/studio-previews/masters/korean-idol.png",
       "studioPreviewFrame": { "x": 83.47, "y": 11.82, "zoom": 3.507 },
       "newChatLayout": {
-        "widthRatio": 0.76,
-        "offsetXRatio": -0.07,
+        "widthRatio": 0.64,
+        "offsetXRatio": 0,
         "offsetYRatio": 0
       },
       "newChatGreetingStyle": {
         "light": {
-          "standard": { "font": "system-sans", "color": "primary", "fontSize": 34, "weight": 650, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.12, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.9 } },
-          "wide": { "font": "system-sans", "color": "primary", "fontSize": 40, "weight": 650, "italic": false, "letterSpacing": -0.03, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.16, "yRatio": -0.01, "decoration": "none", "mark": { "source": "native", "scale": 0.95 } }
+          "standard": { "font": "system-sans", "color": "primary", "fontSize": 34, "weight": 650, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "system-sans", "color": "primary", "fontSize": 40, "weight": 650, "italic": false, "letterSpacing": -0.03, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } }
         },
         "dark": {
-          "standard": { "font": "system-sans", "color": "primary", "fontSize": 34, "weight": 650, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.12, "align": "start", "maxWidthRatio": 0.6, "xRatio": -0.12, "yRatio": -0.02, "decoration": "none", "mark": { "source": "native", "scale": 0.9 } },
-          "wide": { "font": "system-sans", "color": "primary", "fontSize": 40, "weight": 650, "italic": false, "letterSpacing": -0.03, "lineHeight": 1.08, "align": "start", "maxWidthRatio": 0.56, "xRatio": -0.16, "yRatio": -0.01, "decoration": "none", "mark": { "source": "native", "scale": 0.95 } }
+          "standard": { "font": "system-sans", "color": "primary", "fontSize": 34, "weight": 650, "italic": false, "letterSpacing": -0.025, "lineHeight": 1.15, "align": "center", "maxWidthRatio": 0.72, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } },
+          "wide": { "font": "system-sans", "color": "primary", "fontSize": 40, "weight": 650, "italic": false, "letterSpacing": -0.03, "lineHeight": 1.12, "align": "center", "maxWidthRatio": 0.68, "xRatio": 0, "yRatio": 0, "decoration": "none", "mark": { "source": "native", "scale": 1 } }
         }
       },
       "artwork": null,

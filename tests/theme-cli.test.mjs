@@ -44,7 +44,7 @@ import {
   zipEntryNames,
 } from "./support/context.mjs";
 
-test("theme-cli activates Code styling only through the explicit source experiment", async () => {
+test("theme-cli includes fail-closed Code styling in normal installed payloads", async () => {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "aura-code-style-cli-"));
   const configPath = path.join(temporary, "config.json");
   const cliPath = path.join(PROJECT_ROOT, "scripts", "theme-cli.mjs");
@@ -61,7 +61,7 @@ test("theme-cli activates Code styling only through the explicit source experime
       configPath,
       "--payload",
     ]);
-    assert.doesNotMatch(normal, /data-aura-code/);
+    assert.match(normal, /data-aura-code/);
 
     const experimental = run(process.execPath, [
       cliPath,
@@ -82,20 +82,19 @@ test("theme-cli activates Code styling only through the explicit source experime
   }
 });
 
-test("the Windows source host forwards Code styling only through its explicit switch", async () => {
+test("the Windows host enables Code styling for installed and source launches", async () => {
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const install = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
   assert.match(ui, /\[switch\]\$ExperimentalCodeStyle/);
   assert.match(ui, /\[switch\]\$ExperimentalCodeStart/);
-  assert.match(ui,
-    /\$script:ExperimentalCodeStyle\s*=\s*\[bool\]\$ExperimentalCodeStyle[\s\S]{0,900}?\.git[\s\S]{0,900}?ReparsePoint/);
-  assert.match(ui,
-    /if\s*\(\$ExperimentalCodeStart -and -not \$script:ExperimentalCodeStyle\)[\s\S]{0,240}?throw/);
+  assert.match(ui, /\$script:ExperimentalCodeStyle\s*=\s*\$true/);
+  assert.doesNotMatch(ui,
+    /Experimental Code styling is available only from the Claude Aura source checkout/);
   assert.match(ui,
     /\$ClaudeInitialUrl\s*=\s*if\s*\(\$ExperimentalCodeStart\)\s*\{\s*'https:\/\/claude\.ai\/code'\s*\}\s*else\s*\{\s*'https:\/\/claude\.ai\/'\s*\}/);
-  assert.equal((ui.match(/CoreWebView2\.Navigate\(\$ClaudeInitialUrl\)/g) ?? []).length, 2,
-    "both bounded prepaint completion paths must use the fixed experimental start URL");
+  assert.equal((ui.match(/CoreWebView2\.Navigate\(\(Get-AuraWebTabInitialUrl -Fallback \$ClaudeInitialUrl\)\)/g) ?? []).length, 2,
+    "both bounded prepaint completion paths must use the validated active-tab URL with the fixed start URL as fallback");
   assert.equal((ui.match(/'--experimental-code-style'/g) ?? []).length, 3,
     "set, snapshot restore, and initial payload builds must all preserve the source experiment");
   assert.match(start,
@@ -103,8 +102,8 @@ test("the Windows source host forwards Code styling only through its explicit sw
   assert.match(start,
     /\[switch\]\$ExperimentalCodeStart[\s\S]*?\$auraArguments\.ExperimentalCodeStart\s*=\s*\$true/);
   assert.doesNotMatch(install,
-    /ExperimentalCodeStyle|ExperimentalCodeStart|experimental-code-style/,
-    "installed and release launch paths must not activate the source experiment");
+    /ExperimentalCodeStyle|ExperimentalCodeStart/,
+    "the installer must not need a private launch switch for production Code styling");
 });
 
 test("theme-cli exports strict built-in and valid user terminal pairs to explicit paths", async () => {

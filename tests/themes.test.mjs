@@ -205,18 +205,13 @@ test("registry exposes exactly Default plus the seven requested themes", async (
     },
   ]);
   const koreanIdol = themes.find((theme) => theme.name === "korean-idol");
-  for (const theme of themes.filter((candidate) => candidate.name !== "korean-idol")) {
+  for (const theme of themes) {
     assert.deepEqual(theme.newChatLayout, {
       widthRatio: 0.64,
       offsetXRatio: 0,
       offsetYRatio: 0,
-    }, `${theme.name} did not inherit the larger shared prompt recipe`);
+    }, `${theme.name} drifted from the shared Default/Gemini prompt frame`);
   }
-  assert.deepEqual(koreanIdol.newChatLayout, {
-    widthRatio: 0.76,
-    offsetXRatio: -0.07,
-    offsetYRatio: 0,
-  });
   assert.deepEqual(koreanIdol.artworkLayers, [
     {
       path: "assets/theme-art/korean-idol/light-scene.webp",

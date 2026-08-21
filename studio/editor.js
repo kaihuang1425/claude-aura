@@ -1599,7 +1599,7 @@
     const tr = (key) => STRINGS[normalizedLocale]?.[key] ?? translate?.(key) ?? STRINGS.en?.[key] ?? key;
     const editor = document.getElementById("editor");
     const navEditor = document.getElementById("nav-editor");
-    const ordinarySections = ["themes", "prompt-shelf", "background", "create", "settings"]
+  const ordinarySections = ["themes", "pets", "prompt-shelf", "background", "create", "settings"]
       .map((id) => document.getElementById(id));
     const ordinaryLinks = [...document.querySelectorAll(".rail-item")].filter((link) => link !== navEditor);
     const studioShell = document.querySelector(".studio");

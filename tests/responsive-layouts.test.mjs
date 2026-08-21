@@ -364,7 +364,8 @@ test("Studio responsive CRUD is explicit, sparse, persistent, and budget-safe", 
       breakpoints: [1470],
     };
     assert.deepEqual(document.responsiveLayouts, expectedTrackAfterCrud);
-    assert.equal(result.state.feedback.valid, true);
+    assert.equal(result.state.feedback.valid, true,
+      `Responsive layout feedback failed: ${JSON.stringify(result.state.feedback)}`);
     assert(result.state.feedback.budget.chromeBytes <= result.state.feedback.budget.chromeLimit);
     assert(result.state.feedback.budget.embeddedArtworkBytes <= result.state.feedback.budget.embeddedArtworkLimit);
     const settings = readPayloadSettings(result.payload);

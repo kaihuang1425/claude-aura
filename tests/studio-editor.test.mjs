@@ -52,6 +52,33 @@ import {
   studioGreetingPreferenceError,
   studioGreetingState,
 } from "../scripts/theme-core/studio.mjs";
+
+test("Studio synchronizes opted-in Desktop presentation state and reloads saved definitions", async () => {
+  const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
+  const functionSource = (name) => {
+    const start = ui.indexOf(`function ${name}`);
+    assert(start >= 0, `Aura UI is missing ${name}`);
+    const end = ui.indexOf("\nfunction ", start + 1);
+    return ui.slice(start, end < 0 ? ui.length : end);
+  };
+  const sync = functionSource("Sync-AuraUiDesktopPresentation");
+  for (const contract of [
+    /desktop-presentation\.json/,
+    /Get-AuraUiSelectedThemeName/,
+    /Get-AuraUiAppearance/,
+    /Get-AuraUiEnabled/,
+    /Sync-AuraDesktopPresentationState/,
+  ]) assert.match(sync, contract);
+  assert.match(functionSource("Invoke-AuraUiSelectTheme"),
+    /Sync-AuraUiDesktopPresentation\s+-SignalMode sync/);
+  assert.match(functionSource("Invoke-AuraUiSetAppearance"),
+    /Sync-AuraUiDesktopPresentation\s+-SignalMode sync/);
+  assert.match(functionSource("Invoke-AuraUiSetEnabled"),
+    /Sync-AuraUiDesktopPresentation\s+-SignalMode sync/);
+  assert.match(functionSource("Complete-AuraUiStudioEditorAction"),
+    /\$succeeded[\s\S]+\$Result\.ThemesChanged[\s\S]+Sync-AuraUiDesktopPresentation\s+-SignalMode reload/);
+});
+
 test("Windows uses a content-only WebView2 window with Aura Studio and tray controls", async () => {
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
@@ -515,8 +542,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       && mainPrepaintStartIndex > mainNavigationPendingIndex,
   "Aura must apply the WebView2 color preference before its gated claude.ai navigation");
   assert.match(ui,
-    /function Complete-AuraUiInitialNavigationAfterPrepaint[\s\S]{0,500}?CoreWebView2\.Navigate\(\$ClaudeInitialUrl\)/,
-    "The gated initial navigation must use the audited fixed Claude target after passive prepaint registration");
+    /function Complete-AuraUiInitialNavigationAfterPrepaint[\s\S]{0,500}?CoreWebView2\.Navigate\(\(Get-AuraWebTabInitialUrl -Fallback \$ClaudeInitialUrl\)\)/,
+    "The gated initial navigation must use the validated active-tab target after passive prepaint registration");
   assert.match(ui, /\.add_WebMessageReceived\(\s*\{/);
   assert.match(ui, /PostWebMessageAsJson\s*\(/);
   assert.match(ui, /\[switch\]\$OpenStudio/,
@@ -596,7 +623,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "set-card-preview-crop",
     "set-enabled",
     "open-aura",
-    "open-desktop",
+    "open-pet-settings",
+    "pet-plugin-read",
+    "pet-plugin-select",
+    "pet-plugin-show",
+    "pet-plugin-hide",
+    "pet-plugin-open-settings",
     "import-theme",
     "export-theme-package",
     "export-terminal-themes",
@@ -636,6 +668,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "prompt-shelf-delete",
     "prompt-shelf-insert",
     "prompt-shelf-confirm-checked",
+    "taskboard-read",
+    "taskboard-mutate",
   ];
   const studioMessageTypesMatch = ui.match(/\$script:StudioMessageTypes\s*=\s*@\(([\s\S]*?)\)/);
   assert(studioMessageTypesMatch, "The Studio host message allowlist is missing");
@@ -648,8 +682,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert(studioPageMessageTypesMatch, "The Studio page message allowlist is missing");
   const studioPageMessageTypes = [...studioPageMessageTypesMatch[1].matchAll(/["']([^"']+)["']/g)]
     .map((match) => match[1]);
-  assert.deepEqual(studioPageMessageTypes, expectedStudioMessageTypes,
-    "The Studio page and host must allow the same exact action set");
+  assert.deepEqual(studioPageMessageTypes, [
+    ...expectedStudioMessageTypes.slice(0, -2),
+    "session-board-read",
+    "session-board-open",
+    ...expectedStudioMessageTypes.slice(-2),
+    "taskboard-close",
+  ], "The page must add only the body-free session board actions and Desktop-panel close action");
+  assert(!studioMessageTypes.includes("taskboard-close"),
+    "Ordinary Studio must not accept the Desktop-panel-only close action");
   const expectedPropertiesMatch = ui.match(/\$expectedProperties\s*=\s*@\(switch -CaseSensitive \(\$type\) \{([\s\S]*?)\}\)/);
   assert(expectedPropertiesMatch, "Studio exact message-shape switch is missing");
   assert.match(expectedPropertiesMatch[1], /default\s*\{\s*['"]type['"];\s*break\s*\}/,
@@ -689,7 +730,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "prompt-shelf-update": ["type", "version", "requestId", "session", "revision", "commandEpoch", "id", "text"],
     "prompt-shelf-move": ["type", "version", "requestId", "session", "revision", "commandEpoch", "id", "direction"],
     "prompt-shelf-delete": ["type", "version", "requestId", "session", "revision", "commandEpoch", "id"],
-    "prompt-shelf-insert": ["type", "version", "requestId", "session", "revision", "commandEpoch", "id"],
+    "prompt-shelf-insert": [
+      "type", "version", "requestId", "session", "revision", "commandEpoch", "id",
+      "queueCommandId", "draftFingerprint",
+    ],
     "prompt-shelf-confirm-checked": ["type", "version", "requestId", "session", "revision", "commandEpoch"],
   };
   for (const [action, expectedShape] of Object.entries(expectedPromptShelfMessageShapes)) {
@@ -713,13 +757,17 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioApp,
     /const message = \{\s*type,\s*version: promptShelfBridgeVersion,\s*requestId,\s*session: promptShelf\.session,\s*revision: promptShelf\.revision,\s*commandEpoch: promptShelf\.commandEpoch,\s*\.\.\.fields,\s*\}/,
     "Every Prompt Shelf command must share the version/session/revision/epoch envelope");
-  const promptShelfInsertHandler = studioApp.match(
-    /promptShelfInsert\.addEventListener\("click",[\s\S]*?\n\s*\}\);/)?.[0] ?? "";
-  assert.match(promptShelfInsertHandler,
-    /sendPromptShelfAction\("prompt-shelf-insert", "insert", \{ id: selected\.id \}\)/,
-    "The Studio Insert action must send only the selected host-owned draft id");
-  assert(!promptShelfInsertHandler.includes("text"),
-    "The Studio Insert action must not copy prompt text into its command envelope");
+  assert.doesNotMatch(studioHtml, /id="prompt-shelf-insert"/,
+    "Saved prompts must not retain a standalone insertion action outside the Action Queue");
+  assert.doesNotMatch(studioApp, /promptShelfInsert\.addEventListener/,
+    "Saved prompts must not retain the retired insertion click handler");
+  const actionQueueInsertBridge = studioApp.match(
+    /insertSavedPrompt:\s*\(id, queueCommandId, draftFingerprint\)\s*=>\s*sendPromptShelfAction\([\s\S]{0,260}?\{ id, queueCommandId, draftFingerprint \},[\s\S]{0,120}?\)/,
+  )?.[0] ?? "";
+  assert(actionQueueInsertBridge,
+    "Action Queue placement must bind the saved prompt to its command and draft fingerprint");
+  assert(!actionQueueInsertBridge.includes("text"),
+    "Action Queue placement must not copy prompt text into its command envelope");
   assert.match(studioApp, /promptShelfText\.readOnly = pending/,
     "A pending Shelf mutation must freeze the editor until its result is reconciled");
   assert.match(studioApp,
@@ -890,10 +938,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui, /\$script:MirrorProbeTask = \$script:WebView\.CoreWebView2\.ExecuteScriptAsync\(\$probe\)/,
     "Mirror geometry must come from a non-blocking layout probe of the live page");
   assert.match(ui,
-    /\$core\.add_SourceChanged\(\{[\s\S]{0,200}?Request-AuraUiContextMirror[\s\S]{0,360}?}\)/,
+    /\$core\.add_SourceChanged\(\{[\s\S]{0,320}?Request-AuraUiContextMirror[\s\S]{0,480}?}\)/,
     "Aura source changes must refresh the active editor's private mirror");
   assert.match(ui,
-    /\$core\.add_HistoryChanged\(\{[\s\S]{0,200}?Request-AuraUiContextMirror[\s\S]{0,360}?}\)/,
+    /\$core\.add_HistoryChanged\(\{[\s\S]{0,320}?Request-AuraUiContextMirror[\s\S]{0,480}?}\)/,
     "Aura SPA history changes must refresh the active editor's private mirror");
   assert.match(ui,
     /function Request-AuraUiContextMirror[\s\S]{0,420}?MirrorSemanticRetries\s*=\s*3[\s\S]{0,120}?MirrorSemanticPreviousContext/,
@@ -1851,7 +1899,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   );
   const tightShell = cssAtRuleBlock(
     studioCss,
-    "@media (max-width: 640px), (max-height: 430px)",
+    "@media (max-width: 760px), (max-height: 430px)",
   );
   assert.match(compactShell,
     /\.studio:not\(\[data-editor-active="true"\]\)\s*\{[^}]*grid-template-columns:\s*184px\s+minmax\(0,\s*1fr\)/,
@@ -1871,6 +1919,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(tightShell,
     /\.rail-item,[\s\S]{0,160}?\.rail-foot \.ghost-button\s*\{[^}]*width:\s*44px[^}]*min-width:\s*44px[^}]*min-height:\s*44px/,
     "Tight rail links and buttons must retain 44px pointer targets");
+  assert.match(studioCss,
+    /\.rail-main\s*\{[^}]*overflow-x:\s*hidden[^}]*overflow-y:\s*auto/,
+    "The collapsed Side Panel must keep vertical navigation without exposing a horizontal scrollbar");
   const tightDisclosureRule = tightShell.match(
     /\.rail-item:is\(:hover,\s*:focus-visible\),[\s\S]{0,220}?\.rail-foot \.ghost-button:is\(:hover,\s*:focus-visible\)\s*\{([^}]*)\}/,
   )?.[1] ?? "";
@@ -1887,9 +1938,10 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "A widened tight-rail label must remain bounded by the reflowed rail instead of covering Studio content");
   }
   const railActions = [...(studioHtml.match(/<nav class="rail"[\s\S]*?<\/nav>/)?.[0] ?? "")
-    .matchAll(/<(?:a|button)\b[^>]*class="[^"]*(?:rail-item|ghost-button)[^"]*"[^>]*>/g)]
+    .matchAll(/<(a|button)\b[^>]*class="[^"]*(?:rail-item|ghost-button)[^"]*"[^>]*>[\s\S]*?<\/\1>/g)]
     .map((match) => match[0]);
-  assert(railActions.length >= 8, "Studio must retain every ordinary rail action in tight mode");
+  assert(railActions.length >= 7,
+    "Studio must retain Work Hub, customization, settings, and back actions in tight mode");
   for (const action of railActions) {
     assert(/\bdata-(?:editor-)?i18n="[^"]+"/.test(action),
       "A tight rail action must reveal its localized DOM label, not CSS-authored copy");
@@ -1967,10 +2019,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "Full-window artwork must remain free to continue behind the translucent sidebar");
   assert.match(studioApp, /send\(\{\s*type:\s*"set-image"\s*\}\)/,
     "The Studio page must let the host choose image paths");
-  for (const action of ["set-theme", "set-appearance", "set-image", "clear-image", "set-enabled", "open-aura", "open-desktop"]) {
+  for (const action of ["set-theme", "set-appearance", "set-image", "clear-image", "set-enabled", "open-aura"]) {
     assert(new RegExp(`type:\\s*"${action}"`).test(studioApp),
       `Studio must retain the ${action} capability removed from the main toolbar`);
   }
+  assert.doesNotMatch(studioHtml, /id="open-desktop"/,
+    "Studio must not present stock Claude Desktop as the primary Aura return path");
+  assert.doesNotMatch(studioApp, /type:\s*"open-desktop"/,
+    "Studio must not expose a bridge that bypasses the themed Web Aura window");
   assert.match(studioApp, /\{\s*type:\s*"set-image-framing"\s*,\s*\.\.\.saved\s*\}/,
     "The Studio page must persist background framing without supplying a path");
   assert.match(studioApp, /\{\s*type:\s*"set-card-preview-crop"\s*,\s*theme:/,
@@ -2038,8 +2094,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(studioApp, /Object\.hasOwn\(themes,\s*incomingTheme\.name\)\s*\?\s*themes\[incomingTheme\.name\]\s*:\s*null/,
     "Studio must treat valid ids such as constructor as own theme keys, not inherited object properties");
   assert.match(studioHtml,
-    /class="rail-item is-current"[^>]*data-studio-view="themes"[^>]*aria-current="page"/,
-    "Studio must expose the current navigation destination semantically");
+    /class="rail-item is-current"[^>]*data-studio-view="tasks"[^>]*aria-current="page"/,
+    "A fresh Studio must expose Work Hub as the current navigation destination semantically");
   assert.match(studioApp, /removeAttribute\("aria-current"\)/);
   assert.match(studioApp, /setAttribute\("aria-current",\s*"page"\)/);
   const studioViewRouter = studioApp.slice(
@@ -5005,6 +5061,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /Get-AuraUiNavigationCompletionDisposition[\s\S]{0,700}?if\s*\(\$navigationDisposition\s+-eq\s+['"]Ignore['"]\)\s*\{[\s\S]{0,260}?return/,
     "A stale completion must return before it can change the loading cover");
   const newWindowDisposition = powershellFunction("Get-AuraUiNewWindowDisposition");
+  assert.match(newWindowDisposition, /return\s+['"]CodeTab['"]/,
+    "The exact user-initiated Code entry route must stay inside a themed Aura tab");
   assert.match(newWindowDisposition, /return\s+['"]Popup['"]/,
     "Claude and sign-in windows must retain real popup semantics");
   assert(!ui.includes("$script:WebView.CoreWebView2.Navigate($uri.AbsoluteUri)"),
@@ -5012,6 +5070,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /if\s*\(\$newWindowDisposition\s+-eq\s+['"]Popup['"]\)\s*\{[\s\S]{0,360}?return\s*\}[\s\S]{0,120}?\$eventArgs\.Handled\s*=\s*\$true/,
     "The popup branch must return while Handled is still false so window.opener remains valid");
+  assert.match(ui,
+    /if\s*\(\$newWindowDisposition\s+-eq\s+['"]CodeTab['"]\)\s*\{[\s\S]{0,160}?\$eventArgs\.Handled\s*=\s*\$true[\s\S]{0,220}?Request-AuraUiNewWebTab -Url 'https:\/\/claude\.ai\/code'[\s\S]{0,180}?\$sender\.Navigate\('https:\/\/claude\.ai\/code'\)/,
+    "A user-initiated Code entry must use an Aura tab with a same-view themed fallback");
   assert.match(ui, /elseif\s*\(\$script:PageReady\)/,
     "A theme-injection failure over a ready page must not show the opaque cover");
   assert.match(ui, /\$script:PendingApply/,
@@ -5246,6 +5307,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  Invoke-Expression $definition.Extent.Text",
       "}",
       "if((Get-AuraUiNewWindowDisposition -Value 'https://claude.ai/login') -cne 'Popup'){throw 'Claude popup lost its opener semantics'}",
+      "if((Get-AuraUiNewWindowDisposition -Value 'https://claude.ai/code' -IsUserInitiated $true) -cne 'CodeTab'){throw 'Exact user-initiated Code entry escaped Aura tabs'}",
+      "if((Get-AuraUiNewWindowDisposition -Value 'https://claude.ai/code') -cne 'Popup'){throw 'Non-user Code popup lost its opener semantics'}",
+      "if((Get-AuraUiNewWindowDisposition -Value 'https://claude.ai/code?session=private' -IsUserInitiated $true) -cne 'Popup'){throw 'Parameterized Code popup was intercepted too broadly'}",
       "if((Get-AuraUiNewWindowDisposition -Value 'https://accounts.google.com/o/oauth2/v2/auth') -cne 'Popup'){throw 'OAuth popup lost its opener semantics'}",
       "if((Get-AuraUiNewWindowDisposition -Value 'https://example.com/help') -cne 'External'){throw 'External HTTPS window was not separated'}",
       "if((Get-AuraUiNewWindowDisposition -Value 'file:///C:/Windows/win.ini') -cne 'Block'){throw 'Unsafe popup scheme was not blocked'}",
@@ -5393,6 +5457,8 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Set-AuraUiPreferredColorScheme { param([string]$Appearance,[bool]$Enabled);$script:Scheme=\"$Appearance/$Enabled\" }",
       "function Apply-AuraUiTheme { $script:ApplyCount++ }",
       "function Send-AuraUiStudioState { $script:SendCount++ }",
+      "function Sync-AuraUiDesktopPresentation { param([string]$SignalMode) }",
+      "function Update-AuraUiSessionBoardPresentation {}",
       "$script:Enabled=$false;$script:ApplyCount=0;$script:SendCount=0",
       "Invoke-AuraUiSetAppearance -Appearance dark",
       "if(($script:Options -join '/') -cne '--appearance/system'){throw 'Original look persisted a forced appearance'}",
@@ -5725,13 +5791,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "function Assert-Rejected { param([scriptblock]$Operation,[string]$Label);$rejected=$false;try{&$Operation|Out-Null}catch{$rejected=$true};if(-not $rejected){throw \"Studio accepted $Label\"} }",
       "Add-Type -AssemblyName System.Windows.Forms",
       "$StudioLocaleIds=@('en','hi','es','fr','id','ja','ko','pt-BR','de','it','vi','pl','tr','zh-CN','zh-HKTW')",
-      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','open-desktop','import-theme','export-theme-package','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','enable-responsive-layouts','mutate-responsive-layout','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
+      "$script:StudioMessageTypes=@('get-state','set-theme','set-appearance','set-locale','complete-studio-introduction','set-image','clear-image','set-avatar','clear-avatar','set-avatar-framing','set-personal-wordmark','clear-personal-wordmark','set-personal-wordmark-framing','set-image-framing','set-card-preview-crop','set-enabled','open-aura','import-theme','export-theme-package','export-terminal-themes','create-theme-copy','begin-theme-edit','set-theme-token','set-theme-layer','enable-responsive-layouts','mutate-responsive-layout','apply-theme-patch','pick-theme-layer-image','pick-theme-launcher-mark','pick-sidebar-identity-mark','pick-instant-prompt-icon','remove-theme-layer','move-theme-layer','undo-theme-edit','redo-theme-edit','save-theme-edit','discard-theme-edit','delete-user-theme','set-greeting-phrases','reset-greeting','set-aura-preview','set-aura-topmost','refresh-aura-mirror','prompt-shelf-read','prompt-shelf-create','prompt-shelf-update','prompt-shelf-move','prompt-shelf-delete','prompt-shelf-insert','prompt-shelf-confirm-checked')",
       "$script:PromptShelfMaxTextLength=8000",
       "$session='12345678-1234-4abc-8def-1234567890ab'",
       "$script:PersonalWordmarkSession=$session",
       "$script:PersonalWordmarkRevision=[long]0",
       "$requestId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'",
       "$shelfSession='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'",
+      "$queueCommandId='cccccccc-cccc-4ccc-8ccc-cccccccccccc'",
+      "$draftFingerprint=('d' * 64)",
       "$itemId='0123456789abcdef0123456789abcdef'",
       "$source='https://aura.studio/index.html?locale=en&view=prompt-shelf'",
       "$script:StudioForm=[pscustomobject]@{IsDisposed=$false;Visible=$true}",
@@ -5775,7 +5843,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "  [ordered]@{type='prompt-shelf-update';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId;text='Revised draft'},",
       "  [ordered]@{type='prompt-shelf-move';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId;direction='up'},",
       "  [ordered]@{type='prompt-shelf-delete';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId},",
-      "  [ordered]@{type='prompt-shelf-insert';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId},",
+      "  [ordered]@{type='prompt-shelf-insert';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId;queueCommandId=$queueCommandId;draftFingerprint=$draftFingerprint},",
       "  [ordered]@{type='prompt-shelf-confirm-checked';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0}",
       ")",
       "foreach($message in $valid){$parsed=Get-AuraUiStudioMessage -Json ($message|ConvertTo-Json -Compress -Depth 8) -Source $source;if($parsed.type -cne $message.type){throw 'Valid editor message changed type'}}",
@@ -5802,8 +5870,12 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($promptRead|ConvertTo-Json -Compress) -Source 'https://aura.studio/index.html?locale=xx' } 'a Prompt Shelf message with an unsupported URL locale'",
       "$unsupportedPromptRead=[ordered]@{type='prompt-shelf-read';version=2;requestId=$requestId}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($unsupportedPromptRead|ConvertTo-Json -Compress) -Source $source } 'an unsupported Prompt Shelf bridge version'",
-      "$insertWithBody=[ordered]@{type='prompt-shelf-insert';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId;text='private'}",
+      "$insertWithBody=[ordered]@{type='prompt-shelf-insert';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId;queueCommandId=$queueCommandId;draftFingerprint=$draftFingerprint;text='private'}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($insertWithBody|ConvertTo-Json -Compress) -Source $source } 'a Prompt Shelf insertion carrying draft text'",
+      "$insertWithoutQueueBinding=[ordered]@{type='prompt-shelf-insert';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($insertWithoutQueueBinding|ConvertTo-Json -Compress) -Source $source } 'a Prompt Shelf insertion without its queue binding'",
+      "$insertWithBadFingerprint=[ordered]@{type='prompt-shelf-insert';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id=$itemId;queueCommandId=$queueCommandId;draftFingerprint=('D' * 64)}",
+      "Assert-Rejected { Get-AuraUiStudioMessage -Json ($insertWithBadFingerprint|ConvertTo-Json -Compress) -Source $source } 'a Prompt Shelf insertion with a noncanonical draft fingerprint'",
       "$badPromptItem=[ordered]@{type='prompt-shelf-delete';version=1;requestId=$requestId;session=$shelfSession;revision=0;commandEpoch=0;id='ABC'}",
       "Assert-Rejected { Get-AuraUiStudioMessage -Json ($badPromptItem|ConvertTo-Json -Compress) -Source $source } 'an invalid Prompt Shelf item id'",
       "$badPromptRevision=[ordered]@{type='prompt-shelf-move';version=1;requestId=$requestId;session=$shelfSession;revision=0.5;commandEpoch=0;id=$itemId;direction='up'}",
@@ -5931,21 +6003,29 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   const uiCopy = await readHostCopy();
 
   assert.match(studioHtml,
-    /class="rail-item" href="#prompt-shelf" data-studio-view="prompt-shelf" data-i18n="navPromptShelf"/,
-    "Studio must expose Prompt Shelf as a permanent ordinary-shell destination");
+    /class="rail-item is-current" href="#tasks" data-studio-view="tasks" aria-current="page"[^>]*>[\s\S]{0,120}?data-i18n="navWorkHub"/,
+    "Studio must expose the session-only Work Hub as its Find work destination");
+  assert.doesNotMatch(studioHtml,
+    /data-taskboard-destination=/,
+    "The Work Hub rail must not restore todo-list destinations");
+  assert.doesNotMatch(studioHtml,
+    /class="rail-item" href="#prompt-shelf" data-studio-view="prompt-shelf"/,
+    "Prompt Shelf must remain a compatibility route, not a top-level destination");
   assert.match(studioHtml,
     /<section id="prompt-shelf" class="studio-page prompt-shelf-page" data-studio-page="prompt-shelf" aria-labelledby="prompt-shelf-title" aria-busy="false" hidden inert>/,
     "The Prompt Shelf destination must start as an inactive, labelled, host-busy-aware page");
   for (const id of [
     "prompt-shelf-new", "prompt-shelf-search", "prompt-shelf-count", "prompt-shelf-list",
     "prompt-shelf-text", "prompt-shelf-save", "prompt-shelf-cancel", "prompt-shelf-move-up",
-    "prompt-shelf-move-down", "prompt-shelf-delete", "prompt-shelf-insert",
+    "prompt-shelf-move-down", "prompt-shelf-delete",
     "prompt-shelf-refresh", "prompt-shelf-retry-action", "prompt-shelf-confirm-checked",
     "prompt-shelf-status", "prompt-shelf-item-template",
     "prompt-shelf-delete-dialog", "prompt-shelf-delete-confirm", "prompt-shelf-delete-cancel",
   ]) {
     assert(studioHtml.includes(`id="${id}"`), `Studio Prompt Shelf is missing ${id}`);
   }
+  assert.doesNotMatch(studioHtml, /id="prompt-shelf-insert"/,
+    "Saved prompts must not expose the retired standalone insertion action");
   assert.match(studioHtml,
     /<textarea id="prompt-shelf-text"[^>]+maxlength="8000"[^>]+aria-describedby="prompt-shelf-character-count prompt-shelf-status"/,
     "Prompt editing must keep its storage limit and announced count/status relationships");
@@ -5959,16 +6039,18 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
     /<section id="([^"]+)"[^>]*data-studio-page="([^"]+)"/g,
   )].map((match) => [match[1], match[2]]);
   assert.deepEqual(ordinaryPageEntries, [
+    ["tasks", "tasks"],
     ["themes", "themes"],
     ["prompt-shelf", "prompt-shelf"],
     ["background", "background"],
     ["create", "create"],
+    ["pets", "pets"],
     ["settings", "settings"],
-  ], "Studio must expose exactly five matching ordinary page IDs and route IDs");
+  ], "Studio must expose exactly seven matching ordinary page IDs and route IDs");
   assert.match(studioHtml,
-    /<section id="themes" class="studio-page is-current-page"[^>]*>[\s\S]{0,180}?<h1 id="themes-title" tabindex="-1"/,
-    "Themes must be the only initially active page and expose a programmatic focus target");
-  for (const view of ["prompt-shelf", "background", "create", "settings"]) {
+    /<section id="tasks" class="studio-page session-board-page is-current-page"[^>]*>[\s\S]{0,120}?<div data-session-board-root data-session-board-mode="studio"><\/div>/,
+    "Work Hub must be the only initially active page and expose the session-board mount");
+  for (const view of ["themes", "pets", "prompt-shelf", "background", "create", "settings"]) {
     const pageTag = studioHtml.match(new RegExp(`<section id="${view}"[^>]*>`))?.[0] ?? "";
     assert.match(pageTag, /\shidden(?:\s|>)/, `${view} must be initially hidden`);
     assert.match(pageTag, /\sinert(?:\s|>)/, `${view} must be initially inert`);
@@ -6042,7 +6124,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
       `${id} must remain an explicit keyboard-operable action`);
   }
   assert.match(studioEditor,
-    /const ordinarySections = \["themes", "prompt-shelf", "background", "create", "settings"\]\s*\.map\(\(id\) => document\.getElementById\(id\)\)/,
+    /const ordinarySections = \["themes", "pets", "prompt-shelf", "background", "create", "settings"\]\s*\.map\(\(id\) => document\.getElementById\(id\)\)/,
     "Prompt Shelf must leave the ordinary shell with the other sections during an editor session");
   assert.match(studioEditor,
     /const showEditor = \(\) => \{[\s\S]{0,120}?for \(const section of ordinarySections\) section\.hidden = true/,
@@ -6178,7 +6260,7 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   )?.[1] ?? "";
   assert.deepEqual(
     [...ordinaryViewDeclaration.matchAll(/"([^"]+)"/g)].map((match) => match[1]),
-    ["themes", "prompt-shelf", "background", "create", "settings"],
+    ["tasks", "themes", "pets", "prompt-shelf", "background", "create", "settings"],
     "Studio must keep one closed allowlist for host-preserved ordinary pages",
   );
   assert.match(studioApp,
@@ -7087,6 +7169,35 @@ test("Windows keeps the startup cover through DOMContentLoaded", () => {
     Buffer.from(regression, "utf16le").toString("base64"),
   ]);
   assert.match(output, /Startup cover DOM handoff: PASS/);
+});
+
+test("Studio routes to body-free pet controls and the installed companion settings", async () => {
+  const [html, app, ui, pets] = await Promise.all([
+    fs.readFile(path.join(PROJECT_ROOT, "studio", "index.html"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "studio", "app.js"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8"),
+    fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-pets.ps1"), "utf8"),
+  ]);
+  assert.match(html, /id="open-pet-settings"[^>]*data-i18n="openPetSettings"/);
+  assert.match(html, /data-i18n="petsBody"/);
+  assert.match(html, /data-studio-view="pets"/);
+  assert.match(app,
+    /openPetSettingsButton\.addEventListener\("click"[\s\S]{0,260}?activateStudioView\("pets"/);
+  assert.match(app, /"pet-plugin-read", "pet-plugin-select", "pet-plugin-show", "pet-plugin-hide"/);
+  assert.match(app, /data\.type === "pet-settings-result"/);
+  assert.match(ui, /function Invoke-AuraUiOpenPetSettings/);
+  assert.match(ui, /\. \(Join-Path \$PSScriptRoot 'aura-pets\.ps1'\)/);
+  assert.match(pets, /Join-Path \$env:LOCALAPPDATA 'PetStatus\\app'/);
+  assert.match(pets, /Join-Path \$expectedRoot 'PetStatus\.exe'/);
+  assert.match(pets, /function Start-AuraPetManager/);
+  assert.match(pets, /\$startInfo\.UseShellExecute = \$false/);
+  assert.match(pets, /\$startInfo\.CreateNoWindow = \$true/);
+  assert.match(pets, /\[Diagnostics\.Process\]::Start\(\$startInfo\)/);
+  assert.match(ui, /'open-pet-settings'/);
+  assert.doesNotMatch(pets.slice(
+    pets.indexOf("function Get-AuraPetManagerExecutable"),
+    pets.indexOf("function New-AuraPetIntentRevision"),
+  ), /ArgumentList|Invoke-Expression|cmd\.exe/);
 });
 
 runIfMain(import.meta.url);

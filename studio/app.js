@@ -7,7 +7,8 @@
     "get-state", "set-theme", "set-appearance", "set-locale", "complete-studio-introduction",
     "set-image", "clear-image", "set-avatar", "clear-avatar", "set-avatar-framing",
     "set-personal-wordmark", "clear-personal-wordmark", "set-personal-wordmark-framing",
-    "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-desktop",
+    "set-image-framing", "set-card-preview-crop", "set-enabled", "open-aura", "open-pet-settings",
+    "pet-plugin-read", "pet-plugin-select", "pet-plugin-show", "pet-plugin-hide", "pet-plugin-open-settings",
     "import-theme", "export-theme-package", "export-terminal-themes", "create-theme-copy", "begin-theme-edit", "set-theme-token", "set-theme-layer",
     "enable-responsive-layouts", "mutate-responsive-layout",
     "set-loading-screen", "pick-loading-screen-mark", "pick-loading-screen-artwork", "preview-theme-loading-screen",
@@ -19,6 +20,8 @@
     "prompt-shelf-read", "prompt-shelf-create", "prompt-shelf-update",
     "prompt-shelf-move", "prompt-shelf-delete", "prompt-shelf-insert",
     "prompt-shelf-confirm-checked",
+    "session-board-read", "session-board-open",
+    "taskboard-read", "taskboard-mutate", "taskboard-close",
   ]);
   const studioPageMessageTypes = new Set(STUDIO_PAGE_MESSAGE_TYPES);
 
@@ -29,8 +32,13 @@
   const STRINGS = Object.fromEntries(
     Object.entries(window.CLAUDE_AURA_STRINGS ?? {}).map(([tag, copy]) => [tag, copy?.shell ?? {}]),
   );
+  const EDITOR_STRINGS = Object.fromEntries(
+    Object.entries(window.CLAUDE_AURA_STRINGS ?? {}).map(([tag, copy]) => [tag, copy?.editor ?? {}]),
+  );
 
   const params = new URLSearchParams(window.location.search);
+  const desktopTaskboardSurface = params.get("surface") === "desktop";
+  if (desktopTaskboardSurface) document.documentElement.dataset.taskboardSurface = "desktop";
   const normalizeLocale = (value) => {
     if (typeof value !== "string") return "en";
     const tag = value.trim().replaceAll("_", "-");
@@ -46,7 +54,7 @@
     "en", "hi", "es", "fr", "id", "ja", "ko", "pt-BR", "de", "it", "vi", "pl", "tr", "zh-CN", "zh-HKTW",
   ]);
   const ordinaryStudioViews = Object.freeze([
-    "themes", "prompt-shelf", "background", "create", "settings",
+    "tasks", "themes", "pets", "prompt-shelf", "background", "create", "settings",
   ]);
   const ordinaryStudioViewSet = new Set(ordinaryStudioViews);
   const rawLocale = params.get("locale") || navigator.language || "en";
@@ -57,6 +65,8 @@
   const resolvedLocale = normalizeLocale(rawLocale);
   const locale = supportedLocales.has(resolvedLocale) ? resolvedLocale : "en";
   const t = (key) => STRINGS[locale]?.[key] ?? STRINGS.en?.[key] ?? key;
+  const petT = (key) => STRINGS[locale]?.[key] ?? EDITOR_STRINGS[locale]?.[key]
+    ?? STRINGS.en?.[key] ?? EDITOR_STRINGS.en?.[key] ?? key;
   document.documentElement.lang = locale === "zh-HKTW"
     ? "zh-Hant-TW"
     : locale === "zh-CN" ? "zh-Hans-CN" : locale;
@@ -91,6 +101,7 @@
   const welcomeDialog = document.getElementById("welcome-dialog");
   const welcomeThemeMark = document.getElementById("welcome-theme-mark");
   const openWelcomeButton = document.getElementById("open-welcome");
+  const openPetSettingsButton = document.getElementById("open-pet-settings");
   const welcomeClose = document.getElementById("welcome-close");
   const welcomeLater = document.getElementById("welcome-later");
   const welcomeTryTheme = document.getElementById("welcome-try-theme");
@@ -148,8 +159,6 @@
   const promptShelfMoveUp = document.getElementById("prompt-shelf-move-up");
   const promptShelfMoveDown = document.getElementById("prompt-shelf-move-down");
   const promptShelfDelete = document.getElementById("prompt-shelf-delete");
-  const promptShelfInsert = document.getElementById("prompt-shelf-insert");
-  const promptShelfInsertHelp = document.getElementById("prompt-shelf-insert-help");
   const promptShelfStatus = document.getElementById("prompt-shelf-status");
   const promptShelfRefresh = document.getElementById("prompt-shelf-refresh");
   const promptShelfRetryAction = document.getElementById("prompt-shelf-retry-action");
@@ -164,6 +173,7 @@
   ]));
   const ordinaryStudioRailLinks = [...document.querySelectorAll("[data-studio-view]")]
     .filter((link) => ordinaryStudioViewSet.has(link.dataset.studioView));
+  const studioViewActions = [...document.querySelectorAll("[data-open-studio-view]")];
   const cropInputs = {
     x: document.getElementById("crop-x"),
     y: document.getElementById("crop-y"),
@@ -281,6 +291,9 @@
   let editorController = null;
   let activeStudioView = null;
   let activateStudioView = () => false;
+  let sessionBoardController = null;
+  let taskboardController = null;
+  let petsController = null;
   const studioViewScrollPositions = new Map();
   let editorStudioStyle = null;
   let editorStudioThemeId = null;
@@ -288,7 +301,9 @@
   let editorLauncherMarkUrl = null;
   let requestedThemeMarkUrl = "";
   const promptShelfUuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+  const promptShelfTargetPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[458][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
   const promptShelfIdPattern = /^[a-f0-9]{32}$/;
+  const promptShelfFingerprintPattern = /^[a-f0-9]{64}$/;
   const promptShelfBridgeVersion = 1;
   const promptShelf = {
     session: null,
@@ -300,6 +315,7 @@
     loaded: false,
     persistenceAvailable: true,
     insertionAvailable: false,
+    localTargetId: null,
     insertState: "idle",
     pending: null,
     pendingTimer: null,
@@ -308,11 +324,14 @@
     readFailed: false,
     readRetrying: false,
     conflict: false,
+    queueAfterRefresh: null,
     focusAfterRefresh: null,
     statusKey: "promptShelfStatusLoading",
     statusTone: "busy",
   };
   let renderPromptShelf = () => {};
+  let requestPromptShelfState = () => false;
+  let sendPromptShelfAction = () => false;
 
   const effectiveStudioMode = () => (!state.enabled || state.appearance === "system")
     ? (studioColorScheme?.matches ? "dark" : "light")
@@ -727,6 +746,7 @@
     for (const themeId of cardFrames.keys()) layoutCardCrop(themeId);
     editorController?.refreshCardPreview?.();
     renderPromptShelf();
+    taskboardController?.refresh?.();
   };
 
   // ── HOST BRIDGE (WO-05 / WO-07 wire the other side in aura-ui.ps1) ──────
@@ -1195,6 +1215,47 @@
     return true;
   };
 
+  sessionBoardController = window.CLAUDE_AURA_SESSION_BOARD?.createSessionBoard?.({
+    root: document.querySelector('[data-session-board-root][data-session-board-mode="studio"]'),
+    send,
+    t,
+  }) ?? null;
+  taskboardController = window.CLAUDE_AURA_TASKBOARD?.create?.({
+    rootDocument: document,
+    send,
+    t,
+    locale,
+    desktopSurface: desktopTaskboardSurface,
+    openStudioView: desktopTaskboardSurface ? null : (view) => activateStudioView(view, {
+      updateHistory: true,
+      focusPage: true,
+      restoreScroll: false,
+    }),
+    getSavedPrompts: () => promptShelf.items,
+    savedPromptsLoaded: () => promptShelf.loaded,
+    getCurrentTarget: () => ({
+      id: promptShelf.localTargetId,
+      insertionAvailable: promptShelf.insertionAvailable,
+    }),
+    ensureSavedPrompts: () => requestPromptShelfState(),
+    createSavedPrompt: (text, queueAfterRefresh) => sendPromptShelfAction(
+      "prompt-shelf-create",
+      "create",
+      { text },
+      { queueAfterRefresh },
+    ),
+    insertSavedPrompt: (id, queueCommandId, draftFingerprint) => sendPromptShelfAction(
+      "prompt-shelf-insert",
+      "insert",
+      { id, queueCommandId, draftFingerprint },
+    ),
+  }) ?? null;
+  petsController = window.CLAUDE_AURA_PETS?.create?.({
+    rootDocument: document,
+    send,
+    t: petT,
+  }) ?? null;
+
   const promptShelfFormat = (key, ...values) => values.reduce(
     (copy, value, index) => copy.replaceAll(`{${index}}`, String(value)),
     t(key),
@@ -1285,6 +1346,7 @@
     promptShelf.statusKey = key;
     promptShelf.statusTone = tone;
     renderPromptShelf();
+    taskboardController?.refresh?.();
   };
   const announcePromptShelfStatus = (key, tone = "ok") => {
     promptShelf.statusKey = key;
@@ -1318,14 +1380,6 @@
     const dirty = promptShelfIsDirty();
     const textValid = promptShelfTextIsValid(promptShelfText.value);
     const searching = Boolean(promptShelfSearch.value.trim());
-    const insertionReady = Boolean(
-      selected
-      && state.enabled
-      && promptShelf.insertionAvailable
-      && promptShelf.insertState === "idle"
-      && !dirty
-      && !pending);
-
     promptShelfSection.setAttribute(
       "aria-busy",
       String(pending || promptShelf.readRequests.size > 0),
@@ -1346,7 +1400,6 @@
       || promptShelf.items.indexOf(selected) >= promptShelf.items.length - 1;
     promptShelfDelete.disabled = !promptShelf.loaded || pending
       || !promptShelf.persistenceAvailable || !selected;
-    promptShelfInsert.disabled = !insertionReady;
     promptShelfRefresh.hidden = !promptShelf.readFailed && !promptShelf.readRetrying;
     const insertionPending = promptShelf.pending?.action === "insert";
     promptShelfRetryAction.hidden = !promptShelf.pending?.recoveryVisible || insertionPending;
@@ -1359,18 +1412,6 @@
     );
     promptShelfConfirmChecked.hidden = promptShelf.insertState !== "uncertain";
     promptShelfConfirmChecked.disabled = pending || promptShelf.insertState !== "uncertain";
-    let insertHelpKey = "promptShelfInsertHelp";
-    if (!state.enabled) insertHelpKey = "promptShelfInsertUnavailable";
-    else if (!promptShelf.insertionAvailable) insertHelpKey = "promptShelfStatusInsertUnavailable";
-    else if (promptShelf.insertState === "uncertain") {
-      insertHelpKey = "promptShelfStatusInsertUncertain";
-    } else if (promptShelf.insertState === "busy") {
-      insertHelpKey = "promptShelfStatusInsertBusy";
-    } else if (dirty) {
-      insertHelpKey = "promptShelfStatusFinishEditing";
-    }
-    promptShelfInsertHelp.textContent = t(insertHelpKey);
-
     promptShelfEditorTitle.textContent = selected
       ? promptShelfFormat("promptShelfEditorSelectedTitle",
         promptShelf.items.indexOf(selected) + 1)
@@ -1409,7 +1450,7 @@
     promptShelfNoResults.hidden = promptShelf.items.length === 0 || filtered.length > 0;
   };
 
-  const requestPromptShelfState = () => {
+  requestPromptShelfState = () => {
     if (!bridge || promptShelf.readRequests.size > 0) return false;
     const requestId = newPromptShelfRequestId();
     if (!requestId) {
@@ -1430,13 +1471,17 @@
       if (!promptShelf.readRequests.delete(requestId)) return;
       promptShelf.readTimer = null;
       promptShelf.readFailed = true;
+      if (promptShelf.queueAfterRefresh) {
+        promptShelf.queueAfterRefresh = null;
+        taskboardController?.cancelDraftCreation?.();
+      }
       setPromptShelfStatus("statusWelcomeRetry", "error");
     }, 5000);
     renderPromptShelf();
     return true;
   };
 
-  const sendPromptShelfAction = (type, action, fields = {}) => {
+  sendPromptShelfAction = (type, action, fields = {}, metadata = {}) => {
     if (promptShelf.pending || !promptShelfUuidPattern.test(promptShelf.session ?? "")) return false;
     const requestId = newPromptShelfRequestId();
     if (!requestId) {
@@ -1461,6 +1506,7 @@
       type,
       action,
       message: Object.freeze({ ...message }),
+      metadata: Object.freeze({ ...metadata }),
       stalled: false,
       recoveryVisible: false,
     };
@@ -1520,7 +1566,7 @@
     if (!data || typeof data !== "object" || Array.isArray(data)
         || !promptShelfHasExactKeys(data, [
           "type", "version", "requestId", "session", "revision", "commandEpoch",
-          "persistenceAvailable", "insertionAvailable", "insertState", "items",
+          "persistenceAvailable", "insertionAvailable", "localTargetId", "insertState", "items",
         ])
         || data.version !== promptShelfBridgeVersion
         || !promptShelf.readRequests.has(data.requestId)
@@ -1529,18 +1575,20 @@
         || !Number.isSafeInteger(data.commandEpoch) || data.commandEpoch < 0
         || typeof data.persistenceAvailable !== "boolean"
         || typeof data.insertionAvailable !== "boolean"
+        || !(data.localTargetId === null || promptShelfTargetPattern.test(data.localTargetId))
         || !["idle", "busy", "uncertain"].includes(data.insertState)
         || !Array.isArray(data.items) || data.items.length > 50) return false;
     const ids = new Set();
     const items = [];
     for (const item of data.items) {
       if (!item || typeof item !== "object" || Array.isArray(item)
-          || Object.keys(item).length !== 2
+          || Object.keys(item).length !== 3
           || !promptShelfIdPattern.test(item.id)
           || ids.has(item.id)
+          || !(item.fingerprint === null || promptShelfFingerprintPattern.test(item.fingerprint))
           || !promptShelfTextIsValid(item.text)) return false;
       ids.add(item.id);
-      items.push(Object.freeze({ id: item.id, text: item.text }));
+      items.push(Object.freeze({ id: item.id, text: item.text, fingerprint: item.fingerprint }));
     }
 
     clearPromptShelfReads();
@@ -1560,6 +1608,7 @@
     promptShelf.conflict = promptShelf.conflict || incomingConflict;
     promptShelf.persistenceAvailable = data.persistenceAvailable;
     promptShelf.insertionAvailable = data.insertionAvailable;
+    promptShelf.localTargetId = data.localTargetId;
     promptShelf.insertState = data.insertState;
 
     const selected = items.find((item) => item.id === priorSelectedId) ?? null;
@@ -1600,6 +1649,15 @@
       promptShelf.statusTone = "ok";
     }
     renderPromptShelf();
+    taskboardController?.refresh?.();
+    const queueAfterRefresh = promptShelf.queueAfterRefresh;
+    if (queueAfterRefresh && items.some((item) => item.id === queueAfterRefresh.itemId)) {
+      promptShelf.queueAfterRefresh = null;
+      if (!taskboardController?.queueCreatedDraft?.(
+        queueAfterRefresh.itemId,
+        queueAfterRefresh.metadata,
+      )) taskboardController?.cancelDraftCreation?.();
+    }
     const focusTarget = promptShelf.focusAfterRefresh;
     promptShelf.focusAfterRefresh = null;
     if (focusTarget && window.location.hash === "#prompt-shelf") {
@@ -1646,6 +1704,7 @@
     }
 
     const action = promptShelf.pending.action;
+    const pendingMetadata = promptShelf.pending.metadata;
     clearPromptShelfPending();
     promptShelf.revision = data.revision;
     promptShelf.commandEpoch = data.commandEpoch;
@@ -1670,6 +1729,12 @@
         confirm: "promptShelfStatusChecked",
       };
       setPromptShelfStatus(successKeys[action] ?? "promptShelfStatusReady");
+      if (action === "create" && data.itemId && pendingMetadata?.queueAfterRefresh) {
+        promptShelf.queueAfterRefresh = Object.freeze({
+          itemId: data.itemId,
+          metadata: pendingMetadata.queueAfterRefresh,
+        });
+      }
     } else {
       const errorKeys = {
         stale: "promptShelfStatusStale",
@@ -1687,6 +1752,9 @@
       if (data.code === "uncertain") promptShelf.insertState = "uncertain";
       if (data.code === "stale" && promptShelfIsDirty()) promptShelf.conflict = true;
       setPromptShelfStatus(errorKeys[data.code] ?? "promptShelfStatusActionFailed", "error");
+      if (action === "create" && pendingMetadata?.queueAfterRefresh) {
+        taskboardController?.cancelDraftCreation?.();
+      }
     }
     promptShelf.focusAfterRefresh = action === "delete" && data.ok
       ? { kind: "new" }
@@ -1697,7 +1765,11 @@
           : data.itemId
             ? { kind: "item", id: data.itemId }
             : { kind: "editor" };
-    requestPromptShelfState();
+    const promptShelfRefreshStarted = requestPromptShelfState();
+    if (!promptShelfRefreshStarted && promptShelf.queueAfterRefresh) {
+      promptShelf.queueAfterRefresh = null;
+      taskboardController?.cancelDraftCreation?.();
+    }
     return true;
   };
 
@@ -1843,6 +1915,13 @@
     requestWelcomeDestination("later");
   });
   openWelcomeButton.addEventListener("click", () => openWelcome({ opener: openWelcomeButton }));
+  openPetSettingsButton.addEventListener("click", () => {
+    activateStudioView("pets", {
+      updateHistory: true,
+      focusPage: true,
+      restoreScroll: false,
+    });
+  });
   welcomeClose.addEventListener("click", () => requestWelcomeDestination("later"));
   welcomeLater.addEventListener("click", () => requestWelcomeDestination("later"));
   welcomeTryTheme.addEventListener("click", () => requestWelcomeDestination("try-theme"));
@@ -1850,6 +1929,14 @@
   if (bridge) {
     bridge.addEventListener("message", (event) => {
       const data = event.data ?? {};
+      if (sessionBoardController?.receive?.(data)) return;
+      if (taskboardController?.receive?.(data)) return;
+      if (petsController?.receive?.(data)) return;
+      if (data.type === "pet-settings-result") {
+        setStatus(t(data.ok === true ? "statusReady" : "petSettingsUnavailable"),
+          data.ok === true ? "ok" : "error");
+        return;
+      }
       if (data.type === "prompt-shelf-state") {
         receivePromptShelfState(data);
         return;
@@ -2180,12 +2267,6 @@
       promptShelfDelete.focus();
     }
   });
-  promptShelfInsert.addEventListener("click", () => {
-    const selected = selectedPromptShelfItem();
-    if (selected) {
-      sendPromptShelfAction("prompt-shelf-insert", "insert", { id: selected.id });
-    }
-  });
   promptShelfConfirmChecked.addEventListener("click", () => {
     sendPromptShelfAction("prompt-shelf-confirm-checked", "confirm");
   });
@@ -2305,7 +2386,6 @@
     });
   }
   document.getElementById("open-aura").addEventListener("click", () => send({ type: "open-aura" }));
-  document.getElementById("open-desktop").addEventListener("click", () => send({ type: "open-desktop" }));
   document.getElementById("start-theme").addEventListener("click", () => {
     setStatus(t("statusApplying"), "busy");
     send({ type: "create-theme-copy", theme: "default" });
@@ -2568,11 +2648,12 @@
 
   const studioViewFromHash = (hash) => {
     const view = typeof hash === "string" && hash.startsWith("#") ? hash.slice(1) : "";
-    return ordinaryStudioViewSet.has(view) ? view : "themes";
+    return ordinaryStudioViewSet.has(view) ? view : "tasks";
   };
   const reflectStudioViewNavigation = (view) => {
     for (const link of ordinaryStudioRailLinks) {
-      const selected = link.dataset.studioView === view;
+      const selected = link.dataset.studioView === view
+        && (view !== "tasks" || link.dataset.taskboardDestination === "work-hub");
       link.classList.toggle("is-current", selected);
       if (selected) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
@@ -2586,7 +2667,7 @@
       restoreScroll = true,
     } = {},
   ) => {
-    const nextView = ordinaryStudioViewSet.has(view) ? view : "themes";
+    const nextView = ordinaryStudioViewSet.has(view) ? view : "tasks";
     const nextPage = ordinaryStudioPages.get(nextView);
     if (!nextPage || !content || editorController?.isActive?.()) return false;
     if (activeStudioView && activeStudioView !== nextView) {
@@ -2622,6 +2703,11 @@
       : 0;
     content.scrollTo({ top: scrollTop, left: 0, behavior: "auto" });
     if (nextView === "prompt-shelf") ensurePromptShelfState();
+    if (nextView === "tasks") {
+      sessionBoardController?.ensure?.();
+      taskboardController?.ensure?.();
+    }
+    if (nextView === "pets") petsController?.ensure?.();
     if (focusPage) {
       requestAnimationFrame(() => {
         const heading = nextPage.querySelector("h1[tabindex='-1'], h2[tabindex='-1']");
@@ -2649,11 +2735,16 @@
   };
   for (const link of ordinaryStudioRailLinks) {
     link.addEventListener("click", (event) => {
-      if (activateStudioView(link.dataset.studioView, {
+      const activated = activateStudioView(link.dataset.studioView, {
         updateHistory: true,
         focusPage: true,
         restoreScroll: false,
-      })) event.preventDefault();
+      });
+      if (activated && link.dataset.studioView === "tasks"
+          && link.dataset.taskboardDestination) {
+        taskboardController?.openDestination?.(link.dataset.taskboardDestination);
+      }
+      if (activated) event.preventDefault();
     });
     link.addEventListener("keydown", (event) => {
       if (focusAdjacentStudioView(event, link)) return;
@@ -2661,6 +2752,13 @@
       event.preventDefault();
       link.click();
     });
+  }
+  for (const action of studioViewActions) {
+    action.addEventListener("click", () => activateStudioView(action.dataset.openStudioView, {
+      updateHistory: true,
+      focusPage: true,
+      restoreScroll: false,
+    }));
   }
   window.addEventListener("hashchange", () => {
     if (editorController?.isActive?.() || window.location.hash === "#editor") return;

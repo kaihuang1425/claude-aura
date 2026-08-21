@@ -252,7 +252,7 @@ Commands:
   scaffold <id>
   qa <id>
   init --config <path> [--locale <tag>] [--user-themes <path>] [--payload]
-      [--experimental-code-style] (source checkout only)
+      [--experimental-code-style] (legacy compatibility flag)
   show --config <path> [--json] [--locale <tag>] [--user-themes <path>]
   validate <kit-folder>
   validate [--config <path>] [--theme <name>] [--locale <tag>]
@@ -272,7 +272,7 @@ Commands:
        --studio-preview-y <0..100> --studio-preview-zoom <1..6>]
       [--reduce-motion true|false] [--enabled true|false]
       [--user-themes <path>] [--payload]
-      [--experimental-code-style] (source checkout only)
+      [--experimental-code-style] (legacy compatibility flag)
 `);
 }
 
@@ -282,27 +282,20 @@ if (!["export-terminal", "export-terminal-pair", "package-export", "package-extr
 const userThemesDir = options["user-themes"] === undefined ? null : path.resolve(options["user-themes"]);
 const emitWarning = (message) => process.stderr.write(`Warning: ${message}\n`);
 const runtimeOptions = { userThemesDir, onWarning: emitWarning };
-const experimentalCodeStyle = options["experimental-code-style"] === true;
-if (experimentalCodeStyle) {
+const legacyExperimentalCodeStyle = options["experimental-code-style"] === true;
+if (legacyExperimentalCodeStyle) {
   if (!["init", "set"].includes(command)) {
     throw new Error("--experimental-code-style is allowed only with init or set");
-  }
-  const sourceGit = path.join(PROJECT_ROOT, ".git");
-  const sourceGitStat = await fs.lstat(sourceGit).catch(() => null);
-  if (!sourceGitStat?.isDirectory() || sourceGitStat.isSymbolicLink()) {
-    throw new Error("--experimental-code-style is available only in a source checkout");
   }
 }
 const buildRuntimePayload = (compiled) => buildPayloadFromCompiled(
   compiled,
-  experimentalCodeStyle
-    ? {
-      experimentalCode: {
-        factory: createExperimentalCodeAdapter,
-        descriptor: createExperimentalCodeDescriptor(compiled.theme),
-      },
-    }
-    : undefined,
+  {
+    experimentalCode: {
+      factory: createExperimentalCodeAdapter,
+      descriptor: createExperimentalCodeDescriptor(compiled.theme),
+    },
+  },
 );
 if (command === "help" || command === "--help") {
   help();
