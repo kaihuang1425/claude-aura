@@ -44,3 +44,6 @@ docs/preview.png
 !.env.example
 *.pfx
 *.p12
+
+# Local scratch space for probes, slices, and candidate exports
+.tmp/
