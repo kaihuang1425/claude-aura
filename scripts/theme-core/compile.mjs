@@ -235,6 +235,7 @@ export function renderGreetingCss(style, responsiveLayouts = null) {
       `${node} [data-claude-aura-greeting-mark="native"]{opacity:var(--aura-greeting-native-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
       `${node} [data-claude-aura-greeting-mark="compact"]{opacity:var(--aura-greeting-compact-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
       `@media(forced-colors:active){${node}{text-shadow:none;border-bottom:0}}`,
+      `@keyframes aura-gin{from{opacity:0}}`,
     );
     return rules.join("\n");
   }
@@ -264,6 +265,7 @@ export function renderGreetingCss(style, responsiveLayouts = null) {
     `${node} [data-claude-aura-greeting-mark="native"]{opacity:var(--aura-greeting-native-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
     `${node} [data-claude-aura-greeting-mark="compact"]{opacity:var(--aura-greeting-compact-opacity);transform:scale(var(--aura-greeting-mark-scale));transform-origin:50% 50%}`,
     `@media(forced-colors:active){${node}{text-shadow:none;border-bottom:0}}`,
+    `@keyframes aura-gin{from{opacity:0}}`,
   );
   return rules.join("\n");
 }

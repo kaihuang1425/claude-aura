@@ -1188,6 +1188,7 @@
         bd.u.setAttribute(H, "true"); bd.u.setAttribute("aria-hidden", "true");
         bd.u.style.setProperty("display", "none");
         rn.removeAttribute("aria-hidden"); rn.style.removeProperty("position"); rn.style.removeProperty("visibility");
+        rn.style.setProperty("animation", "aura-gin .14s ease-out");
         if (!fit(rn, ma, sh)) { fail(U); return 0; }
         st = verify ? "verifying" : "custom";
         return 1;

@@ -517,4 +517,22 @@ test("every greeting style control reaches the compiled CSS", () => {
     "forced colors must suppress the decorative glow");
 });
 
+test("the first greeting claim fades in instead of snapping", async () => {
+  const css = renderGreetingCss(withFrame({}));
+  // Discovery is geometric and needs laid-out rects, and prepaint may not
+  // inspect Claude's DOM before response verification, so the swap from
+  // Claude's greeting to Aura's can only be softened, never removed.
+  assert.match(css, /@keyframes aura-gin\{from\{opacity:0\}\}/u,
+    "The greeting CSS must define the reveal keyframe");
+  assert.doesNotMatch(css, /prefers-reduced-motion/u,
+    "base.css already forces animation-duration under both reduce-motion paths; "
+    + "a second rule only spends payload bytes the chrome budget cannot spare");
+
+  const renderer = await fs.readFile(
+    path.join(PROJECT_ROOT, "assets", "renderer-inject.js"), "utf8");
+  assert.match(renderer,
+    /removeProperty\("visibility"\);\s*\n\s*rn\.style\.setProperty\("animation", "aura-gin /u,
+    "The fade must be armed on the same reveal that unhides the replacement node");
+});
+
 runIfMain(import.meta.url);
