@@ -23,33 +23,27 @@ try {
   exit 0
 }
 
-if ("$($install.Packaging)" -cne 'msix') {
-  Write-AuraDesktopCapability @{
-    schemaVersion = 2
-    status = 'blocked'
-    reasonCode = 'desktop-msix-required'
-    install = @{
-      packageKind = "$($install.Packaging)"
-      signatureValid = $true
-      productVersion = "$($install.Version)"
-      applicationId = $null
-      appUserModelId = $null
-    }
-    alreadyRunning = $null
-    processCount = $null
-  }
-  exit 0
-}
+$packageKind = "$($install.Packaging)"
+$applicationId = "$($install.ApplicationId)"
+$appUserModelId = "$($install.AppUserModelId)"
+$msixIdentityValid = (
+  $packageKind -ceq 'msix' -and
+  "$($install.PackageFamilyName)" -ceq 'Claude_pzs8sxrjxfjjc' -and
+  $applicationId -cmatch '^[A-Za-z0-9._-]{1,64}$' -and
+  $appUserModelId -ceq "Claude_pzs8sxrjxfjjc!$applicationId"
+)
 
-try {
-  $applicationIdentity = Get-AuraClaudeMsixApplicationIdentity -Install $install
-} catch {
+if (-not $msixIdentityValid) {
   Write-AuraDesktopCapability @{
     schemaVersion = 2
     status = 'blocked'
-    reasonCode = 'desktop-application-identity-unavailable'
+    reasonCode = if ($packageKind -cne 'msix') {
+      'desktop-msix-required'
+    } else {
+      'desktop-application-identity-unavailable'
+    }
     install = @{
-      packageKind = "$($install.Packaging)"
+      packageKind = $packageKind
       signatureValid = $true
       productVersion = "$($install.Version)"
       applicationId = $null
@@ -73,8 +67,8 @@ if (-not $signatureValid) {
       packageKind = "$($install.Packaging)"
       signatureValid = $false
       productVersion = "$($install.Version)"
-      applicationId = "$($applicationIdentity.ApplicationId)"
-      appUserModelId = "$($applicationIdentity.AppUserModelId)"
+      applicationId = "$($install.ApplicationId)"
+      appUserModelId = "$($install.AppUserModelId)"
     }
     alreadyRunning = $null
     processCount = $null
@@ -94,8 +88,8 @@ try {
       packageKind = "$($install.Packaging)"
       signatureValid = $true
       productVersion = "$($install.Version)"
-      applicationId = "$($applicationIdentity.ApplicationId)"
-      appUserModelId = "$($applicationIdentity.AppUserModelId)"
+      applicationId = "$($install.ApplicationId)"
+      appUserModelId = "$($install.AppUserModelId)"
     }
     alreadyRunning = $null
     processCount = $null
@@ -131,8 +125,8 @@ if ($processes.Count -gt 32) {
       packageKind = "$($install.Packaging)"
       signatureValid = $true
       productVersion = "$($install.Version)"
-      applicationId = "$($applicationIdentity.ApplicationId)"
-      appUserModelId = "$($applicationIdentity.AppUserModelId)"
+      applicationId = "$($install.ApplicationId)"
+      appUserModelId = "$($install.AppUserModelId)"
     }
     alreadyRunning = $null
     processCount = $null
@@ -148,8 +142,8 @@ Write-AuraDesktopCapability @{
     packageKind = "$($install.Packaging)"
     signatureValid = $true
     productVersion = "$($install.Version)"
-    applicationId = "$($applicationIdentity.ApplicationId)"
-    appUserModelId = "$($applicationIdentity.AppUserModelId)"
+    applicationId = "$($install.ApplicationId)"
+    appUserModelId = "$($install.AppUserModelId)"
   }
   alreadyRunning = [bool]$processes.Count
   processCount = [int]$processes.Count

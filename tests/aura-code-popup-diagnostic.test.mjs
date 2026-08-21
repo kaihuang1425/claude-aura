@@ -69,21 +69,6 @@ test("Aura Code classifier owns only a user-initiated exact Code entry", async (
 });
 
 test("retired diagnostic cannot launch its live WebView path", async () => {
-  const source = await fs.readFile(diagnosticPath, "utf8");
-  for (const forbidden of [
-    /WebView2/i,
-    /System[.]Windows[.]Forms/i,
-    /Application\]::Run/i,
-    /Start-Process/i,
-    /EnsureCoreWebView2Async/i,
-    /NewWindowRequested/i,
-  ]) {
-    assert.doesNotMatch(source, forbidden);
-  }
-  assert.match(
-    source,
-    /throw 'The live Aura Code popup diagnostic is retired; only -ClassifyOnly is available[.]'/,
-  );
   if (process.platform !== "win32") return;
   assert.throws(
     () => run("powershell.exe", [
@@ -95,6 +80,157 @@ test("retired diagnostic cannot launch its live WebView path", async () => {
     ]),
     /live Aura Code popup diagnostic is retired/,
   );
+});
+
+test("diagnostic prepares one visible unnavigated child in the same profile", async () => {
+  const source = await fs.readFile(diagnosticPath, "utf8");
+  const childEnsure = source.indexOf(
+    "$script:ChildWebView.EnsureCoreWebView2Async($script:Environment)",
+  );
+  const mainEnsure = source.indexOf(
+    "$script:MainWebView.EnsureCoreWebView2Async($script:Environment)",
+  );
+  const mainNavigate = source.indexOf("$mainCore.Navigate('https://claude.ai/')");
+
+  assert(childEnsure >= 0 && childEnsure < mainEnsure && mainEnsure < mainNavigate);
+  assert.match(source, /ClaudeAura[\\/]webview/);
+  assert.match(source, /Test-AuraCodeDiagnosticHostRunning/);
+  assert.match(source, /\$script:ChildForm\.Show\(\$script:MainForm\)/);
+  assert.match(source, /\$script:MainForm\.Visible[\s\S]*?\$script:ChildForm\.Visible/);
+  assert.match(source, /\$script:MainWebView\.IsHandleCreated/);
+  assert.match(source, /\$script:ChildWebView\.IsHandleCreated/);
+  assert.match(source, /Profile\.ProfileName[\s\S]*?Profile\.IsInPrivateModeEnabled/);
+  assert.doesNotMatch(
+    source,
+    /ChildWebView(?:\.CoreWebView2)?\.(?:Navigate|NavigateToString|Source\s*=)/,
+  );
+  assert.equal(
+    (source.match(/\.Navigate\('https:\/\/claude\.ai\/'\)/g) ?? []).length,
+    1,
+  );
+  assert.equal(
+    (source.match(/\.Navigate\('https:\/\/claude\.ai\/new'\)/g) ?? []).length,
+    1,
+  );
+  assert.equal(
+    (source.match(/\.Navigate\('https:\/\/claude\.ai\/code'\)/g) ?? []).length,
+    1,
+  );
+});
+
+test("diagnostic assigns the child once and keeps fallback handling bounded", async () => {
+  const source = await fs.readFile(diagnosticPath, "utf8");
+  const handlerStart = source.indexOf("$mainCore.add_NewWindowRequested({");
+  const handlerEnd = source.indexOf(
+    "\n\n      $script:ChildAvailable = $script:RouteMode -ceq 'Child'",
+    handlerStart,
+  );
+  assert(handlerStart >= 0 && handlerEnd > handlerStart);
+  const handler = source.slice(handlerStart, handlerEnd);
+  const codeStart = handler.indexOf("if ($disposition -eq 'CodeChild')");
+  const nativeStart = handler.indexOf("if ($disposition -eq 'NativePopup')");
+  const codeBranch = handler.slice(codeStart, nativeStart);
+  const mainModeStart = codeBranch.indexOf("if ($script:RouteMode -ceq 'Main')");
+  const childModeStart = codeBranch.indexOf("if ($script:ChildAvailable");
+  const mainModeBranch = codeBranch.slice(mainModeStart, childModeStart);
+  const childModeBranch = codeBranch.slice(childModeStart);
+
+  assert.match(
+    handler,
+    /Get-AuraCodePopupDisposition[\s\S]*?-IsUserInitiated \(\[bool\]\$eventArgs\.IsUserInitiated\)/,
+  );
+  assert.match(
+    mainModeBranch,
+    /\.Navigate\('https:\/\/claude\.ai\/code'\)[\s\S]{0,100}?\$eventArgs\.Handled\s*=\s*\$true/,
+  );
+  assert.doesNotMatch(mainModeBranch, /Navigate\([^)]*eventArgs\.Uri/);
+  assert.match(
+    mainModeBranch,
+    /\$script:CodeRouteAccepted\s*=\s*\$true[\s\S]*?\.Navigate\('https:\/\/claude\.ai\/code'\)/,
+  );
+  assert.match(
+    mainModeBranch,
+    /catch\s*\{[\s\S]*?\$script:CodeRouteAccepted\s*=\s*\$false/,
+  );
+  assert.match(
+    childModeBranch,
+    /\$eventArgs\.NewWindow\s*=\s*\$script:ChildWebView\.CoreWebView2/,
+  );
+  assert.match(childModeBranch, /\$script:ChildAvailable\s*=\s*\$false/);
+  assert.doesNotMatch(childModeBranch, /Handled\s*=/);
+  assert.match(handler, /if \(\$disposition -eq 'NativePopup'\)[\s\S]{0,260}?\breturn\b/);
+  assert.match(
+    handler,
+    /\$eventArgs\.Handled\s*=\s*\$true[\s\S]{0,260}?Start-Process -FilePath \$target\.AbsoluteUri/,
+  );
+  assert.match(source, /\$childCore\.add_WindowCloseRequested\(/);
+});
+
+test("same-window mode exposes one explicit fixed-origin Chat return", async () => {
+  const source = await fs.readFile(diagnosticPath, "utf8");
+  const clickStart = source.indexOf("$script:MainChatButton.add_Click({");
+  const clickEnd = source.indexOf("\n      $mainCore.add_NewWindowRequested({", clickStart);
+  const handler = source.slice(clickStart, clickEnd);
+
+  assert.match(
+    source,
+    /\[ValidateSet\('Child', 'Main'\)\]\[string\]\$RouteMode = 'Main'/,
+  );
+  assert.match(source, /\$script:MainChatButton\.Text\s*=\s*'Return to Chat'/);
+  assert.match(source, /\$script:MainChatButton\.Visible\s*=\s*\$script:RouteMode -ceq 'Main'/);
+  assert.match(
+    source,
+    /\$script:MainChatButton\.Enabled\s*=[\s\S]{0,120}?\$script:CodeRouteAccepted/,
+  );
+  assert.match(
+    handler,
+    /\$script:RouteMode -cne 'Main'[\s\S]*?-not \$script:CodeRouteAccepted/,
+  );
+  assert.match(handler, /\.Navigate\('https:\/\/claude\.ai\/new'\)/);
+  assert.match(
+    handler,
+    /\.Navigate\('https:\/\/claude\.ai\/new'\)[\s\S]*?\$script:CodeRouteAccepted\s*=\s*\$false/,
+  );
+  assert.match(
+    handler,
+    /catch\s*\{[\s\S]*?\$script:CodeRouteAccepted\s*=\s*\$true[\s\S]*?\$script:MainChatButton\.Enabled\s*=\s*\$true/,
+  );
+  assert.doesNotMatch(handler, /eventArgs|Source|History|GoBack/);
+  assert.doesNotMatch(handler, /Timer\.Start|Start-Sleep|retry/i);
+});
+
+test("diagnostic records bounded lifecycle fields without inspecting content", async () => {
+  const source = await fs.readFile(diagnosticPath, "utf8");
+  assert.match(source, /\[ValidateSet\('Child', 'Main'\)\]\[string\]\$RouteMode/);
+  assert.match(
+    source,
+    /\[ValidateSet\('main-navigation', 'popup-request'\)\][\s\S]*?\[ValidateSet\('chat', 'code', 'other'\)\]/,
+  );
+  assert.match(source, /\[ValidateRange\(0, 599\)\]\[int\]\$HttpStatus/);
+  assert.match(source, /\.add_NavigationStarting\(/);
+  assert.match(source, /\.add_NavigationCompleted\(/);
+  assert.match(source, /\$eventArgs\.HttpStatusCode/);
+  assert.equal((source.match(/\$script:MainForm\.Text\s*=/g) ?? []).length, 1);
+  assert.equal((source.match(/\$script:ChildForm\.Text\s*=/g) ?? []).length, 1);
+
+  const forbidden = [
+    /ExecuteScript/i,
+    /ScriptToExecute/i,
+    /CapturePreview/i,
+    /WebMessage/i,
+    /DevTools/i,
+    /\bCDP\b/i,
+    /DOMSnapshot/i,
+    /WebResourceResponseReceived/i,
+    /DocumentTitle|StatusBarText|OriginalSourceFrameInfo/i,
+    /GetDeferral|Register-ObjectEvent|CreateCoreWebView2ControllerAsync/i,
+    /WriteAllText|AppendAllText|Set-Content|Add-Content|Out-File/i,
+    /Write-Aura|Write-Host|Write-Output/i,
+    /renderer|mirror/i,
+  ];
+  for (const pattern of forbidden) assert.doesNotMatch(source, pattern);
+  assert.doesNotMatch(source, /eventArgs\.Uri[\s\S]{0,120}?(?:Text|Console|Write)/i);
+  assert.doesNotMatch(source, /\.Exception(?:\.ToString\(\)|\.Message)?/i);
 });
 
 runIfMain(import.meta.url);
