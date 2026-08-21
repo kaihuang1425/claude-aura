@@ -356,7 +356,7 @@
       const header = make("header", "session-board-header");
       const headingCopy = make("div", "session-board-heading-copy");
       const kicker = make("p", "session-board-kicker");
-      kicker.textContent = model.copy.kicker;
+      kicker.textContent = "CLAUDE AURA";
       const title = make("h1", "session-board-title");
       title.tabIndex = -1;
       title.textContent = model.copy.title;
@@ -369,16 +369,40 @@
       refresh.disabled = pending || pendingOpen !== null;
       refresh.textContent = model.copy.refresh;
       refresh.addEventListener("click", () => requestRead(true));
+      const info = make("button", "session-board-info");
+      info.type = "button";
+      info.textContent = "i";
+      info.setAttribute("aria-label", model.copy.scopeNote);
+      info.setAttribute("aria-expanded", "false");
+      info.setAttribute("aria-controls", "session-board-disclosure");
+      info.title = model.copy.scopeNote;
+      const disclosure = make("aside", "session-board-disclosure");
+      disclosure.id = "session-board-disclosure";
+      disclosure.hidden = true;
+      disclosure.setAttribute("role", "note");
+      const disclosureScope = make("p", "session-board-disclosure-scope");
+      disclosureScope.textContent = model.copy.scopeNote;
+      disclosure.append(disclosureScope);
+      info.addEventListener("click", () => {
+        const expanded = info.getAttribute("aria-expanded") !== "true";
+        info.setAttribute("aria-expanded", String(expanded));
+        disclosure.hidden = !expanded;
+      });
       const status = make("span", "session-board-status");
       status.setAttribute("role", statusName === "error" ? "alert" : "status");
       status.setAttribute("aria-live", "polite");
       status.dataset.status = statusName;
-      status.textContent = model.copy[statusName] ?? model.copy.ready;
-      actions.append(refresh, status);
+      const statusCopy = model.copy[statusName] ?? model.copy.ready;
+      status.textContent = statusName === "ready"
+        ? String(model.lanes.reduce((total, lane) => total + lane.count, 0))
+        : statusCopy;
+      status.setAttribute("aria-label", statusCopy);
+      status.title = statusCopy;
+      actions.append(refresh, info, disclosure);
       header.append(headingCopy, actions);
 
-      const scope = make("p", "session-board-scope-note");
-      scope.textContent = model.copy.scopeNote;
+      const summary = make("div", "session-board-summary");
+      summary.append(status);
       const laneGrid = make("div", "session-board-lanes");
       for (const lane of model.lanes) {
         const laneElement = make("section", "session-board-lane");
@@ -392,6 +416,7 @@
         laneHeader.append(laneTitle, count);
         const list = make("div", "session-board-lane-list");
         list.dataset.sessionLaneList = lane.state;
+        list.dataset.empty = String(lane.sessions.length === 0);
         list.setAttribute("role", "list");
         if (!lane.sessions.length) {
           const empty = make("p", "session-board-empty");
@@ -428,7 +453,10 @@
           response.textContent = session.responsePresentation.icon === "check" ? "✓"
             : session.responsePresentation.icon === "alert" ? "!"
               : session.responsePresentation.icon === "neutral" ? "•" : "";
-          card.append(copyColumn, response);
+          const openIcon = make("span", "session-board-open-icon");
+          openIcon.textContent = "↗";
+          openIcon.setAttribute("aria-hidden", "true");
+          card.append(copyColumn, response, openIcon);
           card.addEventListener("click", () => requestOpen(session.id));
           card.addEventListener("keydown", (event) => {
             if (!navigationKeys.includes(event.key)) return;
@@ -446,7 +474,7 @@
         laneElement.append(laneHeader, list);
         laneGrid.append(laneElement);
       }
-      host.append(header, scope, laneGrid);
+      host.append(header, summary, laneGrid);
       return true;
     };
 

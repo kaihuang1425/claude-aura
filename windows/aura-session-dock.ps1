@@ -30,7 +30,7 @@ $script:AuraSessionResponseChangedAtByRoute = @{}
 $script:AuraSessionResponseObservers = @{}
 $script:AuraSessionDockReceipts = [Collections.Specialized.OrderedDictionary]::new()
 $script:AuraSessionDockPromptOperations = [Collections.Specialized.OrderedDictionary]::new()
-$script:AuraSessionDockDiscoveryRoot = Join-Path $env:LOCALAPPDATA 'GeminiAura\pet-plugin'
+$script:AuraSessionDockDiscoveryRoot = Join-Path $env:LOCALAPPDATA 'ClaudeAura\pet-plugin'
 $script:AuraSessionDockDiscoveryPath = Join-Path $script:AuraSessionDockDiscoveryRoot 'session-dock-v2.json'
 $script:AuraSessionDockInitialized = $false
 $script:AuraSessionDockInstanceId = ''
@@ -47,6 +47,7 @@ $script:AuraSessionDockWriteQueue = [Collections.Generic.Queue[byte[]]]::new()
 $script:AuraSessionDockAuthenticated = $false
 $script:AuraSessionDockLastProjectionRevision = [long]-1
 $script:AuraSessionDockUtf8 = [Text.UTF8Encoding]::new($false, $true)
+$script:AuraSessionAccountTransitionActive = $false
 
 function Test-AuraSessionDockUuid {
   param([AllowEmptyString()][string]$Value)
@@ -269,6 +270,52 @@ function Write-AuraSessionHistoryDocument {
   }
 }
 
+function Publish-AuraSessionBoardInvalidation {
+  $json = '{"type":"session-board-invalidate","version":1}'
+  $delivered = $false
+  foreach ($name in @('StudioWebView', 'AuraWebTabWorkHubWebView')) {
+    $variable = Get-Variable -Name $name -Scope Script -ErrorAction SilentlyContinue
+    if ($null -eq $variable) { continue }
+    $view = $variable.Value
+    if ($null -eq $view -or $view.IsDisposed -or $null -eq $view.CoreWebView2) { continue }
+    try {
+      $view.CoreWebView2.PostWebMessageAsJson($json)
+      $delivered = $true
+    } catch {}
+  }
+  return $delivered
+}
+
+function Reset-AuraSessionHistoryForAccountTransition {
+  if ($script:AuraSessionAccountTransitionActive) { return $false }
+  $script:AuraSessionAccountTransitionActive = $true
+  $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+  $previousRevision = if ($null -ne $script:AuraSessionHistoryDocument) {
+    [long]$script:AuraSessionHistoryDocument.revision
+  } else { [long]0 }
+  $document = New-AuraSessionHistoryDocument
+  $document.revision = [long][Math]::Min(9007199254740991, $previousRevision + 1)
+  $document.changedAt = [long]$now
+  try {
+    $script:AuraSessionHistoryDocument = Write-AuraSessionHistoryDocument -Document $document
+  } catch {
+    $script:AuraSessionHistoryDocument = $document
+    if (Get-Command Write-AuraUiLog -ErrorAction SilentlyContinue) {
+      Write-AuraUiLog -Message 'Aura could not persist the account-transition session reset.'
+    }
+  }
+  $script:AuraSessionResponseRequests.Clear()
+  $script:AuraSessionResponseLiveByRoute.Clear()
+  $script:AuraSessionResponseChangedAtByRoute.Clear()
+  $script:AuraSessionResponseObservers.Clear()
+  $script:AuraSessionDockReceipts.Clear()
+  $script:AuraSessionDockPromptOperations.Clear()
+  $script:AuraSessionProjectionFingerprint = $null
+  $script:AuraSessionWorkHubFingerprint = $null
+  [void](Publish-AuraSessionBoardInvalidation)
+  return $true
+}
+
 function Register-AuraSessionObservation {
   param(
     [Parameter(Mandatory = $true)][object]$Url,
@@ -280,6 +327,7 @@ function Register-AuraSessionObservation {
   if ($null -eq $route -or
       -not (Test-AuraSessionDockText -Value $Title -Maximum 140 -Required) -or
       -not (Test-AuraSessionDockInteger -Value $ObservedAt)) { return $false }
+  $script:AuraSessionAccountTransitionActive = $false
   if ($null -eq $script:AuraSessionHistoryDocument) {
     try { $script:AuraSessionHistoryDocument = Read-AuraSessionHistoryDocument }
     catch { $script:AuraSessionHistoryDocument = New-AuraSessionHistoryDocument }
@@ -1547,7 +1595,7 @@ function Assert-AuraSessionDockDiscoveryPath {
   }
   $localRoot = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd(
     [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-  $expectedRoot = [IO.Path]::GetFullPath((Join-Path $localRoot 'GeminiAura\pet-plugin'))
+  $expectedRoot = [IO.Path]::GetFullPath((Join-Path $localRoot 'ClaudeAura\pet-plugin'))
   $expectedPath = [IO.Path]::GetFullPath((Join-Path $expectedRoot 'session-dock-v2.json'))
   if (-not [string]::Equals(
       [IO.Path]::GetFullPath($script:AuraSessionDockDiscoveryRoot), $expectedRoot,
@@ -1558,7 +1606,7 @@ function Assert-AuraSessionDockDiscoveryPath {
     throw 'Aura session dock discovery path escaped its directory.'
   }
   foreach ($candidate in @(
-      $localRoot, (Join-Path $localRoot 'GeminiAura'), $expectedRoot, $expectedPath)) {
+      $localRoot, (Join-Path $localRoot 'ClaudeAura'), $expectedRoot, $expectedPath)) {
     if (-not (Test-Path -LiteralPath $candidate)) { continue }
     $item = Get-Item -LiteralPath $candidate -Force
     if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {

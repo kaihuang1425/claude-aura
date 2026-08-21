@@ -5,28 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title></title>
-<link rel="stylesheet" href="session-board.css?v=1">
+<link rel="stylesheet" href="session-board.css?v=3">
 </head>
 <body>
 <main data-session-board-root data-session-board-mode="compact"></main>
-<script src="locales/en.js?v=1"></script>
-<script src="locales/hi.js?v=1"></script>
-<script src="locales/es.js?v=1"></script>
-<script src="locales/fr.js?v=1"></script>
-<script src="locales/id.js?v=1"></script>
-<script src="locales/ja.js?v=1"></script>
-<script src="locales/ko.js?v=1"></script>
-<script src="locales/pt-BR.js?v=1"></script>
-<script src="locales/de.js?v=1"></script>
-<script src="locales/it.js?v=1"></script>
-<script src="locales/vi.js?v=1"></script>
-<script src="locales/pl.js?v=1"></script>
-<script src="locales/tr.js?v=1"></script>
-<script src="locales/zh-CN.js?v=1"></script>
-<script src="locales/zh-HKTW.js?v=1"></script>
+<script src="locales/en.js?v=2"></script>
+<script src="locales/hi.js?v=2"></script>
+<script src="locales/es.js?v=2"></script>
+<script src="locales/fr.js?v=2"></script>
+<script src="locales/id.js?v=2"></script>
+<script src="locales/ja.js?v=2"></script>
+<script src="locales/ko.js?v=2"></script>
+<script src="locales/pt-BR.js?v=2"></script>
+<script src="locales/de.js?v=2"></script>
+<script src="locales/it.js?v=2"></script>
+<script src="locales/vi.js?v=2"></script>
+<script src="locales/pl.js?v=2"></script>
+<script src="locales/tr.js?v=2"></script>
+<script src="locales/zh-CN.js?v=2"></script>
+<script src="locales/zh-HKTW.js?v=2"></script>
 <script src="generated-themes.js?v=1"></script>
 <script src="session-board-presentation.js?v=1"></script>
-<script src="session-board.js?v=1"></script>
+<script src="session-board.js?v=3"></script>
 <script>
 (() => {
   "use strict";
@@ -55,6 +55,11 @@
     return controller;
   };
   bridge?.addEventListener("message", (event) => {
+    if (event.data?.type === "session-board-invalidate" && event.data?.version === 1
+        && Object.keys(event.data).length === 2) {
+      ensureController()?.refresh?.();
+      return;
+    }
     if (presenter?.receive?.(event.data)) {
       ensureController()?.render?.();
       return;

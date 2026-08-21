@@ -16,7 +16,45 @@ const uiPath = path.join(PROJECT_ROOT, "windows", "aura-ui.ps1");
 const releaseBuilderPath = path.join(PROJECT_ROOT, "scripts", "build-release.mjs");
 const installerAuditPath = path.join(PROJECT_ROOT, "scripts", "audit-installer.mjs");
 const fileManifestPath = path.join(PROJECT_ROOT, "docs", "FILE_MANIFEST.md");
+const studioAppPath = path.join(PROJECT_ROOT, "studio", "app.js");
+const workHubPath = path.join(PROJECT_ROOT, "studio", "work-hub.html");
+const sessionBoardScriptPath = path.join(PROJECT_ROOT, "studio", "session-board.js");
+const sessionBoardCssPath = path.join(PROJECT_ROOT, "studio", "session-board.css");
 const psPath = (value) => value.replaceAll("'", "''");
+
+test("compact Work Hub uses Gemini Aura hierarchy with progressive disclosure", async () => {
+  const [script, css] = await Promise.all([
+    fs.readFile(sessionBoardScriptPath, "utf8"),
+    fs.readFile(sessionBoardCssPath, "utf8"),
+  ]);
+  assert.match(script, /const info = make\("button", "session-board-info"\)/,
+    "Work Hub must expose its local-observation contract through one info control");
+  assert.match(script, /const disclosure = make\("aside", "session-board-disclosure"\)[\s\S]{0,600}?disclosure\.append\(disclosureScope\)/,
+    "The info control must retain the evidence-state disclaimer without duplicating hero copy");
+  assert.match(script, /info\.setAttribute\("aria-expanded", String\(expanded\)\)[\s\S]{0,100}?disclosure\.hidden = !expanded/,
+    "The disclaimer must stay hidden until the info control is activated");
+  assert.match(script, /headingCopy\.append\(kicker, title, lede\)/,
+    "The dashboard must retain one short navigation subtitle below its title");
+  assert.doesNotMatch(script, /summary\.append\(status, scope\)/,
+    "The evidence-state disclaimer must not remain permanently visible in the dashboard hierarchy");
+  assert.match(script, /host\.append\(header, summary, laneGrid\)/,
+    "The Work Hub summary must sit between the hero and dashboard lanes");
+  assert.match(css,
+    /body:has\(\[data-session-board-mode="compact"\]\)[\s\S]{0,320}?padding:\s*clamp\(28px, 5vw, 72px\)[\s\S]{0,240}?var\(--accent/,
+    "Compact Work Hub must retain the spacious Gemini-style page inset");
+  assert.match(css,
+    /\.session-board-lane-list\[data-empty="true"\][\s\S]{0,120}?overflow-y:\s*hidden/,
+    "Empty lanes must not show inert vertical scrollbars");
+  assert.match(css,
+    /\[data-session-board-mode="compact"\][\s\S]{0,140}?max-width:\s*1180px[\s\S]{0,120}?margin:\s*0 auto/,
+    "Compact Work Hub content must use a centered readable dashboard width");
+  assert.match(css,
+    /\[data-session-board-mode="compact"\] \.session-board-lane[\s\S]{0,240}?min-height:\s*max\(260px, calc\(100vh - 330px\)\)[\s\S]{0,180}?border-radius:\s*18px/,
+    "Compact Work Hub lanes must fill tall windows instead of floating above unused canvas");
+  assert.match(css,
+    /\[data-session-board-mode="compact"\] \.session-board-empty[\s\S]{0,220}?min-height:\s*max\(172px, calc\(100vh - 405px\)\)[\s\S]{0,180}?border:\s*1px dashed/,
+    "Empty Work Hub lanes must retain the dashed treatment while using the available height");
+});
 
 test("pet runway projects encrypted Aura-observed Claude Chat and Claude Code history", async () => {
   if (process.platform !== "win32") return;
@@ -119,6 +157,73 @@ $rawText=[Text.Encoding]::UTF8.GetString($raw)
   } finally {
     await fs.rm(temporaryRoot, { recursive: true, force: true });
   }
+});
+
+test("account transitions clear Claude session history and publish through a Claude-only endpoint", async () => {
+  if (process.platform !== "win32") return;
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aura-session-account-reset-"));
+  const harnessPath = path.join(temporaryRoot, "session-account-reset-harness.ps1");
+  const localAppData = path.join(temporaryRoot, "local-app-data");
+  const harness = `
+$ErrorActionPreference='Stop'
+$env:LOCALAPPDATA='${psPath(localAppData)}'
+$DataRoot='${psPath(path.join(temporaryRoot, "data"))}'
+function Write-AuraUiLog { param([string]$Message) }
+function Send-AuraTaskboardChanged { param([long]$Revision) }
+function Refresh-AuraTaskboardQueue {}
+. '${psPath(taskboardPath)}'
+. '${psPath(modulePath)}'
+$script:AuraSessionHistoryDocument=New-AuraSessionHistoryDocument
+[void](Register-AuraSessionObservation -Url 'https://claude.ai/chat/old-account-session' -Title 'Old account task' -ObservedAt 100 -Opened)
+$before=Get-AuraSessionDockProjection
+$reset=Reset-AuraSessionHistoryForAccountTransition
+$after=Get-AuraSessionDockProjection
+$stored=Read-AuraSessionHistoryDocument
+[ordered]@{
+  beforeCount=@($before.sessions).Count
+  reset=$reset
+  afterCount=@($after.sessions).Count
+  storedCount=@($stored.sessions).Count
+  liveRequests=$script:AuraSessionResponseRequests.Count
+  discoveryPath=[IO.Path]::GetFullPath($script:AuraSessionDockDiscoveryPath)
+  expectedPath=[IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'ClaudeAura\\pet-plugin\\session-dock-v2.json'))
+} | ConvertTo-Json -Compress
+`;
+  await fs.writeFile(harnessPath, harness, "utf8");
+  try {
+    const result = spawnSync("powershell.exe", [
+      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", harnessPath,
+    ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.deepEqual(JSON.parse(result.stdout.trim().split(/\r?\n/u).at(-1)), {
+      beforeCount: 1,
+      reset: true,
+      afterCount: 0,
+      storedCount: 0,
+      liveRequests: 0,
+      discoveryPath: path.join(localAppData, "ClaudeAura", "pet-plugin", "session-dock-v2.json"),
+      expectedPath: path.join(localAppData, "ClaudeAura", "pet-plugin", "session-dock-v2.json"),
+    });
+  } finally {
+    await fs.rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("Claude auth navigation invalidates the prior account session board", async () => {
+  const [source, sessionDock, studioApp, workHub] = await Promise.all([
+    fs.readFile(uiPath, "utf8"),
+    fs.readFile(modulePath, "utf8"),
+    fs.readFile(studioAppPath, "utf8"),
+    fs.readFile(workHubPath, "utf8"),
+  ]);
+  assert.match(source,
+    /add_NavigationStarting\(\{[\s\S]*?Test-AuraUiAccountTransitionUri -Value \$eventArgs\.Uri[\s\S]*?Reset-AuraSessionHistoryForAccountTransition/u);
+  assert.match(sessionDock,
+    /Reset-AuraSessionHistoryForAccountTransition[\s\S]*?Publish-AuraSessionBoardInvalidation/u);
+  assert.match(studioApp,
+    /session-board-invalidate[\s\S]*?sessionBoardController\?\.refresh\?\.\(\)/u);
+  assert.match(workHub,
+    /session-board-invalidate[\s\S]*?ensureController\(\)\?\.refresh\?\.\(\)/u);
 });
 
 test("pet runway quick navigation reuses open Aura tabs and opens only known past sessions", async () => {
@@ -583,7 +688,7 @@ while ($true) { Update-AuraSessionDock; Start-Sleep -Milliseconds 10 }
   let socket;
   try {
     await waitForLine(child.stdout, (line) => line === "READY");
-    const discoveryPath = path.join(localAppData, "GeminiAura", "pet-plugin", "session-dock-v2.json");
+    const discoveryPath = path.join(localAppData, "ClaudeAura", "pet-plugin", "session-dock-v2.json");
     const discovery = JSON.parse(await fs.readFile(discoveryPath, "utf8"));
     assert.deepEqual(Object.keys(discovery), [
       "schemaVersion", "contractId", "pipe", "token", "instanceId", "createdAt",
