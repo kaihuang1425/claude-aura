@@ -2,6 +2,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
 import zlib from "node:zlib";
 import { AURA_VERSION, PROJECT_ROOT } from "./theme-core.mjs";
 import { buildAuraIcon } from "./build-aura-icon.mjs";
@@ -10,19 +11,22 @@ import { buildLauncherAssets } from "./build-launcher-assets.mjs";
 
 const RELEASE_ROOT_FILES = new Set([
   "CONTRIBUTING.md",
-  "Install Claude Aura.cmd",
-  "Install Claude Aura.command",
   "LICENSE",
   "NOTICE.md",
   "README.md",
   "SECURITY.md",
   "THIRD_PARTY_NOTICES.md",
-  "Uninstall Claude Aura.cmd",
   "config.example.json",
   "package.json",
 ]);
+const RELEASE_ROOT_FILE_SOURCES = new Map([
+  ["Install Claude Aura.cmd", "installer/templates/package-root/Install Claude Aura.cmd.template"],
+  ["Install Claude Aura.command", "installer/templates/package-root/Install Claude Aura.command.template"],
+  ["Uninstall Claude Aura.cmd", "installer/templates/package-root/Uninstall Claude Aura.cmd.template"],
+]);
 const RELEASE_DOCUMENT_FILES = new Set([
   "docs/ACCEPTANCE_AUDIT.md",
+  "docs/DELIVERY_GUARDRAIL.md",
   "docs/FILE_MANIFEST.md",
   "docs/IMPLEMENTATION_REPORT.md",
   "docs/SCREENSHOT_PLAN.md",
@@ -38,7 +42,7 @@ const RELEASE_DIRECTORIES = new Map([
   ["macos", new Set([".command", ".sh"])],
   ["readmes", new Set([".md"])],
   ["scripts", new Set([".mjs"])],
-  ["studio", new Set([".css", ".html", ".js"])],
+  ["studio", new Set([".css", ".html", ".js", ".png", ".svg"])],
   ["tests", new Set([".mjs"])],
   ["themes", new Set([".json"])],
   ["vendor", new Set([".dll", ".txt"])],
@@ -58,11 +62,20 @@ const SOURCE_ONLY_RELEASE_DIRECTORIES = new Set([
 ]);
 const SOURCE_ONLY_RELEASE_FILES = new Set([
   "scripts/desktop-cdp/session.mjs",
+  "scripts/desktop-main-inspector.mjs",
   "scripts/desktop-profile.mjs",
+  "studio/pets/moss.svg",
+  "studio/pets/nori.svg",
+  "studio/pets/pip.svg",
   "tests/aura-code-popup-diagnostic.test.mjs",
   "tests/desktop-cdp.test.mjs",
   "windows/aura-code-popup-diagnostic.ps1",
+  "windows/build-desktop-capture-filter.ps1",
+  "windows/desktop-aura-session.ps1",
+  "windows/desktop-overlay-proof.ps1",
   "windows/desktop-presentation.ps1",
+  "windows/desktop-taskboard-panel.ps1",
+  "windows/native/desktop-capture-filter.cpp",
 ]);
 const REQUIRED_THEME_DESCRIPTOR_FILES = new Set([
   "registry.json",
@@ -97,6 +110,8 @@ const REQUIRED_APP_SURFACE_FILES = new Set([
   "macos/switch-theme.sh",
   "macos/verify.sh",
   "scripts/convert-theme-assets.mjs",
+  "scripts/codex-session-index.mjs",
+  "scripts/delivery-gate.mjs",
   "scripts/injector.mjs",
   "scripts/state-cli.mjs",
   "scripts/theme-cli.mjs",
@@ -118,7 +133,17 @@ const REQUIRED_APP_SURFACE_FILES = new Set([
   "studio/locales/en.js",
   "studio/locales/zh-CN.js",
   "studio/locales/zh-HKTW.js",
+  "studio/pets.css",
+  "studio/pets.js",
+  "studio/pets/moss.png",
+  "studio/pets/nori.png",
+  "studio/pets/pip.png",
+  "studio/session-board.css",
+  "studio/session-board.js",
   "studio/styles.css",
+  "studio/taskboard.css",
+  "studio/taskboard.js",
+  "studio/work-hub.html",
   "tests/run-tests.mjs",
   "vendor/webview2/LICENSE.txt",
   "vendor/webview2/Microsoft.Web.WebView2.Core.dll",
@@ -130,7 +155,13 @@ const REQUIRED_APP_SURFACE_FILES = new Set([
   "vendor/webview2/WebView2Loader.dll",
   "windows/aura-draft-handoff.ps1",
   "windows/aura-prompt-shelf.ps1",
+  "windows/aura-pets.ps1",
+  "windows/aura-session-board-desktop.ps1",
+  "windows/aura-session-dock.ps1",
+  "windows/aura-taskboard.ps1",
+  "windows/aura-taskctl.ps1",
   "windows/aura-ui.ps1",
+  "windows/aura-web-tabs.ps1",
   "windows/common.ps1",
   "windows/image-crop.ps1",
   "windows/install.ps1",
@@ -158,10 +189,12 @@ const REQUIRED_APP_SURFACE_FILES = new Set([
 ]);
 const REQUIRED_RELEASE_FILES = new Set([
   ...RELEASE_ROOT_FILES,
+  ...RELEASE_ROOT_FILE_SOURCES.keys(),
   ...RELEASE_DOCUMENT_FILES,
   ...REQUIRED_THEME_DESCRIPTOR_FILES,
   ...REQUIRED_APP_SURFACE_FILES,
   "scripts/asset-audit.mjs",
+  "scripts/audit-installer.mjs",
   "scripts/build-brand-wordmarks.mjs",
   "scripts/build-launcher-assets.mjs",
   ...[
@@ -193,6 +226,26 @@ const CRC_TABLE = Array.from({ length: 256 }, (_, index) => {
   for (let bit = 0; bit < 8; bit += 1) value = (value >>> 1) ^ ((value & 1) ? 0xedb88320 : 0);
   return value >>> 0;
 });
+
+function parseArguments(argv) {
+  let outputDirectory = path.join(PROJECT_ROOT, "dist", "release-payload");
+  let nativePayload = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--native-payload") {
+      nativePayload = true;
+      continue;
+    }
+    if (argument !== "--output-directory") {
+      throw new Error(`Unknown release build argument: ${argument}`);
+    }
+    const value = argv[index + 1];
+    index += 1;
+    if (!value) throw new Error("--output-directory requires an explicit path.");
+    outputDirectory = path.resolve(value);
+  }
+  return { outputDirectory, nativePayload };
+}
 
 function crc32(bytes) {
   let value = 0xffffffff;
@@ -270,6 +323,13 @@ async function collect(directory, prefix = "claude-aura", relativeDirectory = ""
   return files;
 }
 
+function collectReleaseRootTemplates(prefix = "claude-aura") {
+  return [...RELEASE_ROOT_FILE_SOURCES].map(([archiveName, sourceRelativePath]) => ({
+    source: path.join(PROJECT_ROOT, ...sourceRelativePath.split("/")),
+    archivePath: `${prefix}/${archiveName}`,
+  }));
+}
+
 function makeZip(entries) {
   const localParts = [];
   const centralParts = [];
@@ -331,11 +391,17 @@ function makeZip(entries) {
 await buildAuraIcon();
 await buildLauncherAssets();
 await buildBrandWordmarks();
-const outputDirectory = path.join(PROJECT_ROOT, "release");
+const { outputDirectory, nativePayload } = parseArguments(process.argv.slice(2));
 await fs.mkdir(outputDirectory, { recursive: true });
-const files = (await collect(PROJECT_ROOT)).sort((a, b) => a.archivePath.localeCompare(b.archivePath));
+const files = [
+  ...await collect(PROJECT_ROOT),
+  ...(nativePayload ? [] : collectReleaseRootTemplates()),
+].sort((a, b) => a.archivePath.localeCompare(b.archivePath));
 const releaseRelativePaths = new Set(files.map(({ archivePath }) => archivePath.replace(/^claude-aura\//, "")));
-for (const requiredPath of REQUIRED_RELEASE_FILES) {
+const requiredReleaseFiles = nativePayload
+  ? [...REQUIRED_RELEASE_FILES].filter((requiredPath) => !RELEASE_ROOT_FILE_SOURCES.has(requiredPath))
+  : REQUIRED_RELEASE_FILES;
+for (const requiredPath of requiredReleaseFiles) {
   if (!releaseRelativePaths.has(requiredPath)) throw new Error(`Required release file is missing: ${requiredPath}`);
 }
 const entries = await Promise.all(files.map(async (file) => ({ ...file, bytes: await fs.readFile(file.source) })));
@@ -345,4 +411,12 @@ const outputPath = path.join(outputDirectory, name);
 await fs.writeFile(outputPath, zip);
 const digest = crypto.createHash("sha256").update(zip).digest("hex");
 await fs.writeFile(`${outputPath}.sha256`, `${digest}  ${name}\n`, "utf8");
-console.log(JSON.stringify({ outputPath, files: entries.length, bytes: zip.length, sha256: digest }, null, 2));
+const unpackedBytes = entries.reduce((total, entry) => total + entry.bytes.length, 0);
+console.log(JSON.stringify({
+  outputPath,
+  profile: nativePayload ? "native-setup" : "portable",
+  files: entries.length,
+  bytes: zip.length,
+  unpackedBytes,
+  sha256: digest,
+}, null, 2));

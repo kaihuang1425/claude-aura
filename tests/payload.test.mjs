@@ -124,6 +124,9 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
   const baseCss = await fs.readFile(path.join(PROJECT_ROOT, "assets", "base.css"), "utf8");
   assert.match(baseCss, /\[data-claude-aura-prompt="authored"\]\s*\{[^}]*inline-size:\s*var\(--aura-prompt-width\)/s,
     "Only an authored prompt marker may own Aura's width");
+  assert.match(baseCss,
+    /\[data-aura-role="composer-editor"\]\s*\{[^}]*max-block-size:\s*min\(40dvh,\s*22rem\)[^}]*overflow-y:\s*auto[^}]*overflow-wrap:\s*anywhere/s,
+    "A long prompt must scroll and wrap inside the viewport instead of growing through it");
   assert(!/\[data-claude-aura-prompt="native"\]\s*\{[^}]*inline-size:/s.test(baseCss),
     "The native measurement marker must not reset Claude's prompt width");
   assert.match(rendererSource, /const imageCssValue =/);
@@ -208,8 +211,8 @@ test("compiled payload uses one stable root attribute and active-theme-only artw
     config: { ...DEFAULT_CONFIG, theme: "korean-idol" },
   });
   assert.deepEqual(koreanIdolBundle.settings.newChatLayout, {
-    widthRatio: 0.76,
-    offsetXRatio: -0.07,
+    widthRatio: 0.64,
+    offsetXRatio: 0,
     offsetYRatio: 0,
   });
   assert.equal(koreanIdolBundle.settings.artLayers.find((layer) => layer.role === "hero")
@@ -985,6 +988,9 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
         if (simple === '[aria-haspopup="menu"]') return this["aria-haspopup"] === "menu";
         if (simple === '[data-state="checked"]') return this["data-state"] === "checked";
         if (simple === '[data-state="unchecked"]') return this["data-state"] === "unchecked";
+        if (simple === '[data-claude-aura-prompt="authored"]') {
+          return this["data-claude-aura-prompt"] === "authored";
+        }
         if (simple === '[data-testid="new-chat"]') return this["data-testid"] === "new-chat";
         if (simple === '[data-testid="new-chat-button"]') return this["data-testid"] === "new-chat-button";
         if (simple === 'a[href="/new"]') return this.tagName === "A" && this.href === "/new";
@@ -1114,11 +1120,13 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
   const window = {
     innerWidth: 1440,
     innerHeight: 900,
+    location: { href: "https://claude.ai/new", pathname: "/new" },
     matchMedia: (query) => query === "(forced-colors: active)" ? forcedColorQuery : mediaQuery,
     getComputedStyle: (element) => ({
       display: element.style.getPropertyValue("display") || "block",
       visibility: "visible",
       translate: element.style.getPropertyValue("translate") || "none",
+      overflowY: element.style.getPropertyValue("overflow-y") || "visible",
       backgroundColor: element.style.getPropertyValue("background-color") || "rgba(0, 0, 0, 0)",
       backgroundImage: element.style.getPropertyValue("background-image") || "none",
       boxShadow: element.style.getPropertyValue("box-shadow") || "none",
@@ -1135,9 +1143,11 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
     },
   };
   let koreanPayload = null;
+  let prestigePayload = null;
   for (const theme of await listThemes()) {
     const bundle = await buildPayload({ config: { ...DEFAULT_CONFIG, theme: theme.name } });
     if (theme.name === "korean-idol") koreanPayload = bundle.payload;
+    if (theme.name === "korean-prestige") prestigePayload = bundle.payload;
     const inject = new Function(
       "window",
       "document",
@@ -1324,6 +1334,7 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
 
   const composer = new FakeElement("section");
   const editor = new FakeElement("textarea");
+  const editorScrollHost = new FakeElement("div");
   const firstControl = new FakeElement("button");
   const secondControl = new FakeElement("button");
   const modelBadge = new FakeElement("span");
@@ -1383,11 +1394,16 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
   toolbar.appendChild(compactPill);
   toolbar.appendChild(pressedControl);
   toolbar.appendChild(toggleControl);
-  composer.appendChild(editor);
+  editorScrollHost.style.setProperty("overflow-y", "auto");
+  editorScrollHost.appendChild(editor);
+  composer.appendChild(editorScrollHost);
   composer.appendChild(toolbar);
   composer.appendChild(popup);
   const promptRoot = new FakeElement("div");
   promptRoot.appendChild(composer);
+  const contentParent = new FakeElement("div");
+  let contentParentRect = null;
+  contentParent.getBoundingClientRect = () => ({ ...(contentParentRect ?? mainRect) });
   main.appendChild(promptRoot);
   let composerEditors = [editor];
   let hasConversationMessage = false;
@@ -1402,6 +1418,14 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
     width: 500,
     height: editorHeight,
   });
+  editorScrollHost.getBoundingClientRect = () => ({
+    left: 420,
+    top: composerBaseTop + 6,
+    right: 940,
+    bottom: composerBaseTop + 6 + Math.min(384, editorHeight),
+    width: 520,
+    height: Math.min(384, editorHeight),
+  });
   composer.getBoundingClientRect = () => ({
     left: 430,
     top: composerBaseTop,
@@ -1411,10 +1435,11 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
     height: composerHeight,
   });
   promptRoot.getBoundingClientRect = () => {
+    const parentRect = contentParentRect ?? mainRect;
     const width = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-width")) || 600;
     const x = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-x")) || 0;
     const y = Number.parseFloat(promptRoot.style.getPropertyValue("--aura-prompt-y")) || 0;
-    const left = mainRect.left + (mainRect.width / 2) - (width / 2) + x;
+    const left = parentRect.left + (parentRect.width / 2) - (width / 2) + x;
     const height = composerHeight + 20;
     return { left, top: composerBaseTop + y, right: left + width, bottom: composerBaseTop + y + height, width, height };
   };
@@ -1695,11 +1720,80 @@ test("renderer switching keeps one lifecycle, Code cleanup, and stable root writ
   assert.equal(promptRoot["data-claude-aura-prompt"], "authored");
   assert.equal(composer["data-claude-aura-prompt"], undefined,
     "Prompt placement must move the complete composer shell, not its inner field row");
-  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "904.4px");
+  assert.equal(promptRoot.style.getPropertyValue("--aura-prompt-width"), "761.6px");
   const placed = promptRoot.getBoundingClientRect();
   assert(placed.left >= 266 && placed.right <= 1424, "Korean Idol prompt escaped the measured main canvas");
   assert.equal(composer.style.getPropertyValue("position"), "");
   assert.equal(composer.style.getPropertyValue("transform"), "");
+
+  window.innerWidth = 1180;
+  window.innerHeight = 640;
+  mainRect = { left: 0, top: 0, right: 1180, bottom: 640, width: 1180, height: 640 };
+  contentParentRect = { left: 306, top: 0, right: 1162, bottom: 640, width: 856, height: 640 };
+  promptRoot.remove();
+  contentParent.appendChild(promptRoot);
+  main.appendChild(contentParent);
+  composerBaseTop = 220;
+  const injectPrestige = new Function(
+    "window", "document", "MutationObserver", "setInterval", "clearInterval", "setTimeout", "clearTimeout",
+    prestigePayload,
+  );
+  injectPrestige(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
+  window.__CLAUDE_AURA_STATE__.ensure();
+  const alignedPrompt = promptRoot.getBoundingClientRect();
+  const alignmentResult = {
+    promptCenter: Math.round((alignedPrompt.left + alignedPrompt.right) / 2),
+    parentCenter: Math.round((contentParentRect.left + contentParentRect.right) / 2),
+  };
+
+  composerBaseTop = 350;
+  editorHeight = 580;
+  composerHeight = 298;
+  const promptInputListeners = documentListeners.get("input") ?? new Set();
+  assert.equal(promptInputListeners.size, 1,
+    "An authored prompt must remeasure immediately when its editor grows");
+  for (const listener of promptInputListeners) listener({ target: editor });
+  assert.equal(timeouts.size, 1,
+    "One growing prompt input must schedule one bounded geometry refresh");
+  for (const [id, timer] of [...timeouts]) {
+    timeouts.delete(id);
+    timer.callback();
+  }
+  const compactLongPrompt = promptRoot.getBoundingClientRect();
+  const compactLongPromptProbe = window.__CLAUDE_AURA_STATE__.getLayoutProbe();
+  const liveRegressionResult = {
+    alignmentResult,
+    context: document.documentElement.dataset.claudeAuraContext,
+    promptMarker: promptRoot["data-claude-aura-prompt"],
+    editorRole: editor["data-aura-role"],
+    probeContext: compactLongPromptProbe.context,
+    probePromptPresent: Boolean(compactLongPromptProbe.prompt),
+    contained: compactLongPrompt.left >= contentParentRect.left + 16
+      && compactLongPrompt.right <= contentParentRect.right - 16
+      && compactLongPrompt.top >= mainRect.top + 16
+      && compactLongPrompt.bottom <= mainRect.bottom - 16,
+  };
+  window.innerWidth = 1440;
+  window.innerHeight = 900;
+  mainRect = { left: 250, top: 0, right: 1440, bottom: 900, width: 1190, height: 900 };
+  promptRoot.remove();
+  main.appendChild(promptRoot);
+  contentParent.remove();
+  contentParentRect = null;
+  composerBaseTop = 300;
+  editorHeight = 40;
+  composerHeight = 100;
+  window.__CLAUDE_AURA_STATE__.ensure();
+  assert.deepEqual(liveRegressionResult, {
+    alignmentResult: { promptCenter: 734, parentCenter: 734 },
+    context: "new-chat",
+    promptMarker: "authored",
+    editorRole: "composer-editor",
+    probeContext: "new-chat",
+    probePromptPresent: true,
+    contained: true,
+  }, "Live Home geometry must align to its content parent and retain long-prompt containment");
+
   injectNativeLayout(window, document, FakeMutationObserver, setInterval, clearInterval, setTimeout, clearTimeout);
   window.__CLAUDE_AURA_STATE__.ensure();
   assert.equal(promptRoot["data-claude-aura-prompt"], "native",

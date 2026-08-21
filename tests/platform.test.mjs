@@ -1,5 +1,6 @@
 // platform tests. Extracted from the former monolithic tests/run-tests.mjs.
 import { test, runIfMain } from "./support/harness.mjs";
+import { readFileSync } from "node:fs";
 import {
   AURA_VERSION,
   DEFAULT_CONFIG,
@@ -42,14 +43,17 @@ import {
   zipEntryNames,
 } from "./support/context.mjs";
 
-const SOURCE_ONLY_RELEASE_PATHS = [
-  "scripts/desktop-cdp/session.mjs",
-  "scripts/desktop-profile.mjs",
-  "tests/aura-code-popup-diagnostic.test.mjs",
-  "tests/desktop-cdp.test.mjs",
-  "windows/aura-code-popup-diagnostic.ps1",
-  "windows/desktop-presentation.ps1",
-];
+// The release builder owns the source-only denylist. Derive the expected paths
+// from it rather than repeating them, so a file registered for one exclusion
+// surface can never silently ship through another.
+const SOURCE_ONLY_RELEASE_PATHS = (() => {
+  const builder = readFileSync(path.join(PROJECT_ROOT, "scripts", "build-release.mjs"), "utf8");
+  const declaration = builder.match(/const SOURCE_ONLY_RELEASE_FILES = new Set\(\[([\s\S]*?)\]\);/u)?.[1];
+  assert(declaration, "scripts/build-release.mjs no longer declares SOURCE_ONLY_RELEASE_FILES");
+  const paths = [...declaration.matchAll(/"([^"]+)"/gu)].map((match) => match[1]);
+  assert(paths.length, "scripts/build-release.mjs declares no source-only release files");
+  return paths;
+})();
 
 test("legacy macOS CDP validation rejects unsafe endpoints", async () => {
   const output = run(process.execPath, ["scripts/injector.mjs", "--self-test", "--port", "9394"]);
@@ -804,16 +808,28 @@ test("release and installers exclude unsafe composite references and binary patc
   assert.match(releaseBuilder, /SOURCE_ONLY_RELEASE_FILES/);
   assert.match(releaseBuilder, /SOURCE_ONLY_RELEASE_DIRECTORIES/);
   assert.match(releaseBuilder,
-    /isSourceOnlyReleasePath[\s\S]{0,240}?SOURCE_ONLY_RELEASE_FILES[.]has[(]normalized[)]/,
+    /\["studio", new Set\(\["\.css", "\.html", "\.js", "\.png", "\.svg"\]\)\]/,
+    "Release collection must include the canonical PNG pet previews");
+  for (const retiredPetPreview of ["moss.svg", "nori.svg", "pip.svg"]) {
+    assert(SOURCE_ONLY_RELEASE_PATHS.includes(`studio/pets/${retiredPetPreview}`),
+      `Retired pet stand-in must remain source-only: ${retiredPetPreview}`);
+  }
+  assert.match(releaseBuilder,
+    /isSourceOnlyReleasePath[\s\S]{0,240}?SOURCE_ONLY_RELEASE_FILES\.has\(normalized\)/,
     "Release builds must apply the source-only file denylist");
   assert.match(releaseBuilder, /REQUIRED_THEME_DESCRIPTOR_FILES/);
   assert.match(releaseBuilder, /REQUIRED_APP_SURFACE_FILES/);
   assert.match(releaseBuilder, /REQUIRED_RELEASE_FILES/);
+  assert.match(releaseBuilder, /argument === "--native-payload"/,
+    "Release builds must expose a native Setup payload profile");
+  assert.match(releaseBuilder,
+    /nativePayload \? \[\] : collectReleaseRootTemplates\(\)/,
+    "Native Setup payloads must omit portable root installer wrappers");
   assert.match(releaseBuilder,
     /const REQUIRED_RELEASE_FILES = new Set\(\[[\s\S]{0,160}?\.\.\.RELEASE_ROOT_FILES,[\s\S]{0,80}?\.\.\.RELEASE_DOCUMENT_FILES,[\s\S]{0,80}?\.\.\.REQUIRED_THEME_DESCRIPTOR_FILES,[\s\S]{0,80}?\.\.\.REQUIRED_APP_SURFACE_FILES,/,
     "Release builds must reject packages missing an installer-required surface");
-  assert.match(releaseBuilder, /\["studio",\s*new Set\(\["\.css",\s*"\.html",\s*"\.js"\]\)\]/,
-    "The release allowlist must include Aura Studio");
+  assert.match(releaseBuilder, /\["studio",\s*new Set\(\["\.css",\s*"\.html",\s*"\.js",\s*"\.png",\s*"\.svg"\]\)\]/,
+    "The release allowlist must include Aura Studio code and canonical PNG pet artwork");
   assert.match(releaseBuilder, /\.corrupt-/);
   for (const extension of [".avif", ".ico", ".png", ".svg", ".webp"]) {
     assert(releaseBuilder.includes(`"${extension}"`), `Release allowlist omits supported artwork type ${extension}`);
@@ -834,7 +850,10 @@ test("release and installers exclude unsafe composite references and binary patc
   "Release builds must refresh derived identity assets before collecting files");
   const windowsInstall = await fs.readFile(path.join(PROJECT_ROOT, "windows", "install.ps1"), "utf8");
   const aggregateRunner = await fs.readFile(path.join(PROJECT_ROOT, "tests", "run-tests.mjs"), "utf8");
-  const windowsInstallCommand = await fs.readFile(path.join(PROJECT_ROOT, "Install Claude Aura.cmd"), "utf8");
+  const windowsInstallCommand = await fs.readFile(
+    path.join(PROJECT_ROOT, "installer", "templates", "package-root", "Install Claude Aura.cmd.template"),
+    "utf8",
+  );
   const macInstall = await fs.readFile(path.join(PROJECT_ROOT, "macos", "install.sh"), "utf8");
   const commandPathIndex = windowsInstallCommand.indexOf('set "AURA_INSTALLER=%~dp0windows\\install.ps1"');
   const commandLocationIndex = windowsInstallCommand.indexOf('cd /d "%LOCALAPPDATA%"');
@@ -843,6 +862,12 @@ test("release and installers exclude unsafe composite references and binary patc
   assert(commandPathIndex >= 0 && commandLocationIndex > commandPathIndex
       && commandLaunchIndex > commandLocationIndex,
   "The Windows package launcher must leave a potentially installed working directory before update");
+  assert.match(releaseBuilder,
+    /RELEASE_ROOT_FILE_SOURCES[\s\S]{0,500}?installer\/templates\/package-root\/Install Claude Aura\.cmd\.template/,
+    "Release launcher templates must be owned by the installer source tree");
+  assert.match(windowsInstall,
+    /releaseRootTemplatePaths[\s\S]{0,600}?installer\/templates\/package-root\/Install Claude Aura\.cmd\.template/,
+    "Repository installs must map the organized launcher template to the installed root");
   const macCopyList = macInstall.match(/for directory in ([^;]+); do/)?.[1] ?? "";
   assert(!/\b(?:preview|themes)\b/.test(macCopyList),
     "macOS install copy list retained an offline or source-kit directory");
@@ -855,18 +880,15 @@ test("release and installers exclude unsafe composite references and binary patc
   for (const sourceOnlyPath of SOURCE_ONLY_RELEASE_PATHS) {
     assert(installExclusions.includes(`'${sourceOnlyPath}'`),
       `Windows repo/dev installs include source-only file ${sourceOnlyPath}`);
-    assert(macInstall.includes(`"$INSTALL_ROOT/${sourceOnlyPath}"`),
-      `macOS repo/dev installs retain source-only file ${sourceOnlyPath}`);
   }
   assert.match(windowsInstall,
     /Test-AuraInstallExcludedReleasePath -RelativePath \$relativePath/,
     "Windows source enumeration does not apply its source-only filter");
+  assert.doesNotMatch(aggregateRunner, /^import "\.\/desktop-cdp\.test\.mjs";$/m,
+    "The shipped aggregate runner statically imports a source-only Desktop suite");
   assert.doesNotMatch(aggregateRunner,
-    /^import "[.]\/aura-code-popup-diagnostic[.]test[.]mjs";$/m,
-    "The shipped aggregate runner statically imports the source-only Aura Code diagnostic suite");
-  assert.doesNotMatch(aggregateRunner,
-    /^import "[.]\/desktop-cdp[.]test[.]mjs";$/m,
-    "The shipped aggregate runner statically imports the source-only Desktop suite");
+    /^import "\.\/aura-code-popup-diagnostic\.test\.mjs";$/m,
+    "The shipped aggregate runner statically imports a source-only Aura Code diagnostic suite");
   assert.match(aggregateRunner,
     /sourceOnlyAuraCodeDiagnosticInputs[\s\S]{0,500}?existsSync[\s\S]{0,200}?suiteFiles\.push\("aura-code-popup-diagnostic\.test\.mjs"\)/,
     "The repository runner does not conditionally register its source-only Aura Code diagnostic suite");
@@ -874,8 +896,12 @@ test("release and installers exclude unsafe composite references and binary patc
     /sourceOnlyDesktopTestInputs[\s\S]{0,700}?existsSync[\s\S]{0,200}?suiteFiles\.push\("desktop-cdp\.test\.mjs"\)/,
     "The repository runner does not conditionally register its source-only Desktop suite");
   assert.match(aggregateRunner,
-    /EXCLUSIVE_SUITES = new Set\(\["platform\.test\.mjs"\]\)[\s\S]{0,700}?MAX_PARALLEL_SUITES/,
-    "The bounded runner must keep shared release generation exclusive");
+    /EXCLUSIVE_SUITES = new Set\(\["installer\.test\.mjs", "platform\.test\.mjs"\]\)[\s\S]{0,700}?MAX_PARALLEL_SUITES/,
+    "The bounded runner must isolate live-process installer locks and shared release generation");
+  for (const sourceOnlyPath of SOURCE_ONLY_RELEASE_PATHS) {
+    assert(macInstall.includes(`"$INSTALL_ROOT/${sourceOnlyPath}"`),
+      `macOS repo/dev installs retain source-only file ${sourceOnlyPath}`);
+  }
   assert.match(windowsInstall, /function New-AuraInstallStage/);
   assert.match(windowsInstall, /Get-FileHash[\s\S]{0,220}?SHA256/,
     "Windows installs must verify every staged application file");
@@ -893,6 +919,7 @@ test("release and installers exclude unsafe composite references and binary patc
   }
   for (const documentationName of [
     "ACCEPTANCE_AUDIT.md",
+    "DELIVERY_GUARDRAIL.md",
     "FILE_MANIFEST.md",
     "IMPLEMENTATION_REPORT.md",
     "SCREENSHOT_PLAN.md",
@@ -959,9 +986,14 @@ test("release and installers exclude unsafe composite references and binary patc
     "macOS stale-surface cleanup must remain below the verified install root");
   const privateName = `private-release-state-${process.pid}-${Date.now()}.json`;
   const privatePath = path.join(PROJECT_ROOT, privateName);
+  const releaseTestRoot = await fs.mkdtemp(path.join(os.tmpdir(), "claude-aura-release-test-"));
   try {
     await fs.writeFile(privatePath, '{"secret":"must-not-ship"}\n', "utf8");
-    const release = JSON.parse(run(process.execPath, ["scripts/build-release.mjs"]));
+    const release = JSON.parse(run(process.execPath, [
+      "scripts/build-release.mjs",
+      "--output-directory",
+      releaseTestRoot,
+    ]));
     const releaseBytes = await fs.readFile(release.outputPath);
     const names = zipEntryNames(releaseBytes);
     for (const sourceOnlyPath of SOURCE_ONLY_RELEASE_PATHS) {
@@ -989,12 +1021,34 @@ test("release and installers exclude unsafe composite references and binary patc
     ]) {
       assert(names.includes(`claude-aura/${rootFile}`), `Release omitted required root file ${rootFile}`);
     }
+    const nativeReleaseRoot = path.join(releaseTestRoot, "native");
+    const nativeRelease = JSON.parse(run(process.execPath, [
+      "scripts/build-release.mjs",
+      "--native-payload",
+      "--output-directory",
+      nativeReleaseRoot,
+    ]));
+    const nativeNames = zipEntryNames(await fs.readFile(nativeRelease.outputPath));
+    assert.equal(nativeRelease.profile, "native-setup");
+    assert.equal(nativeRelease.files, release.files - 3,
+      "Native Setup payload must differ only by the three portable wrappers");
+    for (const portableWrapper of [
+      "Install Claude Aura.cmd",
+      "Install Claude Aura.command",
+      "Uninstall Claude Aura.cmd",
+    ]) {
+      assert(!nativeNames.includes(`claude-aura/${portableWrapper}`),
+        `Native Setup payload included portable wrapper ${portableWrapper}`);
+    }
+    assert(nativeNames.includes("claude-aura/windows/aura-ui.ps1"),
+      "Native Setup payload omitted the Aura host");
     for (const localizedReadme of ["README.zh-CN.md", "README.zh-HKTW.md"]) {
       assert(names.includes(`claude-aura/readmes/${localizedReadme}`),
         `Release omitted localized readme ${localizedReadme}`);
     }
     assert.deepEqual(names.filter((name) => name.startsWith("claude-aura/docs/")).sort(), [
       "claude-aura/docs/ACCEPTANCE_AUDIT.md",
+      "claude-aura/docs/DELIVERY_GUARDRAIL.md",
       "claude-aura/docs/FILE_MANIFEST.md",
       "claude-aura/docs/IMPLEMENTATION_REPORT.md",
       "claude-aura/docs/SCREENSHOT_PLAN.md",
@@ -1104,6 +1158,7 @@ test("release and installers exclude unsafe composite references and binary patc
       "Release included files from a per-theme source kit directory");
   } finally {
     await fs.rm(privatePath, { force: true });
+    await fs.rm(releaseTestRoot, { recursive: true, force: true });
   }
   const files = [
     ...(await fs.readdir(path.join(PROJECT_ROOT, "windows"))).map((file) => path.join(PROJECT_ROOT, "windows", file)),

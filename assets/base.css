@@ -338,6 +338,9 @@ html.claude-aura [data-aura-role="composer-editor"] {
   background: transparent !important;
   border-color: transparent !important;
   box-shadow: none !important;
+  max-block-size: min(40dvh, 22rem) !important;
+  overflow-y: auto !important;
+  overflow-wrap: anywhere;
 }
 
 html.claude-aura [data-aura-role="composer-editor"]:focus-visible {

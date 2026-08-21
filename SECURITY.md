@@ -10,6 +10,16 @@ package permissions, bypass Anthropic's signed debugging authorization, or
 modify account, model, provider, or conversation data. The **Desktop app**
 button launches the official executable normally.
 
+The source-only Claude Desktop overlay can show Aura's local Work Hub beside
+the verified signed Claude Desktop window. The panel loads only the packaged
+`work-hub.html` surface and never injects into, automates, or reads Claude
+Desktop. It talks to the running Aura Main process over a rotating,
+current-user-only local named pipe. Requests are authenticated, bounded, and
+replay-protected; responses contain only body-free observed-session fields and
+never expose provider routes. A card reports `opened` only after Aura Main has
+actually selected or opened that observed session, and Aura Main is brought to
+the foreground only after that success.
+
 The WebView2 profile under `%LOCALAPPDATA%\ClaudeAura\webview` contains browser
 session data and should be protected like any other signed-in browser profile.
 Aura does not deliberately read or log chat text. Technical exceptions are
@@ -74,18 +84,14 @@ permission, safety, account, or billing controls.
 ## Installer authenticity
 
 Official public Windows distributions come only from the repository's GitHub
-Releases page. When the developer does not have a code-signing certificate, a
-release may provide two explicitly no-certificate paths:
-
-- the allowlisted release ZIP, its SHA-256, and the readable
-  `Install Claude Aura.cmd` source-script entry point; and
-- a guided native Setup whose filename ends in `-UNSIGNED.exe`, accompanied by
-  its SHA-256 and build manifest.
+Releases page. Each release provides one guided native Setup, accompanied by
+its SHA-256 and build manifest. When the developer does not have a code-signing
+certificate, its filename ends in `-UNSIGNED.exe`.
 
 SHA-256 detects changed bytes but does not authenticate a publisher. The
 unsigned Setup must identify that limitation in its filename, first wizard
 page, manifest, documentation, and release notes. If Windows warns about or
-blocks it, users must use the ZIP/CMD path instead of bypassing the warning.
+blocks it, users must stop instead of bypassing the warning.
 
 A Setup filename without `-UNSIGNED` is a signed release path. It must have a
 valid Authenticode signature, expected certificate thumbprint, and timestamp
@@ -95,12 +101,11 @@ release asset.
 
 Claude Aura does not ask users to install a root certificate, disable
 SmartScreen, ignore a publisher mismatch, or run Setup as administrator.
-Neither install path downloads its application payload, adds a service, creates
-a scheduled task, installs a driver, or modifies Claude Desktop. Both check the
+Setup does not download its application payload, add a service, create a
+scheduled task, install a driver, or modify Claude Desktop. It checks the
 installed Node.js and WebView2 prerequisites before changing the app.
 Interrupted app replacement is guarded and recoverable. See
-`docs/WINDOWS_INSTALLER.md` for the ZIP, signing, recovery, and release
-contract.
+`docs/WINDOWS_INSTALLER.md` for signing, recovery, and the release contract.
 
 To report a vulnerability, open a private security advisory in the repository
 instead of a public issue.

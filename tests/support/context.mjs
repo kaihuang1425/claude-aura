@@ -221,6 +221,7 @@ export async function deliverableFiles(directory = PROJECT_ROOT, relativeDirecto
   ]);
   const deliverableDocumentation = new Set([
     "docs/ACCEPTANCE_AUDIT.md",
+    "docs/DELIVERY_GUARDRAIL.md",
     "docs/FILE_MANIFEST.md",
     "docs/IMPLEMENTATION_REPORT.md",
     "docs/SCREENSHOT_PLAN.md",

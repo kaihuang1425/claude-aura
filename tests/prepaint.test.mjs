@@ -306,7 +306,7 @@ test("Windows registers passive prepaint before initial navigation and keeps fai
   const completionEnd = ui.indexOf("\nfunction ", completionStart + 1);
   const completion = ui.slice(completionStart, completionEnd);
   assert.match(completion,
-    /timed out; continuing fail-open[\s\S]{0,240}?Navigate\(\$ClaudeInitialUrl\)/,
+    /timed out; continuing fail-open[\s\S]{0,280}?Navigate\(\(Get-AuraWebTabInitialUrl -Fallback \$ClaudeInitialUrl\)\)/,
     "A prepaint registration failure must not strand the loading cover");
   assert.match(ui,
     /\$ClaudeInitialUrl\s*=\s*if\s*\(\$ExperimentalCodeStart\)\s*\{\s*'https:\/\/claude\.ai\/code'\s*\}\s*else\s*\{\s*'https:\/\/claude\.ai\/'\s*\}/,

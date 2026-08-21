@@ -27,7 +27,17 @@ const suiteFiles = [
   "aura-rescue.test.mjs",
   "draft-handoff.test.mjs",
   "code-adapter.test.mjs",
+  "pets.test.mjs",
+  "pet-runtime-contract.test.mjs",
   "prompt-shelf.test.mjs",
+  "taskboard.test.mjs",
+  "session-board-ui.test.mjs",
+  "session-board-host.test.mjs",
+  "session-board-presentation.test.mjs",
+  "desktop-session-board.test.mjs",
+  "web-tabs.test.mjs",
+  "session-dock.test.mjs",
+  "delivery-gate.test.mjs",
   "installer.test.mjs",
   "desktop-guidance.test.mjs",
   "locales.test.mjs",
@@ -46,16 +56,44 @@ if (sourceOnlyAuraCodeDiagnosticInputs.every((url) => existsSync(fileURLToPath(u
 const sourceOnlyDesktopTestInputs = [
   new URL("./desktop-cdp.test.mjs", import.meta.url),
   new URL("../scripts/desktop-cdp/session.mjs", import.meta.url),
+  new URL("../scripts/desktop-main-inspector.mjs", import.meta.url),
   new URL("../scripts/desktop-profile.mjs", import.meta.url),
+  new URL("../windows/build-desktop-capture-filter.ps1", import.meta.url),
+  new URL("../windows/desktop-aura-session.ps1", import.meta.url),
+  new URL("../windows/desktop-overlay-proof.ps1", import.meta.url),
   new URL("../windows/desktop-presentation.ps1", import.meta.url),
+  new URL("../windows/desktop-taskboard-panel.ps1", import.meta.url),
+  new URL("../windows/native/desktop-capture-filter.cpp", import.meta.url),
 ];
 if (sourceOnlyDesktopTestInputs.every((url) => existsSync(fileURLToPath(url)))) {
   suiteFiles.push("desktop-cdp.test.mjs");
 }
 
-// platform.test.mjs deliberately rebuilds shared derived assets and a release
-// archive. Keep it exclusive after every temp-rooted suite has cleaned up.
-const EXCLUSIVE_SUITES = new Set(["platform.test.mjs"]);
+const runnerArguments = process.argv.slice(2);
+const focused = runnerArguments[0] === "--focus";
+if (runnerArguments.length && !focused) {
+  console.error("Usage: node tests/run-tests.mjs [--focus <suite> ...]");
+  process.exit(2);
+}
+if (focused && runnerArguments.length === 1) {
+  console.error("test:focus requires at least one suite name");
+  process.exit(2);
+}
+const requestedSuites = focused
+  ? runnerArguments.slice(1).map((name) => name.endsWith(".test.mjs") ? name : `${name}.test.mjs`)
+  : suiteFiles;
+const unknownSuites = requestedSuites.filter((file) => !suiteFiles.includes(file));
+if (unknownSuites.length) {
+  console.error(`Unknown test suite: ${unknownSuites.join(", ")}`);
+  console.error(`Available suites: ${suiteFiles.map((file) => file.replace(/\.test\.mjs$/u, "")).join(", ")}`);
+  process.exit(2);
+}
+const selectedSuiteFiles = [...new Set(requestedSuites)];
+
+// Installer tests exercise the same process/operation lock as live Aura hosts,
+// while platform tests rebuild shared derived assets and a release archive.
+// Run both only after window-host suites and other temp-rooted work have ended.
+const EXCLUSIVE_SUITES = new Set(["installer.test.mjs", "platform.test.mjs"]);
 const requestedJobs = Number.parseInt(process.env.AURA_TEST_JOBS ?? "4", 10);
 const MAX_PARALLEL_SUITES = Number.isInteger(requestedJobs)
   ? Math.min(8, Math.max(1, requestedJobs))
@@ -103,8 +141,8 @@ async function runSuites(files, jobs) {
   return results;
 }
 
-const parallel = suiteFiles.filter((file) => !EXCLUSIVE_SUITES.has(file));
-const exclusive = suiteFiles.filter((file) => EXCLUSIVE_SUITES.has(file));
+const parallel = selectedSuiteFiles.filter((file) => !EXCLUSIVE_SUITES.has(file));
+const exclusive = selectedSuiteFiles.filter((file) => EXCLUSIVE_SUITES.has(file));
 const results = [
   ...await runSuites(parallel, MAX_PARALLEL_SUITES),
   ...await runSuites(exclusive, 1),

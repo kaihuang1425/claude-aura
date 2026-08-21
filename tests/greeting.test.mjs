@@ -282,63 +282,95 @@ const EXPECTED_BUILTIN_GREETING_RECIPES = Object.freeze({
       0.68, 0, 0, "none", "native", 1),
   ),
   "japanese-film-editorial": sharedAppearanceRecipe(
-    recipeFrame("editorial-serif", "accent", 36, 500, false, -0.02, 1.14, "start",
-      0.56, -0.12, -0.04, "none", "compact", 0.9),
-    recipeFrame("editorial-serif", "accent", 42, 500, false, -0.02, 1.12, "start",
-      0.5, -0.16, -0.02, "none", "compact", 0.95),
+    recipeFrame("editorial-serif", "accent", 34, 500, false, -0.02, 1.15, "center",
+      0.72, 0, 0, "none", "compact", 1),
+    recipeFrame("editorial-serif", "accent", 40, 500, false, -0.02, 1.12, "center",
+      0.68, 0, 0, "none", "compact", 1),
   ),
   "korean-prestige": sharedAppearanceRecipe(
-    recipeFrame("humanist-sans", "primary", 32, 400, false, 0.03, 1.2, "start",
-      0.62, -0.06, -0.02, "none", "compact", 0.85),
-    recipeFrame("humanist-sans", "primary", 37, 400, false, 0.035, 1.16, "start",
-      0.58, -0.1, -0.01, "none", "compact", 0.9),
+    recipeFrame("humanist-sans", "primary", 34, 400, false, 0.03, 1.15, "center",
+      0.72, 0, 0, "none", "compact", 1),
+    recipeFrame("humanist-sans", "primary", 40, 400, false, 0.035, 1.12, "center",
+      0.68, 0, 0, "none", "compact", 1),
   ),
   "cartoon-studio": sharedAppearanceRecipe(
-    recipeFrame("rounded-sans", "accent", 38, 700, false, -0.02, 1.05, "center",
-      0.72, 0, -0.02, "none", "native", 0.8),
-    recipeFrame("rounded-sans", "accent", 46, 700, false, -0.025, 1.03, "center",
-      0.68, 0, 0, "none", "native", 0.85),
+    recipeFrame("rounded-sans", "accent", 34, 700, false, -0.02, 1.15, "center",
+      0.72, 0, 0, "none", "native", 1),
+    recipeFrame("rounded-sans", "accent", 40, 700, false, -0.025, 1.12, "center",
+      0.68, 0, 0, "none", "native", 1),
   ),
   "anime-twilight": {
     light: {
-      standard: recipeFrame("humanist-sans", "primary", 36, 400, false, 0.02, 1.12, "center",
-        0.7, -0.03, -0.03, "glow", "native", 0.75),
-      wide: recipeFrame("humanist-sans", "primary", 42, 400, false, 0.025, 1.08, "center",
-        0.66, -0.05, -0.01, "glow", "native", 0.8),
+      standard: recipeFrame("humanist-sans", "primary", 34, 400, false, 0.02, 1.15, "center",
+        0.72, 0, 0, "glow", "native", 1),
+      wide: recipeFrame("humanist-sans", "primary", 40, 400, false, 0.025, 1.12, "center",
+        0.68, 0, 0, "glow", "native", 1),
     },
     dark: {
-      standard: recipeFrame("humanist-sans", "accent", 36, 400, false, 0.02, 1.12, "center",
-        0.7, -0.03, -0.03, "glow", "native", 0.75),
-      wide: recipeFrame("humanist-sans", "accent", 42, 400, false, 0.025, 1.08, "center",
-        0.66, -0.05, -0.01, "glow", "native", 0.8),
+      standard: recipeFrame("humanist-sans", "accent", 34, 400, false, 0.02, 1.15, "center",
+        0.72, 0, 0, "glow", "native", 1),
+      wide: recipeFrame("humanist-sans", "accent", 40, 400, false, 0.025, 1.12, "center",
+        0.68, 0, 0, "glow", "native", 1),
     },
   },
   "study-library": sharedAppearanceRecipe(
-    recipeFrame("editorial-serif", "primary", 34, 600, false, -0.01, 1.2, "start",
-      0.6, -0.1, -0.02, "hairline", "compact", 0.85),
-    recipeFrame("editorial-serif", "primary", 40, 600, false, -0.015, 1.17, "start",
-      0.56, -0.14, -0.01, "hairline", "compact", 0.9),
+    recipeFrame("editorial-serif", "primary", 34, 600, false, -0.01, 1.15, "center",
+      0.72, 0, 0, "hairline", "compact", 1),
+    recipeFrame("editorial-serif", "primary", 40, 600, false, -0.015, 1.12, "center",
+      0.68, 0, 0, "hairline", "compact", 1),
   ),
   "japanese-idol": {
     light: {
-      standard: recipeFrame("editorial-serif", "accent", 37, 600, false, 0.005, 1.12, "start",
-        0.58, -0.1, -0.03, "none", "compact", 0.85),
-      wide: recipeFrame("editorial-serif", "accent", 44, 600, false, 0.005, 1.08, "start",
-        0.54, -0.14, -0.01, "none", "compact", 0.9),
+      standard: recipeFrame("editorial-serif", "accent", 34, 600, false, 0.005, 1.15, "center",
+        0.72, 0, 0, "none", "compact", 1),
+      wide: recipeFrame("editorial-serif", "accent", 40, 600, false, 0.005, 1.12, "center",
+        0.68, 0, 0, "none", "compact", 1),
     },
     dark: {
-      standard: recipeFrame("editorial-serif", "accent", 36, 600, false, 0.005, 1.12, "start",
-        0.58, -0.1, -0.03, "none", "compact", 0.85),
-      wide: recipeFrame("editorial-serif", "accent", 43, 600, false, 0.005, 1.08, "start",
-        0.54, -0.14, -0.01, "none", "compact", 0.9),
+      standard: recipeFrame("editorial-serif", "accent", 34, 600, false, 0.005, 1.15, "center",
+        0.72, 0, 0, "none", "compact", 1),
+      wide: recipeFrame("editorial-serif", "accent", 40, 600, false, 0.005, 1.12, "center",
+        0.68, 0, 0, "none", "compact", 1),
     },
   },
   "korean-idol": sharedAppearanceRecipe(
-    recipeFrame("system-sans", "primary", 34, 650, false, -0.025, 1.12, "start",
-      0.6, -0.12, -0.02, "none", "native", 0.9),
-    recipeFrame("system-sans", "primary", 40, 650, false, -0.03, 1.08, "start",
-      0.56, -0.16, -0.01, "none", "native", 0.95),
+    recipeFrame("system-sans", "primary", 34, 650, false, -0.025, 1.15, "center",
+      0.72, 0, 0, "none", "native", 1),
+    recipeFrame("system-sans", "primary", 40, 650, false, -0.03, 1.12, "center",
+      0.68, 0, 0, "none", "native", 1),
   ),
+});
+
+test("all built-in greetings and prompts share Default's stable parent-area geometry", async () => {
+  const registry = JSON.parse(await fs.readFile(
+    path.join(PROJECT_ROOT, "themes", "registry.json"),
+    "utf8",
+  ));
+  const reference = registry.themes.find((theme) => theme.id === "default");
+  assert(reference, "Default theme is missing");
+  const frameGeometry = (frame) => ({
+    fontSize: frame.fontSize,
+    lineHeight: frame.lineHeight,
+    align: frame.align,
+    maxWidthRatio: frame.maxWidthRatio,
+    xRatio: frame.xRatio,
+    yRatio: frame.yRatio,
+    markScale: frame.mark.scale,
+  });
+
+  for (const theme of registry.themes) {
+    assert.deepEqual(theme.newChatLayout, reference.newChatLayout,
+      `${theme.id} composer drifted from Default's parent-area frame`);
+    for (const appearance of ["light", "dark"]) {
+      for (const viewport of ["standard", "wide"]) {
+        assert.deepEqual(
+          frameGeometry(theme.newChatGreetingStyle[appearance][viewport]),
+          frameGeometry(reference.newChatGreetingStyle[appearance][viewport]),
+          `${theme.id} ${appearance}.${viewport} greeting drifted from Default's size or placement`,
+        );
+      }
+    }
+  }
 });
 
 test("all built-ins compile exact four-frame greeting recipes and registered marks", async () => {

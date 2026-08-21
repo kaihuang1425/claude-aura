@@ -36,7 +36,21 @@ offline-preview files and comparison screenshots are not deliverables.
 - `studio/locales/vi.js`
 - `studio/locales/zh-CN.js`
 - `studio/locales/zh-HKTW.js`
+- `studio/pets.css`
+- `studio/pets.js`
+- `studio/pets/moss.png`
+- `studio/pets/moss.svg`
+- `studio/pets/nori.png`
+- `studio/pets/nori.svg`
+- `studio/pets/pip.png`
+- `studio/pets/pip.svg`
+- `studio/session-board-presentation.js`
+- `studio/session-board.css`
+- `studio/session-board.js`
 - `studio/styles.css`
+- `studio/taskboard.css`
+- `studio/taskboard.js`
+- `studio/work-hub.html`
 
 ## Repository and policy
 
@@ -47,15 +61,12 @@ offline-preview files and comparison screenshots are not deliverables.
 - `config.example.json`
 - `desktop-compatibility.json`
 - `CONTRIBUTING.md`
-- `Install Claude Aura.cmd`
-- `Install Claude Aura.command`
 - `LICENSE`
 - `NOTICE.md`
 - `package.json`
 - `README.md`
 - `SECURITY.md`
 - `THIRD_PARTY_NOTICES.md`
-- `Uninstall Claude Aura.cmd`
 
 ## Localized readmes
 
@@ -300,11 +311,15 @@ the retired reconstructed preview are not deliverables.
 - `installer/assets/wizard-small-dark.png`
 - `installer/assets/wizard-small-light.png`
 - `installer/build-update.mjs`
+- `installer/templates/package-root/Install Claude Aura.cmd.template`
+- `installer/templates/package-root/Install Claude Aura.command.template`
+- `installer/templates/package-root/Uninstall Claude Aura.cmd.template`
 - `installer/install-trigger.txt`
 - `installer/locales/en.isl`
 - `installer/locales/zh-CN.isl`
 - `installer/locales/zh-HKTW.isl`
 - `scripts/asset-audit.mjs`
+- `scripts/audit-installer.mjs`
 - `scripts/build-aura-icon.mjs`
 - `scripts/build-brand-wordmarks.mjs`
 - `scripts/build-installer-assets.mjs`
@@ -313,9 +328,12 @@ the retired reconstructed preview are not deliverables.
 - `scripts/build-responsive-resolver.mjs`
 - `scripts/build-studio-themes.mjs`
 - `scripts/build-release.mjs`
+- `scripts/codex-session-index.mjs`
+- `scripts/delivery-gate.mjs`
 - `scripts/convert-theme-assets.mjs`
 - `scripts/desktop-cdp/validation.mjs`
 - `scripts/desktop-cdp/session.mjs`
+- `scripts/desktop-main-inspector.mjs`
 - `scripts/desktop-profile.mjs`
 - `scripts/desktop-probe.mjs`
 - `scripts/injector.mjs`
@@ -348,6 +366,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/draft-handoff.test.mjs`
 - `tests/desktop-cdp.test.mjs`
 - `tests/desktop-guidance.test.mjs`
+- `tests/delivery-gate.test.mjs`
 - `tests/editor-overlay.test.mjs`
 - `tests/greeting-runtime.test.mjs`
 - `tests/greeting.test.mjs`
@@ -357,16 +376,25 @@ the retired reconstructed preview are not deliverables.
 - `tests/loading-screen.test.mjs`
 - `tests/theme-package.test.mjs`
 - `tests/payload.test.mjs`
+- `tests/pet-runtime-contract.test.mjs`
 - `tests/platform.test.mjs`
+- `tests/pets.test.mjs`
 - `tests/prompt-shelf.test.mjs`
 - `tests/prepaint.test.mjs`
 - `tests/responsive-layouts.test.mjs`
 - `tests/run-tests.mjs`
+- `tests/desktop-session-board.test.mjs`
+- `tests/session-board-host.test.mjs`
+- `tests/session-board-presentation.test.mjs`
+- `tests/session-board-ui.test.mjs`
+- `tests/session-dock.test.mjs`
 - `tests/studio-editor.test.mjs`
 - `tests/surface-overrides.test.mjs`
 - `tests/support/context.mjs`
 - `tests/support/harness.mjs`
 - `tests/terminal-theme.test.mjs`
+- `tests/taskboard.test.mjs`
+- `tests/web-tabs.test.mjs`
 - `tests/theme-cli.test.mjs`
 - `tests/themes.test.mjs`
 - `tests/user-kits.test.mjs`
@@ -376,12 +404,23 @@ the retired reconstructed preview are not deliverables.
 
 - `windows/aura-draft-handoff.ps1`
 - `windows/aura-code-popup-diagnostic.ps1`
+- `windows/build-desktop-capture-filter.ps1`
+- `windows/desktop-aura-session.ps1`
 - `windows/desktop-capability.ps1`
+- `windows/desktop-overlay-proof.ps1`
 - `windows/desktop-presentation.ps1`
+- `windows/desktop-taskboard-panel.ps1`
+- `windows/native/desktop-capture-filter.cpp`
 - `windows/aura-ui.ps1`
 - `windows/image-crop.ps1`
 - `windows/personal-wordmark.ps1`
+- `windows/aura-pets.ps1`
+- `windows/aura-session-board-desktop.ps1`
+- `windows/aura-session-dock.ps1`
 - `windows/aura-prompt-shelf.ps1`
+- `windows/aura-taskboard.ps1`
+- `windows/aura-taskctl.ps1`
+- `windows/aura-web-tabs.ps1`
 - `windows/common.ps1`
 - `windows/install.ps1`
 - `windows/locales/de.json`
@@ -421,6 +460,7 @@ the retired reconstructed preview are not deliverables.
 ## Documentation
 
 - `docs/ACCEPTANCE_AUDIT.md`
+- `docs/DELIVERY_GUARDRAIL.md`
 - `docs/FILE_MANIFEST.md`
 - `docs/IMPLEMENTATION_REPORT.md`
 - `docs/SCREENSHOT_PLAN.md`

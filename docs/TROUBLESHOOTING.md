@@ -148,11 +148,10 @@ is needed.
 ## I want to uninstall Claude Aura
 
 Use **Settings > Apps > Installed apps > Claude Aura > Uninstall**, open
-**Claude Aura > Uninstall Claude Aura** from the Start menu, or run
-**Uninstall Claude Aura.cmd** from an extracted release. Close the Claude Aura
-window first. The `.cmd` entry validates and opens the registered native
-uninstaller when present. The default removes the local application copy and
-shortcuts while keeping theme settings and Aura's separate WebView sign-in profile.
+**Claude Aura > Uninstall Claude Aura** from the Start menu, or use **Settings
+> Apps > Installed apps > Claude Aura > Uninstall**. Close the Claude Aura
+window first. The default removes the local application copy and shortcuts
+while keeping theme settings and Aura's separate WebView sign-in profile.
 Choose the data-erasure option only if you also want to remove those local
 settings and the saved Aura sign-in session. Anthropic's Claude installation
 is not changed.
@@ -161,18 +160,9 @@ is not changed.
 
 The public `Claude-Aura-Setup-v<version>-UNSIGNED.exe` has no Authenticode
 publisher identity. Its filename, first wizard page, checksum, and manifest all
-say so. If Windows warns about or blocks it, do not bypass the warning. Use the
-ZIP + CMD fallback from the same GitHub release:
-
-1. Download `claude-aura-v<version>.zip` and its matching `.sha256`.
-2. Verify the ZIP checksum and select **Extract all**.
-3. In the extracted `claude-aura` folder, double-click
-   **Install Claude Aura.cmd**. Do not run it inside the ZIP preview.
-
-The CMD/PowerShell path is readable source, but it also has no Authenticode
-publisher identity. A checksum detects changed bytes; it does not authenticate
-a publisher. Stop if any filename, location, checksum, or manifest value
-differs from the release notes.
+say so. If Windows warns about or blocks it, do not bypass the warning. A
+checksum detects changed bytes; it does not authenticate a publisher. Stop if
+the filename, location, checksum, or manifest differs from the release notes.
 
 A Setup filename without `-UNSIGNED` must be Authenticode-signed and
 timestamped. Open **Properties > Digital Signatures** and compare its publisher

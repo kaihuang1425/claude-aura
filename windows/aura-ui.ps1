@@ -16,26 +16,7 @@ $ErrorActionPreference = 'Stop'
 $Root = Split-Path $PSScriptRoot -Parent
 $ThemeCli = Join-Path $Root 'scripts\theme-cli.mjs'
 $script:BuiltInAuthoring = [bool]$BuiltInAuthoring
-$script:ExperimentalCodeStyle = [bool]$ExperimentalCodeStyle
-if ($script:ExperimentalCodeStyle) {
-  $sourceGit = Join-Path $Root '.git'
-  $sourceRegistry = Join-Path $Root 'themes\registry.json'
-  if (-not (Test-Path -LiteralPath $sourceGit -PathType Container) -or
-      -not (Test-Path -LiteralPath $sourceRegistry -PathType Leaf)) {
-    throw 'Experimental Code styling is available only from the Claude Aura source checkout.'
-  }
-  foreach ($sourceItem in @(
-      (Get-Item -LiteralPath $sourceGit -Force),
-      (Get-Item -LiteralPath $sourceRegistry -Force)
-    )) {
-    if (($sourceItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-      throw 'Experimental Code styling refused a linked source path.'
-    }
-  }
-}
-if ($ExperimentalCodeStart -and -not $script:ExperimentalCodeStyle) {
-  throw 'Experimental Code start requires experimental Code styling.'
-}
+$script:ExperimentalCodeStyle = $true
 $ClaudeInitialUrl = if ($ExperimentalCodeStart) {
   'https://claude.ai/code'
 } else {
@@ -283,7 +264,7 @@ function Get-AuraUiStudioUrl {
     if ($source.Scheme -ceq 'https' -and $source.Host -ceq 'aura.studio' -and
         $source.AbsolutePath -ceq '/index.html' -and
         $source.Fragment -cin @(
-          '#themes', '#prompt-shelf', '#background', '#create', '#settings')) {
+          '#tasks', '#themes', '#prompt-shelf', '#background', '#create', '#settings')) {
       $view = $source.Fragment.TrimStart('#').ToLowerInvariant()
       return $url + '&view=' + [Uri]::EscapeDataString($view)
     }
@@ -316,12 +297,12 @@ function Test-AuraUiStudioDocumentUri {
   }
   if ($locale -cnotin $StudioLocaleIds -or
       ($view -and $view -cnotin @(
-        'themes', 'prompt-shelf', 'background', 'create', 'settings'))) {
+        'tasks', 'themes', 'prompt-shelf', 'background', 'create', 'settings'))) {
     return $false
   }
   if (-not $AllowFragment) { return -not $Uri.Fragment }
   return $Uri.Fragment -cin @(
-    '', '#themes', '#prompt-shelf', '#background', '#create', '#settings', '#editor')
+    '', '#tasks', '#themes', '#prompt-shelf', '#background', '#create', '#settings', '#editor')
 }
 
 function ConvertTo-AuraUiArgument {
@@ -1056,7 +1037,7 @@ function Complete-AuraUiInitialNavigationAfterPrepaint {
   }
   $script:InitialNavigationPending = $false
   $script:PrepaintRegistrationDueUtc = $null
-  $script:WebView.CoreWebView2.Navigate($ClaudeInitialUrl)
+  $script:WebView.CoreWebView2.Navigate((Get-AuraWebTabInitialUrl -Fallback $ClaudeInitialUrl))
 }
 
 function Start-AuraUiDocumentPrepaintRegistration {
@@ -1106,7 +1087,7 @@ function Complete-AuraUiDocumentPrepaintRegistration {
       $script:InitialNavigationPending = $false
       $script:PrepaintRegistrationDueUtc = $null
       Write-AuraUiLog -Message 'Passive startup prepaint registration timed out; continuing fail-open.'
-      $script:WebView.CoreWebView2.Navigate($ClaudeInitialUrl)
+      $script:WebView.CoreWebView2.Navigate((Get-AuraWebTabInitialUrl -Fallback $ClaudeInitialUrl))
     }
     return
   }
@@ -1451,9 +1432,21 @@ function Complete-AuraUiPendingNavigationVerification {
 }
 
 function Get-AuraUiNewWindowDisposition {
-  param([AllowNull()][object]$Value)
+  param(
+    [AllowNull()][object]$Value,
+    [bool]$IsUserInitiated = $false
+  )
   try {
     $uri = if ($Value -is [Uri]) { $Value } else { [Uri]"$Value" }
+    if ($IsUserInitiated -and $uri.IsAbsoluteUri -and
+        $uri.Scheme -ceq [Uri]::UriSchemeHttps -and -not $uri.UserInfo -and
+        $uri.Host.Equals('claude.ai', [StringComparison]::OrdinalIgnoreCase) -and
+        $uri.IsDefaultPort -and
+        ($uri.AbsolutePath -ceq '/code' -or $uri.AbsolutePath -ceq '/code/') -and
+        [string]::IsNullOrEmpty($uri.Query) -and
+        [string]::IsNullOrEmpty($uri.Fragment)) {
+      return 'CodeTab'
+    }
     if ((Test-AuraUiClaudeUri -Value $uri) -or (Test-AuraUiSignInUri -Value $uri)) {
       return 'Popup'
     }
@@ -2908,6 +2901,68 @@ function Get-AuraUiAppearance {
   return 'system'
 }
 
+function Get-AuraUiSessionBoardThemeId {
+  if (-not (Get-AuraUiEnabled)) { return 'default' }
+  $selected = [string](Get-AuraUiSelectedThemeName)
+  $theme = Get-AuraUiThemeByName -Name $selected
+  $sourceRecipe = Get-AuraUiPropertyValue -InputObject $theme -Names @('sourceRecipe')
+  return Resolve-AuraSessionBoardPresentationThemeId `
+    -ThemeId $selected -SourceRecipe $sourceRecipe
+}
+
+function Update-AuraUiSessionBoardPresentation {
+  if (-not (Get-Command New-AuraSessionBoardPresentationMessage -ErrorAction SilentlyContinue) -or
+      -not (Get-Command Update-AuraWebTabWorkHubPresentation -ErrorAction SilentlyContinue)) {
+    return $false
+  }
+  $locale = if ($StudioLocaleIds -ccontains [string]$script:Locale) {
+    [string]$script:Locale
+  } else { 'en' }
+  $enabled = [bool](Get-AuraUiEnabled)
+  $themeId = Get-AuraUiSessionBoardThemeId
+  $appearance = if ($enabled) { Get-AuraUiAppearance } else { 'system' }
+  $fingerprint = "$locale|$themeId|$appearance|$enabled"
+  if ([string]$script:AuraSessionBoardPresentationFingerprint -cne $fingerprint -or
+      $null -eq $script:AuraSessionBoardPresentation) {
+    if ([long]$script:AuraSessionBoardPresentationRevision -ge 9007199254740991) {
+      throw 'Aura Work Hub presentation revision is exhausted.'
+    }
+    $script:AuraSessionBoardPresentationRevision += 1
+    $script:AuraSessionBoardPresentationFingerprint = $fingerprint
+    $script:AuraSessionBoardPresentation = New-AuraSessionBoardPresentationMessage `
+      -Locale $locale -ThemeId $themeId -Appearance $appearance -Enabled $enabled `
+      -Revision $script:AuraSessionBoardPresentationRevision
+  }
+  return [bool](Update-AuraWebTabWorkHubPresentation `
+    -Presentation $script:AuraSessionBoardPresentation)
+}
+
+function Sync-AuraUiDesktopPresentation {
+  param(
+    [ValidateSet('sync', 'reload')][string]$SignalMode = 'sync'
+  )
+  try {
+    $themeId = "$(Get-AuraUiSelectedThemeName)"
+    if ($themeId -cnotmatch '^[a-z][a-z0-9-]{1,39}$') {
+      throw 'Aura Studio has no valid theme to synchronize with Desktop.'
+    }
+    $enabled = Get-AuraUiEnabled
+    $appearance = if ($enabled) { Get-AuraUiAppearance } else { 'system' }
+    $statePath = Join-Path $DataRoot 'desktop-presentation.json'
+    return Sync-AuraDesktopPresentationState -StatePath $statePath `
+      -ThemeId $themeId -Appearance $appearance -OriginalLook (-not $enabled) `
+      -SignalMode $SignalMode
+  } catch {
+    Write-AuraUiLog -Message (
+      "Desktop presentation state could not be synchronized: $($_.Exception.Message)")
+    return [pscustomobject]@{
+      Synchronized = $false
+      Signaled = $false
+      ReasonCode = 'desktop-presentation-state-sync-failed'
+    }
+  }
+}
+
 function Test-AuraUiDarkChrome {
   param(
     [ValidateSet('system', 'light', 'dark')][string]$Appearance = (Get-AuraUiAppearance),
@@ -2998,6 +3053,41 @@ function Update-AuraUiTrayAppearance {
   }
   if ($null -ne $script:LauncherAppearanceItem -and -not $script:LauncherAppearanceItem.IsDisposed) {
     $script:LauncherAppearanceItem.Text = $appearanceText
+  }
+}
+
+function Update-AuraUiPetMainActions {
+  try {
+    $intent = try { Read-AuraPetIntent } catch { New-AuraPetIntent }
+    $model = Get-AuraPetPluginMainActionModel -Intent $intent -Copy $script:UiCopy
+    $script:AuraPetVisibilityRequest = $model.visibilityRequest
+    $script:AuraPetSettingsRequest = $model.settingsRequest
+    $visibilityEnabled = $null -ne $intent.selectedPetId
+    foreach ($item in @($script:TrayPetVisibilityItem, $script:LauncherPetVisibilityItem)) {
+      if ($null -eq $item -or $item.IsDisposed) { continue }
+      $item.Text = [string]$model.visibilityText
+      $item.AccessibleName = [string]$model.visibilityText
+      $item.Enabled = $visibilityEnabled
+    }
+    foreach ($item in @($script:TrayPetSettingsItem, $script:LauncherPetSettingsItem)) {
+      if ($null -eq $item -or $item.IsDisposed) { continue }
+      $item.Text = [string]$model.settingsText
+      $item.AccessibleName = [string]$model.settingsText
+      $item.Enabled = $true
+    }
+  } catch {
+    Write-AuraUiLog -Message "Pet menu state could not be refreshed: $($_.Exception.Message)"
+  }
+}
+
+function Invoke-AuraUiPetMainRequest {
+  param([Parameter(Mandatory = $true)][object]$Message)
+  try {
+    Invoke-AuraPetPluginStudioRequest -Message $Message
+  } catch {
+    Write-AuraUiLog -Message "Pet menu action failed: $($_.Exception.Message)"
+  } finally {
+    Update-AuraUiPetMainActions
   }
 }
 
@@ -6860,6 +6950,11 @@ function Complete-AuraUiStudioEditorAction {
     $script:StudioEditorState['actionSucceeded'] = $false
     $script:StudioEditorState['error'] = 'identity-apply-failed'
   }
+  if ($succeeded -and $Result.ThemesChanged) {
+    [void](Sync-AuraUiDesktopPresentation -SignalMode reload)
+  } elseif ($succeeded -and $Result.ConfigChanged) {
+    [void](Sync-AuraUiDesktopPresentation -SignalMode sync)
+  }
   $status = if ($Action -ceq 'pick-theme-launcher-mark' -and
       (Get-AuraUiPropertyValue -InputObject $script:StudioEditorState -Names @('error')) -ceq 'identity-apply-failed') {
     "$($script:UiCopy.themeLauncherMarkApplyFailed)"
@@ -8978,6 +9073,259 @@ function Invoke-AuraUiOpenDesktopApp {
   Start-Process -FilePath $claude.Executable | Out-Null
 }
 
+function Send-AuraUiPetSettingsResult {
+  param([Parameter(Mandatory = $true)][bool]$Ok)
+  if (-not $script:StudioReady -or $null -eq $script:StudioWebView -or
+      $null -eq $script:StudioWebView.CoreWebView2) { return }
+  try {
+    $script:StudioWebView.CoreWebView2.PostWebMessageAsJson((
+      [ordered]@{ type = 'pet-settings-result'; ok = $Ok } |
+        ConvertTo-Json -Compress))
+  } catch {
+    Write-AuraUiLog -Message 'Pet settings result could not be delivered to Studio.'
+  }
+}
+
+function Invoke-AuraUiOpenPetSettings {
+  $ok = Start-AuraPetManager
+  if (-not $ok) { Write-AuraUiLog -Message 'Pet settings could not be opened.' }
+  Send-AuraUiPetSettingsResult -Ok $ok
+  return $ok
+}
+
+function Initialize-AuraUiWebViewControl {
+  param([Parameter(Mandatory = $true)][object]$Control)
+  $Control.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $Control.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
+  $Control.add_Resize({
+    if ($null -ne $script:StudioForm -and $script:StudioForm.Visible) { Send-AuraUiStudioState }
+    Request-AuraUiLauncherLayoutProbe
+  })
+}
+
+function Test-AuraUiWebTabTransitionAllowed {
+  if ($script:IsRescueSession -or $script:RescueActive -or
+      $script:RescueVerificationPending -or $null -ne $script:RescueChallengeCandidate -or
+      $null -ne $script:ActiveNavigationId -or
+      $null -ne $script:PendingNavigationCompletion) {
+    return $false
+  }
+  foreach ($task in @(
+      $script:EnsureTask,
+      $script:ScriptTask,
+      $script:PrepaintRegistrationTask,
+      $script:PrepaintCleanupTask)) {
+    if ($null -ne $task) { return $false }
+  }
+  return $true
+}
+
+function Start-AuraUiWebTabCore {
+  param([Parameter(Mandatory = $true)][object]$View)
+  if ($null -eq $script:WebViewEnvironment) { return $false }
+  $script:WebView = $View
+  $script:WebReady = $false
+  $script:PageReady = $false
+  $script:PrepaintScriptId = $null
+  $script:PrepaintRegisteredGeneration = [long]-1
+  $script:InitialNavigationPending = $false
+  Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
+  $script:EnsureTask = $View.EnsureCoreWebView2Async($script:WebViewEnvironment)
+  if (Get-Command Register-AuraUiPendingTaskCompletions -ErrorAction SilentlyContinue) {
+    Register-AuraUiPendingTaskCompletions
+  }
+  if (Get-Command Update-AuraUiHostDeadline -ErrorAction SilentlyContinue) {
+    Update-AuraUiHostDeadline
+  }
+  return $true
+}
+
+function Set-AuraUiActiveWebTab {
+  param([Parameter(Mandatory = $true)][string]$Id)
+  Save-AuraWebTabRuntimeState
+  if ($null -ne $script:AuraWebTabWorkHubControl -and
+      -not $script:AuraWebTabWorkHubControl.IsDisposed) {
+    $script:AuraWebTabWorkHubControl.Hide()
+  }
+  foreach ($runtimeId in @($script:AuraWebTabRuntime.Keys)) {
+    $runtimeItem = Get-AuraWebTabRuntime -Id ([string]$runtimeId)
+    if ($null -ne $runtimeItem -and $null -ne $runtimeItem.View -and
+        -not $runtimeItem.View.IsDisposed) {
+      $runtimeItem.View.Hide()
+    }
+  }
+  $tab = Set-AuraWebTabActiveDocument -Id $Id
+  if ($null -eq $tab) { return $false }
+  $view = Ensure-AuraWebTabView -Id $Id
+  if ($null -eq $view) { return $false }
+  $script:WebView = $view
+  Restore-AuraWebTabRuntimeState -Id $Id
+  $view.Show()
+  $view.BringToFront()
+  if ($null -ne $script:LoadingPanel -and
+      $script:LoadingPanel.PSObject.Methods.Name -contains 'BringToFront') {
+    $script:LoadingPanel.BringToFront()
+  }
+  if ($null -eq $view.CoreWebView2) {
+    return Start-AuraUiWebTabCore -View $view
+  }
+  $runtime = Get-AuraWebTabRuntime -Id $Id
+  $runtime.Initialized = $true
+  $runtime.WebReady = $true
+  $runtime.PageReady = Test-AuraUiClaudeUri -Value $view.Source
+  $script:WebReady = $true
+  $script:PageReady = [bool]$runtime.PageReady
+  Set-AuraUiPreferredColorScheme
+  if ([long]$script:PrepaintRegisteredGeneration -ne [long]$script:PrepaintGeneration) {
+    Start-AuraUiDocumentPrepaintRegistration
+  }
+  if ($script:PageReady) {
+    Hide-AuraUiLoading
+    if (Get-AuraUiEnabled) {
+      Apply-AuraUiTheme
+    } else {
+      $cleanup = '(() => { const state = window.__CLAUDE_AURA_STATE__; if (state?.cleanup) return state.cleanup(); window.__CLAUDE_AURA_DISABLED__ = true; return true; })()'
+      Start-AuraUiScript -Source $cleanup -Action Restore
+    }
+  } else {
+    Show-AuraUiLoading -Message "$($script:UiCopy.openingClaude)"
+  }
+  Request-AuraUiContextMirror
+  Request-AuraUiLauncherLayoutProbe
+  return $true
+}
+
+function Request-AuraUiSelectWebTab {
+  param([Parameter(Mandatory = $true)][string]$Id)
+  if (-not (Test-AuraUiWebTabTransitionAllowed)) { return $false }
+  if ([string]$script:AuraWebTabDocument.activeTabId -ceq $Id) { return $true }
+  return [bool](Set-AuraUiActiveWebTab -Id $Id)
+}
+
+function Request-AuraUiInterceptNewSessionNavigation {
+  param(
+    [AllowNull()][object]$Core,
+    [AllowNull()][object]$SourceUrl,
+    [AllowNull()][object]$TargetUrl
+  )
+  if ($null -eq $Core -or -not (Test-AuraWebTabCoreActive -Core $Core)) { return $false }
+  try {
+    $source = ConvertTo-AuraWebTabSessionUrl -Value $SourceUrl
+  } catch {
+    return $false
+  }
+  $expectedTarget = if ($source.StartsWith(
+      'https://claude.ai/chat/', [StringComparison]::Ordinal)) {
+    'https://claude.ai/new'
+  } elseif ($source.StartsWith('https://claude.ai/code/', [StringComparison]::Ordinal)) {
+    'https://claude.ai/code'
+  } else {
+    return $false
+  }
+  $targetCandidate = if ($TargetUrl -is [Uri]) {
+    [string]$TargetUrl.AbsoluteUri
+  } elseif ($TargetUrl -is [string]) {
+    [string]$TargetUrl
+  } else {
+    ''
+  }
+  if ($targetCandidate.Length -gt 2048 -or $targetCandidate -cne $expectedTarget) {
+    return $false
+  }
+  try {
+    return [bool](Request-AuraUiNewWebTab -Url $expectedTarget)
+  } catch {
+    return $false
+  }
+}
+
+function Request-AuraUiNewWebTab {
+  param([string]$Url = 'https://claude.ai/')
+  if (-not (Test-AuraUiWebTabTransitionAllowed)) { return $false }
+  Save-AuraWebTabRuntimeState
+  $result = Add-AuraWebTabRuntime -Url $Url
+  if ($result.Ok) {
+    return [bool](Set-AuraUiActiveWebTab -Id ([string]$result.Id))
+  }
+  return $false
+}
+
+function Request-AuraUiCloseWebTab {
+  param([string]$Id = '')
+  if (-not (Test-AuraUiWebTabTransitionAllowed)) { return }
+  if ([string]::IsNullOrWhiteSpace($Id)) {
+    if ($null -eq $script:AuraWebTabDocument.activeTabId) { return }
+    $Id = [string]$script:AuraWebTabDocument.activeTabId
+  }
+  $closingActive = [string]$script:AuraWebTabDocument.activeTabId -ceq $Id
+  Save-AuraWebTabRuntimeState
+  $result = Remove-AuraWebTabRuntime -Id $Id
+  if ($result.Ok -and $closingActive) {
+    if ($null -ne $result.ActiveTabId) {
+      [void](Set-AuraUiActiveWebTab -Id ([string]$result.ActiveTabId))
+    }
+  }
+}
+
+function Request-AuraUiCycleWebTab {
+  param([switch]$Reverse)
+  if (-not (Test-AuraUiWebTabTransitionAllowed)) { return }
+  $items = @(Get-AuraWebTabStripModel -Document $script:AuraWebTabDocument)
+  if ($items.Count -lt 2) { return }
+  $index = 0
+  for ($candidate = 0; $candidate -lt $items.Count; $candidate += 1) {
+    if ($items[$candidate].Selected) {
+      $index = $candidate
+      break
+    }
+  }
+  $next = if ($Reverse) {
+    ($index - 1 + $items.Count) % $items.Count
+  } else {
+    ($index + 1) % $items.Count
+  }
+  $target = $items[$next]
+  if ([string]$target.Kind -ceq 'work-hub') {
+    return Set-AuraWebTabWorkHubActive
+  }
+  return Request-AuraUiSelectWebTab -Id ([string]$target.Id)
+}
+
+function Register-AuraUiNativeTabAccelerators {
+  param([Parameter(Mandatory = $true)][System.Windows.Forms.Form]$Form)
+  $Form.KeyPreview = $true
+  $Form.add_KeyDown({
+    param($sender, $eventArgs)
+    if ($null -ne $script:WebView -and $script:WebView.ContainsFocus) { return }
+    if (-not $eventArgs.Control) { return }
+    $handled = $true
+    if ($eventArgs.KeyCode -eq [System.Windows.Forms.Keys]::Tab) {
+      Request-AuraUiCycleWebTab -Reverse:$eventArgs.Shift
+    } elseif (-not $eventArgs.Shift) {
+      switch ($eventArgs.KeyCode) {
+        T { Request-AuraUiNewWebTab; break }
+        W { Request-AuraUiCloseWebTab; break }
+        D1 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 1; break }
+        D2 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 2; break }
+        D3 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 3; break }
+        D4 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 4; break }
+        D5 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 5; break }
+        D6 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 6; break }
+        D7 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 7; break }
+        D8 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 8; break }
+        D9 { Request-AuraUiSelectWebTabByOrdinal -Ordinal 9; break }
+        default { $handled = $false }
+      }
+    } else {
+      $handled = $false
+    }
+    if ($handled) {
+      $eventArgs.Handled = $true
+      $eventArgs.SuppressKeyPress = $true
+    }
+  })
+}
+
 function Get-AuraUiDesktopWorkspaceGuidanceUri {
   $expectedAbsoluteUri = 'https://code.claude.com/docs/en/desktop#coming-from-the-cli'
   try {
@@ -9624,6 +9972,8 @@ function Invoke-AuraUiSelectTheme {
   if (-not $knownTheme) { throw 'The Studio requested an unknown theme.' }
   Set-AuraUiConfig -Options @('--theme', $Theme, '--enabled', 'true')
   Apply-AuraUiTheme
+  [void](Sync-AuraUiDesktopPresentation -SignalMode sync)
+  [void](Update-AuraUiSessionBoardPresentation)
   Send-AuraUiStudioState -Status "$($script:UiCopy.applyingTheme)" -Tone busy
 }
 
@@ -10036,6 +10386,8 @@ function Invoke-AuraUiSetEnabled {
       Send-AuraUiStudioState -Status "$($script:UiCopy.originalActive)"
     }
   }
+  [void](Sync-AuraUiDesktopPresentation -SignalMode sync)
+  [void](Update-AuraUiSessionBoardPresentation)
 }
 
 function Sync-AuraUiExternalConfig {
@@ -10058,6 +10410,8 @@ function Invoke-AuraUiSetAppearance {
   Set-AuraUiConfig -Options @('--appearance', $effectiveAppearance)
   Set-AuraUiPreferredColorScheme -Appearance $effectiveAppearance -Enabled $enabled
   if ($enabled) { Apply-AuraUiTheme }
+  [void](Sync-AuraUiDesktopPresentation -SignalMode sync)
+  [void](Update-AuraUiSessionBoardPresentation)
   Send-AuraUiStudioState
 }
 
@@ -10120,6 +10474,11 @@ function Update-AuraUiLocalizedChrome {
       $script:LauncherHint.Close()
     }
     Update-AuraUiTrayAppearance
+    Update-AuraUiPetMainActions
+    if (Get-Command Refresh-AuraWebTabStrip -ErrorAction SilentlyContinue) {
+      Refresh-AuraWebTabStrip
+    }
+    [void](Update-AuraUiSessionBoardPresentation)
     $script:JumpListRegistered = $false
     $script:JumpListRegistrationDue = [DateTime]::UtcNow
   } catch {
@@ -10913,12 +11272,19 @@ function Get-AuraUiStudioMessage {
     }
     'prompt-shelf-insert' {
       'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'id'
+      'queueCommandId'; 'draftFingerprint'
       break
     }
     'prompt-shelf-confirm-checked' {
       'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'
       break
     }
+    'taskboard-read' { 'type'; 'version'; 'requestId'; break }
+    'taskboard-mutate' {
+      'type'; 'version'; 'requestId'; 'session'; 'revision'; 'commandEpoch'; 'operation'; 'payload'
+      break
+    }
+    'pet-plugin-select' { 'type'; 'petId'; break }
     default { 'type'; break }
   })
   $propertyNames = @($message.PSObject.Properties | ForEach-Object { $_.Name })
@@ -10977,6 +11343,15 @@ function Get-AuraUiStudioMessage {
     }
     Assert-AuraPromptShelfStudioRequest -Message $message
   }
+  if ($type -clike 'taskboard-*') {
+    if ($sourceUri.AbsolutePath -cne '/index.html') {
+      throw 'Taskboard Studio message path is not allowed.'
+    }
+    if (-not (Test-AuraUiStudioDocumentUri -Uri $sourceUri -AllowFragment)) {
+      throw 'Taskboard Studio message source is not allowed.'
+    }
+    Assert-AuraTaskboardStudioRequest -Message $message
+  }
   return $message
 }
 
@@ -11020,6 +11395,38 @@ function Invoke-AuraUiStudioMessage {
     }
     'prompt-shelf-confirm-checked' {
       Invoke-AuraPromptShelfStudioRequest -Message $message
+      break
+    }
+    'taskboard-read' {
+      Invoke-AuraTaskboardStudioRequest -Message $message
+      break
+    }
+    'taskboard-mutate' {
+      Invoke-AuraTaskboardStudioRequest -Message $message
+      break
+    }
+    'pet-plugin-read' {
+      Invoke-AuraPetPluginStudioRequest -Message $message
+      break
+    }
+    'pet-plugin-select' {
+      Invoke-AuraPetPluginStudioRequest -Message $message
+      break
+    }
+    'pet-plugin-show' {
+      Invoke-AuraPetPluginStudioRequest -Message $message
+      break
+    }
+    'pet-plugin-hide' {
+      Invoke-AuraPetPluginStudioRequest -Message $message
+      break
+    }
+    'pet-plugin-open-settings' {
+      Invoke-AuraPetPluginStudioRequest -Message $message
+      break
+    }
+    'open-pet-settings' {
+      [void](Invoke-AuraUiOpenPetSettings)
       break
     }
     'set-theme' {
@@ -11100,7 +11507,6 @@ function Invoke-AuraUiStudioMessage {
     'refresh-aura-mirror' { Request-AuraUiMirror; break }
     'start-window-edit' { Invoke-AuraUiStartEditorOverlay -Request $message; break }
     'stop-window-edit' { Invoke-AuraUiStopEditorOverlay -Request $message; break }
-    'open-desktop' { Invoke-AuraUiOpenDesktopApp; Send-AuraUiStudioState; break }
     'import-theme' {
       [void](Invoke-AuraUiImportTheme -Owner $script:StudioForm)
       break
@@ -11158,6 +11564,26 @@ function Invoke-AuraUiStudioMessage {
   }
 }
 
+function Test-AuraUiSessionBoardMessageCandidate {
+  param([AllowNull()][object]$Json)
+  if ($Json -isnot [string] -or $Json.Length -gt 4096) { return $false }
+  try { $candidate = $Json | ConvertFrom-Json } catch { return $false }
+  return $candidate -is [Management.Automation.PSCustomObject] -and
+    $candidate.type -is [string] -and
+    [string]$candidate.type -cin @('session-board-read', 'session-board-open')
+}
+
+function Invoke-AuraUiStudioSessionBoardMessage {
+  param(
+    [Parameter(Mandatory = $true)][object]$Core,
+    [Parameter(Mandatory = $true)][string]$Json,
+    [Parameter(Mandatory = $true)][string]$Source
+  )
+  $response = Invoke-AuraSessionBoardHostRequest `
+    -Json $Json -Source $Source -Surface 'studio'
+  $Core.PostWebMessageAsJson(($response | ConvertTo-Json -Depth 9 -Compress))
+}
+
 function Request-AuraUiHostWork {
   if ($script:Closing -or $script:HostWorkQueued -or
       $null -eq $script:HostWorkAction -or
@@ -11186,10 +11612,11 @@ function Register-AuraUiPendingTaskCompletions {
   $draftWriteTask = if ($null -ne $script:DraftHandoffWriteState) {
     $script:DraftHandoffWriteState.Task
   } else { $null }
-  foreach ($task in @(
+  $pendingTasks = @(
       $script:EnvironmentTask,
       $script:EnsureTask,
       $script:StudioEnsureTask,
+      $script:AuraWebTabWorkHubEnsureTask,
       $script:PrepaintRegistrationTask,
       $script:PrepaintCleanupTask,
       $script:ScriptTask,
@@ -11199,11 +11626,21 @@ function Register-AuraUiPendingTaskCompletions {
       $script:LauncherProbeTask,
       $script:EditorOverlayTask,
       $promptShelfTask,
+      $script:AuraSessionDockAcceptTask,
+      $script:AuraSessionDockReadTask,
+      $script:AuraSessionDockWriteTask,
+      $script:AuraSessionBoardDesktopAcceptTask,
+      $script:AuraSessionBoardDesktopReadTask,
+      $script:AuraSessionBoardDesktopWriteTask,
       $script:DraftHandoffAcceptTask,
       $draftReadTask,
       $draftWriteTask,
       $script:DraftHandoffDisconnectTask
-    )) {
+    )
+  if ($null -ne $script:AuraSessionDockPromptOperations) {
+    $pendingTasks += @($script:AuraSessionDockPromptOperations.Values | ForEach-Object { $_.Task })
+  }
+  foreach ($task in @($pendingTasks)) {
     if ($task -is [Threading.Tasks.Task]) {
       [AuraUiAsyncDispatch]::Watch(
         $task, $script:Form, $script:HostWorkRequestAction)
@@ -11233,6 +11670,13 @@ function Get-AuraUiHostDeadlineUtc {
   }
   if ($script:DraftHandoffIoDeadlineUtc -ne [DateTime]::MinValue) {
     $candidates.Add([DateTime]$script:DraftHandoffIoDeadlineUtc)
+  }
+  if ($null -ne $script:AuraSessionDockPromptOperations) {
+    foreach ($operation in @($script:AuraSessionDockPromptOperations.Values)) {
+      if ($null -ne $operation -and $null -ne $operation.DeadlineUtc) {
+        $candidates.Add([DateTime]$operation.DeadlineUtc)
+      }
+    }
   }
   if ($null -ne $script:DraftHandoffTransient) {
     $candidates.Add([DateTime]$script:DraftHandoffTransient.DeadlineUtc)
@@ -11339,6 +11783,9 @@ $script:Config = $null
 $script:Payload = ''
 $script:ActiveLabel = ''
 $script:ActiveThemeName = $null
+$script:AuraSessionBoardPresentation = $null
+$script:AuraSessionBoardPresentationFingerprint = $null
+$script:AuraSessionBoardPresentationRevision = [long]-1
 $script:ActivePayloadDigest = $null
 $script:Form = $null
 $script:WebView = $null
@@ -11427,7 +11874,12 @@ $script:StudioMessageTypes = @(
   'set-card-preview-crop',
   'set-enabled',
   'open-aura',
-  'open-desktop',
+  'open-pet-settings',
+  'pet-plugin-read',
+  'pet-plugin-select',
+  'pet-plugin-show',
+  'pet-plugin-hide',
+  'pet-plugin-open-settings',
   'import-theme',
   'export-theme-package',
   'export-terminal-themes',
@@ -11466,7 +11918,9 @@ $script:StudioMessageTypes = @(
   'prompt-shelf-move',
   'prompt-shelf-delete',
   'prompt-shelf-insert',
-  'prompt-shelf-confirm-checked'
+  'prompt-shelf-confirm-checked',
+  'taskboard-read',
+  'taskboard-mutate'
 )
 $script:StudioEditorState = [ordered]@{ active = $false }
 $script:StudioEditorTrackedSession = $null
@@ -11528,6 +11982,8 @@ $script:WebViewEnvironment = $null
 $script:TrayIcon = $null
 $script:TrayMenu = $null
 $script:TrayOpenStudioItem = $null
+$script:TrayPetVisibilityItem = $null
+$script:TrayPetSettingsItem = $null
 $script:TrayAppearanceItem = $null
 $script:TrayOpenDesktopItem = $null
 $script:TrayDesktopWorkspaceGuidanceItem = $null
@@ -11569,9 +12025,13 @@ $script:LauncherDpiWindow = $null
 $script:LauncherDpi = 96
 $script:LauncherMenu = $null
 $script:LauncherStudioItem = $null
+$script:LauncherPetVisibilityItem = $null
+$script:LauncherPetSettingsItem = $null
 $script:LauncherAppearanceItem = $null
 $script:LauncherDesktopItem = $null
 $script:LauncherDesktopWorkspaceGuidanceItem = $null
+$script:AuraPetVisibilityRequest = $null
+$script:AuraPetSettingsRequest = $null
 $script:LauncherStyle = $null
 $script:LauncherMark = $null
 $script:LauncherDragging = $false
@@ -11867,6 +12327,11 @@ public static class AuraUiAsyncDispatch {
 '@
   }
   . (Join-Path $PSScriptRoot 'aura-prompt-shelf.ps1')
+  . (Join-Path $PSScriptRoot 'aura-taskboard.ps1')
+  . (Join-Path $PSScriptRoot 'aura-pets.ps1')
+  . (Join-Path $PSScriptRoot 'aura-session-dock.ps1')
+  . (Join-Path $PSScriptRoot 'aura-session-board-desktop.ps1')
+  . (Join-Path $PSScriptRoot 'aura-web-tabs.ps1')
   . (Join-Path $PSScriptRoot 'aura-draft-handoff.ps1')
   # Opt into per-monitor-v2 sizing before EnableVisualStyles or the first Aura
   # HWND. The thread override keeps the STA UI correct even if a host-created
@@ -11993,6 +12458,7 @@ public static class AuraUiAsyncDispatch {
     }
     Request-AuraUiMirror
     Update-AuraPromptShelfVisibleBounds -HostForm $script:Form
+    Update-AuraTaskboardQueueBounds
   })
   $script:Form.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
   $script:Form.Icon = $script:MainIcon
@@ -12003,12 +12469,7 @@ public static class AuraUiAsyncDispatch {
   [void](Update-AuraUiThemes)
 
   $script:WebView = [Microsoft.Web.WebView2.WinForms.WebView2]::new()
-  $script:WebView.Dock = 'Fill'
-  $script:WebView.BackColor = [Drawing.ColorTranslator]::FromHtml('#F4F1EA')
-  $script:WebView.add_Resize({
-    if ($null -ne $script:StudioForm -and $script:StudioForm.Visible) { Send-AuraUiStudioState }
-    Request-AuraUiLauncherLayoutProbe
-  })
+  Initialize-AuraUiWebViewControl -Control $script:WebView
 
   $script:StudioForm = [System.Windows.Forms.Form]::new()
   $script:StudioIconWindow = [AuraIconWindow]::new()
@@ -12078,6 +12539,8 @@ public static class AuraUiAsyncDispatch {
   })
 
   $script:TrayOpenStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
+  $script:TrayPetVisibilityItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.showPet)")
+  $script:TrayPetSettingsItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.petSettings)")
   $script:TrayAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
   $script:TrayOpenDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
   $script:TrayDesktopWorkspaceGuidanceItem = [System.Windows.Forms.ToolStripMenuItem]::new(
@@ -12086,14 +12549,24 @@ public static class AuraUiAsyncDispatch {
   $script:TrayMenu = [System.Windows.Forms.ContextMenuStrip]::new()
   [void]$script:TrayMenu.Items.AddRange(@(
     $script:TrayOpenStudioItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
+    $script:TrayPetVisibilityItem,
+    $script:TrayPetSettingsItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
     $script:TrayAppearanceItem,
     $script:TrayOpenDesktopItem,
     $script:TrayDesktopWorkspaceGuidanceItem,
     [System.Windows.Forms.ToolStripSeparator]::new(),
     $script:TrayExitItem
   ))
-  $script:TrayMenu.add_Opening({ Update-AuraUiTrayAppearance })
+  $script:TrayMenu.add_Opening({ Update-AuraUiTrayAppearance; Update-AuraUiPetMainActions })
   $script:TrayOpenStudioItem.add_Click({ Show-AuraUiStudio })
+  $script:TrayPetVisibilityItem.add_Click({
+    Invoke-AuraUiPetMainRequest -Message $script:AuraPetVisibilityRequest
+  })
+  $script:TrayPetSettingsItem.add_Click({
+    Invoke-AuraUiPetMainRequest -Message $script:AuraPetSettingsRequest
+  })
   $script:TrayAppearanceItem.add_Click({
     try {
       Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
@@ -12122,6 +12595,7 @@ public static class AuraUiAsyncDispatch {
   $script:TrayIcon.add_DoubleClick({ Show-AuraUiStudio })
   $script:TrayIcon.Visible = $false
   Update-AuraUiTrayAppearance
+  Update-AuraUiPetMainActions
 
   $script:LoadingPanel = [System.Windows.Forms.Panel]::new()
   $script:LoadingPanel.Dock = 'Fill'
@@ -12221,7 +12695,13 @@ public static class AuraUiAsyncDispatch {
   $content.Controls.Add($script:WebView)
   $content.Controls.Add($script:LoadingPanel)
   $script:Form.Controls.Add($content)
-  $script:LoadingPanel.BringToFront()
+  if (-not $script:IsRescueSession) {
+    Initialize-AuraWebTabs `
+      -ContentPanel $content `
+      -InitialWebView $script:WebView `
+      -InitialUrl $ClaudeInitialUrl
+    Register-AuraUiNativeTabAccelerators -Form $script:Form
+  }
 
   # A themed floating launcher: a separate owned overlay window pinned safely
   # inside the content. Being its own top-level window it renders above the
@@ -12229,19 +12709,24 @@ public static class AuraUiAsyncDispatch {
   # space, never reflows or clips Claude, and keeps the main form content-only.
   # The permanently circular button opens its action menu on a click and
   # becomes a drag surface only after the DPI-scaled movement threshold;
-  # right-click opens the same menu. The menu exposes Prompt Shelf, Studio,
+  # right-click opens the same menu. The menu exposes the current-target Action Queue, Studio,
   # appearance, and Desktop actions without touching the claude.ai document.
   $script:LauncherMenu = [System.Windows.Forms.ContextMenuStrip]::new()
   $script:LauncherStudioItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openStudio)")
-  $script:LauncherPromptShelfItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openPromptShelf)")
-  $script:LauncherPromptShelfItem.ShortcutKeyDisplayString = 'Ctrl+Shift+P'
+  $script:LauncherActionQueueItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openActionQueue)")
+  $script:LauncherActionQueueItem.ShortcutKeyDisplayString = 'Ctrl+Shift+P'
+  $script:LauncherPetVisibilityItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.showPet)")
+  $script:LauncherPetSettingsItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.petSettings)")
   $script:LauncherAppearanceItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.originalLook)")
   $script:LauncherDesktopItem = [System.Windows.Forms.ToolStripMenuItem]::new("$($script:UiCopy.openDesktopApp)")
   $script:LauncherDesktopWorkspaceGuidanceItem = [System.Windows.Forms.ToolStripMenuItem]::new(
     "$($script:UiCopy.openDesktopWorkspaceGuidance)")
   [void]$script:LauncherMenu.Items.AddRange(@(
     $script:LauncherStudioItem,
-    $script:LauncherPromptShelfItem,
+    $script:LauncherActionQueueItem,
+    [System.Windows.Forms.ToolStripSeparator]::new(),
+    $script:LauncherPetVisibilityItem,
+    $script:LauncherPetSettingsItem,
     [System.Windows.Forms.ToolStripSeparator]::new(),
     $script:LauncherAppearanceItem,
     $script:LauncherDesktopItem,
@@ -12250,10 +12735,17 @@ public static class AuraUiAsyncDispatch {
   $script:LauncherMenu.add_Opening({
     Hide-AuraUiLauncherTip
     Update-AuraUiTrayAppearance
+    Update-AuraUiPetMainActions
     Set-AuraPromptShelfAvailability -Enabled (Get-AuraUiEnabled)
   })
   $script:LauncherStudioItem.add_Click({ Show-AuraUiStudio -OfferIntroduction })
-  $script:LauncherPromptShelfItem.add_Click({ Show-AuraPromptShelf })
+  $script:LauncherActionQueueItem.add_Click({ Show-AuraTaskboardQueue })
+  $script:LauncherPetVisibilityItem.add_Click({
+    Invoke-AuraUiPetMainRequest -Message $script:AuraPetVisibilityRequest
+  })
+  $script:LauncherPetSettingsItem.add_Click({
+    Invoke-AuraUiPetMainRequest -Message $script:AuraPetSettingsRequest
+  })
   $script:LauncherAppearanceItem.add_Click({
     try {
       Invoke-AuraUiSetEnabled -Enabled (-not (Get-AuraUiEnabled))
@@ -12547,8 +13039,8 @@ public static class AuraUiAsyncDispatch {
   $script:Launcher.add_LocationChanged({
     Update-AuraPromptShelfVisibleBounds -HostForm $script:Form
   })
-  $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition })
-  $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition })
+  $script:Form.add_LocationChanged({ Update-AuraUiLauncherPosition; Update-AuraTaskboardQueueBounds })
+  $script:Form.add_SizeChanged({ Update-AuraUiLauncherPosition; Update-AuraTaskboardQueueBounds })
   $script:Form.add_Shown({
     Request-AuraUiLauncherLayoutProbe
     Update-AuraUiLauncherPosition
@@ -12588,6 +13080,8 @@ public static class AuraUiAsyncDispatch {
       }
       }
       try {
+      Update-AuraSessionDock
+      Update-AuraSessionBoardDesktopHost
       Update-AuraDraftHandoff
       Complete-AuraUiDocumentPrepaintRegistration
       Complete-AuraUiDocumentPrepaintCleanup
@@ -12597,16 +13091,19 @@ public static class AuraUiAsyncDispatch {
         $script:EnvironmentTask = $null
         $environment = $task.GetAwaiter().GetResult()
         $script:WebViewEnvironment = $environment
-        if ($script:IsRescueSession) {
-          # A clean session uses WebView2's private controller mode. It starts
-          # without the normal Aura cookies and discards its own session data
-          # when the controller closes; the regular profile remains untouched.
-          $controllerOptions = $environment.CreateCoreWebView2ControllerOptions()
-          $controllerOptions.ProfileName = 'ClaudeAuraRescue'
-          $controllerOptions.IsInPrivateModeEnabled = $true
-          $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment, $controllerOptions)
-        } else {
-          $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment)
+        [void](Start-AuraWebTabWorkHubWebView -Environment $environment -StudioRoot $StudioRoot)
+        if ($script:IsRescueSession -or (Test-AuraWebTabProviderActivationRequired)) {
+          if ($script:IsRescueSession) {
+            # A clean session uses WebView2's private controller mode. It starts
+            # without the normal Aura cookies and discards its own session data
+            # when the controller closes; the regular profile remains untouched.
+            $controllerOptions = $environment.CreateCoreWebView2ControllerOptions()
+            $controllerOptions.ProfileName = 'ClaudeAuraRescue'
+            $controllerOptions.IsInPrivateModeEnabled = $true
+            $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment, $controllerOptions)
+          } else {
+            $script:EnsureTask = $script:WebView.EnsureCoreWebView2Async($environment)
+          }
         }
         if (Test-Path -LiteralPath $StudioRoot -PathType Container) {
           if ($script:IsRescueSession) {
@@ -12626,6 +13123,8 @@ public static class AuraUiAsyncDispatch {
           Write-AuraUiLog -Message "Studio folder is missing: $StudioRoot"
         }
       }
+      [void](Complete-AuraWebTabWorkHubWebView)
+      [void](Update-AuraUiSessionBoardPresentation)
       if ($null -ne $script:StudioEnsureTask -and $script:StudioEnsureTask.IsCompleted) {
         try {
           $task = $script:StudioEnsureTask
@@ -12689,6 +13188,7 @@ public static class AuraUiAsyncDispatch {
                 $eventArgs.Cancel = $true
               } else {
                 [void](New-AuraPromptShelfStudioSession)
+                [void](New-AuraTaskboardStudioSession)
               }
             } catch { $eventArgs.Cancel = $true }
           })
@@ -12706,12 +13206,18 @@ public static class AuraUiAsyncDispatch {
             $rawMessage = $null
             try {
               $rawMessage = $eventArgs.WebMessageAsJson
+              if (Test-AuraUiSessionBoardMessageCandidate -Json $rawMessage) {
+                Invoke-AuraUiStudioSessionBoardMessage `
+                  -Core $sender -Json $rawMessage -Source $eventArgs.Source
+                return
+              }
               Invoke-AuraUiStudioMessage -Json $rawMessage -Source $eventArgs.Source
             } catch {
               Write-AuraUiLog -Message "Studio message rejected: $($_.Exception.Message)"
               $failedAction = ''
               $failedRequestId = ''
               $promptShelfRejected = $false
+              $taskboardRejected = $false
               try {
                 if ($rawMessage -isnot [string] -or $rawMessage.Length -gt 16384) {
                   throw 'Rejected Studio message is not safe to inspect.'
@@ -12721,6 +13227,12 @@ public static class AuraUiAsyncDispatch {
                     $script:StudioMessageTypes -ccontains $failedMessage.type) {
                   if ([string]$failedMessage.type -clike 'prompt-shelf-*') {
                     $promptShelfRejected = $true
+                  } elseif ([string]$failedMessage.type -clike 'taskboard-*') {
+                    $taskboardRejected = $true
+                    if ($failedMessage.requestId -is [string] -and
+                        (Test-AuraTaskboardUuid -Value ([string]$failedMessage.requestId))) {
+                      $failedRequestId = [string]$failedMessage.requestId
+                    }
                   } elseif ($failedMessage.type -in @(
                       'set-locale', 'complete-studio-introduction',
                       'set-image-framing', 'set-avatar-framing', 'set-card-preview-crop',
@@ -12744,6 +13256,9 @@ public static class AuraUiAsyncDispatch {
               if ($promptShelfRejected) {
                 Write-AuraPromptShelfEvent -Code 'studio-request-rejected'
                 Send-AuraPromptShelfStudioChanged
+              } elseif ($taskboardRejected) {
+                Write-AuraTaskboardEvent -Code 'studio-request-rejected'
+                Send-AuraTaskboardStudioFailure -RequestId $failedRequestId
               } elseif ($failedAction) {
                 if ($failedAction -ceq 'set-locale') {
                   Send-AuraUiStudioState -Status "$($script:UiCopy.localeNotChangedMessage)" -Tone error
@@ -12789,6 +13304,10 @@ public static class AuraUiAsyncDispatch {
         $script:EnsureTask = $null
         [void]$task.GetAwaiter().GetResult()
         $core = $script:WebView.CoreWebView2
+        if (-not $script:IsRescueSession) {
+          Register-AuraWebTabInitialized -WebView $script:WebView
+          [void](Register-AuraSessionResponseObserverForWebView -WebView $script:WebView)
+        }
         $core.Settings.AreDevToolsEnabled = $false
         $core.Settings.IsStatusBarEnabled = $false
         $core.Settings.AreDefaultContextMenusEnabled = $true
@@ -12798,6 +13317,7 @@ public static class AuraUiAsyncDispatch {
 
         $core.add_WebResourceResponseReceived({
           param($sender, $eventArgs)
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           if ($null -eq $script:ActiveNavigationId -or -not $script:ActiveNavigationUri) { return }
           try {
             # cf-mitigated is Cloudflare's authoritative challenge marker. Read
@@ -12832,6 +13352,12 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_NavigationStarting({
           param($sender, $eventArgs)
+          if (Request-AuraUiInterceptNewSessionNavigation `
+              -Core $sender -SourceUrl $script:WebView.Source -TargetUrl $eventArgs.Uri) {
+            $eventArgs.Cancel = $true
+            return
+          }
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           Advance-AuraPromptShelfPageEpoch
           Stop-AuraUiLoadingScreenPreview -Reason navigation
           Stop-AuraUiEditorOverlay -Reason navigation
@@ -12869,6 +13395,7 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_WebMessageReceived({
           param($sender, $eventArgs)
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           try {
             Invoke-AuraUiEditorOverlayMessage `
               -Json $eventArgs.WebMessageAsJson `
@@ -12881,6 +13408,7 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_DOMContentLoaded({
           param($sender, $eventArgs)
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           if ($null -eq $script:ActiveNavigationId -or
               [UInt64]$script:ActiveNavigationId -ne [UInt64]$eventArgs.NavigationId -or
               -not (Test-AuraUiClaudeUri -Value $script:WebView.Source)) {
@@ -12907,6 +13435,7 @@ public static class AuraUiAsyncDispatch {
         })
         $core.add_NavigationCompleted({
           param($sender, $eventArgs)
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           $navigationDisposition = Get-AuraUiNavigationCompletionDisposition `
             -CurrentNavigationId $script:ActiveNavigationId `
             -ReadyNavigationId $script:ReadyNavigationId `
@@ -13023,6 +13552,9 @@ public static class AuraUiAsyncDispatch {
         # source or history transition; Request-AuraUiMirror coalesces bursts
         # and keeps its existing editor-session/generation guards.
         $core.add_SourceChanged({
+          param($sender, $eventArgs)
+          Sync-AuraWebTabMetadata -Core $sender
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
           Stop-AuraUiLoadingScreenPreview -Reason navigation
@@ -13031,6 +13563,9 @@ public static class AuraUiAsyncDispatch {
           Request-AuraUiLauncherLayoutProbe
         })
         $core.add_HistoryChanged({
+          param($sender, $eventArgs)
+          Sync-AuraWebTabMetadata -Core $sender
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           Advance-AuraPromptShelfPageEpoch
           Request-AuraUiContextMirror
           Stop-AuraUiLoadingScreenPreview -Reason navigation
@@ -13038,11 +13573,27 @@ public static class AuraUiAsyncDispatch {
           Request-AuraUiGreetingProbe
           Request-AuraUiLauncherLayoutProbe
         })
+        $core.add_DocumentTitleChanged({
+          param($sender, $eventArgs)
+          Sync-AuraWebTabMetadata -Core $sender
+        })
         $core.add_NewWindowRequested({
           param($sender, $eventArgs)
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) {
+            $eventArgs.Handled = $true
+            return
+          }
           try {
             $uri = [Uri]$eventArgs.Uri
-            $newWindowDisposition = Get-AuraUiNewWindowDisposition -Value $uri
+            $newWindowDisposition = Get-AuraUiNewWindowDisposition -Value $uri `
+              -IsUserInitiated ([bool]$eventArgs.IsUserInitiated)
+            if ($newWindowDisposition -eq 'CodeTab') {
+              $eventArgs.Handled = $true
+              if (-not (Request-AuraUiNewWebTab -Url 'https://claude.ai/code')) {
+                $sender.Navigate('https://claude.ai/code')
+              }
+              return
+            }
             if ($newWindowDisposition -eq 'Popup') {
               # Keep Handled false so WebView2 creates the real popup and preserves
               # window.opener. Replacing window.open with a main-view Navigate gives
@@ -13064,6 +13615,8 @@ public static class AuraUiAsyncDispatch {
           }
         })
         $core.add_ProcessFailed({
+          param($sender, $eventArgs)
+          if ($null -ne $sender -and -not (Test-AuraWebTabCoreActive -Core $sender)) { return }
           Advance-AuraPromptShelfPageEpoch
           $codeRecoveryAllowed = $script:ExperimentalCodeStyle -and (Get-AuraUiEnabled)
           $processRecoverySurface = if ($codeRecoveryAllowed -and
@@ -13135,10 +13688,31 @@ public static class AuraUiAsyncDispatch {
                 $modifiers = [System.Windows.Forms.Control]::ModifierKeys
                 $hasControl = ($modifiers -band [System.Windows.Forms.Keys]::Control) -ne 0
                 $hasShift = ($modifiers -band [System.Windows.Forms.Keys]::Shift) -ne 0
-                if (-not ($hasControl -and $hasShift)) { return }
+                if (-not $hasControl) { return }
+                if ([int]$eventArgs.VirtualKey -eq 0x09) {
+                  $eventArgs.Handled = $true
+                  Request-AuraUiCycleWebTab -Reverse:$hasShift
+                  return
+                }
+                if (-not $hasShift) {
+                  switch ([int]$eventArgs.VirtualKey) {
+                    0x31 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 1; break }
+                    0x32 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 2; break }
+                    0x33 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 3; break }
+                    0x34 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 4; break }
+                    0x35 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 5; break }
+                    0x36 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 6; break }
+                    0x37 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 7; break }
+                    0x38 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 8; break }
+                    0x39 { $eventArgs.Handled = $true; Request-AuraUiSelectWebTabByOrdinal -Ordinal 9; break }
+                    0x54 { $eventArgs.Handled = $true; Request-AuraUiNewWebTab; break }
+                    0x57 { $eventArgs.Handled = $true; Request-AuraUiCloseWebTab; break }
+                  }
+                  return
+                }
                 switch ([int]$eventArgs.VirtualKey) {
                   0x53 { $eventArgs.Handled = $true; Show-AuraUiStudio; break }
-                  0x50 { $eventArgs.Handled = $true; Show-AuraPromptShelf; break }
+                  0x50 { $eventArgs.Handled = $true; Show-AuraTaskboardQueue; break }
                   0x41 {
                     $eventArgs.Handled = $true
                     try {
@@ -13301,13 +13875,21 @@ public static class AuraUiAsyncDispatch {
     $script:PendingNavigationCompletion = $null
     $script:PendingApply = $false
     $script:PendingRestore = $false
-    Show-AuraUiLoading -Message $(if ($script:IsRescueSession) {
-        "$($script:UiCopy.rescueStartingCleanSession)"
-      } else {
-        "$($script:UiCopy.openingClaude)"
-      })
+    if ($script:IsRescueSession -or (Test-AuraWebTabProviderActivationRequired)) {
+      Show-AuraUiLoading -Message $(if ($script:IsRescueSession) {
+          "$($script:UiCopy.rescueStartingCleanSession)"
+        } else {
+          "$($script:UiCopy.openingClaude)"
+        })
+    } else {
+      [void](Set-AuraWebTabWorkHubActive)
+    }
     try {
       $script:EnvironmentTask = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $WebDataRoot, $null)
+      if (-not $script:IsRescueSession) {
+        [void](Initialize-AuraSessionDock)
+        [void](Initialize-AuraSessionBoardDesktopHost)
+      }
       Initialize-AuraDraftHandoff -Enabled ([bool]$ExperimentalDraftHandoff)
       Initialize-AuraUiEventDispatch
       Request-AuraUiHostWork
@@ -13367,8 +13949,11 @@ public static class AuraUiAsyncDispatch {
     }
     if ($script:StudioForm -and -not $script:StudioForm.IsDisposed) { $script:StudioForm.Close() }
     if ($script:StudioWebView -and -not $script:StudioWebView.IsDisposed) { $script:StudioWebView.Dispose() }
+    Dispose-AuraSessionDock
+    Dispose-AuraSessionBoardDesktopHost
     Dispose-AuraDraftHandoff
     Dispose-AuraPromptShelf -Final
+    Dispose-AuraTaskboardQueue
     if ($script:LauncherAnimTimer) { $script:LauncherAnimTimer.Stop(); $script:LauncherAnimTimer.Dispose(); $script:LauncherAnimTimer = $null }
     if ($script:LauncherTipTimer) { $script:LauncherTipTimer.Stop(); $script:LauncherTipTimer.Dispose(); $script:LauncherTipTimer = $null }
     if ($script:LauncherHint -and -not $script:LauncherHint.IsDisposed) { $script:LauncherHint.Close() }
@@ -13378,7 +13963,9 @@ public static class AuraUiAsyncDispatch {
     if ($script:LauncherMark) { $script:LauncherMark.Dispose(); $script:LauncherMark = $null }
     if ($script:TrayMenu) { $script:TrayMenu.Dispose() }
     if ($script:LauncherMenu) { $script:LauncherMenu.Dispose() }
-    if ($script:WebView) { $script:WebView.Dispose() }
+    if (Get-Command Dispose-AuraWebTabs -ErrorAction SilentlyContinue) {
+      Dispose-AuraWebTabs
+    } elseif ($script:WebView) { $script:WebView.Dispose() }
   })
 
   [System.Windows.Forms.Application]::Run($script:Form)
@@ -13421,8 +14008,17 @@ public static class AuraUiAsyncDispatch {
   if (Get-Command Dispose-AuraDraftHandoff -ErrorAction SilentlyContinue) {
     try { Dispose-AuraDraftHandoff } catch {}
   }
+  if (Get-Command Dispose-AuraSessionDock -ErrorAction SilentlyContinue) {
+    try { Dispose-AuraSessionDock } catch {}
+  }
+  if (Get-Command Dispose-AuraSessionBoardDesktopHost -ErrorAction SilentlyContinue) {
+    try { Dispose-AuraSessionBoardDesktopHost } catch {}
+  }
   if (Get-Command Dispose-AuraPromptShelf -ErrorAction SilentlyContinue) {
     try { Dispose-AuraPromptShelf -Final } catch {}
+  }
+  if (Get-Command Dispose-AuraWebTabs -ErrorAction SilentlyContinue) {
+    try { Dispose-AuraWebTabs } catch {}
   }
   if ($null -ne $script:StudioOpenSignal) {
     try { $script:StudioOpenSignal.Dispose() } catch {}

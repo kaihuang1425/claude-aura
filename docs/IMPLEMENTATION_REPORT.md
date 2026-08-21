@@ -1,5 +1,20 @@
 # Eight-theme implementation report
 
+## Phase 2 source completion and Checkpoint F — 2026-08-09
+
+WO-20, WO-21, WO-25, WO-26, WO-28, and WO-22 are implemented through their
+source and mechanical gates. The latest shared Phase 2 commit, `26cb329`, passed
+205 tests across 28 suites, the 16-state payload cycle, PowerShell parsing, and
+all eight status-only production asset audits.
+
+The owner directed the queue to skip the remaining blockages and resume.
+HUMAN CHECKPOINT F is therefore recorded as **owner-skipped — unpassed**. Its
+current-build whole-window actual-Aura matrix, installed interaction,
+accessibility, persistence, loading/retry behavior, and clean-profile `.aura`
+round-trip were not performed. No mechanical result or older capture is treated
+as visual approval. The still-running older installed Aura instance was left
+untouched; WO-23 proceeds only to its required macOS plan approval checkpoint.
+
 ## WO-16 final sweep — 2026-08-08
 
 **Outcome: mechanically complete release candidate; final public release
@@ -302,7 +317,7 @@ implementation surface by responsibility.
 | Runtime artwork and app identity | `assets/theme-art/`, `assets/theme-art/README.md` | Isolated optional renderer layers, eight separate Light/Dark in-page wordmark pairs, plus eight deterministic 96×96 PNG/nine-frame ICO pairs shared by running and installed identity surfaces |
 | Studio selector media and source references | `assets/studio-previews/` | Seven preserved uncropped, user-framable masters plus clearly separated repository-only alternates, authored 1254×1254 launcher sources, eight normalized in-page wordmark sources, prompts, and provenance |
 | Compiler and commands | `scripts/theme-core.mjs`, `scripts/theme-core/*.mjs`, `scripts/theme-cli.mjs`, `scripts/webview-cli.mjs`, `scripts/state-cli.mjs`, `scripts/injector.mjs`, `scripts/asset-audit.mjs`, `scripts/build-brand-wordmarks.mjs`, `scripts/build-launcher-assets.mjs`, `scripts/build-studio-themes.mjs`, `scripts/build-release.mjs`, `scripts/build-installer*.mjs` | Validation, compilation, persistence aliases, localized payload metadata, legacy injection, status-only artwork/identity auditing, deterministic artwork generation, Studio metadata generation, release collection, and signed/unsigned Windows installer builds |
-| Windows experience | `installer/`, `Install Claude Aura.cmd`, `Uninstall Claude Aura.cmd`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | Native per-user setup/uninstall lifecycle, localized trust and prerequisite UI, journaled app-tree prepare/commit/rollback, versioned retry-safe maintenance, DPI-aware content-only host plus Aura Studio, live application, adjustable card/background framing, dynamic theme identity, accessibility, verification/restore helpers, and explicit app/data removal |
+| Windows experience | `installer/`, `installer/templates/package-root/`, `windows/*.ps1`, `windows/ui-copy.json`, `studio/` | Native per-user setup/uninstall lifecycle, private payload templates, localized trust and prerequisite UI, journaled app-tree prepare/commit/rollback, versioned retry-safe maintenance, DPI-aware content-only host plus Aura Studio, live application, adjustable card/background framing, dynamic theme identity, accessibility, verification/restore helpers, and explicit app/data removal |
 | macOS compatibility | `Install Claude Aura.command`, `macos/*.sh`, `macos/launchers/*.command` | Reversible, allowlisted legacy installation, theme switching, verification, and restore without reference composites |
 | Verification | `tests/run-tests.mjs`, `scripts/verify-cycle.mjs`, `scripts/asset-audit.mjs`, `package.json`, `config.example.json` | Twenty end-to-end/static checks, payload-only Light/Dark compilation for all eight themes, status-only artwork audits, build commands, and Default baseline |
 | Documentation and policy | `README.md`, `CONTRIBUTING.md`, `docs/THEMING.md`, `docs/TROUBLESHOOTING.md`, `docs/WINDOWS_INSTALLER.md`, `docs/FILE_MANIFEST.md`, `docs/SCREENSHOT_PLAN.md`, `docs/ACCEPTANCE_AUDIT.md`, this report, `SECURITY.md`, `NOTICE.md`, `THIRD_PARTY_NOTICES.md`, `.gitignore` | Use, maintenance, installer signing and release procedure, troubleshooting, exhaustive file inventory, repeatable capture, acceptance evidence, licensing, exclusions, and deliverables |
@@ -610,21 +625,23 @@ reinstalled after the source tree and live checkpoint settle.
 | WO-18 permanent Studio-shell profiles | Eight closed Aura-owned profile branches add pairwise-distinct non-colour structure for the permanent themes. Selection is limited to the immutable generated-theme snapshot; host-added themes and active drafts use neutral chrome. Regressions require the exact eight IDs, a complete variable set, at least two structural differences per pair, no raw colour/media/path channel, reduced-motion lift removal, and high-contrast/forced-colours decoration removal. The installed 1080×720 Gallery/settings Light/Dark/System walkthrough and neutral Quick/Advanced draft boundary were completed at HUMAN CHECKPOINT D. |
 | WO-13 Japanese Idol parity cycle | Four production WebPs totaling 489,780 bytes; decoded dimensions, alpha/full-bleed expectations, raster limits, and Light/Dark payload budgets pass. After the first Checkpoint C review rejected the Light framing, the top-right 74%/660px revision was recaptured in actual Aura across Light/Dark new-chat/conversation; Dark is unchanged. The user approved HUMAN CHECKPOINT C on 2026-07-21 and the recorded assets/hashes are frozen. |
 
-Before creating an archive, run the checks and then:
+To inspect the internal Setup payload, run the checks and then:
 
 ```powershell
 npm run release
 ```
 
-The release builder creates a versioned ZIP and SHA-256 file from explicit
-distributable top-level files, directories, and supported file types. Source
+The payload builder creates a versioned ZIP and SHA-256 file under
+`dist/release-payload` from explicit distributable top-level files,
+directories, and supported file types. This archive is a build input, not a
+second user-facing installer. Source
 control metadata, internal planning records, local configuration/state,
 dependency/build output, temporary files, logs, existing release output, and
 source-only `assets/studio-previews/references/` are therefore excluded,
 including launcher source images and their prompt record. The derived
 `assets/theme-art/<id>/launcher-mark.png` and `launcher-mark.ico` files and the
 registered preview masters are shipped product media. The native installer
-embeds only the release builder's allowlisted ZIP content, re-verifies that
+embeds only the payload builder's allowlisted content, re-verifies the private
 archive before compilation, and performs a hash-verified exact-tree swap.
 Repository tests and payload-cycle checks are separate build gates rather than
 hidden work performed on the user's computer.
@@ -724,10 +741,15 @@ substitute.
 
 ## Remaining limitations
 
-- Aura 0.3 themes the live Claude website only. It does not theme native Claude
-  Desktop and gives ordinary web chat no local-project authority. The safe
-  companion coverage is terminal-theme export plus `desktop-guidance-only`;
-  the opt-in Code outer-shell styling remains a source-checkout experiment.
+- The installable Aura 0.3 product themes the live Claude website only and gives
+  ordinary web chat no local-project authority. WO-32 now also provides a
+  separately named, source-checkout-only external presentation for the exact
+  reviewed Claude Desktop build: 13 semantic GPU colors, two translucency roles,
+  permanent-theme artwork/identity/material cues, and reversible Original look.
+  It does not patch or directly style Desktop's renderer and remains excluded
+  from releases. The safe shipped companion coverage is still terminal-theme
+  export plus `desktop-guidance-only`; the opt-in Code outer-shell styling also
+  remains a source-checkout experiment.
   Stable WO-27 and HUMAN CHECKPOINT CODE are NO-GO because no affirmative
   third-party WebView2 support contract has been established. The owner waived
   their dependency only to continue source work, so the final public release

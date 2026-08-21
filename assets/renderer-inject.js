@@ -9,20 +9,17 @@
     }
     delete settings.C;
   }
-  const STATE_KEY = "__CLAUDE_AURA_STATE__";
-  const STYLE_ID = "claude-aura-style";
-  const BACKDROP_ID = "claude-aura-backdrop";
-  const root = document.documentElement;
-  const imageCssValue = settings.imageDataUrl ? `url(${JSON.stringify(settings.imageDataUrl)})` : "none";
-  const imageOpacityValue = settings.imageOpacity === null
+  const STATE_KEY = "__CLAUDE_AURA_STATE__", STYLE_ID = "claude-aura-style",
+    BACKDROP_ID = "claude-aura-backdrop", root = document.documentElement;
+  const imageCssValue = settings.imageDataUrl ? `url(${JSON.stringify(settings.imageDataUrl)})` : "none",
+    imageOpacityValue = settings.imageOpacity === null
     ? "var(--aura-default-image-opacity)"
-    : String(settings.imageOpacity);
-  const imageScaleValue = String(settings.imageZoom || 1);
-  const artCssValue = settings.artDataUrl ? `url(${JSON.stringify(settings.artDataUrl)})` : "none";
-  const appearance = settings.appearance || "system";
-  const media = appearance === "system" ? window.matchMedia?.("(prefers-color-scheme: dark)") : null;
-  const forcedColors = window.matchMedia?.("(forced-colors: active)") ?? null;
-  const mode = () => appearance === "system" ? (media?.matches ? "dark" : "light") : appearance;
+    : String(settings.imageOpacity), imageScaleValue = String(settings.imageZoom || 1);
+  const artCssValue = settings.artDataUrl ? `url(${JSON.stringify(settings.artDataUrl)})` : "none",
+    appearance = settings.appearance || "system",
+    media = appearance === "system" ? window.matchMedia?.("(prefers-color-scheme: dark)") : null,
+    forcedColors = window.matchMedia?.("(forced-colors: active)") ?? null,
+    mode = () => appearance === "system" ? (media?.matches ? "dark" : "light") : appearance;
   const viewport = () => {
     const screenWide = window.screen?.availWidth > 0 && window.screen?.availHeight > 0
       && window.innerWidth >= window.screen.availWidth - 32
@@ -82,19 +79,15 @@
   const SIDEBAR_MARKER = "data-claude-aura-sidebar";
   const MAIN_MARKER = "data-claude-aura-main-canvas";
   const PROMPT_MARKER = "data-claude-aura-prompt";
-  const RM = "data-aura-role";
-  const FM = "data-aura-f";
-  const PM = "data-aura-bg";
+  const RM = "data-aura-role", FM = "data-aura-f", PM = "data-aura-bg";
   const R = Object.freeze([
     "sidebar-primary", "sidebar-row", "sidebar-section", "sidebar-list", "sidebar-footer",
     "composer-shell", "composer-editor", "composer-toolbar",
     "control-icon", "control-pill", "control-toggle",
   ]);
-  const BH = "data-claude-aura-brand-host";
-  const BF = "data-claude-aura-brand-flow";
-  const BN = "data-claude-aura-brand-native";
-  const BI = "data-claude-aura-brand-image";
-  const BL = "data-claude-aura-brand-loader";
+  const BH = "data-claude-aura-brand-host", BF = "data-claude-aura-brand-flow",
+    BN = "data-claude-aura-brand-native", BI = "data-claude-aura-brand-image",
+    BL = "data-claude-aura-brand-loader";
   const MESSAGE_SELECTOR = [
     '[data-testid="user-message"]',
     '[data-testid="assistant-message"]',
@@ -103,17 +96,12 @@
     '[data-message-author-role="user"]',
     '[data-message-author-role="assistant"]',
     '.font-claude-response-body',
-  ].join(",");
-  const EDITOR_SELECTOR = [
+  ].join(","), EDITOR_SELECTOR = [
     'textarea:not([readonly])',
     '.ProseMirror[contenteditable="true"]',
     '[role="textbox"][contenteditable="true"]',
-  ].join(",");
-  const CONTROL_SELECTOR = 'button,[role="button"],[role="switch"],[role="combobox"],select';
-  let observeTargets = () => {};
-  let styleDirty = true;
-  let rootDirty = true;
-  let currentContext = "other";
+  ].join(","), CONTROL_SELECTOR = 'button,[role="button"],[role="switch"],[role="combobox"],select';
+  let observeTargets = () => {}, styleDirty = true, rootDirty = true, currentContext = "other";
   /*__AURA_CODE_ACTIVE_START__*/
   let codeCleanupRetry = 0;
   /*__AURA_CODE_ACTIVE_END__*/
@@ -592,7 +580,8 @@
       node = node.parentElement, depth += 1) {
       const rect = visibleRect(node);
       if (!rect || rect.width < Math.max(280, editorRect.width * 0.75)
-          || rect.height < editorRect.height + 18 || rect.height > 560) continue;
+          || rect.height < Math.min(editorRect.height + 18, 222)
+          || rect.height > 560) continue;
       fallback ??= node;
       const controls = [...(node.querySelectorAll?.(CONTROL_SELECTOR) ?? [])]
         .filter((control) => visibleRect(control) && !modalAncestor(control, node));
@@ -610,7 +599,8 @@
       node && node !== main && depth < 8;
       node = node.parentElement, depth += 1) {
       const rect = visibleRect(node);
-      if (!rect || rect.width < shellRect.width * 0.9
+      if (!rect) continue;
+      if (rect.width < shellRect.width * 0.9
           || rect.height > Math.min(560, shellRect.height + 260)
           || node.querySelector?.(MESSAGE_SELECTOR)) continue;
       const editors = [...(node.querySelectorAll?.(EDITOR_SELECTOR) ?? [])]
@@ -681,12 +671,17 @@
     const groupRect = visibleRect(group);
     if (!mainRect || !groupRect || group === main) return { context: "other", main };
     const context = mainRect.bottom - groupRect.bottom >= Math.max(56, mainRect.height * 0.08)
+      || ((groupRect.bottom > mainRect.bottom
+          || (currentContext === "new-chat" && window.location?.pathname === "/new"))
+        && groupRect.top >= mainRect.top + Math.min(180, mainRect.height * 0.35)
+        && groupRect.left >= mainRect.left - 2
+        && groupRect.right <= mainRect.right + 2)
       ? "new-chat" : "other";
     if (context === "other") return { context, main };
     const controls = classifyComposerControls(shell, editor);
     return {
       context,
-      main,
+      main: group.parentNode,
       prompt: context === "new-chat" ? group : null,
       shell,
       editor,
@@ -1547,7 +1542,8 @@
         ensure();
     }, 160);
   };
-  const onContextSignal = () => scheduleEnsure();
+  const onContextSignal = () => scheduleEnsure(),
+    onPromptInput=e=>e.target?.closest?.(`[${PROMPT_MARKER}="authored"]`)&&scheduleEnsure();
   const onResize = () => {
     if (!responsiveTrack) return scheduleEnsure();
     if (responsiveAnimationFrame) return;
@@ -1573,6 +1569,7 @@
   const onVis=()=>{clearInterval(t);t=document["hidden"]?0:setInterval(ensure,15e3);if(t&&window[STATE_KEY])ensure()};
   window.addEventListener("popstate", onPopState);
   window.addEventListener("resize", onResize, { passive: true });
+  document.addEventListener?.("input", onPromptInput, true);
   document.addEventListener?.("fullscreenchange", onContextSignal);
   document.addEventListener?.("visibilitychange", onVis);
   window.navigation?.addEventListener?.("currententrychange", onNavigationSignal);
@@ -1580,6 +1577,7 @@
     clearInterval(t);
     window.removeEventListener("popstate", onPopState);
     window.removeEventListener("resize", onResize);
+    document.removeEventListener?.("input", onPromptInput, true);
     document.removeEventListener?.("fullscreenchange", onContextSignal);
     document.removeEventListener?.("visibilitychange", onVis);
     window.navigation?.removeEventListener?.("currententrychange", onNavigationSignal);
@@ -1691,11 +1689,16 @@
     "greetingMemory": greetingMemory,
     "getGreetingProbe": getGreetingProbe,
     clearMarkedElements: clearMarks,
-    codeAdapter,
     version: settings.version,
     theme: settings.theme,
     digest: settings.digest,
   };
   ensure();
-  return { installed: true, version: settings.version, theme: settings.theme, digest: settings.digest, gm: greetingMatches };
+  return {
+    installed: true,
+    version: settings.version,
+    theme: settings.theme,
+    digest: settings.digest,
+    gm: greetingMatches,
+  };
 })(__AURA_CSS_JSON__, __AURA_SETTINGS_JSON__)
