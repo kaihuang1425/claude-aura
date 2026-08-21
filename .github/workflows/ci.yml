@@ -18,6 +18,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Provide Windows PowerShell command name on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          command -v pwsh
+          mkdir -p "$RUNNER_TEMP/aura-bin"
+          printf '#!/bin/sh\nexec pwsh "$@"\n' > "$RUNNER_TEMP/aura-bin/powershell.exe"
+          chmod +x "$RUNNER_TEMP/aura-bin/powershell.exe"
+          echo "$RUNNER_TEMP/aura-bin" >> "$GITHUB_PATH"
       - run: npm test
       - run: npm run studio:build
       - run: npm run check
