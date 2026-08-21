@@ -21,6 +21,7 @@ export const CRITICAL_RUNTIME_FILES = Object.freeze([
   "scripts/codex-session-index.mjs",
   "studio/app.js",
   "studio/index.html",
+  "studio/theme-assistant.js",
   "studio/pets.css",
   "studio/pets.js",
   "studio/pets/moss.png",

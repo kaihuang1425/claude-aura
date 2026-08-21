@@ -82,6 +82,7 @@ test("Studio synchronizes opted-in Desktop presentation state and reloads saved 
 test("Windows uses a content-only WebView2 window with Aura Studio and tray controls", async () => {
   const start = await fs.readFile(path.join(PROJECT_ROOT, "windows", "start.ps1"), "utf8");
   const ui = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-ui.ps1"), "utf8");
+  const webTabs = await fs.readFile(path.join(PROJECT_ROOT, "windows", "aura-web-tabs.ps1"), "utf8");
   const powershellFunction = (name) => {
     const startIndex = ui.indexOf(`function ${name}`);
     assert(startIndex >= 0, `Aura UI is missing ${name}`);
@@ -184,8 +185,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Claude content panel must contain only the Claude WebView and loading panel");
   assert(!/\$content\.Controls\.AddRange\s*\(/.test(ui),
     "The content panel must not receive controls through an unverified AddRange call");
-  assert(!/DwmExtendFrameIntoClientArea|WM_NCCALCSIZE|DwmDefWindowProc|WM_NCHITTEST/.test(ui),
-    "Aura must not expand WebView content over the native caption controls");
+  assert(!/DwmExtendFrameIntoClientArea|WM_NCCALCSIZE|DwmDefWindowProc/.test(ui),
+    "Aura must not use unsupported non-client frame extension tricks");
+  assert.match(ui,
+    /customFrame[\s\S]{0,500}?WM_NCHITTEST[\s\S]{0,1400}?HTTOPLEFT[\s\S]{0,900}?HTBOTTOMRIGHT/,
+    "The borderless Aura window must retain edge and corner resizing");
   assert.match(ui,
     /DwmSetWindowAttribute\(Handle,\s*20[\s\S]{0,180}?DwmSetWindowAttribute\(Handle,\s*19/,
     "System caption controls must follow Light, Dark, and system appearance");
@@ -196,14 +200,21 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /DwmSetWindowAttribute\(Handle,\s*34/,
     "The retained native caption must suppress only the outer border");
   assert.match(ui,
-    /\$script:Form\.FormBorderStyle\s*=\s*\[System\.Windows\.Forms\.FormBorderStyle\]::Sizable/,
-    "The Aura window must keep its native resizable frame");
+    /\$script:Form\.FormBorderStyle\s*=\s*\[System\.Windows\.Forms\.FormBorderStyle\]::None/,
+    "The Aura window must use one compact custom title/menu row instead of a second native caption row");
   assert.match(ui,
     /\$script:StudioForm\.FormBorderStyle\s*=\s*\[System\.Windows\.Forms\.FormBorderStyle\]::Sizable/,
     "The Studio window must keep its native resizable frame");
-  // The caption still reads as untitled, but it stays untitled by painting the
-  // title in the caption color rather than by leaving the window text empty --
-  // an empty caption made Aura invisible to every window-capture picker.
+  assert.match(ui, /\$script:MainIconWindow\.SetCustomFrame\(\$true\)/,
+    "Only the main Aura window may opt into the custom resizable frame");
+  assert.match(webTabs,
+    /function Register-AuraWebWindowDragSurface[\s\S]{0,1800}?ReleaseCapture[\s\S]{0,500}?SendMessage/,
+    "The custom row must provide a draggable title surface");
+  assert.match(webTabs,
+    /New-AuraWebWindowControlButton -Text[\s\S]{0,1800}?\$script:AuraWebWindowControlButtons\s*=\s*@\(\$minimize, \$maximize, \$close\)/,
+    "The custom row must provide minimize, maximize, and close controls");
+  // Studio retains the native caption. The main custom frame still keeps real
+  // window text so screen pickers and Alt+Tab can identify it.
   assert.match(ui, /DwmSetWindowAttribute\(Handle,\s*36,\s*ref textColor/,
     "The retained native caption must hide the title via DWMWA_TEXT_COLOR, not an empty title");
   assert.match(ui, /int textColor = captionColor;/,
@@ -213,12 +224,14 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
       `${form} must not blank its window text; recorders skip zero-length titles`);
     assert.match(ui, new RegExp(`\\$script:${form}\\.ShowIcon\\s*=\\s*\\$false`),
       `${form} must hide only the caption icon`);
-    for (const control of ["ControlBox", "MinimizeBox", "MaximizeBox"]) {
-      assert.match(ui, new RegExp(`\\$script:${form}\\.${control}\\s*=\\s*\\$true`),
-        `${form} must retain its native ${control}`);
-    }
   }
-  assert.match(ui, /\$script:Form\.AccessibleName\s*=\s*'Claude Aura'/,
+  for (const control of ["ControlBox", "MinimizeBox", "MaximizeBox"]) {
+    assert.match(ui, new RegExp(`\\$script:Form\\.${control}\\s*=\\s*\\$false`),
+      `The main custom frame must replace native ${control}`);
+    assert.match(ui, new RegExp(`\\$script:StudioForm\\.${control}\\s*=\\s*\\$true`),
+      `Studio must retain its native ${control}`);
+  }
+  assert.match(ui, /\$script:Form\.AccessibleName\s*=\s*'Claude Aura Web'/,
     "Hiding the painted title must not remove Aura's accessible window name");
   const exitRequest = powershellFunction("Request-AuraUiExit");
   assert.match(exitRequest,
@@ -258,15 +271,15 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The launcher must be shown as an owned window so it tracks the main window's minimize/restore and z-order");
   assert.match(ui, /\$script:LauncherButton\.add_MouseMove/,
     "The launcher must be draggable");
-  assert.match(ui, /\$wasClickArmed\s*\)\s*\{\s*Show-AuraUiLauncherMenu/,
-    "A left click that was not a drag must reveal the launcher action menu");
+  assert.match(ui, /\$wasClickArmed\s*\)\s*\{\s*Show-AuraUiStudio -OfferIntroduction/,
+    "A left click that was not a drag must open Studio");
   const launcherMenuShow = powershellFunction("Show-AuraUiLauncherMenu");
   assert.match(launcherMenuShow,
     /Hide-AuraUiLauncherTip[\s\S]{0,160}?\$script:LauncherMenu\.Show\(\[System\.Windows\.Forms\.Cursor\]::Position\)/,
-    "The launcher must use one shared menu-opening path without changing its circle");
+    "The launcher must retain one right-click menu path without changing its circle");
   assert.match(ui,
     /\$eventArgs\.Button -eq \[System\.Windows\.Forms\.MouseButtons\]::Right[\s\S]{0,220}?Show-AuraUiLauncherMenu/,
-    "Right-click must remain an alias for the same launcher menu");
+    "Right-click must retain the launcher action menu");
   assert.match(ui, /\$dragThreshold = ConvertTo-AuraUiLauncherPixels -Logical 6[\s\S]{0,500}?Get-AuraUiLauncherClampedLocation/,
     "A DPI-scaled movement threshold must separate dragging the launcher from clicking it");
   assert.match(ui, /LauncherSafeGap\s*=\s*16/,
@@ -278,11 +291,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui, /\$script:LauncherCompactSize\s*=\s*48/,
     "The launcher circle must remain 48 logical px");
   assert.match(ui,
-    /\$script:LauncherButton\.AccessibleRole\s*=\s*\[System\.Windows\.Forms\.AccessibleRole\]::ButtonMenu/,
-    "Assistive technology must identify the launcher as a menu button");
+    /\$script:LauncherButton\.AccessibleRole\s*=\s*\[System\.Windows\.Forms\.AccessibleRole\]::PushButton/,
+    "Assistive technology must identify the launcher's default Studio action");
   assert.match(ui,
-    /\$script:LauncherButton\.AccessibleDescription\s*=\s*"\$\(\$script:UiCopy\.launcherTipHint\)"/,
-    "The launcher must expose its localized click, shortcut, and drag guidance");
+    /\$script:LauncherButton\.AccessibleDescription\s*=\s*"\$\(\$script:UiCopy\.openStudio\)"/,
+    "The launcher must expose its localized Studio action");
   assert.match(ui,
     /\$script:LauncherButton\.Bounds\s*=\s*\[Drawing\.Rectangle\]::new\(\s*\$launcherMetrics\.Halo,\s*\$launcherMetrics\.Halo,\s*\$launcherMetrics\.Compact,\s*\$launcherMetrics\.Compact\)/,
     "The visible circle must remain the launcher hit surface, inset by its transparent halo");
@@ -324,14 +337,18 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(ui,
     /\$script:LauncherTipAlpha\s*=\s*\[int\]\$tipInitialAlpha[\s\S]{0,300}?if\s*\(\$script:LauncherLayeredActive[\s\S]{0,180}?\$script:LauncherAnimTimer\.Start\(\)/,
     "Only the layered launcher may defer tooltip visibility to the animation timer");
-  assert.match(ui, /launcherTipTitle/,
-    "The hover tip must carry the localized launcher-menu caption");
+  assert.match(powershellFunction("New-AuraUiLauncherTipBitmap"),
+    /UiCopy\.studioTitle[\s\S]{0,120}?UiCopy\.openStudio/,
+    "The hover tip must carry the localized default Studio action");
   // The launch hint is a real-control card: closable for the session, or
   // permanently dismissed through its marker file.
   assert.match(ui, /function Show-AuraUiLauncherHint[\s\S]{0,800}?launcher-hint-dismissed/,
     "The launch hint must honor its dismissal marker before showing");
   assert.match(ui, /launcherHintDismiss/,
     "The launch hint must offer a never-show-again action");
+  assert.match(ui,
+    /\$script:Form\.add_Shown\(\{[\s\S]{0,240}?Update-AuraUiLauncherPosition[\s\S]{0,120}?Show-AuraUiLauncherHint/,
+    "First arrival must present the Web/Desktop explanation through the floating Aura button dialog");
   assert(!ui.includes("Show-AuraUiFirstRunNavHint"),
     "The tray balloon hint is replaced by the launcher hint card");
   assert.match(ui, /add_AcceleratorKeyPressed/,
@@ -453,9 +470,13 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
   assert.match(launcherPosition,
     /LoadingPanel[\s\S]{0,180}?Visible[\s\S]{0,220}?Launcher\.Hide\(\)[\s\S]{0,120}?Hide-AuraUiLauncherTip/,
     "The floating launcher must stay out of the host-owned loading composition");
-  assert.match(powershellFunction("Show-AuraUiLoading"),
+  const showLoading = powershellFunction("Show-AuraUiLoading");
+  assert.match(showLoading,
     /LoadingPanel\.Visible\s*=\s*\$true[\s\S]{0,180}?Update-AuraUiLauncherPosition/,
     "Showing the cover must suppress the floating launcher immediately");
+  assert.match(showLoading,
+    /LoadingMark\.Visible\s*=\s*\$false[\s\S]{0,240}?LoadingLabel\.Visible\s*=\s*\$false[\s\S]{0,240}?LoadingProgress\.Visible\s*=\s*\$false/,
+    "Normal startup must present a quiet themed surface instead of a blocking loading portal");
   assert.match(powershellFunction("Hide-AuraUiLoading"),
     /LoadingPanel\.Visible\s*=\s*\$false[\s\S]{0,360}?Update-AuraUiLauncherPosition/,
     "Revealing the page must restore normal launcher positioning");
@@ -473,7 +494,7 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     "The Studio window's accessible name must come from localized UI copy");
   // Screen recorders and the Chromium/Electron screen pickers drop any window
   // whose GetWindowTextLength is 0, so both primary windows need real captions.
-  assert.match(ui, /\$script:Form\.Text\s*=\s*'Claude Aura'/,
+  assert.match(ui, /\$script:Form\.Text\s*=\s*'Claude Aura Web'/,
     "The main Aura window needs a non-empty caption to appear in window-capture pickers");
   assert.match(ui, /\$script:StudioForm\.Text\s*=\s*"\$\(\$script:UiCopy\.studioTitle\)"/,
     "The Studio window needs a non-empty caption to appear in window-capture pickers");
@@ -4407,8 +4428,11 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /\$script:LauncherStyle\s*=\s*\$Candidate\.Style[\s\S]{0,180}?\$script:LauncherMark\s*=\s*\$Candidate\.Mark[\s\S]{0,300}?\$script:MainWindowIconPair\s*=\s*\$Candidate\.IconSet\.MainNative[\s\S]{0,180}?\$script:StudioWindowIconPair\s*=\s*\$Candidate\.IconSet\.StudioNative[\s\S]{0,400}?\$script:ThemeIdentityLock\s*=\s*\$Candidate\.IdentityLock[\s\S]{0,180}?\$script:ShellIdentityIconPath\s*=\s*\$Candidate\.ShortcutIconPath[\s\S]{0,260}?\$script:EffectiveLauncherIdentity\s*=\s*\[PSCustomObject\]\[ordered\]@\{\s*launcher = \$Candidate\.Material\s*previewUrl = \$Candidate\.PreviewUrl/,
     "The visible launcher, shell path, and Studio-facing effective identity must commit together");
   assert.match(identityCandidateCommit,
-    /\$Candidate\.Mark\s*=\s*\$null[\s\S]{0,400}?\$Candidate\.Region\s*=\s*\$null[\s\S]{0,240}?\$Candidate\.IconSet\s*=\s*\$null[\s\S]{0,100}?\$Candidate\.IdentityLock\s*=\s*\$null[\s\S]{0,600}?foreach \(\$resource in @\([\s\S]{0,220}?\$resource\.Dispose\(\)[\s\S]{0,180}?Dispose-AuraUiNativeFormIconPair -Pair \$old\.MainWindowIconPair[\s\S]{0,120}?Dispose-AuraUiNativeFormIconPair -Pair \$old\.StudioWindowIconPair[\s\S]{0,180}?\$old\.ThemeIdentityLock\.Dispose\(\)[\s\S]{0,80}?return \$true/,
+    /\$Candidate\.Mark\s*=\s*\$null[\s\S]{0,400}?\$Candidate\.Region\s*=\s*\$null[\s\S]{0,240}?\$Candidate\.IconSet\s*=\s*\$null[\s\S]{0,100}?\$Candidate\.IdentityLock\s*=\s*\$null[\s\S]{0,600}?foreach \(\$resource in @\([\s\S]{0,220}?\$resource\.Dispose\(\)[\s\S]{0,180}?Dispose-AuraUiNativeFormIconPair -Pair \$old\.MainWindowIconPair[\s\S]{0,120}?Dispose-AuraUiNativeFormIconPair -Pair \$old\.StudioWindowIconPair[\s\S]{0,180}?\$old\.ThemeIdentityLock\.Dispose\(\)[\s\S]{0,500}?return \$true/,
     "A successful commit must transfer candidate ownership before disposing the prior complete identity");
+  assert.match(identityCandidateCommit,
+    /Update-AuraWebChromeAppearance[\s\S]{0,180}?\$script:LauncherStyle/,
+    "A committed theme identity must also update the app-owned tab chrome");
   for (const rollbackSurface of [
     "launcher-region", "launcher-material", "notification-area", "Aura-window", "Studio-window",
   ]) {
@@ -4648,6 +4672,9 @@ test("Windows uses a content-only WebView2 window with Aura Studio and tray cont
     /\$script:LauncherTip\.ClientSize[\s\S]{0,340}?if \(-not \(Update-AuraUiLauncherTipPosition\)\)[\s\S]{0,1200}?ShowWindow\(\$script:LauncherTip\.Handle,\s*8\)/,
     "The hover caption must use the same live positioning path before its first frame");
   const launcherHintShow = powershellFunction("Show-AuraUiLauncherHint");
+  assert.match(launcherHintShow,
+    /'Claude Aura Web'\s+'claude\.ai'\s+\$true[\s\S]{0,180}?'Claude Aura Desktop'\s+'Claude Desktop'\s+\$false/,
+    "The first-use guide must distinguish the WebView2 app from the separate Desktop presentation app visually");
   assert.match(launcherHintShow,
     /\$script:LauncherHint\s*=\s*\$hint[\s\S]{0,520}?\[void\]\(Update-AuraUiLauncherHintPosition\)/,
     "The launcher guide must use the same live positioning path before its first frame");
@@ -6293,8 +6320,8 @@ test("Aura Studio persists an exact locale and offers a host-acknowledged welcom
   assert.match(ui, /\$script:LauncherStudioItem\.add_Click\(\{ Show-AuraUiStudio -OfferIntroduction \}\)/,
     "The launcher menu entry must offer the introduction");
   assert.match(ui,
-    /\} elseif \(\$wasClickArmed\) \{\s*Show-AuraUiLauncherMenu/,
-    "A direct launcher click must reveal the menu whose Studio entry offers the introduction");
+    /\} elseif \(\$wasClickArmed\) \{\s*Show-AuraUiStudio -OfferIntroduction/,
+    "A direct launcher click must open Studio and offer the introduction");
   assert.match(ui, /\$script:TrayOpenStudioItem\.add_Click\(\{ Show-AuraUiStudio \}\)/,
     "The tray entry must not impersonate the Aura launcher introduction path");
   assert.match(ui,

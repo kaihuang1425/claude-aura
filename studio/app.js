@@ -1929,6 +1929,11 @@
   if (bridge) {
     bridge.addEventListener("message", (event) => {
       const data = event.data ?? {};
+      if (data.type === "session-board-invalidate" && data.version === 1
+          && Object.keys(data).length === 2) {
+        sessionBoardController?.refresh?.();
+        return;
+      }
       if (sessionBoardController?.receive?.(data)) return;
       if (taskboardController?.receive?.(data)) return;
       if (petsController?.receive?.(data)) return;
@@ -2386,6 +2391,13 @@
     });
   }
   document.getElementById("open-aura").addEventListener("click", () => send({ type: "open-aura" }));
+  document.getElementById("start-theme-assistant")?.addEventListener("click", () => {
+    try { sessionStorage.setItem("claude-aura:open-theme-assistant", "true"); } catch {}
+    setStatus(t("statusApplying"), "busy");
+    if (!send({ type: "create-theme-copy", theme: "default" })) {
+      try { sessionStorage.removeItem("claude-aura:open-theme-assistant"); } catch {}
+    }
+  });
   document.getElementById("start-theme").addEventListener("click", () => {
     setStatus(t("statusApplying"), "busy");
     send({ type: "create-theme-copy", theme: "default" });

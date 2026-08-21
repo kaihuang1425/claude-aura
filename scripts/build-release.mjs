@@ -130,6 +130,7 @@ const REQUIRED_APP_SURFACE_FILES = new Set([
   "studio/editor.js",
   "studio/generated-themes.js",
   "studio/index.html",
+  "studio/theme-assistant.js",
   "studio/locales/en.js",
   "studio/locales/zh-CN.js",
   "studio/locales/zh-HKTW.js",

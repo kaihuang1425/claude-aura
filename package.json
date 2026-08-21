@@ -7,7 +7,7 @@
   "scripts": {
     "test": "node tests/run-tests.mjs",
     "test:focus": "node tests/run-tests.mjs --focus",
-    "check": "node --check scripts/injector.mjs && node --check scripts/theme-core.mjs && node --check scripts/webview-cli.mjs && node --check scripts/codex-session-index.mjs && node --check scripts/delivery-gate.mjs && node --check scripts/build-installer-assets.mjs && node --check scripts/build-installer.mjs && node --check scripts/audit-installer.mjs && node --check assets/renderer-prepaint.js && node --check assets/renderer-inject.js && node --check assets/editor-overlay.js && node --check studio/taskboard.js && node --check studio/pets.js && node tests/run-tests.mjs",
+    "check": "node --check scripts/injector.mjs && node --check scripts/theme-core.mjs && node --check scripts/webview-cli.mjs && node --check scripts/codex-session-index.mjs && node --check scripts/delivery-gate.mjs && node --check scripts/build-installer-assets.mjs && node --check scripts/build-installer.mjs && node --check scripts/audit-installer.mjs && node --check assets/renderer-prepaint.js && node --check assets/renderer-inject.js && node --check assets/editor-overlay.js && node --check studio/theme-assistant.js && node --check studio/taskboard.js && node --check studio/pets.js && node tests/run-tests.mjs",
     "studio:build": "node scripts/build-studio-themes.mjs && node scripts/build-responsive-resolver.mjs",
     "locale:check": "node scripts/locale-tasks.mjs check",
     "locale:export": "node scripts/locale-tasks.mjs export",

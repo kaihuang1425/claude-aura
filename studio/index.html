@@ -237,9 +237,25 @@
       <p class="kicker" data-i18n="createKicker">Visual theme builder</p>
       <h2 id="create-title" tabindex="-1" data-i18n="createTitle">Create a theme</h2>
       <p class="lede" data-i18n="createLede">Start with Default in the visual editor, then choose colors, style, and artwork. No code or theme folder is required.</p>
-      <div class="actions-row">
-        <button type="button" id="start-theme" class="primary-button" data-i18n="startTheme">Customize Default</button>
-        <button type="button" id="import-theme" class="ghost-button" data-i18n="installThemePackage">Install theme…</button>
+      <div class="create-path-grid">
+        <article class="create-path-card create-path-assisted">
+          <span class="create-path-mark" aria-hidden="true">✦</span>
+          <div>
+            <p class="create-path-eyebrow" data-editor-i18n="assistantKicker">Theme assistant</p>
+            <h3 data-editor-i18n="assistantCreateTitle">Turn an idea into a theme draft</h3>
+            <p data-editor-i18n="assistantCreateBody">Describe the atmosphere you want. Aura prepares a strict prompt and checks Claude's theme draft before previewing it.</p>
+          </div>
+          <button type="button" id="start-theme-assistant" class="primary-button" data-editor-i18n="assistantStart">Build with Claude</button>
+        </article>
+        <article class="create-path-card create-path-manual">
+          <span class="create-path-mark" aria-hidden="true">◌</span>
+          <div>
+            <p class="create-path-eyebrow" data-editor-i18n="manualKicker">Manual controls</p>
+            <h3 data-editor-i18n="manualCreateTitle">Shape every detail yourself</h3>
+            <p data-editor-i18n="manualCreateBody">Start from Default and use the live editor for colors, greeting, layout, artwork, and widgets.</p>
+          </div>
+          <button type="button" id="start-theme" class="ghost-button" data-i18n="startTheme">Customize Default</button>
+        </article>
       </div>
       <details class="create-inline-guide">
         <summary data-i18n="createGuide">How visual creation works</summary>
@@ -250,7 +266,10 @@
         </ol>
         <p class="help" data-i18n="createAdvancedHelp">Already have a theme kit? Install its folder with the secondary action above.</p>
       </details>
-      <p class="help" data-i18n="createHelp">Your custom themes stay in Aura's user data folder and never modify Claude or the desktop app.</p>
+      <div class="create-secondary-row">
+        <button type="button" id="import-theme" class="ghost-button" data-i18n="installThemePackage">Install theme…</button>
+        <p class="help" data-i18n="createHelp">Your custom themes stay in Aura's user data folder and never modify Claude or the desktop app.</p>
+      </div>
     </section>
 
     <section id="pets" class="studio-page pet-page" data-studio-page="pets" aria-labelledby="pets-title" aria-busy="true" hidden inert>
@@ -532,6 +551,10 @@
             <label><input type="radio" name="editor-level" value="simple" checked> <span data-editor-i18n="levelSimple">Quick customize</span></label>
             <label><input type="radio" name="editor-level" value="advanced"> <span data-editor-i18n="levelAdvanced">Advanced</span></label>
           </fieldset>
+          <button type="button" id="editor-theme-assistant" class="assistant-launch-button">
+            <span aria-hidden="true">✦</span>
+            <span data-editor-i18n="assistantOpen">Theme assistant</span>
+          </button>
           <div class="editor-toolbar" role="group" aria-label="Edit history" data-editor-i18n-aria-label="historyActions">
             <button type="button" id="editor-undo" class="ghost-button" data-editor-i18n="undo">Undo</button>
             <button type="button" id="editor-redo" class="ghost-button" data-editor-i18n="redo">Redo</button>
@@ -1473,6 +1496,78 @@
   </form>
 </dialog>
 
+<dialog id="theme-assistant-dialog" class="theme-assistant-dialog" aria-labelledby="theme-assistant-title" aria-describedby="theme-assistant-intro">
+  <form method="dialog">
+    <header class="theme-assistant-head">
+      <div>
+        <p class="kicker" data-editor-i18n="assistantKicker">Theme assistant</p>
+        <h2 id="theme-assistant-title" data-editor-i18n="assistantTitle">Build a theme with Claude</h2>
+        <p id="theme-assistant-intro" data-editor-i18n="assistantIntro">Aura turns your direction into a bounded prompt, then validates the returned palette and greeting before anything reaches the preview.</p>
+      </div>
+      <details class="theme-assistant-info">
+        <summary data-editor-i18n-aria-label="assistantInfoLabel" aria-label="How the assistant works">i</summary>
+        <p data-editor-i18n="assistantInfo">Aura does not call a model or send the brief. Copying and opening Claude leaves the final send under your control.</p>
+      </details>
+      <button type="submit" value="close" class="dialog-close theme-assistant-close" data-editor-i18n-aria-label="assistantClose" aria-label="Close theme assistant">×</button>
+    </header>
+
+    <div class="theme-assistant-workflow">
+      <section class="theme-assistant-step" aria-labelledby="theme-assistant-brief-title">
+        <div class="theme-assistant-step-head">
+          <span aria-hidden="true">1</span>
+          <div>
+            <h3 id="theme-assistant-brief-title" data-editor-i18n="assistantBriefTitle">Describe the feeling</h3>
+            <p data-editor-i18n="assistantBriefHelp">Name the mood, materials, colors, and the kind of greeting you want.</p>
+          </div>
+        </div>
+        <label class="editor-field" for="theme-assistant-brief">
+          <span data-editor-i18n="assistantBriefLabel">Theme direction</span>
+          <textarea id="theme-assistant-brief" rows="5" maxlength="600" spellcheck="true"></textarea>
+        </label>
+        <div class="theme-assistant-actions">
+          <button type="button" id="theme-assistant-prepare" class="primary-button" data-editor-i18n="assistantPrepare">Prepare prompt</button>
+          <button type="button" id="theme-assistant-open-claude" class="ghost-button" disabled data-editor-i18n="assistantCopyOpen">Copy and open Claude</button>
+        </div>
+        <label class="editor-field theme-assistant-prompt" for="theme-assistant-prompt">
+          <span data-editor-i18n="assistantPromptLabel">Prompt for Claude</span>
+          <textarea id="theme-assistant-prompt" rows="7" readonly></textarea>
+        </label>
+      </section>
+
+      <section class="theme-assistant-step" aria-labelledby="theme-assistant-draft-title">
+        <div class="theme-assistant-step-head">
+          <span aria-hidden="true">2</span>
+          <div>
+            <h3 id="theme-assistant-draft-title" data-editor-i18n="assistantDraftTitle">Check Claude's draft</h3>
+            <p data-editor-i18n="assistantDraftHelp">Paste the JSON response. Extra fields, unsafe values, and weak contrast are rejected.</p>
+          </div>
+        </div>
+        <label class="editor-field" for="theme-assistant-response">
+          <span data-editor-i18n="assistantResponseLabel">Claude response</span>
+          <textarea id="theme-assistant-response" rows="9" maxlength="12000" spellcheck="false"></textarea>
+        </label>
+        <button type="button" id="theme-assistant-check" class="ghost-button" data-editor-i18n="assistantCheck">Check draft</button>
+        <div id="theme-assistant-preview" class="theme-assistant-preview" hidden>
+          <div id="theme-assistant-palette" class="theme-assistant-palette" aria-hidden="true"></div>
+          <div class="theme-assistant-preview-copy">
+            <strong id="theme-assistant-preview-title"></strong>
+            <span id="theme-assistant-preview-summary"></span>
+            <span id="theme-assistant-preview-greeting"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="theme-assistant-foot">
+      <output id="theme-assistant-status" role="status" aria-live="polite" data-tone="ready" data-editor-i18n="assistantIdle">Describe a theme to begin.</output>
+      <div class="dialog-actions">
+        <button type="submit" value="close" class="ghost-button" data-editor-i18n="assistantClose">Close</button>
+        <button type="button" id="theme-assistant-apply" class="primary-button" disabled data-editor-i18n="assistantApply">Apply to preview</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
 <script src="locales/en.js"></script>
 <script src="locales/hi.js"></script>
 <script src="locales/es.js"></script>
@@ -1491,6 +1586,7 @@
 <script src="generated-themes.js"></script>
 <script src="crop-math.js"></script>
 <script src="responsive-resolver.js"></script>
+<script src="theme-assistant.js"></script>
 <script src="editor.js"></script>
 <script src="session-board.js?v=1"></script>
 <script src="pets.js?v=1"></script>

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const PROJECT_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const suiteFiles = [
   "themes.test.mjs",
+  "theme-assistant.test.mjs",
   "payload.test.mjs",
   "artwork.test.mjs",
   "theme-cli.test.mjs",

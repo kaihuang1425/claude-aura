@@ -1783,6 +1783,22 @@
     const windowEditorInspector = document.getElementById("window-editor-inspector");
     const windowEditorTarget = document.getElementById("window-editor-target");
     const windowEditorTokens = document.getElementById("window-editor-tokens");
+    const themeAssistant = window.CLAUDE_AURA_THEME_ASSISTANT ?? null;
+    const assistantLaunchButton = document.getElementById("editor-theme-assistant");
+    const assistantDialog = document.getElementById("theme-assistant-dialog");
+    const assistantBrief = document.getElementById("theme-assistant-brief");
+    const assistantPrepareButton = document.getElementById("theme-assistant-prepare");
+    const assistantOpenClaudeButton = document.getElementById("theme-assistant-open-claude");
+    const assistantPrompt = document.getElementById("theme-assistant-prompt");
+    const assistantResponse = document.getElementById("theme-assistant-response");
+    const assistantCheckButton = document.getElementById("theme-assistant-check");
+    const assistantPreview = document.getElementById("theme-assistant-preview");
+    const assistantPalette = document.getElementById("theme-assistant-palette");
+    const assistantPreviewTitle = document.getElementById("theme-assistant-preview-title");
+    const assistantPreviewSummary = document.getElementById("theme-assistant-preview-summary");
+    const assistantPreviewGreeting = document.getElementById("theme-assistant-preview-greeting");
+    const assistantStatus = document.getElementById("theme-assistant-status");
+    const assistantApplyButton = document.getElementById("theme-assistant-apply");
     let state = null;
     let overlayState = null;
     let overlaySelection = null;
@@ -1858,6 +1874,8 @@
     let changeSendRetryCount = 0;
     let patchResponseRetryCount = 0;
     let actionAfterPatch = null;
+    let assistantDraft = null;
+    let assistantReturnFocus = null;
     const overlayTransportBusy = () => Boolean(
       pendingAction || greetingResyncPending || patchResyncPending
       || coalescedChanges.size || changeFlushTimer || inFlightChanges.length
@@ -2454,6 +2472,120 @@
       reflectButtonStates();
     };
     const queueThemeChange = (change, options) => queueThemeChanges([change], options);
+    const setAssistantStatus = (message, tone = "ready") => {
+      if (!assistantStatus) return;
+      assistantStatus.textContent = message;
+      assistantStatus.dataset.tone = tone;
+    };
+    const clearAssistantDraft = () => {
+      assistantDraft = null;
+      if (assistantApplyButton) assistantApplyButton.disabled = true;
+      if (assistantPreview) assistantPreview.hidden = true;
+      assistantPalette?.replaceChildren();
+    };
+    const assistantFrames = () => state?.responsiveLayouts?.sets.map(({ id, width }) => ({ id, width }))
+      ?? [{ id: "standard", width: STAGE_SIZES.normal[0] }, { id: "wide", width: STAGE_SIZES.wide[0] }];
+    const openThemeAssistant = (opener = assistantLaunchButton) => {
+      if (!themeAssistant || !state || isBuiltInLayoutEdit() || overlayTransportBusy()
+          || !assistantDialog || assistantDialog.open) return false;
+      assistantReturnFocus = opener instanceof HTMLElement ? opener : assistantLaunchButton;
+      clearAssistantDraft();
+      assistantPrompt.value = "";
+      assistantResponse.value = "";
+      assistantOpenClaudeButton.disabled = true;
+      setAssistantStatus(tr("assistantIdle"));
+      assistantDialog.showModal();
+      requestAnimationFrame(() => assistantBrief.focus());
+      return true;
+    };
+    const prepareAssistantPrompt = () => {
+      if (!themeAssistant || !state) return;
+      const prompt = themeAssistant.buildPrompt({
+        brief: assistantBrief.value,
+        baseTheme: state.label,
+      });
+      clearAssistantDraft();
+      assistantPrompt.value = prompt;
+      assistantOpenClaudeButton.disabled = !prompt;
+      if (!prompt) {
+        setAssistantStatus(tr("assistantBriefMissing"), "error");
+        assistantBrief.focus();
+        return;
+      }
+      setAssistantStatus(tr("assistantPromptReady"), "ok");
+    };
+    const copyAssistantPromptAndOpenClaude = async () => {
+      if (!assistantPrompt.value) prepareAssistantPrompt();
+      if (!assistantPrompt.value) return;
+      try {
+        await navigator.clipboard.writeText(assistantPrompt.value);
+      } catch {
+        assistantPrompt.focus();
+        assistantPrompt.select();
+        setAssistantStatus(tr("assistantCopyFailed"), "error");
+        return;
+      }
+      if (!send({ type: "open-aura" })) {
+        setAssistantStatus(tr("assistantOpenFailed"), "error");
+        return;
+      }
+      setAssistantStatus(tr("assistantCopied"), "ok");
+    };
+    const renderAssistantDraft = (draft) => {
+      assistantPalette.replaceChildren(...["light", "dark"].flatMap((mode) => (
+        MODE_TOKEN_KEYS.slice(0, 6).map((token) => {
+          const swatch = document.createElement("span");
+          swatch.style.background = draft[mode][token];
+          return swatch;
+        })
+      )));
+      assistantPreviewTitle.textContent = draft.title;
+      assistantPreviewSummary.textContent = draft.summary;
+      assistantPreviewGreeting.textContent = tr("assistantGreetingSample");
+      assistantPreviewGreeting.style.setProperty(
+        "--assistant-greeting-font",
+        GREETING_FONT_STACKS[draft.greeting.font] ?? GREETING_FONT_STACKS["system-sans"],
+      );
+      assistantPreviewGreeting.style.setProperty("--assistant-greeting-weight", String(draft.greeting.weight));
+      assistantPreviewGreeting.style.setProperty(
+        "--assistant-greeting-tracking",
+        `${draft.greeting.letterSpacing}em`,
+      );
+      assistantPreviewGreeting.style.fontStyle = draft.greeting.italic ? "italic" : "normal";
+      assistantPreviewGreeting.style.textAlign = draft.greeting.align;
+      assistantPreview.hidden = false;
+    };
+    const checkAssistantDraft = () => {
+      if (!themeAssistant) return;
+      clearAssistantDraft();
+      const result = themeAssistant.parseDraft(assistantResponse.value);
+      if (!result.ok) {
+        setAssistantStatus(
+          format(tr("assistantDraftInvalid"), result.errors[0] ?? "draft"),
+          "error",
+        );
+        assistantResponse.focus();
+        return;
+      }
+      assistantDraft = result.draft;
+      renderAssistantDraft(assistantDraft);
+      assistantApplyButton.disabled = false;
+      setAssistantStatus(tr("assistantDraftValid"), "ok");
+    };
+    const applyAssistantDraft = () => {
+      if (!themeAssistant || !assistantDraft || !state || overlayTransportBusy()) {
+        setAssistantStatus(tr("assistantApplyFailed"), "error");
+        return;
+      }
+      const result = themeAssistant.toPatchChanges(assistantDraft, { frames: assistantFrames() });
+      if (!result.ok || !result.changes.length) {
+        setAssistantStatus(tr("assistantApplyFailed"), "error");
+        return;
+      }
+      queueThemeChanges(result.changes, { immediate: true });
+      assistantDialog.close("applied");
+      announce(tr("assistantApplying"), "busy");
+    };
     const confirmedTokenValue = (change) => {
       if (change.mode === "light" || change.mode === "dark") {
         return state?.tokens?.[change.mode]?.[change.token];
@@ -8288,6 +8420,14 @@
         if (!post(rebased)) announce(tr("editorActionFailed"), "error");
       }
       if (settlement !== "blocked" && settlement !== "stopped") flushThemeChanges();
+      if (entering) {
+        let requestedAssistant = false;
+        try {
+          requestedAssistant = sessionStorage.getItem("claude-aura:open-theme-assistant") === "true";
+          if (requestedAssistant) sessionStorage.removeItem("claude-aura:open-theme-assistant");
+        } catch {}
+        if (requestedAssistant) requestAnimationFrame(() => openThemeAssistant(assistantLaunchButton));
+      }
       if ((retryGreetingAfterRefresh || greetingStageRequested) && !greetingStageTimer) {
         greetingStageTimer = setTimeout(() => {
           greetingStageTimer = null;
@@ -9180,6 +9320,27 @@
       return true;
     };
 
+    assistantLaunchButton?.addEventListener("click", () => openThemeAssistant(assistantLaunchButton));
+    assistantPrepareButton?.addEventListener("click", prepareAssistantPrompt);
+    assistantOpenClaudeButton?.addEventListener("click", copyAssistantPromptAndOpenClaude);
+    assistantCheckButton?.addEventListener("click", checkAssistantDraft);
+    assistantApplyButton?.addEventListener("click", applyAssistantDraft);
+    assistantBrief?.addEventListener("input", () => {
+      assistantPrompt.value = "";
+      assistantOpenClaudeButton.disabled = true;
+      clearAssistantDraft();
+      setAssistantStatus(tr("assistantIdle"));
+    });
+    assistantResponse?.addEventListener("input", () => {
+      clearAssistantDraft();
+      setAssistantStatus(tr("assistantIdle"));
+    });
+    assistantDialog?.addEventListener("close", () => {
+      const returnFocus = assistantReturnFocus;
+      assistantReturnFocus = null;
+      returnFocus?.focus();
+    });
+
     applyTranslations();
     fillSelect(document.getElementById("editor-font-ui"), FONT_UI_OPTIONS);
     fillSelect(document.getElementById("editor-font-display"), FONT_DISPLAY_OPTIONS);
@@ -9202,6 +9363,7 @@
       receiveOverlay,
       receiveOverlayState,
       requestDelete,
+      openThemeAssistant,
       refreshCardPreview: () => {
         if (state) reflectCardPreview();
       },

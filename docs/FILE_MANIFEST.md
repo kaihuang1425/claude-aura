@@ -20,6 +20,7 @@ offline-preview files and comparison screenshots are not deliverables.
 - `studio/editor.js`
 - `studio/generated-themes.js`
 - `studio/index.html`
+- `studio/theme-assistant.js`
 - `studio/locales/de.js`
 - `studio/locales/en-keys.json`
 - `studio/locales/en.js`
@@ -396,6 +397,7 @@ the retired reconstructed preview are not deliverables.
 - `tests/taskboard.test.mjs`
 - `tests/web-tabs.test.mjs`
 - `tests/theme-cli.test.mjs`
+- `tests/theme-assistant.test.mjs`
 - `tests/themes.test.mjs`
 - `tests/user-kits.test.mjs`
 - `tests/wordmark.test.mjs`
