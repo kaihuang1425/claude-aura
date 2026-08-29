@@ -209,6 +209,15 @@ test("compact presentation preserves Unicode, locale fallback, and mounted theme
 
 test("Aura hosts emit one exact presentation message without touching the provider WebView", async () => {
   const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "aura-session-board-presentation-"));
+  const powershellEnvironment = { ...process.env };
+  if (process.platform !== "win32") {
+    powershellEnvironment.LOCALAPPDATA = path.join(temporaryRoot, "localappdata");
+    powershellEnvironment.APPDATA = path.join(temporaryRoot, "appdata");
+    await Promise.all([
+      fs.mkdir(powershellEnvironment.LOCALAPPDATA, { recursive: true }),
+      fs.mkdir(powershellEnvironment.APPDATA, { recursive: true }),
+    ]);
+  }
   const updateHarnessPath = path.join(temporaryRoot, "compact-update.ps1");
   const updateHarness = `
 $ErrorActionPreference='Stop'
@@ -261,7 +270,7 @@ try{[void](Update-AuraWebTabWorkHubPresentation -Presentation $invalid)}catch{}
   await fs.writeFile(updateHarnessPath, updateHarness, "utf8");
   const updateResult = spawnSync(TEST_POWERSHELL, [
     "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", updateHarnessPath,
-  ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true });
+  ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true, env: powershellEnvironment });
   try {
     assert.equal(updateResult.status, 0, `${updateResult.stdout}\n${updateResult.stderr}`);
     assert.deepEqual(JSON.parse(updateResult.stdout.trim().split(/\r?\n/u).at(-1)), {
@@ -283,7 +292,7 @@ $value|ConvertTo-Json -Compress
     await fs.writeFile(messageHarnessPath, messageHarness, "utf8");
     const messageResult = spawnSync(TEST_POWERSHELL, [
       "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", messageHarnessPath,
-    ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true });
+    ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true, env: powershellEnvironment });
     assert.equal(messageResult.status, 0, `${messageResult.stdout}\n${messageResult.stderr}`);
     assert.deepEqual(JSON.parse(messageResult.stdout.trim().split(/\r?\n/u).at(-1)), {
       type: "session-board-presentation", version: 1, revision: 4,
@@ -303,7 +312,7 @@ $DataRoot='${psPath(path.join(temporaryRoot, "data"))}'
     await fs.writeFile(resolutionHarnessPath, resolutionHarness, "utf8");
     const resolutionResult = spawnSync(TEST_POWERSHELL, [
       "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", resolutionHarnessPath,
-    ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true });
+    ], { cwd: PROJECT_ROOT, encoding: "utf8", windowsHide: true, env: powershellEnvironment });
     assert.equal(resolutionResult.status, 0, `${resolutionResult.stdout}\n${resolutionResult.stderr}`);
     assert.deepEqual(JSON.parse(resolutionResult.stdout.trim().split(/\r?\n/u).at(-1)), {
       inherited: "study-library", fallback: "default",
