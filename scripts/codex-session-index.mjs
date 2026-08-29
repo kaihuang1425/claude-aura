@@ -97,7 +97,7 @@ function databaseMetadata(databasePath, visibleIds) {
         continue;
       }
       const cwd = safeText(row.cwd, 520);
-      const workspace = cwd ? safeText(path.basename(cwd), 120) ?? "" : "";
+      const workspace = cwd ? safeText(path.basename(cwd.replaceAll("\\", "/")), 120) ?? "" : "";
       const branch = safeText(row.git_branch, 160) ?? "";
       const dbUpdatedAt = [row.recency_at_ms, row.updated_at_ms]
         .filter((value) => Number.isSafeInteger(value) && value >= 0)

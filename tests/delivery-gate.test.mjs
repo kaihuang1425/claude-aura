@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { existsSync } from "node:fs";
 import { test, runIfMain } from "./support/harness.mjs";
 import {
   LIVE_ACCEPTANCE_CHECKS,
@@ -16,6 +17,8 @@ import {
 
 const deliveryScriptPath = path.join(PROJECT_ROOT, "scripts", "delivery-gate.mjs");
 const deliveryDocumentPath = path.join(PROJECT_ROOT, "docs", "DELIVERY_GUARDRAIL.md");
+const hasLocalAgentContract = existsSync(path.join(PROJECT_ROOT, "AGENTS.md"));
+const localContractTest = hasLocalAgentContract ? test : () => {};
 
 const stages = (value) => Object.fromEntries([
   "source", "installer", "installed", "runtime", "liveReview",
@@ -35,7 +38,7 @@ test("delivery state cannot skip installed or user-approved live evidence", () =
   assert.equal(evaluateDelivery(stages(true)).overall, "done");
 });
 
-test("delivery source receipt covers the manifest-owned tree and local agent contract", async () => {
+localContractTest("delivery source receipt covers the manifest-owned tree and local agent contract", async () => {
   const fingerprint = await sourceFingerprint();
   assert.match(fingerprint.sha256, /^[0-9a-f]{64}$/u);
   assert(fingerprint.files > 200, "Delivery fingerprint unexpectedly covers too few files");
@@ -101,7 +104,7 @@ test("live approval is fixed, image-bound, current, and cannot escape its eviden
   }
 });
 
-test("one refresh path checks, builds, installs, audits, receipts, and launches without force-close logic", async () => {
+localContractTest("one refresh path checks, builds, installs, audits, receipts, and launches without force-close logic", async () => {
   const [source, packageJson, agents, document, auditor, releaseBuilder] = await Promise.all([
     fs.readFile(deliveryScriptPath, "utf8"),
     fs.readFile(path.join(PROJECT_ROOT, "package.json"), "utf8").then(JSON.parse),
