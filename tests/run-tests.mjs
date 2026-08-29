@@ -38,6 +38,7 @@ const suiteFiles = [
   "desktop-session-board.test.mjs",
   "web-tabs.test.mjs",
   "session-dock.test.mjs",
+  "delivery-gate.test.mjs",
   "installer.test.mjs",
   "desktop-guidance.test.mjs",
   "locales.test.mjs",
@@ -65,20 +66,8 @@ const sourceOnlyDesktopTestInputs = [
   new URL("../windows/desktop-taskboard-panel.ps1", import.meta.url),
   new URL("../windows/native/desktop-capture-filter.cpp", import.meta.url),
 ];
-if (process.platform === "win32"
-    && sourceOnlyDesktopTestInputs.every((url) => existsSync(fileURLToPath(url)))) {
+if (sourceOnlyDesktopTestInputs.every((url) => existsSync(fileURLToPath(url)))) {
   suiteFiles.push("desktop-cdp.test.mjs");
-}
-
-// Delivery verification intentionally includes the local AGENTS.md contract,
-// which is ignored by git and therefore absent from clean CI checkouts. Keep
-// that local-only suite active when the complete contract is actually present.
-const localDeliveryTestInputs = [
-  new URL("./delivery-gate.test.mjs", import.meta.url),
-  new URL("../AGENTS.md", import.meta.url),
-];
-if (localDeliveryTestInputs.every((url) => existsSync(fileURLToPath(url)))) {
-  suiteFiles.push("delivery-gate.test.mjs");
 }
 
 const runnerArguments = process.argv.slice(2);

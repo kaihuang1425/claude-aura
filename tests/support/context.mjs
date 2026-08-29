@@ -46,8 +46,11 @@ import {
 
 // GitHub Actions starts Windows jobs under PowerShell 7, whose module path can
 // make Windows PowerShell 5.1 resolve incompatible copies of built-in modules.
-// Every native regression probe uses powershell.exe, so keep its module lookup
-// on the Windows PowerShell roots that production uses.
+// Native Windows regression probes use powershell.exe, while portable source
+// probes use PowerShell 7 on other hosts. Keep Windows module lookup on the
+// Windows PowerShell roots that production uses.
+export const TEST_POWERSHELL = process.platform === "win32" ? "powershell.exe" : "pwsh";
+
 if (process.platform === "win32") {
   const systemRoot = process.env.SystemRoot ?? process.env.WINDIR ?? "C:\\Windows";
   const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";

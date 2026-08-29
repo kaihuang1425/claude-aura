@@ -4,6 +4,7 @@ import {
   AURA_VERSION,
   DEFAULT_CONFIG,
   PROJECT_ROOT,
+  TEST_POWERSHELL,
   REQUIRED_SEMANTIC_TOKENS,
   STUDIO_FONT_DISPLAY_STACKS,
   STUDIO_FONT_UI_STACKS,
@@ -7142,7 +7143,7 @@ test("WO-29 activates the layered launcher and dispatches host work without poll
     "$dispatchForm.Dispose()",
     "Write-Output 'WO-29 launcher and dispatch smoke: PASS'",
   ].join("\n");
-  const output = run("powershell.exe", [
+  const output = run(TEST_POWERSHELL, [
     "-NoProfile",
     "-STA",
     "-ExecutionPolicy",
@@ -7188,7 +7189,7 @@ test("Windows keeps the startup cover through DOMContentLoaded", () => {
     "if($null -ne $script:ReadyNavigationId -or $script:HideCount -ne 0){throw 'A non-Claude DOMContentLoaded changed the current cover'}",
     "Write-Output 'Startup cover DOM handoff: PASS'",
   ].join("\n");
-  const output = run("powershell.exe", [
+  const output = run(TEST_POWERSHELL, [
     "-NoProfile",
     "-ExecutionPolicy",
     "Bypass",

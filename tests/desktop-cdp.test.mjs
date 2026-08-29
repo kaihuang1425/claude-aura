@@ -594,48 +594,50 @@ test("Desktop main-inspector orchestration enables Runtime and pins its default 
   }
 });
 
-test("Desktop greeting and prompt geometry follows the Aura Web parent-area contract", async () => {
-  const overlay = await fs.readFile(
-    path.join(PROJECT_ROOT, "windows", "desktop-overlay-proof.ps1"),
-    "utf8",
-  );
-  const geometry = await desktopGeometryProbe(overlay);
-  assert.deepEqual(geometry.prompt, {
-    x: 806,
-    y: 714,
-    width: 1006,
-    height: 310,
-  }, "Desktop prompt treatment must follow the live native composer exactly");
-  assert.deepEqual(geometry.greeting, {
-    x: 806,
-    y: 500,
-    width: 600,
-    height: 100,
-  }, "Desktop greeting treatment must retain the sharp native greeting rectangle");
-  assert.deepEqual(geometry.compact, {
-    wide: false,
-    prompt: { x: 402, y: 357, width: 504, height: 163 },
-    greeting: { x: 405, y: 289, width: 468, height: 40 },
-  }, "Compact Desktop treatment diverged from the live native geometry");
-});
-
-test("Studio can atomically synchronize an existing opted-in Desktop presentation state", async () => {
-  const result = await desktopPresentationStateSyncProbe();
-  assert.deepEqual(result, {
-    synchronized: true,
-    signaled: true,
-    signalReceived: true,
-    reasonCode: "desktop-presentation-state-synchronized",
-    json: '{"schemaVersion":2,"themeId":"korean-prestige","appearance":"dark","originalLook":false}',
-    absentSynchronized: false,
-    absentReasonCode: "desktop-presentation-state-not-present",
-    absentCreated: false,
-    initialized: true,
-    initializedReasonCode: "desktop-presentation-state-initialized",
-    initializedJson: '{"schemaVersion":2,"themeId":"japanese-idol","appearance":"light","originalLook":false}',
-    files: 3,
+if (process.platform === "win32") {
+  test("Desktop greeting and prompt geometry follows the Aura Web parent-area contract", async () => {
+    const overlay = await fs.readFile(
+      path.join(PROJECT_ROOT, "windows", "desktop-overlay-proof.ps1"),
+      "utf8",
+    );
+    const geometry = await desktopGeometryProbe(overlay);
+    assert.deepEqual(geometry.prompt, {
+      x: 806,
+      y: 714,
+      width: 1006,
+      height: 310,
+    }, "Desktop prompt treatment must follow the live native composer exactly");
+    assert.deepEqual(geometry.greeting, {
+      x: 806,
+      y: 500,
+      width: 600,
+      height: 100,
+    }, "Desktop greeting treatment must retain the sharp native greeting rectangle");
+    assert.deepEqual(geometry.compact, {
+      wide: false,
+      prompt: { x: 402, y: 357, width: 504, height: 163 },
+      greeting: { x: 405, y: 289, width: 468, height: 40 },
+    }, "Compact Desktop treatment diverged from the live native geometry");
   });
-});
+
+  test("Studio can atomically synchronize an existing opted-in Desktop presentation state", async () => {
+    const result = await desktopPresentationStateSyncProbe();
+    assert.deepEqual(result, {
+      synchronized: true,
+      signaled: true,
+      signalReceived: true,
+      reasonCode: "desktop-presentation-state-synchronized",
+      json: '{"schemaVersion":2,"themeId":"korean-prestige","appearance":"dark","originalLook":false}',
+      absentSynchronized: false,
+      absentReasonCode: "desktop-presentation-state-not-present",
+      absentCreated: false,
+      initialized: true,
+      initializedReasonCode: "desktop-presentation-state-initialized",
+      initializedJson: '{"schemaVersion":2,"themeId":"japanese-idol","appearance":"light","originalLook":false}',
+      files: 3,
+    });
+  });
+}
 
 test("Desktop presentation experiments bind the signed package and remain reversible source-only tools", async () => {
   const [common, capability, controller, overlay, desktopSession,
